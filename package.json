@@ -1,0 +1,40 @@
+{
+  "name": "llm-browser-mcp",
+  "version": "0.1.0",
+  "description": "LLM-first browser MCP server with API discovery, session management, and intelligent optimization",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "llm-browser": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "start": "node dist/index.js",
+    "inspect": "node --inspect dist/index.js"
+  },
+  "keywords": [
+    "mcp",
+    "browser",
+    "automation",
+    "llm",
+    "api-discovery",
+    "web-scraping"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^0.6.0",
+    "playwright": "^1.48.0",
+    "cheerio": "^1.0.0",
+    "turndown": "^7.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.8.4",
+    "@types/turndown": "^5.0.5",
+    "typescript": "^5.6.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
