@@ -4,16 +4,68 @@
 
 import { chromium, Browser, BrowserContext, Page } from 'playwright';
 import type { NetworkRequest, ConsoleMessage } from '../types/index.js';
+import * as fs from 'fs';
+
+export interface BrowserConfig {
+  headless?: boolean;
+  screenshotDir?: string;
+  slowMo?: number; // Slow down actions for debugging
+  devtools?: boolean;
+}
+
+const DEFAULT_CONFIG: BrowserConfig = {
+  headless: true,
+  screenshotDir: '/tmp/browser-screenshots',
+  slowMo: 0,
+  devtools: false,
+};
 
 export class BrowserManager {
   private browser: Browser | null = null;
   private contexts: Map<string, BrowserContext> = new Map();
+  private config: BrowserConfig;
+
+  constructor(config: Partial<BrowserConfig> = {}) {
+    this.config = { ...DEFAULT_CONFIG, ...config };
+  }
+
+  /**
+   * Update configuration at runtime
+   */
+  setConfig(config: Partial<BrowserConfig>): void {
+    this.config = { ...this.config, ...config };
+    // If headless mode changed, need to restart browser
+    if (config.headless !== undefined && this.browser) {
+      this.cleanup().then(() => this.initialize());
+    }
+  }
+
+  /**
+   * Enable visual debugging mode (non-headless with devtools)
+   */
+  enableDebugMode(): void {
+    this.setConfig({ headless: false, devtools: true, slowMo: 100 });
+  }
+
+  /**
+   * Disable visual debugging mode (return to headless)
+   */
+  disableDebugMode(): void {
+    this.setConfig({ headless: true, devtools: false, slowMo: 0 });
+  }
 
   async initialize(): Promise<void> {
     if (!this.browser) {
       this.browser = await chromium.launch({
-        headless: true,
+        headless: this.config.headless,
+        slowMo: this.config.slowMo,
+        devtools: this.config.devtools,
       });
+
+      // Ensure screenshot directory exists
+      if (this.config.screenshotDir) {
+        fs.mkdirSync(this.config.screenshotDir, { recursive: true });
+      }
     }
   }
 
@@ -133,5 +185,130 @@ export class BrowserManager {
       await this.browser.close();
       this.browser = null;
     }
+  }
+
+  /**
+   * Take a screenshot of the current page
+   */
+  async screenshot(
+    page: Page,
+    options: {
+      name?: string;
+      fullPage?: boolean;
+      element?: string; // CSS selector for specific element
+    } = {}
+  ): Promise<string> {
+    const timestamp = Date.now();
+    const name = options.name || `screenshot-${timestamp}`;
+    const filename = `${this.config.screenshotDir}/${name}.png`;
+
+    if (options.element) {
+      // Screenshot specific element
+      const element = await page.$(options.element);
+      if (element) {
+        await element.screenshot({ path: filename });
+      } else {
+        throw new Error(`Element not found: ${options.element}`);
+      }
+    } else {
+      // Full page or viewport screenshot
+      await page.screenshot({
+        path: filename,
+        fullPage: options.fullPage ?? true,
+      });
+    }
+
+    return filename;
+  }
+
+  /**
+   * Take a screenshot and return as base64
+   */
+  async screenshotBase64(
+    page: Page,
+    options: {
+      fullPage?: boolean;
+      element?: string;
+    } = {}
+  ): Promise<string> {
+    let buffer: Buffer;
+
+    if (options.element) {
+      const element = await page.$(options.element);
+      if (element) {
+        buffer = await element.screenshot();
+      } else {
+        throw new Error(`Element not found: ${options.element}`);
+      }
+    } else {
+      buffer = await page.screenshot({
+        fullPage: options.fullPage ?? true,
+      });
+    }
+
+    return buffer.toString('base64');
+  }
+
+  /**
+   * Browse and capture screenshots at key points
+   */
+  async browseWithScreenshots(
+    url: string,
+    options: {
+      captureOnLoad?: boolean;
+      captureOnError?: boolean;
+      prefix?: string;
+      profile?: string;
+    } = {}
+  ): Promise<{
+    page: Page;
+    screenshots: string[];
+    network: NetworkRequest[];
+    console: ConsoleMessage[];
+  }> {
+    const screenshots: string[] = [];
+    const prefix = options.prefix || new URL(url).hostname.replace(/\./g, '-');
+
+    try {
+      const result = await this.browse(url, { profile: options.profile });
+
+      if (options.captureOnLoad !== false) {
+        const path = await this.screenshot(result.page, {
+          name: `${prefix}-loaded`,
+          fullPage: true,
+        });
+        screenshots.push(path);
+      }
+
+      return {
+        ...result,
+        screenshots,
+      };
+    } catch (error) {
+      if (options.captureOnError) {
+        // Try to capture what we can on error
+        const context = await this.getContext(options.profile);
+        const pages = context.pages();
+        if (pages.length > 0) {
+          try {
+            const path = await this.screenshot(pages[0], {
+              name: `${prefix}-error`,
+              fullPage: false,
+            });
+            screenshots.push(path);
+          } catch {
+            // Ignore screenshot errors during error handling
+          }
+        }
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Get current configuration
+   */
+  getConfig(): BrowserConfig {
+    return { ...this.config };
   }
 }
