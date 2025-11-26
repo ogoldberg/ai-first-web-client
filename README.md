@@ -1,304 +1,285 @@
-# LLM Browser MCP Server
+# LLM Browser MCP Server v0.2
 
-An intelligent browser designed specifically for LLM interactions. Unlike traditional web scraping tools, this MCP server learns from your browsing patterns, discovers API endpoints, and progressively optimizes web access by bypassing unnecessary rendering.
+An intelligent, self-learning browser designed for AI agents. Unlike traditional web scraping tools, this MCP server learns from every interaction, building intelligence that makes it more effective over time.
 
-## What Makes This Different?
+## The Core Idea
 
-**Traditional Tools (Jina, Firecrawl, etc.):**
-- Return clean markdown/HTML
-- Every request = full page render
-- No memory of previous visits
-- No API discovery
+**Traditional scraping tools** are stateless - every request starts from scratch.
 
-**LLM Browser:**
-- Returns content + network traffic + console logs
-- Discovers underlying APIs automatically
-- Learns patterns to bypass rendering
-- Session management for authenticated access
-- Gets smarter over time
+**LLM Browser** is stateful and intelligent:
+- Learns which selectors work for content extraction
+- Discovers API endpoints and when they can bypass rendering
+- Tracks which sites change frequently
+- Applies learned patterns across similar domains
+- Validates responses to detect errors
+- Automatically handles pagination
 
-## Key Features
+The more you use it, the smarter it gets.
 
-### 🧠 **Intelligent API Discovery**
-Automatically analyzes network traffic to discover API endpoints. After the first visit, it can often bypass the browser entirely and call APIs directly.
+## Quick Start
 
-### 🔐 **Session Management**
-Save authentication sessions (cookies, localStorage) and reuse them across requests. Access authenticated content without re-logging in.
-
-### 📊 **Network Transparency**
-Unlike browser automation tools that hide network traffic, this exposes everything:
-- All HTTP requests and responses
-- Console logs and errors
-- API patterns and authentication flows
-
-### 🚀 **Progressive Optimization**
-- **First visit:** Full browser render, capture everything, learn APIs
-- **Second visit:** Use learned patterns when possible
-- **Future visits:** Direct API calls = 10x faster
-
-### 🎯 **LLM-Native Design**
-Built as an MCP server that LLMs can use naturally. No code generation required.
-
-## Installation
-
-On your Mac M2:
-
-\`\`\`bash
-# Clone/navigate to the project
+```bash
+# Install and build
 cd ai-first-web-client
-
-# Install dependencies
 npm install
-
-# Install Chromium for Playwright
 npx playwright install chromium
-
-# Build the TypeScript code
 npm run build
-\`\`\`
 
-## Configuration
-
-Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_desktop_config.json`):
-
-\`\`\`json
+# Add to Claude Desktop config
+# ~/Library/Application Support/Claude/claude_desktop_config.json
 {
   "mcpServers": {
     "llm-browser": {
       "command": "node",
-      "args": ["/absolute/path/to/ai-first-web-client/dist/index.js"]
+      "args": ["/path/to/ai-first-web-client/dist/index.js"]
     }
   }
 }
-\`\`\`
+```
 
-Then restart Claude Desktop.
+## Primary Tool: `smart_browse`
 
-## Usage Examples
+This is the recommended tool for all browsing. It automatically applies all learned intelligence.
 
-### Basic Browsing
+```
+User: "Get visa requirements from extranjeria.gob.es"
 
-\`\`\`
-User: "Browse example.com and show me the main content"
-
-Claude: → browse("https://example.com")
+Claude: smart_browse("https://extranjeria.gob.es/es/visados")
 
 Returns:
-- Clean markdown content
-- All network requests (including hidden APIs)
-- Console logs
-- Discovered API patterns
-\`\`\`
+{
+  "content": { "markdown": "...", "textLength": 5234 },
+  "tables": [{ "headers": ["Visa Type", "Fee"], "data": [...] }],
+  "intelligence": {
+    "confidenceLevel": "high",
+    "domainGroup": "spanish_gov",
+    "validationPassed": true,
+    "paginationAvailable": true,
+    "selectorsSucceeded": 3
+  },
+  "discoveredApis": [
+    { "endpoint": "/api/visados", "canBypassBrowser": true }
+  ]
+}
+```
 
-### API Discovery
+### Parameters
 
-\`\`\`
-User: "Get product data from shop.com"
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `url` | string | URL to browse (required) |
+| `contentType` | enum | Content type hint: `main_content`, `requirements`, `fees`, `timeline`, `documents`, `table` |
+| `followPagination` | boolean | Follow detected pagination to get all pages |
+| `maxPages` | number | Maximum pages to follow (default: 5) |
+| `checkForChanges` | boolean | Compare with cached version to detect changes |
+| `waitForSelector` | string | CSS selector to wait for (for SPAs) |
+| `scrollToLoad` | boolean | Scroll to trigger lazy-loaded content |
+| `sessionProfile` | string | Session profile for authenticated access |
 
-Claude: → browse("https://shop.com/products")
+## Learning System
 
-Response shows:
-- Page content
-- Discovered: GET /api/products endpoint
-- Can be called directly next time
+### What It Learns
 
-User: "Get more products"
+1. **Content Selectors** - Which CSS selectors reliably extract content for each domain
+2. **Selector Fallbacks** - Backup selectors when primary fails
+3. **API Patterns** - Discovered APIs that can bypass browser rendering
+4. **Validation Rules** - What valid content looks like (to detect error pages)
+5. **Change Frequency** - How often content updates (for refresh scheduling)
+6. **Pagination Patterns** - How sites paginate their content
+7. **Failure Patterns** - What causes failures (to avoid and recover)
 
-Claude: → execute_api_call("https://shop.com/api/products?page=2")
-(Much faster - no browser rendering!)
-\`\`\`
+### Domain Groups
 
-### Session Management
+Pre-configured patterns for government sites that share conventions:
 
-\`\`\`
-User: "Browse my GitHub dashboard"
+**Spanish Government** (`spanish_gov`):
+- boe.es, extranjeria.inclusion.gob.es, agenciatributaria.es, seg-social.es
 
-Claude: → browse("https://github.com")
-User manually logs in...
+**US Government** (`us_gov`):
+- uscis.gov, irs.gov, state.gov, ssa.gov, travel.state.gov
 
-Claude: → save_session("github.com")
+**EU Government** (`eu_gov`):
+- ec.europa.eu, europa.eu, europarl.europa.eu
 
-Later:
-User: "Check my GitHub notifications"
+When you browse a site in a domain group, learned patterns from similar sites are automatically applied.
 
-Claude: → browse("https://github.com/notifications")
-(Automatically uses saved session - no re-login!)
-\`\`\`
+### Confidence Decay
 
-### Knowledge Base
+Learned patterns decay over time if not verified:
+- Patterns have a 14-day grace period
+- After grace period, confidence decreases weekly
+- Low-confidence patterns are eventually archived
+- Using a pattern resets its confidence
 
-\`\`\`
-User: "What APIs have you learned?"
+This prevents stale patterns from causing failures when sites change.
 
-Claude: → get_knowledge_stats()
+## Intelligence Tools
+
+### `get_domain_intelligence`
+
+Check what the browser knows about a domain before browsing:
+
+```
+Claude: get_domain_intelligence("boe.es")
 
 Returns:
-- 15 domains with learned patterns
-- 47 total API patterns
-- 23 can bypass browser rendering
-- Top domains: github.com, api.stripe.com, etc.
-\`\`\`
+{
+  "domain": "boe.es",
+  "knownPatterns": 5,
+  "selectorChains": 12,
+  "validators": 3,
+  "paginationPatterns": 2,
+  "successRate": 0.95,
+  "domainGroup": "spanish_gov",
+  "recommendations": [
+    "Part of spanish_gov group - shared patterns will be applied",
+    "12 learned selectors available for reliable extraction",
+    "Pagination patterns learned - use followPagination for multi-page content"
+  ]
+}
+```
 
-## Available Tools
+### `get_learning_stats`
 
-### \`browse\`
-Browse a URL with full intelligence.
+Get overall learning statistics:
 
-**Parameters:**
-- \`url\` (required): URL to browse
-- \`waitFor\`: Wait strategy - 'load', 'domcontentloaded', or 'networkidle' (default)
-- \`timeout\`: Timeout in ms (default: 30000)
-- \`sessionProfile\`: Session profile to use (default: 'default')
+```
+Claude: get_learning_stats()
 
-**Returns:**
-- Page content (markdown, HTML, text)
-- All network requests
-- Console logs
-- Discovered API patterns
-- Load time and metadata
-
-### \`execute_api_call\`
-Make a direct API call using saved session authentication.
-
-**Parameters:**
-- \`url\` (required): API endpoint
-- \`method\`: HTTP method (default: GET)
-- \`headers\`: Additional headers
-- \`body\`: Request body (for POST/PUT)
-- \`sessionProfile\`: Session profile to use
-
-**Returns:**
-- Response status and headers
-- Response body (parsed JSON or text)
-- Request duration
-
-### \`save_session\`
-Save the current browser session for future use.
-
-**Parameters:**
-- \`domain\` (required): Domain to save session for
-- \`sessionProfile\`: Profile name (default: 'default')
-
-### \`list_sessions\`
-List all saved sessions.
-
-### \`get_knowledge_stats\`
-Get statistics about learned API patterns.
-
-### \`get_learned_patterns\`
-Get all learned patterns for a specific domain.
-
-**Parameters:**
-- \`domain\` (required): Domain to query
+Returns:
+{
+  "summary": {
+    "totalDomains": 15,
+    "totalApiPatterns": 47,
+    "bypassablePatterns": 23,
+    "totalSelectors": 89,
+    "totalValidators": 12,
+    "domainGroups": ["spanish_gov", "us_gov", "eu_gov"]
+  },
+  "recentLearning": [
+    { "type": "selector_learned", "domain": "boe.es", "timestamp": "..." },
+    { "type": "api_discovered", "domain": "uscis.gov", "timestamp": "..." }
+  ]
+}
+```
 
 ## Architecture
 
-\`\`\`
-┌─────────────────────────────────────┐
-│  MCP Tools                          │
-│  - browse                           │
-│  - execute_api_call                 │
-│  - save_session                     │
-└──────────────┬──────────────────────┘
-               │
-┌──────────────▼──────────────────────┐
-│  Intelligence Layer                 │
-│  ┌────────────────────────────────┐ │
-│  │ API Analyzer                   │ │
-│  │ - Detects API patterns         │ │
-│  │ - Scores confidence            │ │
-│  │ - Identifies auth types        │ │
-│  └────────────────────────────────┘ │
-│  ┌────────────────────────────────┐ │
-│  │ Knowledge Base                 │ │
-│  │ - Stores learned patterns      │ │
-│  │ - Tracks success rates         │ │
-│  │ - Optimizes over time          │ │
-│  └────────────────────────────────┘ │
-└─────────────────────────────────────┘
-               │
-┌──────────────▼──────────────────────┐
-│  Core Services                      │
-│  - Browser Manager (Playwright)     │
-│  - Session Manager (cookies, etc.)  │
-│  - Content Extractor (HTML→MD)      │
-└─────────────────────────────────────┘
-\`\`\`
+```
+                    smart_browse (Primary Interface)
+                              |
+          +-------------------+-------------------+
+          |                   |                   |
+    Learning Engine     Smart Browser       Utilities
+          |                   |                   |
+    +-----+-----+      +------+------+     +------+------+
+    |           |      |             |     |             |
+  Selector   Pattern  Content     API    Rate      Retry
+  Chains    Validator Extractor  Calls  Limiter   Logic
+    |           |      |             |     |             |
+    +-----------+------+-------------+-----+-------------+
+                              |
+                    Browser Manager (Playwright)
+                              |
+                    Session Manager (Auth)
+```
 
-## Comparison with Existing Tools
+### Key Components
 
-| Feature | Jina/Firecrawl | Puppeteer/Playwright | LLM Browser |
-|---------|---------------|---------------------|-------------|
-| Clean content extraction | ✅ | ❌ | ✅ |
-| Network inspection | ❌ | Manual | ✅ Automatic |
-| Console logs | ❌ | Manual | ✅ Automatic |
-| API discovery | ❌ | ❌ | ✅ |
-| Session persistence | ❌ | Manual | ✅ |
-| Progressive optimization | ❌ | ❌ | ✅ |
-| LLM-native (MCP) | ❌ | ❌ | ✅ |
+**SmartBrowser** (`src/core/smart-browser.ts`)
+- Orchestrates all learning features
+- Applies selector fallback chains
+- Validates responses
+- Handles pagination
 
-## Technical Details
+**LearningEngine** (`src/core/learning-engine.ts`)
+- Stores and retrieves learned patterns
+- Applies confidence decay
+- Transfers patterns across domain groups
+- Tracks failure contexts
 
-**Built with:**
-- TypeScript for type safety
-- Playwright for browser automation
-- Model Context Protocol (MCP) SDK
-- Cheerio & Turndown for content extraction
+**BrowserManager** (`src/core/browser-manager.ts`)
+- Playwright wrapper for browsing
+- Network capture and API discovery
+- Session and cookie management
 
-**Storage:**
-- Sessions stored in \`./sessions/\` (gitignored)
-- Knowledge base in \`./knowledge-base.json\` (gitignored)
+## Utility Modules
 
-**Performance:**
-- First browse: ~2-5 seconds (full render)
-- Optimized API call: ~200-500ms (no render)
+All utilities are automatically used by `smart_browse`, but can also be used directly:
+
+### Rate Limiting
+```typescript
+// Pre-configured for government sites
+// boe.es: 10 req/min, extranjeria: 6 req/min
+await rateLimiter.acquire(url);
+```
+
+### Retry with Backoff
+```typescript
+// Automatic retry on timeout/network errors
+const result = await withRetry(operation, { maxAttempts: 3 });
+```
+
+### Content Extraction
+```typescript
+// HTML to markdown with table support
+const { markdown, tables } = extractor.extract(html);
+```
+
+### PDF Extraction
+```typescript
+// Extract structured content from PDFs
+const { sections, lists, keyValues } = await pdfExtractor.extractStructured(url);
+```
+
+## Comparison
+
+| Feature | Jina/Firecrawl | Puppeteer | LLM Browser |
+|---------|---------------|-----------|-------------|
+| Clean content | Yes | No | Yes |
+| API discovery | No | No | Yes |
+| Learning | No | No | Yes |
+| Selector fallbacks | No | No | Yes |
+| Response validation | No | No | Yes |
+| Cross-domain patterns | No | No | Yes |
+| Pagination detection | No | No | Yes |
+| Change tracking | No | No | Yes |
+| Rate limiting | No | Manual | Automatic |
+| Session persistence | No | Manual | Yes |
+| LLM-native (MCP) | No | No | Yes |
 
 ## Development
 
-\`\`\`bash
-# Watch mode (auto-rebuild on changes)
-npm run dev
+```bash
+npm run dev    # Watch mode
+npm run build  # Build
+npm start      # Run MCP server
+```
 
-# Build
-npm run build
+## Storage
 
-# Run
-npm start
-
-# Debug
-npm run inspect
-\`\`\`
+- `./sessions/` - Saved authentication sessions
+- `./knowledge-base.json` - Legacy pattern storage
+- `./enhanced-knowledge-base.json` - Full learning state
 
 ## Roadmap
 
-**Phase 2 (Coming Soon):**
-- [ ] Change detection & monitoring
-- [ ] Action recording/replay
-- [ ] Pagination intelligence
-- [ ] Visual debugging mode
-- [ ] Data validation
+**Completed:**
+- Smart browsing with automatic learning
+- Selector fallback chains
+- Cross-domain pattern transfer
+- Response validation
+- Confidence decay
+- Pagination detection
+- Change frequency tracking
+- Failure context learning
 
-**Phase 3:**
-- [ ] Pattern marketplace
-- [ ] Multi-site workflows
-- [ ] Stealth mode
-- [ ] Natural language selectors
-
-## Contributing
-
-This is a prototype/MVP. Contributions welcome!
+**Coming Soon:**
+- Action recording/replay
+- Natural language selectors
+- Pattern export/import
+- Stealth mode for anti-bot sites
 
 ## License
 
 MIT
-
-## Why This Matters
-
-Current LLM web tools force a choice:
-- **Search APIs** (OpenAI, Anthropic): Good for public info, can't access authenticated content
-- **Scraping tools** (Jina, Firecrawl): Fast for one-off tasks, but don't learn or optimize
-- **Browser automation** (Puppeteer): Powerful but requires code, no intelligence
-
-**LLM Browser bridges the gap:** Intelligent, learning, authenticated access with an LLM-native interface.
-
-It's not just a scraping tool - it's web intelligence infrastructure for AI agents.
