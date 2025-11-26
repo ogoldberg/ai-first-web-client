@@ -1,0 +1,732 @@
+/**
+ * Smart Browser - Unified intelligent browsing with automatic learning
+ *
+ * This is the main orchestrator that ties together all learning features
+ * into a cohesive, intelligent browsing experience for AI agents.
+ *
+ * Key capabilities:
+ * - Automatic content extraction with learned selectors
+ * - Fallback selector chains when primary fails
+ * - Response validation with learned rules
+ * - Automatic learning from successes and failures
+ * - Cross-domain pattern transfer
+ * - Pagination detection and handling
+ * - Change frequency tracking
+ * - Intelligent retry with failure context
+ */
+
+import type { Page } from 'playwright';
+import type {
+  BrowseResult,
+  BrowseOptions,
+  FailureContext,
+  SelectorPattern,
+  PaginationPattern,
+} from '../types/index.js';
+import { BrowserManager } from './browser-manager.js';
+import { ContentExtractor } from '../utils/content-extractor.js';
+import { ApiAnalyzer } from './api-analyzer.js';
+import { SessionManager } from './session-manager.js';
+import { LearningEngine } from './learning-engine.js';
+import { rateLimiter } from '../utils/rate-limiter.js';
+import { withRetry } from '../utils/retry.js';
+import { findPreset, getWaitStrategy } from '../utils/domain-presets.js';
+import { pageCache, ContentCache } from '../utils/cache.js';
+
+// Common cookie consent selectors (enhanced with learning)
+const DEFAULT_COOKIE_SELECTORS = [
+  '[class*="cookie"] button[class*="accept"]',
+  '[class*="cookie"] button[class*="agree"]',
+  '[class*="consent"] button[class*="accept"]',
+  '#onetrust-accept-btn-handler',
+  '.cc-btn.cc-dismiss',
+  '#CybotCookiebotDialogBodyLevelButtonLevelOptinAllowAll',
+  '.aceptar-cookies',
+  '#aceptarCookies',
+  'button[aria-label*="accept" i]',
+];
+
+export interface SmartBrowseOptions extends BrowseOptions {
+  // Content extraction
+  extractContent?: boolean;
+  contentType?: SelectorPattern['contentType'];
+
+  // Validation
+  validateContent?: boolean;
+
+  // Pagination
+  followPagination?: boolean;
+  maxPages?: number;
+
+  // Learning
+  enableLearning?: boolean;
+
+  // Change detection
+  checkForChanges?: boolean;
+}
+
+export interface SmartBrowseResult extends BrowseResult {
+  // Learning insights
+  learning: {
+    selectorsUsed: string[];
+    selectorsSucceeded: string[];
+    selectorsFailed: string[];
+    validationResult?: { valid: boolean; reasons: string[] };
+    paginationDetected?: PaginationPattern;
+    contentChanged?: boolean;
+    recommendedRefreshHours?: number;
+    domainGroup?: string;
+    confidenceLevel: 'high' | 'medium' | 'low' | 'unknown';
+  };
+
+  // Additional pages if pagination was followed
+  additionalPages?: Array<{
+    url: string;
+    content: { html: string; markdown: string; text: string };
+  }>;
+}
+
+export class SmartBrowser {
+  private learningEngine: LearningEngine;
+
+  constructor(
+    private browserManager: BrowserManager,
+    private contentExtractor: ContentExtractor,
+    private apiAnalyzer: ApiAnalyzer,
+    private sessionManager: SessionManager
+  ) {
+    this.learningEngine = new LearningEngine();
+  }
+
+  async initialize(): Promise<void> {
+    await this.learningEngine.initialize();
+  }
+
+  /**
+   * Intelligent browse with automatic learning and optimization
+   */
+  async browse(url: string, options: SmartBrowseOptions = {}): Promise<SmartBrowseResult> {
+    const startTime = Date.now();
+    const domain = new URL(url).hostname;
+    const enableLearning = options.enableLearning !== false;
+
+    // Initialize learning result
+    const learning: SmartBrowseResult['learning'] = {
+      selectorsUsed: [],
+      selectorsSucceeded: [],
+      selectorsFailed: [],
+      confidenceLevel: 'unknown',
+    };
+
+    // Check for domain group and apply shared patterns
+    const domainGroup = this.learningEngine.getDomainGroup(domain);
+    if (domainGroup) {
+      learning.domainGroup = domainGroup.name;
+      console.error(`[SmartBrowser] Using patterns from domain group: ${domainGroup.name}`);
+    }
+
+    // Check if we should back off due to recent failures
+    const failurePatterns = this.learningEngine.getFailurePatterns(domain);
+    if (failurePatterns.shouldBackoff) {
+      console.error(`[SmartBrowser] Backing off from ${domain} due to ${failurePatterns.mostCommonType} errors`);
+      // Add extra delay
+      await this.delay(5000);
+    }
+
+    // Get learned patterns for optimization
+    const entry = this.learningEngine.getEntry(domain);
+    if (entry) {
+      const bypassablePatterns = entry.apiPatterns.filter(p => p.canBypass);
+      if (bypassablePatterns.length > 0) {
+        learning.confidenceLevel = 'high';
+        console.error(`[SmartBrowser] Found ${bypassablePatterns.length} bypassable API patterns for ${domain}`);
+      }
+    }
+
+    // The core browsing operation with intelligent enhancements
+    const browseWithLearning = async (): Promise<{
+      page: Page;
+      network: BrowseResult['network'];
+      console: BrowseResult['console'];
+    }> => {
+      // Apply rate limiting
+      if (options.useRateLimiting !== false) {
+        await rateLimiter.acquire(url);
+      }
+
+      // Load session if available
+      const context = await this.browserManager.getContext(options.sessionProfile || 'default');
+      const hasSession = await this.sessionManager.loadSession(domain, context, options.sessionProfile || 'default');
+      if (hasSession) {
+        console.error(`[SmartBrowser] Using saved session for ${domain}`);
+      }
+
+      // Use preset or learned wait strategy
+      const preset = findPreset(url);
+      const waitFor = options.waitFor || (preset ? getWaitStrategy(url) : 'networkidle');
+
+      // Browse the page
+      const result = await this.browserManager.browse(url, {
+        captureNetwork: options.captureNetwork !== false,
+        captureConsole: options.captureConsole !== false,
+        waitFor,
+        timeout: options.timeout || 30000,
+        profile: options.sessionProfile,
+      });
+
+      // Wait for specific selector if requested
+      if (options.waitForSelector) {
+        await this.waitForSelectorWithFallback(result.page, options.waitForSelector, domain, learning);
+      }
+
+      // Dismiss cookie banners with learned selectors
+      if (options.dismissCookieBanner !== false) {
+        await this.dismissCookieBannerWithLearning(result.page, domain, enableLearning);
+      }
+
+      // Scroll to load lazy content
+      if (options.scrollToLoad) {
+        await this.scrollToLoadContent(result.page);
+      }
+
+      return result;
+    };
+
+    // Execute with retry and failure learning
+    let result: Awaited<ReturnType<typeof browseWithLearning>>;
+    let retryCount = 0;
+
+    try {
+      if (options.retryOnError !== false) {
+        result = await withRetry(browseWithLearning, {
+          maxAttempts: 3,
+          initialDelayMs: 1000,
+          maxDelayMs: 10000,
+          retryOn: (error: Error) => {
+            const message = error.message.toLowerCase();
+            return (
+              message.includes('timeout') ||
+              message.includes('net::') ||
+              message.includes('navigation')
+            );
+          },
+          onRetry: (attempt: number, error: Error) => {
+            retryCount = attempt;
+            // Learn from the failure
+            if (enableLearning) {
+              this.learningEngine.recordFailure(domain, {
+                type: this.learningEngine.classifyError(error),
+                errorMessage: error.message,
+                recoveryAttempted: true,
+              });
+            }
+          },
+        });
+      } else {
+        result = await browseWithLearning();
+      }
+    } catch (error) {
+      // Record final failure
+      if (enableLearning && error instanceof Error) {
+        this.learningEngine.recordFailure(domain, {
+          type: this.learningEngine.classifyError(error),
+          errorMessage: error.message,
+          recoveryAttempted: retryCount > 0,
+          recoverySucceeded: false,
+        });
+      }
+      throw error;
+    }
+
+    const { page, network, console: consoleMessages } = result;
+
+    // Extract content using learned selectors
+    const html = await page.content();
+    const finalUrl = page.url();
+
+    // Try to extract content with learned selectors
+    let extractedContent = await this.extractContentWithLearning(
+      page,
+      html,
+      finalUrl,
+      domain,
+      options.contentType || 'main_content',
+      learning,
+      enableLearning
+    );
+
+    // Extract tables
+    const tables = this.contentExtractor.extractTablesAsJSON(html);
+
+    // Detect language
+    let language: string | undefined;
+    if (options.detectLanguage !== false) {
+      language = this.detectLanguage(html);
+    }
+
+    // Validate content with learned rules
+    if (options.validateContent !== false && enableLearning) {
+      const validationResult = this.learningEngine.validateContent(
+        domain,
+        extractedContent.text,
+        finalUrl
+      );
+      learning.validationResult = validationResult;
+
+      if (!validationResult.valid) {
+        console.error(`[SmartBrowser] Content validation failed: ${validationResult.reasons.join(', ')}`);
+        learning.confidenceLevel = 'low';
+      } else if (enableLearning) {
+        // Learn from successful validation
+        this.learningEngine.learnValidator(domain, extractedContent.text, finalUrl);
+      }
+    }
+
+    // Analyze APIs and learn
+    const discoveredApis = this.apiAnalyzer.analyzeRequests(network);
+    if (enableLearning && discoveredApis.length > 0) {
+      for (const api of discoveredApis) {
+        this.learningEngine.learnApiPattern(domain, api);
+      }
+      console.error(`[SmartBrowser] Learned ${discoveredApis.length} API pattern(s) from ${domain}`);
+    }
+
+    // Check for content changes
+    if (options.checkForChanges) {
+      const cached = pageCache.get(url);
+      if (cached) {
+        const newHash = ContentCache.hashContent(html);
+        const changed = cached.contentHash !== newHash;
+        learning.contentChanged = changed;
+
+        if (enableLearning) {
+          this.learningEngine.recordContentCheck(domain, finalUrl, html, changed);
+          learning.recommendedRefreshHours = this.learningEngine.getRecommendedRefreshInterval(domain, finalUrl);
+        }
+      }
+    }
+
+    // Cache the content
+    pageCache.set(url, {
+      html,
+      contentHash: ContentCache.hashContent(html),
+      fetchedAt: Date.now(),
+    });
+
+    // Detect pagination
+    const paginationPattern = await this.detectPagination(page, finalUrl, domain, enableLearning);
+    if (paginationPattern) {
+      learning.paginationDetected = paginationPattern;
+    }
+
+    // Follow pagination if requested
+    let additionalPages: SmartBrowseResult['additionalPages'];
+    if (options.followPagination && paginationPattern) {
+      additionalPages = await this.followPagination(
+        page,
+        paginationPattern,
+        options.maxPages || 5,
+        domain
+      );
+    }
+
+    // Close the page
+    await page.close();
+
+    // Determine overall confidence
+    if (learning.confidenceLevel === 'unknown') {
+      if (learning.selectorsSucceeded.length > 0 && learning.validationResult?.valid !== false) {
+        learning.confidenceLevel = 'high';
+      } else if (learning.selectorsFailed.length > learning.selectorsSucceeded.length) {
+        learning.confidenceLevel = 'low';
+      } else {
+        learning.confidenceLevel = 'medium';
+      }
+    }
+
+    return {
+      url,
+      title: extractedContent.title,
+      content: {
+        html,
+        markdown: extractedContent.markdown,
+        text: extractedContent.text,
+      },
+      tables: tables.length > 0 ? tables : undefined,
+      network,
+      console: consoleMessages,
+      discoveredApis,
+      metadata: {
+        loadTime: Date.now() - startTime,
+        timestamp: Date.now(),
+        finalUrl,
+        language,
+        retryCount: retryCount > 0 ? retryCount : undefined,
+      },
+      learning,
+      additionalPages,
+    };
+  }
+
+  /**
+   * Wait for selector with learned fallbacks
+   */
+  private async waitForSelectorWithFallback(
+    page: Page,
+    primarySelector: string,
+    domain: string,
+    learning: SmartBrowseResult['learning']
+  ): Promise<boolean> {
+    // Get fallback chain from learning
+    const fallbackChain = this.learningEngine.getSelectorChain(domain, 'main_content');
+    const allSelectors = [primarySelector, ...fallbackChain.filter(s => s !== primarySelector)];
+
+    learning.selectorsUsed = allSelectors;
+
+    for (const selector of allSelectors) {
+      try {
+        await page.waitForSelector(selector, { timeout: 5000 });
+        learning.selectorsSucceeded.push(selector);
+        console.error(`[SmartBrowser] Found selector: ${selector}`);
+        return true;
+      } catch {
+        learning.selectorsFailed.push(selector);
+        console.error(`[SmartBrowser] Selector not found: ${selector}`);
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Dismiss cookie banner with learning
+   */
+  private async dismissCookieBannerWithLearning(
+    page: Page,
+    domain: string,
+    enableLearning: boolean
+  ): Promise<boolean> {
+    // Get domain group cookie selectors
+    const sharedPatterns = this.learningEngine.getSharedPatterns(domain);
+    const groupSelectors = sharedPatterns?.cookieBannerSelectors || [];
+
+    // Combine with defaults, domain-specific first
+    const allSelectors = [...groupSelectors, ...DEFAULT_COOKIE_SELECTORS];
+
+    for (const selector of allSelectors) {
+      try {
+        const button = await page.$(selector);
+        if (button) {
+          const isVisible = await button.isVisible();
+          if (isVisible) {
+            await button.click();
+            console.error(`[SmartBrowser] Dismissed cookie banner using: ${selector}`);
+
+            // Learn this selector if it's not from the group
+            if (enableLearning && !groupSelectors.includes(selector)) {
+              // Could add cookie banner learning here
+            }
+
+            await page.waitForTimeout(500);
+            return true;
+          }
+        }
+      } catch {
+        // Selector not found or not clickable
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Extract content using learned selectors with fallbacks
+   */
+  private async extractContentWithLearning(
+    page: Page,
+    html: string,
+    url: string,
+    domain: string,
+    contentType: SelectorPattern['contentType'],
+    learning: SmartBrowseResult['learning'],
+    enableLearning: boolean
+  ): Promise<{ markdown: string; text: string; title: string }> {
+    // Get selector chain for this content type
+    const selectorChain = this.learningEngine.getSelectorChain(domain, contentType);
+
+    if (selectorChain.length > 0) {
+      learning.selectorsUsed.push(...selectorChain);
+
+      // Try each selector
+      for (const selector of selectorChain) {
+        try {
+          const element = await page.$(selector);
+          if (element) {
+            const elementHtml = await element.innerHTML();
+            if (elementHtml && elementHtml.length > 100) {
+              // Extract from this element
+              const extracted = this.contentExtractor.extract(elementHtml, url);
+
+              if (extracted.text.length > 50) {
+                learning.selectorsSucceeded.push(selector);
+
+                // Learn success
+                if (enableLearning) {
+                  this.learningEngine.learnSelector(domain, selector, contentType);
+                }
+
+                console.error(`[SmartBrowser] Extracted content using learned selector: ${selector}`);
+                return extracted;
+              }
+            }
+          }
+
+          learning.selectorsFailed.push(selector);
+          if (enableLearning) {
+            this.learningEngine.recordSelectorFailure(domain, selector, contentType);
+          }
+        } catch {
+          learning.selectorsFailed.push(selector);
+        }
+      }
+    }
+
+    // Fall back to default extraction
+    const defaultExtracted = this.contentExtractor.extract(html, url);
+
+    // Learn from the successful extraction
+    if (enableLearning && defaultExtracted.text.length > 100) {
+      // Try to identify what selector would have worked
+      const possibleSelectors = ['main', 'article', '#content', '.content', '[role="main"]'];
+      for (const selector of possibleSelectors) {
+        try {
+          const element = await page.$(selector);
+          if (element) {
+            const elementHtml = await element.innerHTML();
+            // Compare against text length as a heuristic
+            if (elementHtml && elementHtml.length > defaultExtracted.text.length * 0.5) {
+              this.learningEngine.learnSelector(domain, selector, contentType);
+              console.error(`[SmartBrowser] Learned new selector for ${domain}: ${selector}`);
+              break;
+            }
+          }
+        } catch {
+          // Skip
+        }
+      }
+    }
+
+    return defaultExtracted;
+  }
+
+  /**
+   * Detect pagination pattern
+   */
+  private async detectPagination(
+    page: Page,
+    url: string,
+    domain: string,
+    enableLearning: boolean
+  ): Promise<PaginationPattern | null> {
+    // Check if we already know the pattern
+    const knownPattern = this.learningEngine.getPaginationPattern(domain, url);
+    if (knownPattern) {
+      return knownPattern;
+    }
+
+    // Try to detect pagination
+    const paginationSelectors = [
+      '.pagination',
+      '[aria-label="pagination"]',
+      '.pager',
+      'nav[role="navigation"]',
+      '.page-numbers',
+    ];
+
+    for (const selector of paginationSelectors) {
+      try {
+        const pagination = await page.$(selector);
+        if (pagination) {
+          // Look for next/prev links
+          const nextLink = await page.$(`${selector} a[rel="next"], ${selector} .next a, ${selector} a:has-text("Next")`);
+          const pageLinks = await page.$$(`${selector} a[href*="page"], ${selector} a[href*="p="]`);
+
+          if (nextLink || pageLinks.length > 1) {
+            const urls = await Promise.all(
+              pageLinks.slice(0, 3).map(async link => {
+                const href = await link.getAttribute('href');
+                return href ? new URL(href, url).href : null;
+              })
+            );
+
+            const validUrls = urls.filter((u): u is string => u !== null);
+
+            if (validUrls.length >= 2) {
+              // Learn the pagination pattern
+              const pattern: PaginationPattern = {
+                type: nextLink ? 'next_button' : 'query_param',
+                selector: nextLink ? `${selector} a[rel="next"], ${selector} .next a` : undefined,
+              };
+
+              if (enableLearning) {
+                this.learningEngine.learnPaginationPattern(domain, [url, ...validUrls], pattern);
+              }
+
+              return this.learningEngine.getPaginationPattern(domain, url);
+            }
+          }
+        }
+      } catch {
+        // Skip
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Follow pagination to get additional pages
+   */
+  private async followPagination(
+    page: Page,
+    pattern: PaginationPattern,
+    maxPages: number,
+    domain: string
+  ): Promise<Array<{ url: string; content: { html: string; markdown: string; text: string } }>> {
+    const additionalPages: Array<{ url: string; content: { html: string; markdown: string; text: string } }> = [];
+
+    for (let i = 0; i < maxPages - 1; i++) {
+      try {
+        if (pattern.type === 'next_button' && pattern.selector) {
+          const nextButton = await page.$(pattern.selector);
+          if (!nextButton) break;
+
+          await nextButton.click();
+          await page.waitForLoadState('networkidle');
+
+          const html = await page.content();
+          const url = page.url();
+          const extracted = this.contentExtractor.extract(html, url);
+
+          additionalPages.push({
+            url,
+            content: {
+              html,
+              markdown: extracted.markdown,
+              text: extracted.text,
+            },
+          });
+        } else {
+          // Query param or path-based pagination
+          // Would need to construct next URL and navigate
+          break; // For now, only button-based is fully implemented
+        }
+      } catch (error) {
+        console.error(`[SmartBrowser] Pagination failed at page ${i + 2}:`, error);
+        break;
+      }
+    }
+
+    return additionalPages;
+  }
+
+  /**
+   * Scroll page to load lazy content
+   */
+  private async scrollToLoadContent(page: Page): Promise<void> {
+    const scrollHeight = await page.evaluate(() => document.body.scrollHeight);
+    const viewportHeight = await page.evaluate(() => window.innerHeight);
+
+    let currentPosition = 0;
+    const scrollStep = viewportHeight * 0.8;
+
+    while (currentPosition < scrollHeight) {
+      currentPosition += scrollStep;
+      await page.evaluate((y) => window.scrollTo(0, y), currentPosition);
+      await page.waitForTimeout(300);
+    }
+
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.waitForTimeout(500);
+  }
+
+  /**
+   * Detect page language
+   */
+  private detectLanguage(html: string): string | undefined {
+    const htmlLangMatch = html.match(/<html[^>]*\slang=["']([^"']+)["']/i);
+    if (htmlLangMatch) {
+      return htmlLangMatch[1].split('-')[0].toLowerCase();
+    }
+
+    const metaLangMatch = html.match(
+      /<meta[^>]*http-equiv=["']content-language["'][^>]*content=["']([^"']+)["']/i
+    );
+    if (metaLangMatch) {
+      return metaLangMatch[1].split('-')[0].toLowerCase();
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Utility delay function
+   */
+  private delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Get learning engine for direct access
+   */
+  getLearningEngine(): LearningEngine {
+    return this.learningEngine;
+  }
+
+  /**
+   * Get intelligence summary for a domain
+   */
+  async getDomainIntelligence(domain: string): Promise<{
+    knownPatterns: number;
+    selectorChains: number;
+    validators: number;
+    paginationPatterns: number;
+    recentFailures: number;
+    successRate: number;
+    domainGroup: string | null;
+    recommendedWaitStrategy: string;
+    shouldUseSession: boolean;
+  }> {
+    const entry = this.learningEngine.getEntry(domain);
+    const group = this.learningEngine.getDomainGroup(domain);
+    const preset = findPreset(`https://${domain}`);
+
+    if (!entry) {
+      return {
+        knownPatterns: 0,
+        selectorChains: 0,
+        validators: 0,
+        paginationPatterns: 0,
+        recentFailures: 0,
+        successRate: 1.0,
+        domainGroup: group?.name || null,
+        recommendedWaitStrategy: preset ? 'preset' : 'networkidle',
+        shouldUseSession: false,
+      };
+    }
+
+    const paginationCount = Object.keys(entry.paginationPatterns as Record<string, unknown>).length;
+
+    return {
+      knownPatterns: entry.apiPatterns.length,
+      selectorChains: entry.selectorChains.reduce((sum, c) => sum + c.selectors.length, 0),
+      validators: entry.validators.length,
+      paginationPatterns: paginationCount,
+      recentFailures: entry.recentFailures.length,
+      successRate: entry.overallSuccessRate,
+      domainGroup: entry.domainGroup || group?.name || null,
+      recommendedWaitStrategy: preset ? 'preset' : 'networkidle',
+      shouldUseSession: entry.apiPatterns.some(p => p.authType === 'cookie'),
+    };
+  }
+}
