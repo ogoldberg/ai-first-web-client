@@ -19,19 +19,27 @@ import type { Page } from 'playwright';
 import type {
   BrowseResult,
   BrowseOptions,
-  FailureContext,
   SelectorPattern,
   PaginationPattern,
+  BrowsingAction,
+  BrowsingTrajectory,
+  PageContext,
+  SkillMatch,
 } from '../types/index.js';
 import { BrowserManager } from './browser-manager.js';
 import { ContentExtractor } from '../utils/content-extractor.js';
 import { ApiAnalyzer } from './api-analyzer.js';
 import { SessionManager } from './session-manager.js';
 import { LearningEngine } from './learning-engine.js';
+import { ProceduralMemory } from './procedural-memory.js';
 import { rateLimiter } from '../utils/rate-limiter.js';
 import { withRetry } from '../utils/retry.js';
 import { findPreset, getWaitStrategy } from '../utils/domain-presets.js';
 import { pageCache, ContentCache } from '../utils/cache.js';
+
+// Procedural memory thresholds
+const SKILL_APPLICATION_THRESHOLD = 0.8;  // Minimum similarity to auto-apply a skill
+const MIN_SUCCESS_TEXT_LENGTH = 100;       // Minimum extracted text length for successful trajectory
 
 // Common cookie consent selectors (enhanced with learning)
 const DEFAULT_COOKIE_SELECTORS = [
@@ -63,6 +71,10 @@ export interface SmartBrowseOptions extends BrowseOptions {
 
   // Change detection
   checkForChanges?: boolean;
+
+  // Procedural memory / skills
+  useSkills?: boolean; // Try to apply learned skills (default: true)
+  recordTrajectory?: boolean; // Record this session for skill learning (default: true)
 }
 
 export interface SmartBrowseResult extends BrowseResult {
@@ -77,6 +89,10 @@ export interface SmartBrowseResult extends BrowseResult {
     recommendedRefreshHours?: number;
     domainGroup?: string;
     confidenceLevel: 'high' | 'medium' | 'low' | 'unknown';
+    // Procedural memory insights
+    skillsMatched?: SkillMatch[];
+    skillApplied?: string;
+    trajectoryRecorded?: boolean;
   };
 
   // Additional pages if pagination was followed
@@ -88,6 +104,8 @@ export interface SmartBrowseResult extends BrowseResult {
 
 export class SmartBrowser {
   private learningEngine: LearningEngine;
+  private proceduralMemory: ProceduralMemory;
+  private currentTrajectory: BrowsingTrajectory | null = null;
 
   constructor(
     private browserManager: BrowserManager,
@@ -96,10 +114,12 @@ export class SmartBrowser {
     private sessionManager: SessionManager
   ) {
     this.learningEngine = new LearningEngine();
+    this.proceduralMemory = new ProceduralMemory();
   }
 
   async initialize(): Promise<void> {
     await this.learningEngine.initialize();
+    await this.proceduralMemory.initialize();
   }
 
   /**
@@ -109,6 +129,8 @@ export class SmartBrowser {
     const startTime = Date.now();
     const domain = new URL(url).hostname;
     const enableLearning = options.enableLearning !== false;
+    const useSkills = options.useSkills !== false;
+    const recordTrajectory = options.recordTrajectory !== false;
 
     // Initialize learning result
     const learning: SmartBrowseResult['learning'] = {
@@ -118,11 +140,38 @@ export class SmartBrowser {
       confidenceLevel: 'unknown',
     };
 
+    // Start trajectory recording for procedural memory
+    if (recordTrajectory) {
+      this.startTrajectory(url, domain);
+    }
+
     // Check for domain group and apply shared patterns
     const domainGroup = this.learningEngine.getDomainGroup(domain);
     if (domainGroup) {
       learning.domainGroup = domainGroup.name;
       console.error(`[SmartBrowser] Using patterns from domain group: ${domainGroup.name}`);
+    }
+
+    // Check for applicable skills from procedural memory
+    if (useSkills) {
+      const pageContext: PageContext = {
+        url,
+        domain,
+        pageType: 'unknown',
+      };
+
+      const matchedSkills = this.proceduralMemory.retrieveSkills(pageContext, 3);
+      if (matchedSkills.length > 0) {
+        learning.skillsMatched = matchedSkills;
+        console.error(`[SmartBrowser] Found ${matchedSkills.length} potentially applicable skills`);
+
+        // Record the best match for later application
+        const bestMatch = matchedSkills[0];
+        if (bestMatch.preconditionsMet && bestMatch.similarity > SKILL_APPLICATION_THRESHOLD) {
+          learning.skillApplied = bestMatch.skill.name;
+          console.error(`[SmartBrowser] Will apply skill: ${bestMatch.skill.name} (similarity: ${bestMatch.similarity.toFixed(2)})`);
+        }
+      }
     }
 
     // Check if we should back off due to recent failures
@@ -244,6 +293,22 @@ export class SmartBrowser {
     const html = await page.content();
     const finalUrl = page.url();
 
+    // Detect page context for better skill matching
+    if (useSkills) {
+      const detectedContext = await this.detectPageContext(page, finalUrl);
+
+      // Re-match skills with full page context
+      const matchedSkills = this.proceduralMemory.retrieveSkills(detectedContext, 3);
+      if (matchedSkills.length > 0) {
+        learning.skillsMatched = matchedSkills;
+        const bestMatch = matchedSkills[0];
+        if (bestMatch.preconditionsMet && bestMatch.similarity > 0.75) {
+          learning.skillApplied = bestMatch.skill.name;
+          console.error(`[SmartBrowser] Matched skill with context: ${bestMatch.skill.name} (${detectedContext.pageType} page, similarity: ${bestMatch.similarity.toFixed(2)})`);
+        }
+      }
+    }
+
     // Try to extract content with learned selectors
     let extractedContent = await this.extractContentWithLearning(
       page,
@@ -344,6 +409,22 @@ export class SmartBrowser {
       }
     }
 
+    // Complete trajectory recording for procedural memory
+    if (recordTrajectory && this.currentTrajectory) {
+      const success = learning.confidenceLevel !== 'low' && extractedContent.text.length > MIN_SUCCESS_TEXT_LENGTH;
+      await this.completeTrajectory(
+        finalUrl,
+        success,
+        Date.now() - startTime,
+        {
+          text: extractedContent.text,
+          tables: tables.length,
+          apis: discoveredApis.length,
+        }
+      );
+      learning.trajectoryRecorded = true;
+    }
+
     return {
       url,
       title: extractedContent.title,
@@ -419,8 +500,18 @@ export class SmartBrowser {
         if (button) {
           const isVisible = await button.isVisible();
           if (isVisible) {
+            const startTime = Date.now();
             await button.click();
             console.error(`[SmartBrowser] Dismissed cookie banner using: ${selector}`);
+
+            // Record action for procedural memory
+            this.recordAction({
+              type: 'dismiss_banner',
+              selector,
+              timestamp: Date.now(),
+              success: true,
+              duration: Date.now() - startTime,
+            });
 
             // Learn this selector if it's not from the group
             if (enableLearning && !groupSelectors.includes(selector)) {
@@ -474,6 +565,14 @@ export class SmartBrowser {
                 if (enableLearning) {
                   this.learningEngine.learnSelector(domain, selector, contentType);
                 }
+
+                // Record extraction action for procedural memory
+                this.recordAction({
+                  type: 'extract',
+                  selector,
+                  timestamp: Date.now(),
+                  success: true,
+                });
 
                 console.error(`[SmartBrowser] Extracted content using learned selector: ${selector}`);
                 return extracted;
@@ -728,5 +827,170 @@ export class SmartBrowser {
       recommendedWaitStrategy: preset ? 'preset' : 'networkidle',
       shouldUseSession: entry.apiPatterns.some(p => p.authType === 'cookie'),
     };
+  }
+
+  // ============================================
+  // PROCEDURAL MEMORY / SKILL METHODS
+  // ============================================
+
+  /**
+   * Get procedural memory for direct access
+   */
+  getProceduralMemory(): ProceduralMemory {
+    return this.proceduralMemory;
+  }
+
+  /**
+   * Detect page context for better skill matching
+   */
+  async detectPageContext(page: Page, url: string): Promise<PageContext> {
+    const domain = new URL(url).hostname;
+
+    // Detect page elements in parallel
+    const [
+      hasForm,
+      hasTable,
+      hasPagination,
+      hasLogin,
+      hasSearch,
+      title,
+      language,
+    ] = await Promise.all([
+      page.$('form').then(el => el !== null),
+      page.$('table').then(el => el !== null),
+      page.$('.pagination, [aria-label="pagination"], .pager, nav[role="navigation"] a[href*="page"]').then(el => el !== null),
+      page.$('input[type="password"], form[action*="login"], form[action*="signin"], #login, .login-form').then(el => el !== null),
+      page.$('input[type="search"], form[action*="search"], input[name="q"], input[name="query"]').then(el => el !== null),
+      page.title(),
+      page.$eval('html', el => el.getAttribute('lang')).catch(() => undefined),
+    ]);
+
+    // Infer page type
+    let pageType: PageContext['pageType'] = 'unknown';
+    if (hasLogin) {
+      pageType = 'login';
+    } else if (hasSearch) {
+      pageType = 'search';
+    } else if (hasForm) {
+      pageType = 'form';
+    } else if (hasTable || hasPagination) {
+      pageType = 'list';
+    } else {
+      pageType = 'detail';
+    }
+
+    // Get available selectors for skill matching
+    const availableSelectors = await page.evaluate(() => {
+      const selectors: string[] = [];
+      // Check for common content selectors
+      const checks = [
+        'main', 'article', '#content', '.content', '[role="main"]',
+        'table', 'form', '.pagination', 'nav',
+      ];
+      for (const sel of checks) {
+        if (document.querySelector(sel)) {
+          selectors.push(sel);
+        }
+      }
+      return selectors;
+    });
+
+    // Get content length estimate
+    const contentLength = await page.evaluate(() => document.body?.innerText?.length || 0);
+
+    return {
+      url,
+      domain,
+      title,
+      language: language?.split('-')[0],
+      pageType,
+      availableSelectors,
+      contentLength,
+      hasForm,
+      hasPagination,
+      hasTable,
+    };
+  }
+
+  /**
+   * Start recording a new browsing trajectory
+   */
+  private startTrajectory(url: string, domain: string): void {
+    this.currentTrajectory = {
+      id: `traj_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      startUrl: url,
+      endUrl: url,
+      domain,
+      actions: [],
+      success: false,
+      totalDuration: 0,
+      timestamp: Date.now(),
+    };
+
+    // Record the initial navigate action
+    this.recordAction({
+      type: 'navigate',
+      url,
+      timestamp: Date.now(),
+      success: true,
+    });
+  }
+
+  /**
+   * Record an action in the current trajectory
+   */
+  recordAction(action: BrowsingAction): void {
+    if (this.currentTrajectory) {
+      this.currentTrajectory.actions.push(action);
+    }
+  }
+
+  /**
+   * Complete and submit the current trajectory for skill learning
+   */
+  private async completeTrajectory(
+    endUrl: string,
+    success: boolean,
+    totalDuration: number,
+    extractedContent?: { text: string; tables: number; apis: number }
+  ): Promise<void> {
+    if (!this.currentTrajectory) return;
+
+    this.currentTrajectory.endUrl = endUrl;
+    this.currentTrajectory.success = success;
+    this.currentTrajectory.totalDuration = totalDuration;
+    this.currentTrajectory.extractedContent = extractedContent;
+
+    // Submit to procedural memory for potential skill extraction
+    await this.proceduralMemory.recordTrajectory(this.currentTrajectory);
+
+    // Clear the current trajectory
+    this.currentTrajectory = null;
+  }
+
+  /**
+   * Get procedural memory statistics
+   */
+  getProceduralMemoryStats(): {
+    totalSkills: number;
+    totalTrajectories: number;
+    skillsByDomain: Record<string, number>;
+    avgSuccessRate: number;
+    mostUsedSkills: Array<{ name: string; uses: number }>;
+  } {
+    return this.proceduralMemory.getStats();
+  }
+
+  /**
+   * Find applicable skills for a given URL
+   */
+  findApplicableSkills(url: string, topK: number = 3): SkillMatch[] {
+    const domain = new URL(url).hostname;
+    const pageContext: PageContext = {
+      url,
+      domain,
+      pageType: 'unknown',
+    };
+    return this.proceduralMemory.retrieveSkills(pageContext, topK);
   }
 }

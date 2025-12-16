@@ -278,3 +278,185 @@ export interface ConfidenceDecayConfig {
   // Days without use before pattern is archived
   archiveAfterDays: number;
 }
+
+// ============================================
+// PROCEDURAL MEMORY TYPES
+// ============================================
+
+/**
+ * A browsing action that can be part of a skill
+ */
+export interface BrowsingAction {
+  type: 'navigate' | 'click' | 'fill' | 'select' | 'scroll' | 'wait' | 'extract' | 'dismiss_banner';
+  selector?: string;
+  value?: string;
+  url?: string;
+  waitFor?: 'load' | 'networkidle' | 'selector';
+  timestamp: number;
+  success: boolean;
+  duration?: number;
+}
+
+/**
+ * Preconditions for when a skill is applicable
+ */
+export interface SkillPreconditions {
+  // URL patterns where this skill applies
+  urlPatterns?: string[];
+  // Domain patterns (supports wildcards)
+  domainPatterns?: string[];
+  // Required DOM elements for skill to work
+  requiredSelectors?: string[];
+  // Page must contain certain text
+  requiredText?: string[];
+  // Page characteristics
+  pageType?: 'list' | 'detail' | 'form' | 'search' | 'login' | 'unknown';
+  // Language requirements
+  language?: string;
+  // Content type hints
+  contentTypeHints?: Array<SelectorPattern['contentType']>;
+}
+
+/**
+ * A learned browsing skill (procedural memory unit)
+ */
+export interface BrowsingSkill {
+  // Unique identifier
+  id: string;
+  // Human-readable name
+  name: string;
+  // Description of what this skill does
+  description: string;
+  // When this skill is applicable
+  preconditions: SkillPreconditions;
+  // The sequence of actions
+  actionSequence: BrowsingAction[];
+  // Vector embedding for similarity matching (normalized)
+  embedding: number[];
+  // Performance metrics
+  metrics: {
+    successCount: number;
+    failureCount: number;
+    avgDuration: number;
+    lastUsed: number;
+    timesUsed: number;
+  };
+  // Metadata
+  createdAt: number;
+  updatedAt: number;
+  sourceUrl?: string;
+  sourceDomain?: string;
+}
+
+/**
+ * A recorded browsing trajectory (for skill extraction)
+ */
+export interface BrowsingTrajectory {
+  id: string;
+  startUrl: string;
+  endUrl: string;
+  domain: string;
+  actions: BrowsingAction[];
+  success: boolean;
+  totalDuration: number;
+  extractedContent?: {
+    text: string;
+    tables: number;
+    apis: number;
+  };
+  timestamp: number;
+}
+
+/**
+ * Skill retrieval result with similarity score
+ */
+export interface SkillMatch {
+  skill: BrowsingSkill;
+  similarity: number;
+  preconditionsMet: boolean;
+  reason?: string;
+}
+
+/**
+ * Configuration for the procedural memory system
+ */
+export interface ProceduralMemoryConfig {
+  // Embedding dimension (default: 64)
+  embeddingDim: number;
+  // Minimum similarity threshold for retrieval (default: 0.7)
+  similarityThreshold: number;
+  // Maximum skills to store (default: 1000)
+  maxSkills: number;
+  // Minimum trajectory length to extract skill (default: 2)
+  minTrajectoryLength: number;
+  // Merge threshold for similar skills (default: 0.9)
+  mergeThreshold: number;
+  // Skill file path
+  filePath: string;
+}
+
+/**
+ * Page context for skill matching
+ */
+export interface PageContext {
+  url: string;
+  domain: string;
+  title?: string;
+  language?: string;
+  pageType?: SkillPreconditions['pageType'];
+  availableSelectors?: string[];
+  contentLength?: number;
+  hasForm?: boolean;
+  hasPagination?: boolean;
+  hasTable?: boolean;
+}
+
+/**
+ * A composed workflow combining multiple skills
+ */
+export interface SkillWorkflow {
+  id: string;
+  name: string;
+  description: string;
+  // Skills to execute in order
+  skillIds: string[];
+  // Preconditions for the entire workflow
+  preconditions: SkillPreconditions;
+  // Transition conditions between skills
+  transitions: Array<{
+    fromSkillId: string;
+    toSkillId: string;
+    condition?: 'success' | 'always' | 'has_pagination' | 'has_next';
+  }>;
+  // Performance metrics
+  metrics: {
+    successCount: number;
+    failureCount: number;
+    avgDuration: number;
+    lastUsed: number;
+    timesUsed: number;
+  };
+  createdAt: number;
+  updatedAt: number;
+}
+
+/**
+ * Coverage tracking for active learning
+ */
+export interface CoverageStats {
+  // Domains with skill coverage
+  coveredDomains: string[];
+  // Page types with skills
+  coveredPageTypes: Array<SkillPreconditions['pageType']>;
+  // Domains visited but no skills learned
+  uncoveredDomains: string[];
+  // Page types frequently encountered but no skills
+  uncoveredPageTypes: Array<SkillPreconditions['pageType']>;
+  // Suggested areas to explore
+  suggestions: Array<{
+    type: 'domain' | 'pageType' | 'action';
+    value: string;
+    reason: string;
+    priority: 'high' | 'medium' | 'low';
+  }>;
+}
