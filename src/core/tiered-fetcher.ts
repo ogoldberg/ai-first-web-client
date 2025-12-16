@@ -27,11 +27,10 @@
 
 import { LightweightRenderer } from './lightweight-renderer.js';
 import { ContentIntelligence, type ContentResult, type ExtractionStrategy } from './content-intelligence.js';
-import { BrowserManager } from './browser-manager.js';
+import { BrowserManager, type Page } from './browser-manager.js';
 import { ContentExtractor } from '../utils/content-extractor.js';
 import { rateLimiter } from '../utils/rate-limiter.js';
 import type { NetworkRequest, ApiPattern } from '../types/index.js';
-import type { Page } from 'playwright';
 
 export type RenderTier = 'intelligence' | 'lightweight' | 'playwright';
 
@@ -241,7 +240,7 @@ export class TieredFetcher {
               isJSHeavy: tier === 'playwright',
               needsFullBrowser: tier === 'playwright',
               contentComplete: true,
-              playwrightAvailable: ContentIntelligence.isPlaywrightAvailable(),
+              playwrightAvailable: BrowserManager.isPlaywrightAvailable(),
             },
           };
         }
@@ -410,16 +409,24 @@ export class TieredFetcher {
    * Determine which tier to start with
    */
   private determineStartingTier(domain: string, url: string): RenderTier {
+    const playwrightAvailable = BrowserManager.isPlaywrightAvailable();
+
     // Check learned preferences first
     const preference = this.domainPreferences.get(domain);
     if (preference && preference.successCount > 2) {
       // Normalize legacy tier names
-      return TIER_ALIASES[preference.preferredTier] || preference.preferredTier;
+      const preferredTier = TIER_ALIASES[preference.preferredTier] || preference.preferredTier;
+      // If preference is playwright but it's not available, fall back to lightweight
+      if (preferredTier === 'playwright' && !playwrightAvailable) {
+        return 'lightweight';
+      }
+      return preferredTier;
     }
 
     // Check known browser-required domains (social media, etc.)
     if (KNOWN_BROWSER_REQUIRED.some(pattern => pattern.test(domain))) {
-      return 'playwright';
+      // If Playwright not available, try lightweight instead
+      return playwrightAvailable ? 'playwright' : 'lightweight';
     }
 
     // Default to intelligence tier (fastest) - it tries multiple strategies
@@ -433,15 +440,28 @@ export class TieredFetcher {
     // Normalize legacy tier name
     const tier = TIER_ALIASES[startTier] || startTier;
 
+    // Check if Playwright is available - skip that tier if not
+    const playwrightAvailable = BrowserManager.isPlaywrightAvailable();
+
     switch (tier) {
       case 'intelligence':
-        return ['intelligence', 'lightweight', 'playwright'];
+        return playwrightAvailable
+          ? ['intelligence', 'lightweight', 'playwright']
+          : ['intelligence', 'lightweight'];
       case 'lightweight':
-        return ['lightweight', 'playwright'];
+        return playwrightAvailable
+          ? ['lightweight', 'playwright']
+          : ['lightweight'];
       case 'playwright':
+        if (!playwrightAvailable) {
+          console.error('[TieredFetcher] Playwright tier requested but Playwright is not available. Falling back to lightweight tier.');
+          return ['lightweight'];
+        }
         return ['playwright'];
       default:
-        return ['intelligence', 'lightweight', 'playwright'];
+        return playwrightAvailable
+          ? ['intelligence', 'lightweight', 'playwright']
+          : ['intelligence', 'lightweight'];
     }
   }
 
@@ -579,7 +599,7 @@ export class TieredFetcher {
       totalDomains: this.domainPreferences.size,
       byTier,
       avgResponseTimes,
-      playwrightAvailable: ContentIntelligence.isPlaywrightAvailable(),
+      playwrightAvailable: BrowserManager.isPlaywrightAvailable(),
     };
   }
 

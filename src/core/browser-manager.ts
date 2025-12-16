@@ -1,10 +1,43 @@
 /**
  * Browser Manager - Handles Playwright browser lifecycle
+ *
+ * Playwright is OPTIONAL - the module gracefully degrades if not installed.
+ * Check isPlaywrightAvailable() before using browser functionality.
  */
 
-import { chromium, Browser, BrowserContext, Page } from 'playwright';
+import type { Browser, BrowserContext, Page } from 'playwright';
 import type { NetworkRequest, ConsoleMessage } from '../types/index.js';
 import * as fs from 'fs';
+
+// Re-export Page type for consumers
+export type { Page } from 'playwright';
+
+// Lazy-loaded Playwright reference
+let playwrightModule: typeof import('playwright') | null = null;
+let playwrightLoadAttempted = false;
+let playwrightLoadError: string | null = null;
+
+/**
+ * Try to load Playwright dynamically
+ */
+async function tryLoadPlaywright(): Promise<typeof import('playwright') | null> {
+  if (playwrightLoadAttempted) {
+    return playwrightModule;
+  }
+
+  playwrightLoadAttempted = true;
+
+  try {
+    playwrightModule = await import('playwright');
+    return playwrightModule;
+  } catch (error) {
+    playwrightLoadError = error instanceof Error ? error.message : 'Failed to load Playwright';
+    console.error('[BrowserManager] Playwright not available:', playwrightLoadError);
+    console.error('[BrowserManager] The system will work without Playwright using intelligence and lightweight tiers.');
+    console.error('[BrowserManager] To enable full browser rendering, install Playwright: npm install playwright && npx playwright install chromium');
+    return null;
+  }
+}
 
 export interface BrowserConfig {
   headless?: boolean;
@@ -27,6 +60,30 @@ export class BrowserManager {
 
   constructor(config: Partial<BrowserConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
+  }
+
+  /**
+   * Check if Playwright is available without loading it
+   */
+  static isPlaywrightAvailable(): boolean {
+    if (playwrightLoadAttempted) {
+      return playwrightModule !== null;
+    }
+
+    // Check if playwright is in node_modules without loading it
+    try {
+      require.resolve('playwright');
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Get the Playwright load error if any
+   */
+  static getPlaywrightError(): string | null {
+    return playwrightLoadError;
   }
 
   /**
@@ -54,9 +111,25 @@ export class BrowserManager {
     this.setConfig({ headless: true, devtools: false, slowMo: 0 });
   }
 
+  /**
+   * Ensure Playwright is available, throwing a helpful error if not
+   */
+  private async ensurePlaywright(): Promise<typeof import('playwright')> {
+    const pw = await tryLoadPlaywright();
+    if (!pw) {
+      throw new Error(
+        'Playwright is not installed. ' +
+        'Install it with: npm install playwright && npx playwright install chromium\n' +
+        'Or use the intelligence/lightweight tiers which work without Playwright.'
+      );
+    }
+    return pw;
+  }
+
   async initialize(): Promise<void> {
     if (!this.browser) {
-      this.browser = await chromium.launch({
+      const pw = await this.ensurePlaywright();
+      this.browser = await pw.chromium.launch({
         headless: this.config.headless,
         slowMo: this.config.slowMo,
         devtools: this.config.devtools,
@@ -115,14 +188,14 @@ export class BrowserManager {
         const startTime = requestTiming.get(response.url()) || Date.now();
         const duration = Date.now() - startTime;
 
-        let responseBody: any;
+        let responseBody: unknown;
         const contentType = response.headers()['content-type'] || '';
 
         // Capture JSON responses
         if (contentType.includes('application/json')) {
           try {
             responseBody = await response.json();
-          } catch (e) {
+          } catch {
             // Failed to parse JSON
           }
         }
@@ -146,7 +219,7 @@ export class BrowserManager {
     if (options.captureConsole !== false) {
       page.on('console', (msg) => {
         consoleMessages.push({
-          type: msg.type() as any,
+          type: msg.type() as ConsoleMessage['type'],
           text: msg.text(),
           timestamp: Date.now(),
           location: msg.location() ? {
