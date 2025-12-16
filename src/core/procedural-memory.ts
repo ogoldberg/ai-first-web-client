@@ -82,6 +82,10 @@ export class ProceduralMemory {
 
   async initialize(): Promise<void> {
     await this.load();
+    // Apply decay to stale skills on startup
+    this.applySkillDecay();
+    // Prune consistently failing skills
+    this.pruneFailedSkills();
     console.error(`[ProceduralMemory] Initialized with ${this.skills.size} skills`);
   }
 
@@ -776,6 +780,121 @@ export class ProceduralMemory {
       null,
       2
     );
+  }
+
+  /**
+   * Import skills from another instance or backup
+   */
+  async importSkills(skillsJson: string, merge: boolean = true): Promise<number> {
+    try {
+      const data = JSON.parse(skillsJson);
+      const importedSkills: BrowsingSkill[] = data.skills || data;
+      let imported = 0;
+
+      for (const skill of importedSkills) {
+        if (!skill.id || !skill.embedding) continue;
+
+        if (merge) {
+          // Check for similar existing skill
+          const existing = this.findSimilarSkill(skill.embedding);
+          if (existing && this.cosineSimilarity(skill.embedding, existing.embedding) > this.config.mergeThreshold) {
+            // Merge metrics
+            existing.metrics.successCount += skill.metrics.successCount;
+            existing.metrics.timesUsed += skill.metrics.timesUsed;
+            continue;
+          }
+        }
+
+        // Add as new skill
+        this.skills.set(skill.id, skill);
+        imported++;
+      }
+
+      await this.save();
+      console.error(`[ProceduralMemory] Imported ${imported} skills`);
+      return imported;
+    } catch (error) {
+      console.error('[ProceduralMemory] Failed to import skills:', error);
+      return 0;
+    }
+  }
+
+  /**
+   * Apply decay to skills that haven't been used recently
+   */
+  applySkillDecay(decayAfterDays: number = 30, decayRate: number = 0.1): number {
+    const now = Date.now();
+    let decayedCount = 0;
+
+    for (const skill of this.skills.values()) {
+      const daysSinceUsed = (now - skill.metrics.lastUsed) / (24 * 60 * 60 * 1000);
+
+      if (daysSinceUsed > decayAfterDays) {
+        // Calculate decay factor
+        const weeksOverdue = (daysSinceUsed - decayAfterDays) / 7;
+        const decayFactor = Math.max(0.1, 1 - (weeksOverdue * decayRate));
+
+        // Apply decay to success count (reduces skill priority in retrieval)
+        const originalSuccess = skill.metrics.successCount;
+        skill.metrics.successCount = Math.floor(skill.metrics.successCount * decayFactor);
+
+        if (skill.metrics.successCount < originalSuccess) {
+          decayedCount++;
+          skill.updatedAt = now;
+        }
+      }
+    }
+
+    if (decayedCount > 0) {
+      this.save();
+      console.error(`[ProceduralMemory] Applied decay to ${decayedCount} skills`);
+    }
+
+    return decayedCount;
+  }
+
+  /**
+   * Remove skills with poor performance
+   */
+  pruneFailedSkills(minSuccessRate: number = 0.3, minUses: number = 3): number {
+    const toRemove: string[] = [];
+
+    for (const [id, skill] of this.skills) {
+      if (skill.metrics.timesUsed >= minUses) {
+        const successRate = skill.metrics.successCount / skill.metrics.timesUsed;
+        if (successRate < minSuccessRate) {
+          toRemove.push(id);
+        }
+      }
+    }
+
+    for (const id of toRemove) {
+      this.skills.delete(id);
+    }
+
+    if (toRemove.length > 0) {
+      this.save();
+      console.error(`[ProceduralMemory] Pruned ${toRemove.length} low-performing skills`);
+    }
+
+    return toRemove.length;
+  }
+
+  /**
+   * Get skills grouped by domain for analysis
+   */
+  getSkillsByDomain(): Map<string, BrowsingSkill[]> {
+    const byDomain = new Map<string, BrowsingSkill[]>();
+
+    for (const skill of this.skills.values()) {
+      const domain = skill.sourceDomain || 'unknown';
+      if (!byDomain.has(domain)) {
+        byDomain.set(domain, []);
+      }
+      byDomain.get(domain)!.push(skill);
+    }
+
+    return byDomain;
   }
 }
 

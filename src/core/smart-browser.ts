@@ -480,8 +480,18 @@ export class SmartBrowser {
         if (button) {
           const isVisible = await button.isVisible();
           if (isVisible) {
+            const startTime = Date.now();
             await button.click();
             console.error(`[SmartBrowser] Dismissed cookie banner using: ${selector}`);
+
+            // Record action for procedural memory
+            this.recordAction({
+              type: 'dismiss_banner',
+              selector,
+              timestamp: Date.now(),
+              success: true,
+              duration: Date.now() - startTime,
+            });
 
             // Learn this selector if it's not from the group
             if (enableLearning && !groupSelectors.includes(selector)) {
@@ -535,6 +545,14 @@ export class SmartBrowser {
                 if (enableLearning) {
                   this.learningEngine.learnSelector(domain, selector, contentType);
                 }
+
+                // Record extraction action for procedural memory
+                this.recordAction({
+                  type: 'extract',
+                  selector,
+                  timestamp: Date.now(),
+                  success: true,
+                });
 
                 console.error(`[SmartBrowser] Extracted content using learned selector: ${selector}`);
                 return extracted;
