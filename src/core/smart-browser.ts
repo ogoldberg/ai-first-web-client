@@ -37,6 +37,10 @@ import { withRetry } from '../utils/retry.js';
 import { findPreset, getWaitStrategy } from '../utils/domain-presets.js';
 import { pageCache, ContentCache } from '../utils/cache.js';
 
+// Procedural memory thresholds
+const SKILL_APPLICATION_THRESHOLD = 0.8;  // Minimum similarity to auto-apply a skill
+const MIN_SUCCESS_TEXT_LENGTH = 100;       // Minimum extracted text length for successful trajectory
+
 // Common cookie consent selectors (enhanced with learning)
 const DEFAULT_COOKIE_SELECTORS = [
   '[class*="cookie"] button[class*="accept"]',
@@ -163,7 +167,7 @@ export class SmartBrowser {
 
         // Record the best match for later application
         const bestMatch = matchedSkills[0];
-        if (bestMatch.preconditionsMet && bestMatch.similarity > 0.8) {
+        if (bestMatch.preconditionsMet && bestMatch.similarity > SKILL_APPLICATION_THRESHOLD) {
           learning.skillApplied = bestMatch.skill.name;
           console.error(`[SmartBrowser] Will apply skill: ${bestMatch.skill.name} (similarity: ${bestMatch.similarity.toFixed(2)})`);
         }
@@ -407,8 +411,8 @@ export class SmartBrowser {
 
     // Complete trajectory recording for procedural memory
     if (recordTrajectory && this.currentTrajectory) {
-      const success = learning.confidenceLevel !== 'low' && extractedContent.text.length > 100;
-      this.completeTrajectory(
+      const success = learning.confidenceLevel !== 'low' && extractedContent.text.length > MIN_SUCCESS_TEXT_LENGTH;
+      await this.completeTrajectory(
         finalUrl,
         success,
         Date.now() - startTime,
@@ -944,12 +948,12 @@ export class SmartBrowser {
   /**
    * Complete and submit the current trajectory for skill learning
    */
-  private completeTrajectory(
+  private async completeTrajectory(
     endUrl: string,
     success: boolean,
     totalDuration: number,
     extractedContent?: { text: string; tables: number; apis: number }
-  ): void {
+  ): Promise<void> {
     if (!this.currentTrajectory) return;
 
     this.currentTrajectory.endUrl = endUrl;
@@ -958,7 +962,7 @@ export class SmartBrowser {
     this.currentTrajectory.extractedContent = extractedContent;
 
     // Submit to procedural memory for potential skill extraction
-    this.proceduralMemory.recordTrajectory(this.currentTrajectory);
+    await this.proceduralMemory.recordTrajectory(this.currentTrajectory);
 
     // Clear the current trajectory
     this.currentTrajectory = null;

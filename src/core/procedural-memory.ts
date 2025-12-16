@@ -36,7 +36,34 @@ const DEFAULT_CONFIG: ProceduralMemoryConfig = {
   filePath: './procedural-memory.json',
 };
 
-// Common skill templates for bootstrapping
+// Embedding feature layout configuration
+// Defines the structure and position of features within the 64-dimensional embedding vector
+const EMBEDDING_FEATURES = {
+  DOMAIN: { offset: 0, size: 8 },         // positions 0-7: domain hash
+  URL_PATTERN: { offset: 8, size: 8 },    // positions 8-15: URL pattern hash
+  PAGE_TYPE: { offset: 16, size: 8 },     // positions 16-23: page type one-hot
+  BOOLEAN_FLAGS: { offset: 24, size: 8 }, // positions 24-31: boolean features
+  ACTIONS: { offset: 32, size: 16 },      // positions 32-47: action type counts
+  SELECTORS: { offset: 48, size: 8 },     // positions 48-55: selector hash
+  CONTENT_TYPES: { offset: 56, size: 8 }, // positions 56-63: content type hints
+} as const;
+
+// Known page types for embedding encoding
+const PAGE_TYPES = ['list', 'detail', 'form', 'search', 'login', 'unknown'] as const;
+
+// Boolean features tracked in embeddings
+const BOOLEAN_FEATURES = ['hasForm', 'hasPagination', 'hasTable', 'hasLogin'] as const;
+
+// Action types for sequence encoding
+const ACTION_TYPES = ['navigate', 'click', 'fill', 'select', 'scroll', 'wait', 'extract', 'dismiss_banner'] as const;
+
+// Content type categories
+const CONTENT_TYPES = ['main_content', 'requirements', 'fees', 'timeline', 'documents', 'contact', 'navigation', 'table'] as const;
+
+// Common skill templates for bootstrapping new instances
+// These templates define common browsing patterns that can be used to seed
+// the procedural memory with basic skills before any learning has occurred.
+// TODO: Implement bootstrapFromTemplates() method to use these templates
 const SKILL_TEMPLATES: Partial<BrowsingSkill>[] = [
   {
     name: 'cookie_banner_dismiss',
@@ -94,7 +121,7 @@ export class ProceduralMemory {
     this.applySkillDecay();
     // Prune consistently failing skills
     this.pruneFailedSkills();
-    console.error(`[ProceduralMemory] Initialized with ${this.skills.size} skills`);
+    console.log(`[ProceduralMemory] Initialized with ${this.skills.size} skills`);
   }
 
   // ============================================
@@ -108,80 +135,74 @@ export class ProceduralMemory {
   private createEmbedding(features: Record<string, unknown>): number[] {
     const embedding = new Array(this.config.embeddingDim).fill(0);
 
-    // Feature extraction and encoding
-    let featureIndex = 0;
-
-    // Domain features (positions 0-7)
+    // Domain features
     if (features.domain) {
+      const { offset, size } = EMBEDDING_FEATURES.DOMAIN;
       const domainHash = this.hashString(String(features.domain));
-      for (let i = 0; i < 8 && i < this.config.embeddingDim; i++) {
-        embedding[i] = ((domainHash >> (i * 4)) & 0xf) / 15;
+      for (let i = 0; i < size && offset + i < this.config.embeddingDim; i++) {
+        embedding[offset + i] = ((domainHash >> (i * 4)) & 0xf) / 15;
       }
-      featureIndex = 8;
     }
 
-    // URL pattern features (positions 8-15)
+    // URL pattern features
     if (features.urlPattern) {
+      const { offset, size } = EMBEDDING_FEATURES.URL_PATTERN;
       const urlHash = this.hashString(String(features.urlPattern));
-      for (let i = 0; i < 8 && featureIndex + i < this.config.embeddingDim; i++) {
-        embedding[featureIndex + i] = ((urlHash >> (i * 4)) & 0xf) / 15;
+      for (let i = 0; i < size && offset + i < this.config.embeddingDim; i++) {
+        embedding[offset + i] = ((urlHash >> (i * 4)) & 0xf) / 15;
       }
-      featureIndex += 8;
     }
 
-    // Page type encoding (positions 16-23)
-    const pageTypes = ['list', 'detail', 'form', 'search', 'login', 'unknown'];
+    // Page type encoding (one-hot)
     if (features.pageType && typeof features.pageType === 'string') {
-      const pageTypeIndex = pageTypes.indexOf(features.pageType);
-      if (pageTypeIndex >= 0 && featureIndex < this.config.embeddingDim) {
-        embedding[featureIndex + pageTypeIndex] = 1.0;
+      const { offset } = EMBEDDING_FEATURES.PAGE_TYPE;
+      const pageTypeIndex = PAGE_TYPES.indexOf(features.pageType as typeof PAGE_TYPES[number]);
+      if (pageTypeIndex >= 0 && offset + pageTypeIndex < this.config.embeddingDim) {
+        embedding[offset + pageTypeIndex] = 1.0;
       }
     }
-    featureIndex += 8;
 
-    // Boolean features (positions 24-31)
-    const boolFeatures = ['hasForm', 'hasPagination', 'hasTable', 'hasLogin'];
-    for (let i = 0; i < boolFeatures.length && featureIndex + i < this.config.embeddingDim; i++) {
-      if (features[boolFeatures[i]]) {
-        embedding[featureIndex + i] = 1.0;
+    // Boolean features
+    const { offset: boolOffset } = EMBEDDING_FEATURES.BOOLEAN_FLAGS;
+    for (let i = 0; i < BOOLEAN_FEATURES.length && boolOffset + i < this.config.embeddingDim; i++) {
+      if (features[BOOLEAN_FEATURES[i]]) {
+        embedding[boolOffset + i] = 1.0;
       }
     }
-    featureIndex += 8;
 
-    // Action sequence encoding (positions 32-47)
+    // Action sequence encoding
     if (Array.isArray(features.actions)) {
-      const actionTypes = ['navigate', 'click', 'fill', 'select', 'scroll', 'wait', 'extract', 'dismiss_banner'];
-      const actionCounts = new Array(actionTypes.length).fill(0);
+      const { offset: actionOffset, size: actionSize } = EMBEDDING_FEATURES.ACTIONS;
+      const actionCounts = new Array(ACTION_TYPES.length).fill(0);
 
       for (const action of features.actions as BrowsingAction[]) {
-        const idx = actionTypes.indexOf(action.type);
+        const idx = ACTION_TYPES.indexOf(action.type as typeof ACTION_TYPES[number]);
         if (idx >= 0) actionCounts[idx]++;
       }
 
       // Normalize and encode
       const maxCount = Math.max(...actionCounts, 1);
-      for (let i = 0; i < actionTypes.length && featureIndex + i < this.config.embeddingDim; i++) {
-        embedding[featureIndex + i] = actionCounts[i] / maxCount;
+      for (let i = 0; i < ACTION_TYPES.length && actionOffset + i < this.config.embeddingDim; i++) {
+        embedding[actionOffset + i] = actionCounts[i] / maxCount;
       }
-      featureIndex += 16;
     }
 
-    // Selector features (positions 48-55)
+    // Selector features
     if (Array.isArray(features.selectors)) {
+      const { offset, size } = EMBEDDING_FEATURES.SELECTORS;
       const selectorHash = this.hashString((features.selectors as string[]).join(','));
-      for (let i = 0; i < 8 && featureIndex + i < this.config.embeddingDim; i++) {
-        embedding[featureIndex + i] = ((selectorHash >> (i * 4)) & 0xf) / 15;
+      for (let i = 0; i < size && offset + i < this.config.embeddingDim; i++) {
+        embedding[offset + i] = ((selectorHash >> (i * 4)) & 0xf) / 15;
       }
-      featureIndex += 8;
     }
 
-    // Content type hints (positions 56-63)
-    const contentTypes = ['main_content', 'requirements', 'fees', 'timeline', 'documents', 'contact', 'navigation', 'table'];
+    // Content type hints
     if (Array.isArray(features.contentTypes)) {
+      const { offset: ctOffset } = EMBEDDING_FEATURES.CONTENT_TYPES;
       for (const ct of features.contentTypes as string[]) {
-        const idx = contentTypes.indexOf(ct);
-        if (idx >= 0 && featureIndex + idx < this.config.embeddingDim) {
-          embedding[featureIndex + idx] = 1.0;
+        const idx = CONTENT_TYPES.indexOf(ct as typeof CONTENT_TYPES[number]);
+        if (idx >= 0 && ctOffset + idx < this.config.embeddingDim) {
+          embedding[ctOffset + idx] = 1.0;
         }
       }
     }
@@ -371,7 +392,7 @@ export class ProceduralMemory {
   /**
    * Record a browsing trajectory for potential skill extraction
    */
-  recordTrajectory(trajectory: BrowsingTrajectory): void {
+  async recordTrajectory(trajectory: BrowsingTrajectory): Promise<void> {
     this.trajectoryBuffer.push(trajectory);
 
     // Limit buffer size
@@ -381,14 +402,14 @@ export class ProceduralMemory {
 
     // Attempt to extract skills from successful trajectories
     if (trajectory.success && trajectory.actions.length >= this.config.minTrajectoryLength) {
-      this.extractAndLearnSkill(trajectory);
+      await this.extractAndLearnSkill(trajectory);
     }
   }
 
   /**
    * Extract a skill from a successful trajectory
    */
-  private extractAndLearnSkill(trajectory: BrowsingTrajectory): BrowsingSkill | null {
+  private async extractAndLearnSkill(trajectory: BrowsingTrajectory): Promise<BrowsingSkill | null> {
     // Extract the meaningful action sequence (last N actions that led to success)
     const meaningfulActions = this.extractMeaningfulActions(trajectory.actions);
 
@@ -407,7 +428,7 @@ export class ProceduralMemory {
 
     if (existingSkill && this.cosineSimilarity(embedding, existingSkill.embedding) > this.config.mergeThreshold) {
       // Merge with existing skill
-      return this.mergeSkill(existingSkill, meaningfulActions, trajectory);
+      return await this.mergeSkill(existingSkill, meaningfulActions, trajectory);
     }
 
     // Create new skill
@@ -431,8 +452,8 @@ export class ProceduralMemory {
       sourceDomain: trajectory.domain,
     };
 
-    this.addSkill(skill);
-    console.error(`[ProceduralMemory] Learned new skill: ${skill.name}`);
+    await this.addSkill(skill);
+    console.log(`[ProceduralMemory] Learned new skill: ${skill.name}`);
 
     return skill;
   }
@@ -510,11 +531,11 @@ export class ProceduralMemory {
   /**
    * Merge a new trajectory into an existing skill
    */
-  private mergeSkill(
+  private async mergeSkill(
     existing: BrowsingSkill,
     newActions: BrowsingAction[],
     trajectory: BrowsingTrajectory
-  ): BrowsingSkill {
+  ): Promise<BrowsingSkill> {
     // Update metrics
     existing.metrics.successCount++;
     existing.metrics.timesUsed++;
@@ -538,23 +559,23 @@ export class ProceduralMemory {
     }
 
     existing.updatedAt = Date.now();
-    this.save();
+    await this.save();
 
-    console.error(`[ProceduralMemory] Merged into existing skill: ${existing.name}`);
+    console.log(`[ProceduralMemory] Merged into existing skill: ${existing.name}`);
     return existing;
   }
 
   /**
    * Add a new skill to the library
    */
-  addSkill(skill: BrowsingSkill): void {
+  async addSkill(skill: BrowsingSkill): Promise<void> {
     // Enforce max skills limit
     if (this.skills.size >= this.config.maxSkills) {
       this.evictLeastUsedSkill();
     }
 
     this.skills.set(skill.id, skill);
-    this.save();
+    await this.save();
   }
 
   /**
@@ -584,7 +605,7 @@ export class ProceduralMemory {
   /**
    * Record skill execution result
    */
-  recordSkillExecution(skillId: string, success: boolean, duration: number): void {
+  async recordSkillExecution(skillId: string, success: boolean, duration: number): Promise<void> {
     const skill = this.skills.get(skillId);
     if (!skill) return;
 
@@ -601,7 +622,7 @@ export class ProceduralMemory {
     skill.metrics.lastUsed = Date.now();
     skill.updatedAt = Date.now();
 
-    this.save();
+    await this.save();
   }
 
   // ============================================
