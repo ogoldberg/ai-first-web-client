@@ -93,6 +93,10 @@ export interface SmartBrowseResult extends BrowseResult {
     skillsMatched?: SkillMatch[];
     skillApplied?: string;
     trajectoryRecorded?: boolean;
+    // Anomaly detection results
+    anomalyDetected?: boolean;
+    anomalyType?: 'challenge_page' | 'error_page' | 'empty_content' | 'redirect_notice' | 'captcha' | 'rate_limited';
+    anomalyAction?: 'wait' | 'retry' | 'use_session' | 'change_agent' | 'skip';
   };
 
   // Additional pages if pagination was followed
@@ -238,6 +242,9 @@ export class SmartBrowser {
         await this.scrollToLoadContent(result.page);
       }
 
+      // Check for and wait through bot challenge pages
+      await this.waitForBotChallenge(result.page, domain);
+
       return result;
     };
 
@@ -289,9 +296,78 @@ export class SmartBrowser {
 
     const { page, network, console: consoleMessages } = result;
 
-    // Extract content using learned selectors
-    const html = await page.content();
-    const finalUrl = page.url();
+    // Get initial content (may be challenge page)
+    let html = await page.content();
+    let finalUrl = page.url();
+
+    console.error(`[SmartBrowser] Page loaded: ${finalUrl}`);
+    console.error(`[SmartBrowser] HTML length: ${html.length} chars`);
+
+    // Check if we passed through a bot challenge - if so, get the new content
+    const challengeIndicators = ['Checking Your Browser', 'Voight-Kampff', 'Just a moment', 'Cloudflare'];
+    const wasChallengePage = challengeIndicators.some(indicator =>
+      html.toLowerCase().includes(indicator.toLowerCase())
+    );
+
+    if (wasChallengePage) {
+      console.error(`[SmartBrowser] Challenge page detected, re-fetching content after challenge...`);
+      // Get the updated content after challenge completion
+      html = await page.content();
+      finalUrl = page.url();
+      console.error(`[SmartBrowser] Post-challenge HTML length: ${html.length} chars`);
+    }
+
+    // Run universal anomaly detection
+    const anomalyResult = this.learningEngine.detectContentAnomalies(
+      html,
+      finalUrl,
+      options.contentType // Use content type as expected topic hint
+    );
+
+    if (anomalyResult.isAnomaly) {
+      console.error(`[SmartBrowser] Content anomaly detected: ${anomalyResult.anomalyType} (${Math.round(anomalyResult.confidence * 100)}% confidence)`);
+      console.error(`[SmartBrowser] Reasons: ${anomalyResult.reasons.join('; ')}`);
+
+      // Record anomaly in learning results
+      learning.anomalyDetected = true;
+      learning.anomalyType = anomalyResult.anomalyType;
+      learning.anomalyAction = anomalyResult.suggestedAction;
+
+      if (anomalyResult.suggestedAction) {
+        console.error(`[SmartBrowser] Suggested action: ${anomalyResult.suggestedAction}`);
+      }
+
+      // Take automated action based on anomaly type
+      if (anomalyResult.suggestedAction === 'wait' && anomalyResult.waitTimeMs) {
+        console.error(`[SmartBrowser] Waiting ${anomalyResult.waitTimeMs}ms for challenge/rate limit...`);
+        await this.delay(anomalyResult.waitTimeMs);
+
+        // Re-fetch content after waiting
+        html = await page.content();
+        finalUrl = page.url();
+        console.error(`[SmartBrowser] Post-wait HTML length: ${html.length} chars`);
+
+        // Check if anomaly is resolved
+        const postWaitAnomaly = this.learningEngine.detectContentAnomalies(html, finalUrl, options.contentType);
+        if (!postWaitAnomaly.isAnomaly) {
+          console.error(`[SmartBrowser] Anomaly resolved after waiting`);
+        } else {
+          console.error(`[SmartBrowser] Anomaly persists: ${postWaitAnomaly.anomalyType}`);
+          learning.validationResult = {
+            valid: false,
+            reasons: postWaitAnomaly.reasons,
+          };
+          learning.confidenceLevel = 'low';
+        }
+      } else if (anomalyResult.anomalyType === 'error_page') {
+        // Record this for learning but don't retry - page doesn't exist
+        learning.validationResult = {
+          valid: false,
+          reasons: anomalyResult.reasons,
+        };
+        learning.confidenceLevel = 'low';
+      }
+    }
 
     // Detect page context for better skill matching
     if (useSkills) {
@@ -319,6 +395,8 @@ export class SmartBrowser {
       learning,
       enableLearning
     );
+
+    console.error(`[SmartBrowser] Extracted content: ${extractedContent.text.length} chars, title: "${extractedContent.title?.slice(0, 50) || 'none'}"`);
 
     // Extract tables
     const tables = this.contentExtractor.extractTablesAsJSON(html);
@@ -591,7 +669,9 @@ export class SmartBrowser {
     }
 
     // Fall back to default extraction
+    console.error(`[SmartBrowser] Falling back to default extraction for ${url}`);
     const defaultExtracted = this.contentExtractor.extract(html, url);
+    console.error(`[SmartBrowser] Default extraction result: ${defaultExtracted.text.length} chars`);
 
     // Learn from the successful extraction
     if (enableLearning && defaultExtracted.text.length > 100) {
@@ -747,6 +827,76 @@ export class SmartBrowser {
 
     await page.evaluate(() => window.scrollTo(0, 0));
     await page.waitForTimeout(500);
+  }
+
+  /**
+   * Detect and wait through bot challenge pages (Cloudflare, Voight-Kampff, etc.)
+   */
+  private async waitForBotChallenge(page: Page, domain: string): Promise<boolean> {
+    // Common indicators of bot challenge pages
+    const challengeIndicators = [
+      'Checking Your Browser',
+      'Please wait',
+      'Voight-Kampff',
+      'Just a moment',
+      'DDoS protection',
+      'Cloudflare',
+      'Attention Required',
+      'Access Denied',
+      'Verifying you are human',
+      'Please verify you are a human',
+      'Security check',
+      'challenge-running',
+      'cf-browser-verification',
+    ];
+
+    // Check if we're on a challenge page
+    const pageContent = await page.content();
+    const pageText = await page.evaluate(() => document.body?.innerText || '');
+
+    const isChallengePage = challengeIndicators.some(indicator =>
+      pageContent.toLowerCase().includes(indicator.toLowerCase()) ||
+      pageText.toLowerCase().includes(indicator.toLowerCase())
+    );
+
+    if (!isChallengePage) {
+      return false;
+    }
+
+    console.error(`[SmartBrowser] Bot challenge detected on ${domain}, waiting for completion...`);
+
+    // Wait for the challenge to complete (up to 15 seconds)
+    const maxWaitTime = 15000;
+    const checkInterval = 1000;
+    const startTime = Date.now();
+
+    while (Date.now() - startTime < maxWaitTime) {
+      await page.waitForTimeout(checkInterval);
+
+      // Check if challenge is still present
+      const currentText = await page.evaluate(() => document.body?.innerText || '');
+      const stillChallenging = challengeIndicators.some(indicator =>
+        currentText.toLowerCase().includes(indicator.toLowerCase())
+      );
+
+      if (!stillChallenging) {
+        console.error(`[SmartBrowser] Bot challenge completed on ${domain}`);
+        // Wait a bit more for page to fully load after challenge
+        await page.waitForTimeout(2000);
+        return true;
+      }
+
+      // Check if URL changed (redirect after challenge)
+      const currentUrl = page.url();
+      if (!currentUrl.includes(domain)) {
+        console.error(`[SmartBrowser] Redirected after challenge to ${currentUrl}`);
+        await page.waitForTimeout(1000);
+        return true;
+      }
+    }
+
+    console.error(`[SmartBrowser] Bot challenge timeout on ${domain} - may need session cookies`);
+    return false;
   }
 
   /**
