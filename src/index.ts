@@ -60,7 +60,7 @@ const apiCallTool = new ApiCallTool(browserManager);
 const server = new Server(
   {
     name: 'llm-browser',
-    version: '0.2.0',
+    version: '0.3.0',
   },
   {
     capabilities: {
@@ -185,6 +185,75 @@ Use this to understand the browser's overall intelligence level.`,
         inputSchema: {
           type: 'object',
           properties: {},
+        },
+      },
+
+      // ============================================
+      // PROCEDURAL MEMORY (Skills)
+      // ============================================
+      {
+        name: 'get_procedural_memory_stats',
+        description: `Get statistics about learned browsing skills (procedural memory).
+
+Shows:
+- Total skills learned
+- Skills by domain
+- Average success rate
+- Most used skills
+- Recent trajectories
+
+The browser learns reusable "skills" from successful browsing sessions.
+Skills are multi-step action sequences that can be applied to similar pages.`,
+        inputSchema: {
+          type: 'object',
+          properties: {},
+        },
+      },
+      {
+        name: 'find_applicable_skills',
+        description: `Find browsing skills that might be applicable for a URL.
+
+Returns skills that match the page context based on:
+- Domain patterns
+- URL patterns
+- Page type
+- Similarity to learned patterns
+
+Use this to preview what skills might be applied before browsing.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            url: {
+              type: 'string',
+              description: 'The URL to find skills for',
+            },
+            topK: {
+              type: 'number',
+              description: 'Maximum number of skills to return (default: 3)',
+            },
+          },
+          required: ['url'],
+        },
+      },
+      {
+        name: 'get_skill_details',
+        description: `Get detailed information about a specific learned skill.
+
+Shows:
+- Skill name and description
+- Preconditions (when it applies)
+- Action sequence
+- Performance metrics
+- Source domain`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            skillId: {
+              type: 'string',
+              description: 'The ID of the skill to get details for',
+            },
+          },
+          required: ['skillId'],
         },
       },
 
@@ -322,6 +391,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             paginationAvailable: !!result.learning.paginationDetected,
             selectorsSucceeded: result.learning.selectorsSucceeded.length,
             selectorsFailed: result.learning.selectorsFailed.length,
+            // Procedural memory insights
+            skillApplied: result.learning.skillApplied,
+            skillsMatched: result.learning.skillsMatched?.length || 0,
+            trajectoryRecorded: result.learning.trajectoryRecorded,
           },
           // Discovered APIs for future direct access
           discoveredApis: result.discoveredApis.map(api => ({
@@ -392,6 +465,108 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                   domain: e.domain,
                   timestamp: new Date(e.timestamp).toISOString(),
                 })),
+              }, null, 2),
+            },
+          ],
+        };
+      }
+
+      // ============================================
+      // PROCEDURAL MEMORY (Skills)
+      // ============================================
+      case 'get_procedural_memory_stats': {
+        const proceduralStats = smartBrowser.getProceduralMemoryStats();
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                summary: {
+                  totalSkills: proceduralStats.totalSkills,
+                  totalTrajectories: proceduralStats.totalTrajectories,
+                  avgSuccessRate: Math.round(proceduralStats.avgSuccessRate * 100) + '%',
+                },
+                skillsByDomain: proceduralStats.skillsByDomain,
+                mostUsedSkills: proceduralStats.mostUsedSkills.slice(0, 5),
+              }, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'find_applicable_skills': {
+        const skills = smartBrowser.findApplicableSkills(
+          args.url as string,
+          (args.topK as number) || 3
+        );
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                url: args.url,
+                matchedSkills: skills.map(match => ({
+                  skillId: match.skill.id,
+                  name: match.skill.name,
+                  description: match.skill.description,
+                  similarity: Math.round(match.similarity * 100) + '%',
+                  preconditionsMet: match.preconditionsMet,
+                  reason: match.reason,
+                  timesUsed: match.skill.metrics.timesUsed,
+                  successRate: match.skill.metrics.successCount > 0
+                    ? Math.round((match.skill.metrics.successCount / match.skill.metrics.timesUsed) * 100) + '%'
+                    : 'N/A',
+                })),
+              }, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'get_skill_details': {
+        const proceduralMemory = smartBrowser.getProceduralMemory();
+        const skill = proceduralMemory.getSkill(args.skillId as string);
+
+        if (!skill) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({ error: `Skill not found: ${args.skillId}` }),
+              },
+            ],
+            isError: true,
+          };
+        }
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                id: skill.id,
+                name: skill.name,
+                description: skill.description,
+                preconditions: skill.preconditions,
+                actionSequence: skill.actionSequence.map(a => ({
+                  type: a.type,
+                  selector: a.selector,
+                  success: a.success,
+                })),
+                metrics: {
+                  successCount: skill.metrics.successCount,
+                  failureCount: skill.metrics.failureCount,
+                  successRate: skill.metrics.timesUsed > 0
+                    ? Math.round((skill.metrics.successCount / skill.metrics.timesUsed) * 100) + '%'
+                    : 'N/A',
+                  avgDuration: Math.round(skill.metrics.avgDuration) + 'ms',
+                  timesUsed: skill.metrics.timesUsed,
+                  lastUsed: new Date(skill.metrics.lastUsed).toISOString(),
+                },
+                sourceDomain: skill.sourceDomain,
+                createdAt: new Date(skill.createdAt).toISOString(),
               }, null, 2),
             },
           ],
@@ -535,8 +710,9 @@ async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
 
-  console.error('LLM Browser MCP Server v0.2.0 running');
+  console.error('LLM Browser MCP Server v0.3.0 running');
   console.error('Primary tool: smart_browse (with automatic learning)');
+  console.error('Features: Domain patterns, API discovery, Procedural memory (skills)');
   console.error('Domain groups: spanish_gov, us_gov, eu_gov');
 
   // Cleanup on exit

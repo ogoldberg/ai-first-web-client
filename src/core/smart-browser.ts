@@ -19,15 +19,19 @@ import type { Page } from 'playwright';
 import type {
   BrowseResult,
   BrowseOptions,
-  FailureContext,
   SelectorPattern,
   PaginationPattern,
+  BrowsingAction,
+  BrowsingTrajectory,
+  PageContext,
+  SkillMatch,
 } from '../types/index.js';
 import { BrowserManager } from './browser-manager.js';
 import { ContentExtractor } from '../utils/content-extractor.js';
 import { ApiAnalyzer } from './api-analyzer.js';
 import { SessionManager } from './session-manager.js';
 import { LearningEngine } from './learning-engine.js';
+import { ProceduralMemory } from './procedural-memory.js';
 import { rateLimiter } from '../utils/rate-limiter.js';
 import { withRetry } from '../utils/retry.js';
 import { findPreset, getWaitStrategy } from '../utils/domain-presets.js';
@@ -63,6 +67,10 @@ export interface SmartBrowseOptions extends BrowseOptions {
 
   // Change detection
   checkForChanges?: boolean;
+
+  // Procedural memory / skills
+  useSkills?: boolean; // Try to apply learned skills (default: true)
+  recordTrajectory?: boolean; // Record this session for skill learning (default: true)
 }
 
 export interface SmartBrowseResult extends BrowseResult {
@@ -77,6 +85,10 @@ export interface SmartBrowseResult extends BrowseResult {
     recommendedRefreshHours?: number;
     domainGroup?: string;
     confidenceLevel: 'high' | 'medium' | 'low' | 'unknown';
+    // Procedural memory insights
+    skillsMatched?: SkillMatch[];
+    skillApplied?: string;
+    trajectoryRecorded?: boolean;
   };
 
   // Additional pages if pagination was followed
@@ -88,6 +100,8 @@ export interface SmartBrowseResult extends BrowseResult {
 
 export class SmartBrowser {
   private learningEngine: LearningEngine;
+  private proceduralMemory: ProceduralMemory;
+  private currentTrajectory: BrowsingTrajectory | null = null;
 
   constructor(
     private browserManager: BrowserManager,
@@ -96,10 +110,12 @@ export class SmartBrowser {
     private sessionManager: SessionManager
   ) {
     this.learningEngine = new LearningEngine();
+    this.proceduralMemory = new ProceduralMemory();
   }
 
   async initialize(): Promise<void> {
     await this.learningEngine.initialize();
+    await this.proceduralMemory.initialize();
   }
 
   /**
@@ -109,6 +125,8 @@ export class SmartBrowser {
     const startTime = Date.now();
     const domain = new URL(url).hostname;
     const enableLearning = options.enableLearning !== false;
+    const useSkills = options.useSkills !== false;
+    const recordTrajectory = options.recordTrajectory !== false;
 
     // Initialize learning result
     const learning: SmartBrowseResult['learning'] = {
@@ -118,11 +136,38 @@ export class SmartBrowser {
       confidenceLevel: 'unknown',
     };
 
+    // Start trajectory recording for procedural memory
+    if (recordTrajectory) {
+      this.startTrajectory(url, domain);
+    }
+
     // Check for domain group and apply shared patterns
     const domainGroup = this.learningEngine.getDomainGroup(domain);
     if (domainGroup) {
       learning.domainGroup = domainGroup.name;
       console.error(`[SmartBrowser] Using patterns from domain group: ${domainGroup.name}`);
+    }
+
+    // Check for applicable skills from procedural memory
+    if (useSkills) {
+      const pageContext: PageContext = {
+        url,
+        domain,
+        pageType: 'unknown',
+      };
+
+      const matchedSkills = this.proceduralMemory.retrieveSkills(pageContext, 3);
+      if (matchedSkills.length > 0) {
+        learning.skillsMatched = matchedSkills;
+        console.error(`[SmartBrowser] Found ${matchedSkills.length} potentially applicable skills`);
+
+        // Record the best match for later application
+        const bestMatch = matchedSkills[0];
+        if (bestMatch.preconditionsMet && bestMatch.similarity > 0.8) {
+          learning.skillApplied = bestMatch.skill.name;
+          console.error(`[SmartBrowser] Will apply skill: ${bestMatch.skill.name} (similarity: ${bestMatch.similarity.toFixed(2)})`);
+        }
+      }
     }
 
     // Check if we should back off due to recent failures
@@ -342,6 +387,22 @@ export class SmartBrowser {
       } else {
         learning.confidenceLevel = 'medium';
       }
+    }
+
+    // Complete trajectory recording for procedural memory
+    if (recordTrajectory && this.currentTrajectory) {
+      const success = learning.confidenceLevel !== 'low' && extractedContent.text.length > 100;
+      this.completeTrajectory(
+        finalUrl,
+        success,
+        Date.now() - startTime,
+        {
+          text: extractedContent.text,
+          tables: tables.length,
+          apis: discoveredApis.length,
+        }
+      );
+      learning.trajectoryRecorded = true;
     }
 
     return {
@@ -728,5 +789,98 @@ export class SmartBrowser {
       recommendedWaitStrategy: preset ? 'preset' : 'networkidle',
       shouldUseSession: entry.apiPatterns.some(p => p.authType === 'cookie'),
     };
+  }
+
+  // ============================================
+  // PROCEDURAL MEMORY / SKILL METHODS
+  // ============================================
+
+  /**
+   * Get procedural memory for direct access
+   */
+  getProceduralMemory(): ProceduralMemory {
+    return this.proceduralMemory;
+  }
+
+  /**
+   * Start recording a new browsing trajectory
+   */
+  private startTrajectory(url: string, domain: string): void {
+    this.currentTrajectory = {
+      id: `traj_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      startUrl: url,
+      endUrl: url,
+      domain,
+      actions: [],
+      success: false,
+      totalDuration: 0,
+      timestamp: Date.now(),
+    };
+
+    // Record the initial navigate action
+    this.recordAction({
+      type: 'navigate',
+      url,
+      timestamp: Date.now(),
+      success: true,
+    });
+  }
+
+  /**
+   * Record an action in the current trajectory
+   */
+  recordAction(action: BrowsingAction): void {
+    if (this.currentTrajectory) {
+      this.currentTrajectory.actions.push(action);
+    }
+  }
+
+  /**
+   * Complete and submit the current trajectory for skill learning
+   */
+  private completeTrajectory(
+    endUrl: string,
+    success: boolean,
+    totalDuration: number,
+    extractedContent?: { text: string; tables: number; apis: number }
+  ): void {
+    if (!this.currentTrajectory) return;
+
+    this.currentTrajectory.endUrl = endUrl;
+    this.currentTrajectory.success = success;
+    this.currentTrajectory.totalDuration = totalDuration;
+    this.currentTrajectory.extractedContent = extractedContent;
+
+    // Submit to procedural memory for potential skill extraction
+    this.proceduralMemory.recordTrajectory(this.currentTrajectory);
+
+    // Clear the current trajectory
+    this.currentTrajectory = null;
+  }
+
+  /**
+   * Get procedural memory statistics
+   */
+  getProceduralMemoryStats(): {
+    totalSkills: number;
+    totalTrajectories: number;
+    skillsByDomain: Record<string, number>;
+    avgSuccessRate: number;
+    mostUsedSkills: Array<{ name: string; uses: number }>;
+  } {
+    return this.proceduralMemory.getStats();
+  }
+
+  /**
+   * Find applicable skills for a given URL
+   */
+  findApplicableSkills(url: string, topK: number = 3): SkillMatch[] {
+    const domain = new URL(url).hostname;
+    const pageContext: PageContext = {
+      url,
+      domain,
+      pageType: 'unknown',
+    };
+    return this.proceduralMemory.retrieveSkills(pageContext, topK);
   }
 }
