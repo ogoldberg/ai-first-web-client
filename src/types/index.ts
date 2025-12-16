@@ -410,3 +410,53 @@ export interface PageContext {
   hasPagination?: boolean;
   hasTable?: boolean;
 }
+
+/**
+ * A composed workflow combining multiple skills
+ */
+export interface SkillWorkflow {
+  id: string;
+  name: string;
+  description: string;
+  // Skills to execute in order
+  skillIds: string[];
+  // Preconditions for the entire workflow
+  preconditions: SkillPreconditions;
+  // Transition conditions between skills
+  transitions: Array<{
+    fromSkillId: string;
+    toSkillId: string;
+    condition?: 'success' | 'always' | 'has_pagination' | 'has_next';
+  }>;
+  // Performance metrics
+  metrics: {
+    successCount: number;
+    failureCount: number;
+    avgDuration: number;
+    lastUsed: number;
+    timesUsed: number;
+  };
+  createdAt: number;
+  updatedAt: number;
+}
+
+/**
+ * Coverage tracking for active learning
+ */
+export interface CoverageStats {
+  // Domains with skill coverage
+  coveredDomains: string[];
+  // Page types with skills
+  coveredPageTypes: Array<SkillPreconditions['pageType']>;
+  // Domains visited but no skills learned
+  uncoveredDomains: string[];
+  // Page types frequently encountered but no skills
+  uncoveredPageTypes: Array<SkillPreconditions['pageType']>;
+  // Suggested areas to explore
+  suggestions: Array<{
+    type: 'domain' | 'pageType' | 'action';
+    value: string;
+    reason: string;
+    priority: 'high' | 'medium' | 'low';
+  }>;
+}

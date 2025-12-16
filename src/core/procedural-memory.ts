@@ -22,6 +22,8 @@ import type {
   SkillMatch,
   PageContext,
   ProceduralMemoryConfig,
+  SkillWorkflow,
+  CoverageStats,
 } from '../types/index.js';
 
 // Default configuration
@@ -73,8 +75,14 @@ const SKILL_TEMPLATES: Partial<BrowsingSkill>[] = [
  */
 export class ProceduralMemory {
   private skills: Map<string, BrowsingSkill> = new Map();
+  private workflows: Map<string, SkillWorkflow> = new Map();
   private trajectoryBuffer: BrowsingTrajectory[] = [];
   private config: ProceduralMemoryConfig;
+
+  // Active learning tracking
+  private visitedDomains: Set<string> = new Set();
+  private visitedPageTypes: Map<string, number> = new Map(); // pageType -> count
+  private failedExtractions: Map<string, number> = new Map(); // domain -> failure count
 
   constructor(config: Partial<ProceduralMemoryConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
@@ -741,11 +749,29 @@ export class ProceduralMemory {
         }
       }
 
+      this.workflows = new Map();
+      if (data.workflows) {
+        for (const workflow of data.workflows) {
+          this.workflows.set(workflow.id, workflow);
+        }
+      }
+
       if (data.trajectoryBuffer) {
         this.trajectoryBuffer = data.trajectoryBuffer;
       }
 
-      console.error(`[ProceduralMemory] Loaded ${this.skills.size} skills from ${this.config.filePath}`);
+      // Load active learning data
+      if (data.visitedDomains) {
+        this.visitedDomains = new Set(data.visitedDomains);
+      }
+      if (data.visitedPageTypes) {
+        this.visitedPageTypes = new Map(Object.entries(data.visitedPageTypes));
+      }
+      if (data.failedExtractions) {
+        this.failedExtractions = new Map(Object.entries(data.failedExtractions));
+      }
+
+      console.error(`[ProceduralMemory] Loaded ${this.skills.size} skills, ${this.workflows.size} workflows from ${this.config.filePath}`);
     } catch {
       console.error('[ProceduralMemory] No existing memory found, starting fresh');
     }
@@ -755,7 +781,12 @@ export class ProceduralMemory {
     try {
       const data = {
         skills: Array.from(this.skills.values()),
+        workflows: Array.from(this.workflows.values()),
         trajectoryBuffer: this.trajectoryBuffer.slice(-50), // Keep last 50
+        // Active learning data
+        visitedDomains: Array.from(this.visitedDomains),
+        visitedPageTypes: Object.fromEntries(this.visitedPageTypes),
+        failedExtractions: Object.fromEntries(this.failedExtractions),
         lastSaved: Date.now(),
         config: this.config,
       };
@@ -895,6 +926,471 @@ export class ProceduralMemory {
     }
 
     return byDomain;
+  }
+
+  // ============================================
+  // SKILL COMPOSITION (WORKFLOWS)
+  // ============================================
+
+  /**
+   * Create a workflow by composing multiple skills
+   */
+  createWorkflow(
+    name: string,
+    skillIds: string[],
+    description?: string
+  ): SkillWorkflow | null {
+    // Validate all skills exist
+    const skills: BrowsingSkill[] = [];
+    for (const id of skillIds) {
+      const skill = this.skills.get(id);
+      if (!skill) {
+        console.error(`[ProceduralMemory] Skill not found for workflow: ${id}`);
+        return null;
+      }
+      skills.push(skill);
+    }
+
+    if (skills.length < 2) {
+      console.error('[ProceduralMemory] Workflow requires at least 2 skills');
+      return null;
+    }
+
+    // Merge preconditions from first skill
+    const preconditions: SkillPreconditions = { ...skills[0].preconditions };
+
+    // Create transitions
+    const transitions: SkillWorkflow['transitions'] = [];
+    for (let i = 0; i < skillIds.length - 1; i++) {
+      transitions.push({
+        fromSkillId: skillIds[i],
+        toSkillId: skillIds[i + 1],
+        condition: 'success',
+      });
+    }
+
+    const workflow: SkillWorkflow = {
+      id: `wf_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+      name,
+      description: description || `Workflow: ${skills.map(s => s.name).join(' → ')}`,
+      skillIds,
+      preconditions,
+      transitions,
+      metrics: {
+        successCount: 0,
+        failureCount: 0,
+        avgDuration: 0,
+        lastUsed: Date.now(),
+        timesUsed: 0,
+      },
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+
+    this.workflows.set(workflow.id, workflow);
+    this.save();
+
+    console.error(`[ProceduralMemory] Created workflow: ${name}`);
+    return workflow;
+  }
+
+  /**
+   * Get a workflow by ID
+   */
+  getWorkflow(workflowId: string): SkillWorkflow | null {
+    return this.workflows.get(workflowId) || null;
+  }
+
+  /**
+   * Get all workflows
+   */
+  getAllWorkflows(): SkillWorkflow[] {
+    return Array.from(this.workflows.values());
+  }
+
+  /**
+   * Auto-detect potential workflows from trajectory patterns
+   */
+  detectPotentialWorkflows(): Array<{ skills: string[]; frequency: number }> {
+    const sequenceMap = new Map<string, number>();
+
+    // Analyze trajectory buffer for skill sequence patterns
+    for (const trajectory of this.trajectoryBuffer) {
+      if (!trajectory.success || trajectory.actions.length < 3) continue;
+
+      // Extract action type sequences
+      const actionSeq = trajectory.actions
+        .filter(a => a.success)
+        .map(a => a.type)
+        .join('→');
+
+      sequenceMap.set(actionSeq, (sequenceMap.get(actionSeq) || 0) + 1);
+    }
+
+    // Find frequent sequences (appeared 3+ times)
+    const potentialWorkflows: Array<{ skills: string[]; frequency: number }> = [];
+
+    for (const [seq, count] of sequenceMap) {
+      if (count >= 3) {
+        // Map action sequence to skill types
+        const actionTypes = seq.split('→');
+        const skillNames = this.mapActionsToSkillNames(actionTypes);
+
+        if (skillNames.length >= 2) {
+          potentialWorkflows.push({
+            skills: skillNames,
+            frequency: count,
+          });
+        }
+      }
+    }
+
+    return potentialWorkflows.sort((a, b) => b.frequency - a.frequency);
+  }
+
+  private mapActionsToSkillNames(actionTypes: string[]): string[] {
+    const skillNames: string[] = [];
+
+    for (const action of actionTypes) {
+      switch (action) {
+        case 'dismiss_banner':
+          if (!skillNames.includes('cookie_dismiss')) {
+            skillNames.push('cookie_dismiss');
+          }
+          break;
+        case 'extract':
+          if (!skillNames.includes('content_extraction')) {
+            skillNames.push('content_extraction');
+          }
+          break;
+        case 'click':
+          if (skillNames[skillNames.length - 1] !== 'navigation') {
+            skillNames.push('navigation');
+          }
+          break;
+        case 'fill':
+          if (!skillNames.includes('form_fill')) {
+            skillNames.push('form_fill');
+          }
+          break;
+      }
+    }
+
+    return skillNames;
+  }
+
+  // ============================================
+  // ACTIVE LEARNING
+  // ============================================
+
+  /**
+   * Track a domain visit for coverage analysis
+   */
+  trackVisit(domain: string, pageType: PageContext['pageType'], success: boolean): void {
+    this.visitedDomains.add(domain);
+
+    if (pageType) {
+      this.visitedPageTypes.set(
+        pageType,
+        (this.visitedPageTypes.get(pageType) || 0) + 1
+      );
+    }
+
+    if (!success) {
+      this.failedExtractions.set(
+        domain,
+        (this.failedExtractions.get(domain) || 0) + 1
+      );
+    }
+  }
+
+  /**
+   * Get coverage statistics and suggestions for active learning
+   */
+  getCoverageStats(): CoverageStats {
+    // Get domains with skills
+    const coveredDomains = new Set<string>();
+    const coveredPageTypes = new Set<SkillPreconditions['pageType']>();
+
+    for (const skill of this.skills.values()) {
+      if (skill.sourceDomain) {
+        coveredDomains.add(skill.sourceDomain);
+      }
+      if (skill.preconditions.pageType) {
+        coveredPageTypes.add(skill.preconditions.pageType);
+      }
+    }
+
+    // Find uncovered domains (visited but no skills)
+    const uncoveredDomains = Array.from(this.visitedDomains)
+      .filter(d => !coveredDomains.has(d));
+
+    // Find uncovered page types
+    const allPageTypes: Array<SkillPreconditions['pageType']> = [
+      'list', 'detail', 'form', 'search', 'login',
+    ];
+    const uncoveredPageTypes = allPageTypes.filter(pt => !coveredPageTypes.has(pt));
+
+    // Generate suggestions
+    const suggestions: CoverageStats['suggestions'] = [];
+
+    // Suggest domains with failed extractions
+    for (const [domain, failures] of this.failedExtractions) {
+      if (failures >= 3 && !coveredDomains.has(domain)) {
+        suggestions.push({
+          type: 'domain',
+          value: domain,
+          reason: `${failures} failed extractions - needs skills`,
+          priority: failures >= 5 ? 'high' : 'medium',
+        });
+      }
+    }
+
+    // Suggest frequently visited uncovered domains
+    const domainVisitCounts = new Map<string, number>();
+    for (const traj of this.trajectoryBuffer) {
+      domainVisitCounts.set(
+        traj.domain,
+        (domainVisitCounts.get(traj.domain) || 0) + 1
+      );
+    }
+
+    for (const domain of uncoveredDomains) {
+      const visits = domainVisitCounts.get(domain) || 0;
+      if (visits >= 3) {
+        suggestions.push({
+          type: 'domain',
+          value: domain,
+          reason: `Visited ${visits} times but no skills learned`,
+          priority: visits >= 5 ? 'high' : 'medium',
+        });
+      }
+    }
+
+    // Suggest uncovered page types
+    for (const pageType of uncoveredPageTypes) {
+      if (!pageType) continue;
+      const visits = this.visitedPageTypes.get(pageType) || 0;
+      if (visits >= 2) {
+        suggestions.push({
+          type: 'pageType',
+          value: pageType || 'unknown',
+          reason: `${visits} ${pageType} pages visited but no skills`,
+          priority: 'medium',
+        });
+      }
+    }
+
+    // Sort by priority
+    const priorityOrder = { high: 0, medium: 1, low: 2 };
+    suggestions.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority]);
+
+    return {
+      coveredDomains: Array.from(coveredDomains),
+      coveredPageTypes: Array.from(coveredPageTypes).filter(Boolean) as Array<SkillPreconditions['pageType']>,
+      uncoveredDomains,
+      uncoveredPageTypes,
+      suggestions: suggestions.slice(0, 10), // Top 10 suggestions
+    };
+  }
+
+  // ============================================
+  // IMPROVED EMBEDDINGS
+  // ============================================
+
+  /**
+   * Create enhanced embedding with more features
+   */
+  private createEnhancedEmbedding(context: PageContext, actions?: BrowsingAction[]): number[] {
+    const embedding = new Array(this.config.embeddingDim).fill(0);
+    let idx = 0;
+
+    // Domain features (0-7): Use better hashing
+    if (context.domain) {
+      const domainParts = context.domain.split('.');
+      const tld = domainParts[domainParts.length - 1];
+      const sld = domainParts[domainParts.length - 2] || '';
+
+      // TLD type encoding
+      const govTlds = ['gov', 'gob', 'edu', 'mil'];
+      const commercialTlds = ['com', 'net', 'org', 'io'];
+
+      embedding[idx++] = govTlds.includes(tld) ? 1.0 : 0.0;
+      embedding[idx++] = commercialTlds.includes(tld) ? 1.0 : 0.0;
+
+      // Domain hash spread across multiple dimensions
+      const domainHash = this.hashString(sld);
+      for (let i = 0; i < 6 && idx < 8; i++) {
+        embedding[idx++] = ((domainHash >> (i * 5)) & 0x1f) / 31;
+      }
+    }
+    idx = 8;
+
+    // URL structure features (8-15)
+    if (context.url) {
+      try {
+        const url = new URL(context.url);
+        const pathDepth = url.pathname.split('/').filter(Boolean).length;
+        const hasQuery = url.search.length > 0;
+        const hasHash = url.hash.length > 0;
+
+        embedding[idx++] = Math.min(pathDepth / 5, 1.0); // Normalized path depth
+        embedding[idx++] = hasQuery ? 1.0 : 0.0;
+        embedding[idx++] = hasHash ? 1.0 : 0.0;
+
+        // Path pattern detection
+        const pathLower = url.pathname.toLowerCase();
+        embedding[idx++] = pathLower.includes('search') || pathLower.includes('buscar') ? 1.0 : 0.0;
+        embedding[idx++] = pathLower.includes('login') || pathLower.includes('signin') ? 1.0 : 0.0;
+        embedding[idx++] = pathLower.includes('list') || pathLower.includes('index') ? 1.0 : 0.0;
+        embedding[idx++] = /\/\d+/.test(url.pathname) ? 1.0 : 0.0; // Has numeric ID
+        embedding[idx++] = pathLower.includes('form') || pathLower.includes('submit') ? 1.0 : 0.0;
+      } catch {
+        idx = 16;
+      }
+    }
+    idx = 16;
+
+    // Page type one-hot encoding (16-23)
+    const pageTypes = ['list', 'detail', 'form', 'search', 'login', 'unknown'];
+    if (context.pageType) {
+      const typeIdx = pageTypes.indexOf(context.pageType);
+      if (typeIdx >= 0 && idx + typeIdx < 24) {
+        embedding[idx + typeIdx] = 1.0;
+      }
+    }
+    idx = 24;
+
+    // Page element features (24-31)
+    embedding[idx++] = context.hasForm ? 1.0 : 0.0;
+    embedding[idx++] = context.hasPagination ? 1.0 : 0.0;
+    embedding[idx++] = context.hasTable ? 1.0 : 0.0;
+    embedding[idx++] = context.contentLength ? Math.min(context.contentLength / 10000, 1.0) : 0.0;
+    embedding[idx++] = context.availableSelectors?.includes('main') ? 1.0 : 0.0;
+    embedding[idx++] = context.availableSelectors?.includes('article') ? 1.0 : 0.0;
+    embedding[idx++] = context.availableSelectors?.includes('table') ? 1.0 : 0.0;
+    embedding[idx++] = context.availableSelectors?.includes('form') ? 1.0 : 0.0;
+    idx = 32;
+
+    // Action sequence features (32-47)
+    if (actions && actions.length > 0) {
+      const actionTypes = ['navigate', 'click', 'fill', 'select', 'scroll', 'wait', 'extract', 'dismiss_banner'];
+      const actionCounts = new Array(actionTypes.length).fill(0);
+
+      for (const action of actions) {
+        const actionIdx = actionTypes.indexOf(action.type);
+        if (actionIdx >= 0) actionCounts[actionIdx]++;
+      }
+
+      // Normalized action counts
+      const maxCount = Math.max(...actionCounts, 1);
+      for (let i = 0; i < actionTypes.length && idx < 40; i++) {
+        embedding[idx++] = actionCounts[i] / maxCount;
+      }
+
+      // Sequence characteristics
+      embedding[idx++] = Math.min(actions.length / 10, 1.0); // Sequence length
+      embedding[idx++] = actions.filter(a => a.success).length / actions.length; // Success rate
+      embedding[idx++] = actions.some(a => a.type === 'fill') ? 1.0 : 0.0; // Has form interaction
+      embedding[idx++] = actions.some(a => a.type === 'dismiss_banner') ? 1.0 : 0.0;
+      embedding[idx++] = actions.filter(a => a.type === 'click').length / Math.max(actions.length, 1);
+      embedding[idx++] = actions.filter(a => a.type === 'extract').length > 0 ? 1.0 : 0.0;
+    }
+    idx = 48;
+
+    // Selector pattern features (48-55)
+    if (context.availableSelectors) {
+      const selectorStr = context.availableSelectors.join(',');
+      const selectorHash = this.hashString(selectorStr);
+      for (let i = 0; i < 8 && idx < 56; i++) {
+        embedding[idx++] = ((selectorHash >> (i * 4)) & 0xf) / 15;
+      }
+    }
+    idx = 56;
+
+    // Language features (56-59)
+    if (context.language) {
+      const langHash = this.hashString(context.language);
+      embedding[idx++] = context.language === 'en' ? 1.0 : 0.0;
+      embedding[idx++] = context.language === 'es' ? 1.0 : 0.0;
+      embedding[idx++] = (langHash & 0xff) / 255;
+      embedding[idx++] = ((langHash >> 8) & 0xff) / 255;
+    }
+    idx = 60;
+
+    // Reserved for future features (60-63)
+    // Leave as zeros
+
+    return this.normalizeVector(embedding);
+  }
+
+  /**
+   * Update createContextEmbedding to use enhanced version
+   */
+  createContextEmbeddingEnhanced(context: PageContext): number[] {
+    return this.createEnhancedEmbedding(context);
+  }
+
+  // ============================================
+  // SKILL MANAGEMENT
+  // ============================================
+
+  /**
+   * Manually add a skill (for bootstrapping or import)
+   */
+  addManualSkill(
+    name: string,
+    description: string,
+    preconditions: SkillPreconditions,
+    actionSequence: BrowsingAction[]
+  ): BrowsingSkill {
+    const skill: BrowsingSkill = {
+      id: this.generateSkillId(),
+      name,
+      description,
+      preconditions,
+      actionSequence,
+      embedding: this.createSkillEmbedding(preconditions, actionSequence),
+      metrics: {
+        successCount: 0,
+        failureCount: 0,
+        avgDuration: 0,
+        lastUsed: Date.now(),
+        timesUsed: 0,
+      },
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+
+    this.skills.set(skill.id, skill);
+    this.save();
+
+    return skill;
+  }
+
+  /**
+   * Delete a skill by ID
+   */
+  deleteSkill(skillId: string): boolean {
+    const deleted = this.skills.delete(skillId);
+    if (deleted) {
+      this.save();
+    }
+    return deleted;
+  }
+
+  /**
+   * Reset all procedural memory (for testing/debugging)
+   */
+  async reset(): Promise<void> {
+    this.skills.clear();
+    this.workflows.clear();
+    this.trajectoryBuffer = [];
+    this.visitedDomains.clear();
+    this.visitedPageTypes.clear();
+    this.failedExtractions.clear();
+    await this.save();
+    console.error('[ProceduralMemory] Reset complete');
   }
 }
 

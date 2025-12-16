@@ -289,6 +289,22 @@ export class SmartBrowser {
     const html = await page.content();
     const finalUrl = page.url();
 
+    // Detect page context for better skill matching
+    if (useSkills) {
+      const detectedContext = await this.detectPageContext(page, finalUrl);
+
+      // Re-match skills with full page context
+      const matchedSkills = this.proceduralMemory.retrieveSkills(detectedContext, 3);
+      if (matchedSkills.length > 0) {
+        learning.skillsMatched = matchedSkills;
+        const bestMatch = matchedSkills[0];
+        if (bestMatch.preconditionsMet && bestMatch.similarity > 0.75) {
+          learning.skillApplied = bestMatch.skill.name;
+          console.error(`[SmartBrowser] Matched skill with context: ${bestMatch.skill.name} (${detectedContext.pageType} page, similarity: ${bestMatch.similarity.toFixed(2)})`);
+        }
+      }
+    }
+
     // Try to extract content with learned selectors
     let extractedContent = await this.extractContentWithLearning(
       page,
@@ -818,6 +834,78 @@ export class SmartBrowser {
    */
   getProceduralMemory(): ProceduralMemory {
     return this.proceduralMemory;
+  }
+
+  /**
+   * Detect page context for better skill matching
+   */
+  async detectPageContext(page: Page, url: string): Promise<PageContext> {
+    const domain = new URL(url).hostname;
+
+    // Detect page elements in parallel
+    const [
+      hasForm,
+      hasTable,
+      hasPagination,
+      hasLogin,
+      hasSearch,
+      title,
+      language,
+    ] = await Promise.all([
+      page.$('form').then(el => el !== null),
+      page.$('table').then(el => el !== null),
+      page.$('.pagination, [aria-label="pagination"], .pager, nav[role="navigation"] a[href*="page"]').then(el => el !== null),
+      page.$('input[type="password"], form[action*="login"], form[action*="signin"], #login, .login-form').then(el => el !== null),
+      page.$('input[type="search"], form[action*="search"], input[name="q"], input[name="query"]').then(el => el !== null),
+      page.title(),
+      page.$eval('html', el => el.getAttribute('lang')).catch(() => undefined),
+    ]);
+
+    // Infer page type
+    let pageType: PageContext['pageType'] = 'unknown';
+    if (hasLogin) {
+      pageType = 'login';
+    } else if (hasSearch) {
+      pageType = 'search';
+    } else if (hasForm) {
+      pageType = 'form';
+    } else if (hasTable || hasPagination) {
+      pageType = 'list';
+    } else {
+      pageType = 'detail';
+    }
+
+    // Get available selectors for skill matching
+    const availableSelectors = await page.evaluate(() => {
+      const selectors: string[] = [];
+      // Check for common content selectors
+      const checks = [
+        'main', 'article', '#content', '.content', '[role="main"]',
+        'table', 'form', '.pagination', 'nav',
+      ];
+      for (const sel of checks) {
+        if (document.querySelector(sel)) {
+          selectors.push(sel);
+        }
+      }
+      return selectors;
+    });
+
+    // Get content length estimate
+    const contentLength = await page.evaluate(() => document.body?.innerText?.length || 0);
+
+    return {
+      url,
+      domain,
+      title,
+      language: language?.split('-')[0],
+      pageType,
+      availableSelectors,
+      contentLength,
+      hasForm,
+      hasPagination,
+      hasTable,
+    };
   }
 
   /**

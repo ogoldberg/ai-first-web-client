@@ -256,6 +256,37 @@ Shows:
           required: ['skillId'],
         },
       },
+      {
+        name: 'manage_skills',
+        description: `Manage browsing skills: export, import, prune, or reset.
+
+Actions:
+- export: Export all skills as JSON for backup/sharing
+- import: Import skills from JSON (merge by default)
+- prune: Remove low-performing skills
+- reset: Clear all skills (use with caution)
+- coverage: Get active learning coverage stats and suggestions
+- workflows: List detected potential workflows`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            action: {
+              type: 'string',
+              enum: ['export', 'import', 'prune', 'reset', 'coverage', 'workflows'],
+              description: 'The management action to perform',
+            },
+            data: {
+              type: 'string',
+              description: 'JSON data for import action',
+            },
+            minSuccessRate: {
+              type: 'number',
+              description: 'Minimum success rate for pruning (default: 0.3)',
+            },
+          },
+          required: ['action'],
+        },
+      },
 
       // ============================================
       // LEGACY TOOLS (Backward Compatibility)
@@ -571,6 +602,124 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             },
           ],
         };
+      }
+
+      case 'manage_skills': {
+        const proceduralMemory = smartBrowser.getProceduralMemory();
+        const action = args.action as string;
+
+        switch (action) {
+          case 'export': {
+            const exported = await proceduralMemory.exportMemory();
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify({
+                    message: 'Skills exported successfully',
+                    data: JSON.parse(exported),
+                  }, null, 2),
+                },
+              ],
+            };
+          }
+
+          case 'import': {
+            if (!args.data) {
+              return {
+                content: [{ type: 'text', text: JSON.stringify({ error: 'No data provided for import' }) }],
+                isError: true,
+              };
+            }
+            const imported = await proceduralMemory.importSkills(args.data as string);
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify({
+                    message: `Imported ${imported} skills`,
+                    totalSkills: proceduralMemory.getStats().totalSkills,
+                  }, null, 2),
+                },
+              ],
+            };
+          }
+
+          case 'prune': {
+            const minRate = (args.minSuccessRate as number) || 0.3;
+            const pruned = proceduralMemory.pruneFailedSkills(minRate);
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify({
+                    message: `Pruned ${pruned} low-performing skills`,
+                    remainingSkills: proceduralMemory.getStats().totalSkills,
+                  }, null, 2),
+                },
+              ],
+            };
+          }
+
+          case 'reset': {
+            await proceduralMemory.reset();
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify({ message: 'All skills have been reset' }, null, 2),
+                },
+              ],
+            };
+          }
+
+          case 'coverage': {
+            const coverage = proceduralMemory.getCoverageStats();
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify({
+                    coverage: {
+                      coveredDomains: coverage.coveredDomains.length,
+                      coveredPageTypes: coverage.coveredPageTypes,
+                      uncoveredDomains: coverage.uncoveredDomains.slice(0, 10),
+                      uncoveredPageTypes: coverage.uncoveredPageTypes,
+                    },
+                    suggestions: coverage.suggestions,
+                  }, null, 2),
+                },
+              ],
+            };
+          }
+
+          case 'workflows': {
+            const potentialWorkflows = proceduralMemory.detectPotentialWorkflows();
+            const existingWorkflows = proceduralMemory.getAllWorkflows();
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify({
+                    existingWorkflows: existingWorkflows.map(w => ({
+                      id: w.id,
+                      name: w.name,
+                      skills: w.skillIds.length,
+                      timesUsed: w.metrics.timesUsed,
+                    })),
+                    potentialWorkflows: potentialWorkflows.slice(0, 5),
+                  }, null, 2),
+                },
+              ],
+            };
+          }
+
+          default:
+            return {
+              content: [{ type: 'text', text: JSON.stringify({ error: `Unknown action: ${action}` }) }],
+              isError: true,
+            };
+        }
       }
 
       // ============================================
