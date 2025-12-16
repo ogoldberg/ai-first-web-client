@@ -611,3 +611,55 @@ export interface ExtendedSkillPreconditions extends SkillPreconditions {
   // Fallback skills if this one fails
   fallbackSkillIds?: string[];
 }
+
+// ============================================
+// TIERED RENDERING TYPES
+// ============================================
+
+/**
+ * Rendering tier for content fetching
+ * - intelligence: Content Intelligence (fastest, ~50-200ms)
+ *   - Framework data extraction (__NEXT_DATA__, etc.)
+ *   - Structured data (JSON-LD, OpenGraph)
+ *   - API prediction and direct calling
+ *   - Google Cache / Archive.org fallbacks
+ *   - Static HTML parsing
+ * - lightweight: HTTP + linkedom + Node VM (medium, ~200-500ms)
+ * - playwright: Full Chromium browser (slowest, ~2-5s, OPTIONAL)
+ */
+export type RenderTier = 'intelligence' | 'lightweight' | 'playwright';
+
+/**
+ * Domain-specific rendering preference
+ */
+export interface DomainRenderPreference {
+  domain: string;
+  preferredTier: RenderTier;
+  successCount: number;
+  failureCount: number;
+  lastUsed: number;
+  avgResponseTime: number;
+}
+
+/**
+ * Result from tiered fetching
+ */
+export interface TieredFetchResult {
+  html: string;
+  content: {
+    markdown: string;
+    text: string;
+    title: string;
+  };
+  tier: RenderTier;
+  finalUrl: string;
+  fellBack: boolean;
+  tiersAttempted: RenderTier[];
+  tierReason: string;
+  networkRequests: NetworkRequest[];
+  discoveredApis: ApiPattern[];
+  timing: {
+    total: number;
+    perTier: Record<RenderTier, number>;
+  };
+}

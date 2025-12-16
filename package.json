@@ -1,6 +1,6 @@
 {
   "name": "llm-browser-mcp",
-  "version": "0.1.0",
+  "version": "0.4.0",
   "description": "LLM-first browser MCP server with API discovery, session management, and intelligent optimization",
   "type": "module",
   "main": "dist/index.js",
@@ -29,13 +29,16 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^0.6.0",
     "cheerio": "^1.0.0",
+    "linkedom": "^0.18.12",
     "pdf-parse": "^1.1.1",
     "playwright": "^1.48.0",
+    "tough-cookie": "^6.0.0",
     "turndown": "^7.2.0"
   },
   "devDependencies": {
     "@types/node": "^22.8.4",
     "@types/pdf-parse": "^1.1.4",
+    "@types/tough-cookie": "^4.0.5",
     "@types/turndown": "^5.0.5",
     "@vitest/coverage-v8": "^4.0.16",
     "typescript": "^5.6.3",

@@ -559,6 +559,63 @@ Captures cookies, localStorage, sessionStorage for future requests.`,
           required: ['domain'],
         },
       },
+
+      // ============================================
+      // TIERED RENDERING
+      // ============================================
+      {
+        name: 'get_tiered_fetcher_stats',
+        description: `Get statistics about tiered rendering performance.
+
+The browser uses a tiered approach for fetching:
+- Tier 1 (intelligence): Content Intelligence (~50-200ms)
+  - Framework data extraction (Next.js, Nuxt, Gatsby, Remix)
+  - Structured data (JSON-LD, OpenGraph)
+  - API prediction and direct calling
+  - Google Cache / Archive.org fallbacks
+  - Static HTML parsing
+- Tier 2 (lightweight): HTTP + JS execution (~200-500ms) - for simple dynamic pages
+- Tier 3 (playwright): Full browser (~2-5s) - OPTIONAL, for complex SPAs
+
+Playwright is OPTIONAL - if not installed, the system gracefully skips it.
+
+Shows:
+- Domains using each tier
+- Average response times per tier
+- Whether Playwright is available
+
+Use this to understand rendering efficiency.`,
+        inputSchema: {
+          type: 'object',
+          properties: {},
+        },
+      },
+      {
+        name: 'set_domain_tier',
+        description: `Manually set the preferred rendering tier for a domain.
+
+Use this to override automatic tier selection:
+- 'intelligence' for most sites (fastest, uses multiple strategies)
+- 'lightweight' for sites needing simple JS execution
+- 'playwright' for sites requiring full browser (if available)
+
+The setting persists until the browser learns differently or is reset.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            domain: {
+              type: 'string',
+              description: 'The domain to configure',
+            },
+            tier: {
+              type: 'string',
+              enum: ['intelligence', 'lightweight', 'playwright'],
+              description: 'The rendering tier to use',
+            },
+          },
+          required: ['domain', 'tier'],
+        },
+      },
     ],
   };
 });
@@ -613,6 +670,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             skillApplied: result.learning.skillApplied,
             skillsMatched: result.learning.skillsMatched?.length || 0,
             trajectoryRecorded: result.learning.trajectoryRecorded,
+            // Tiered rendering insights
+            renderTier: result.learning.renderTier,
+            tierFellBack: result.learning.tierFellBack,
+            tierReason: result.learning.tierReason,
           },
           // Discovered APIs for future direct access
           discoveredApis: result.discoveredApis.map(api => ({
@@ -1258,6 +1319,77 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
+      // ============================================
+      // TIERED RENDERING
+      // ============================================
+      case 'get_tiered_fetcher_stats': {
+        const tieredFetcher = smartBrowser.getTieredFetcher();
+        const tierStats = tieredFetcher.getStats();
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                summary: {
+                  totalDomains: tierStats.totalDomains,
+                  domainsByTier: tierStats.byTier,
+                  playwrightAvailable: tierStats.playwrightAvailable,
+                },
+                performance: {
+                  avgResponseTimes: {
+                    intelligence: Math.round(tierStats.avgResponseTimes.intelligence) + 'ms',
+                    lightweight: Math.round(tierStats.avgResponseTimes.lightweight) + 'ms',
+                    playwright: Math.round(tierStats.avgResponseTimes.playwright) + 'ms',
+                  },
+                },
+                efficiency: {
+                  intelligencePercent: tierStats.totalDomains > 0
+                    ? Math.round((tierStats.byTier.intelligence / tierStats.totalDomains) * 100) + '%'
+                    : '0%',
+                  lightweightPercent: tierStats.totalDomains > 0
+                    ? Math.round((tierStats.byTier.lightweight / tierStats.totalDomains) * 100) + '%'
+                    : '0%',
+                  playwrightPercent: tierStats.totalDomains > 0
+                    ? Math.round((tierStats.byTier.playwright / tierStats.totalDomains) * 100) + '%'
+                    : '0%',
+                  message: tierStats.byTier.intelligence + tierStats.byTier.lightweight > tierStats.byTier.playwright
+                    ? 'Good! Most requests are using lightweight rendering'
+                    : tierStats.playwrightAvailable
+                    ? 'Consider optimizing - many requests still require full browser'
+                    : 'Playwright not installed - using lightweight strategies only',
+                },
+              }, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'set_domain_tier': {
+        const tieredFetcher = smartBrowser.getTieredFetcher();
+        const domain = args.domain as string;
+        const tier = args.tier as 'intelligence' | 'lightweight' | 'playwright';
+
+        tieredFetcher.setDomainPreference(domain, tier);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                success: true,
+                message: `Set ${domain} to use ${tier} tier`,
+                note: tier === 'intelligence'
+                  ? 'Content Intelligence - tries framework extraction, API prediction, caches, then static parsing'
+                  : tier === 'lightweight'
+                  ? 'Lightweight JS - executes scripts without full browser'
+                  : 'Full browser - handles all pages but slowest (requires Playwright)',
+              }, null, 2),
+            },
+          ],
+        };
+      }
+
       default:
         throw new Error(`Unknown tool: ${name}`);
     }
@@ -1325,8 +1457,9 @@ async function main() {
 
   console.error('LLM Browser MCP Server v0.4.0 running');
   console.error('Primary tool: smart_browse (with automatic learning)');
-  console.error('Features: Domain patterns, API discovery, Procedural memory (skills)');
+  console.error('Features: Tiered rendering, Domain patterns, API discovery, Procedural memory');
   console.error('New in v0.4: Skill versioning, anti-patterns, user feedback, dependencies');
+  console.error('Tiers: static (~50ms) -> lightweight (~200-500ms) -> playwright (~2-5s)');
   console.error('Domain groups: spanish_gov, us_gov, eu_gov');
 
   // Cleanup on exit
