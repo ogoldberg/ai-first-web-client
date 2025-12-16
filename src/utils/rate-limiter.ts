@@ -110,16 +110,14 @@ export class RateLimiter {
   }
 
   /**
-   * Wait for rate limit and acquire lock
+   * Wait for rate limit delay and record request.
+   *
+   * Note: This method only handles rate limiting (delay calculation and request recording).
+   * For serialized access (ensuring one request at a time per domain), use throttle() instead.
+   * The lock mechanism is intentionally NOT checked here to avoid deadlock when called from throttle().
    */
   async acquire(url: string): Promise<void> {
     const domain = this.getDomain(url);
-
-    // Wait for any pending request to this domain
-    const existingLock = this.domainLocks.get(domain);
-    if (existingLock) {
-      await existingLock;
-    }
 
     // Calculate and wait for rate limit delay
     const delay = this.calculateDelay(domain);

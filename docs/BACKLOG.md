@@ -23,7 +23,6 @@ Tasks are organized by priority and category. Each task includes:
 
 | ID | Task | Effort | Category | Notes |
 |----|------|--------|----------|-------|
-| R-001 | Fix rate limiter potential deadlock | S | Reliability | Known issue in tests (skipped) |
 | R-002 | Add error boundaries to SmartBrowser | M | Reliability | Prevent cascading failures |
 | R-003 | Graceful degradation when Playwright missing | S | Reliability | Clear error messages, fallback |
 
@@ -130,6 +129,7 @@ Tasks are organized by priority and category. Each task includes:
 
 | ID | Task | Completed | Notes |
 |----|------|-----------|-------|
+| R-001 | Fix rate limiter potential deadlock | 2024-12-16 | Removed lock check from acquire() |
 | - | Vitest test framework setup | 2024-12-16 | PR #4 |
 | - | Cache eviction LRU fix | 2024-12-16 | PR #4 |
 | - | Procedural memory rollback metrics | 2024-12-16 | PR #3 |
