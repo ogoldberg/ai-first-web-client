@@ -16,7 +16,6 @@ Tasks are organized by priority and category. Each task includes:
 | ID | Task | Effort | Category | Notes |
 |----|------|--------|----------|-------|
 | T-001 | Add integration tests for smart_browse tool | L | Testing | Primary MCP tool, needs full coverage |
-| T-002 | Add integration tests for tiered fetcher | M | Testing | Test tier cascade and fallback |
 | T-003 | End-to-end test: full browse cycle | M | Testing | From MCP call to response |
 
 ---
@@ -122,6 +121,7 @@ Tasks are organized by priority and category. Each task includes:
 
 | ID | Task | Completed | Notes |
 |----|------|-----------|-------|
+| T-002 | Add integration tests for tiered fetcher | 2025-12-16 | 24 tests for tier cascade and fallback, PR #10 |
 | R-002 | Add error boundaries to SmartBrowser | 2025-12-16 | Wrap non-critical ops in try-catch, PR #9 |
 | R-003 | Graceful degradation when Playwright missing | 2024-12-16 | Lazy loading, clear errors, tier fallback |
 | R-001 | Fix rate limiter potential deadlock | 2024-12-16 | Removed lock check from acquire() |
