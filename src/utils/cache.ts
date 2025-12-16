@@ -118,7 +118,7 @@ export class ResponseCache<T = unknown> {
   /**
    * Evict the oldest entries to make room
    */
-  private evictOldest(count: number = 100): void {
+  private evictOldest(count: number = 1): void {
     const entries = Array.from(this.cache.entries())
       .sort(([, a], [, b]) => a.timestamp - b.timestamp)
       .slice(0, count);

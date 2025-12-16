@@ -119,7 +119,7 @@ describe('ResponseCache', () => {
   });
 
   describe('max entries eviction', () => {
-    it('should evict oldest entries when at capacity', () => {
+    it('should evict the oldest entry when at capacity', () => {
       const smallCache = new ResponseCache<string>({ maxEntries: 3 });
 
       smallCache.set('https://1.com', 'first');
@@ -127,15 +127,15 @@ describe('ResponseCache', () => {
       smallCache.set('https://2.com', 'second');
       vi.advanceTimersByTime(10);
       smallCache.set('https://3.com', 'third');
-      vi.advanceTimersByTime(10);
 
-      // This should trigger eviction
+      // This should trigger eviction of the oldest entry ('first')
       smallCache.set('https://4.com', 'fourth');
 
+      expect(smallCache.has('https://1.com')).toBe(false);
+      expect(smallCache.get('https://2.com')).toBe('second');
+      expect(smallCache.get('https://3.com')).toBe('third');
       expect(smallCache.get('https://4.com')).toBe('fourth');
-      // At least one of the older entries should be evicted
-      const stats = smallCache.getStats();
-      expect(stats.size).toBeLessThanOrEqual(3);
+      expect(smallCache.getStats().size).toBe(3);
     });
   });
 
