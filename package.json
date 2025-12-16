@@ -11,7 +11,10 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "start": "node dist/index.js",
-    "inspect": "node --inspect dist/index.js"
+    "inspect": "node --inspect dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "keywords": [
     "mcp",
@@ -25,16 +28,18 @@
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^0.6.0",
-    "playwright": "^1.48.0",
     "cheerio": "^1.0.0",
-    "turndown": "^7.2.0",
-    "pdf-parse": "^1.1.1"
+    "pdf-parse": "^1.1.1",
+    "playwright": "^1.48.0",
+    "turndown": "^7.2.0"
   },
   "devDependencies": {
     "@types/node": "^22.8.4",
-    "@types/turndown": "^5.0.5",
     "@types/pdf-parse": "^1.1.4",
-    "typescript": "^5.6.3"
+    "@types/turndown": "^5.0.5",
+    "@vitest/coverage-v8": "^4.0.16",
+    "typescript": "^5.6.3",
+    "vitest": "^4.0.16"
   },
   "engines": {
     "node": ">=18.0.0"
