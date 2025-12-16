@@ -86,11 +86,7 @@ describe('RateLimiter', () => {
     });
   });
 
-  // NOTE: The throttle method has a deadlock bug where it sets a lock before
-  // calling acquire(), but acquire() also checks for that same lock, causing
-  // it to wait forever. These tests are skipped until the bug is fixed.
-  // See: src/utils/rate-limiter.ts - throttle() method
-  describe.skip('throttle (skipped - deadlock bug)', () => {
+  describe('throttle', () => {
     it('should execute function and return result', async () => {
       const result = await rateLimiter.throttle(
         'https://unique-domain-1.com',
