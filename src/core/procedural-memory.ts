@@ -25,7 +25,6 @@ import type {
   SkillWorkflow,
   CoverageStats,
   SkillVersion,
-  VersionedBrowsingSkill,
   AntiPattern,
   SkillExplanation,
   SkillFeedback,
@@ -40,6 +39,9 @@ const DEFAULT_CONFIG: ProceduralMemoryConfig = {
   minTrajectoryLength: 2,
   mergeThreshold: 0.9,
   filePath: './procedural-memory.json',
+  maxVersionsPerSkill: 10,
+  maxFeedbackLogSize: 500,
+  autoRollbackThreshold: 0.3,
 };
 
 // Embedding feature layout configuration
@@ -119,7 +121,6 @@ export class ProceduralMemory {
 
   // Versioning support
   private skillVersions: Map<string, SkillVersion[]> = new Map(); // skillId -> version history
-  private maxVersionsPerSkill: number = 10;
 
   // Anti-patterns (negative skills)
   private antiPatterns: Map<string, AntiPattern> = new Map();
@@ -849,7 +850,7 @@ export class ProceduralMemory {
         // Anti-patterns
         antiPatterns: Array.from(this.antiPatterns.values()),
         // User feedback
-        feedbackLog: this.feedbackLog.slice(-500), // Keep last 500
+        feedbackLog: this.feedbackLog.slice(-(this.config.maxFeedbackLogSize ?? 500)),
         lastSaved: Date.now(),
         config: this.config,
       };
@@ -1473,7 +1474,7 @@ export class ProceduralMemory {
   ): SkillVersion {
     const successRate = skill.metrics.timesUsed > 0
       ? skill.metrics.successCount / skill.metrics.timesUsed
-      : 1;
+      : 0;
 
     const versions = this.skillVersions.get(skill.id) || [];
     const nextVersion = versions.length > 0
@@ -1511,8 +1512,9 @@ export class ProceduralMemory {
     versions.push(version);
 
     // Keep only the last N versions
-    if (versions.length > this.maxVersionsPerSkill) {
-      versions.splice(0, versions.length - this.maxVersionsPerSkill);
+    const maxVersions = this.config.maxVersionsPerSkill ?? 10;
+    if (versions.length > maxVersions) {
+      versions.splice(0, versions.length - maxVersions);
     }
   }
 
@@ -1566,6 +1568,8 @@ export class ProceduralMemory {
     skill.embedding = [...targetVersionData.embedding];
     skill.metrics.successCount = targetVersionData.metricsSnapshot.successCount;
     skill.metrics.failureCount = targetVersionData.metricsSnapshot.failureCount;
+    skill.metrics.timesUsed = targetVersionData.metricsSnapshot.timesUsed;
+    skill.metrics.avgDuration = targetVersionData.metricsSnapshot.avgDuration;
     skill.updatedAt = Date.now();
 
     await this.save();
@@ -1576,7 +1580,8 @@ export class ProceduralMemory {
   /**
    * Check if a skill should be auto-rolled back based on performance degradation
    */
-  checkForAutoRollback(skillId: string, threshold: number = 0.5): boolean {
+  checkForAutoRollback(skillId: string, threshold?: number): boolean {
+    const effectiveThreshold = threshold ?? this.config.autoRollbackThreshold ?? 0.5;
     const skill = this.skills.get(skillId);
     if (!skill) return false;
 
@@ -1586,7 +1591,7 @@ export class ProceduralMemory {
     // Get current success rate
     const currentSuccessRate = skill.metrics.timesUsed > 0
       ? skill.metrics.successCount / skill.metrics.timesUsed
-      : 1;
+      : 0;
 
     // Get best historical success rate
     const bestHistoricalRate = Math.max(
@@ -1595,7 +1600,7 @@ export class ProceduralMemory {
 
     // Check if current performance is significantly worse
     const degradation = bestHistoricalRate - currentSuccessRate;
-    if (degradation > threshold && skill.metrics.timesUsed >= 5) {
+    if (degradation > effectiveThreshold && skill.metrics.timesUsed >= 5) {
       console.error(`[ProceduralMemory] Performance degradation detected for ${skill.name}: ${(degradation * 100).toFixed(1)}% drop`);
       return true;
     }
@@ -1639,8 +1644,11 @@ export class ProceduralMemory {
       // Update existing anti-pattern
       existing.occurrenceCount++;
       existing.updatedAt = Date.now();
-      if (!existing.consequences.includes(consequences[0])) {
-        existing.consequences.push(...consequences);
+      // Add only new, unique consequences
+      for (const consequence of consequences) {
+        if (!existing.consequences.includes(consequence)) {
+          existing.consequences.push(consequence);
+        }
       }
       await this.save();
       return existing;
@@ -1988,7 +1996,7 @@ export class ProceduralMemory {
         skill.metrics.failureCount++;
 
         // Check if we should auto-rollback
-        if (this.checkForAutoRollback(skillId, 0.3)) {
+        if (this.checkForAutoRollback(skillId)) {
           console.error(`[ProceduralMemory] Auto-rollback triggered for skill ${skill.name} due to negative feedback`);
           await this.rollbackSkill(skillId);
         }
@@ -2000,8 +2008,9 @@ export class ProceduralMemory {
     }
 
     // Keep feedback log bounded
-    if (this.feedbackLog.length > 1000) {
-      this.feedbackLog = this.feedbackLog.slice(-500);
+    const maxSize = this.config.maxFeedbackLogSize ?? 500;
+    if (this.feedbackLog.length > maxSize * 2) {
+      this.feedbackLog = this.feedbackLog.slice(-maxSize);
     }
 
     await this.save();
@@ -2086,14 +2095,10 @@ export class ProceduralMemory {
       }
     }
 
-    // Check for circular dependencies
-    for (const prereqId of prerequisiteSkillIds) {
-      const prereqSkill = this.skills.get(prereqId)!;
-      const prereqPrereqs = (prereqSkill.preconditions as ExtendedSkillPreconditions).prerequisites || [];
-      if (prereqPrereqs.includes(skillId)) {
-        console.error(`[ProceduralMemory] Circular dependency detected between ${skillId} and ${prereqId}`);
-        return false;
-      }
+    // Check for circular dependencies using DFS
+    if (this.wouldCreateCircularDependency(skillId, prerequisiteSkillIds)) {
+      console.error(`[ProceduralMemory] Circular dependency detected when adding prerequisites to ${skillId}`);
+      return false;
     }
 
     // Extend preconditions with prerequisites
@@ -2103,6 +2108,62 @@ export class ProceduralMemory {
     await this.save();
     console.error(`[ProceduralMemory] Added ${prerequisiteSkillIds.length} prerequisites to ${skill.name}`);
     return true;
+  }
+
+  /**
+   * Check if adding prerequisites would create a circular dependency using DFS
+   */
+  private wouldCreateCircularDependency(skillId: string, newPrereqs: string[]): boolean {
+    // Build a temporary graph with the proposed new edges
+    const visited = new Set<string>();
+    const recursionStack = new Set<string>();
+
+    // DFS to detect cycles
+    const hasCycle = (currentId: string): boolean => {
+      if (recursionStack.has(currentId)) {
+        return true; // Cycle detected
+      }
+      if (visited.has(currentId)) {
+        return false; // Already fully explored
+      }
+
+      visited.add(currentId);
+      recursionStack.add(currentId);
+
+      // Get prerequisites for this skill
+      let prereqs: string[] = [];
+      if (currentId === skillId) {
+        // Use the proposed new prerequisites
+        prereqs = newPrereqs;
+      } else {
+        const skill = this.skills.get(currentId);
+        if (skill) {
+          prereqs = (skill.preconditions as ExtendedSkillPreconditions).prerequisites || [];
+        }
+      }
+
+      // Check each prerequisite
+      for (const prereqId of prereqs) {
+        if (hasCycle(prereqId)) {
+          return true;
+        }
+      }
+
+      recursionStack.delete(currentId);
+      return false;
+    };
+
+    // Start DFS from each new prerequisite to see if any path leads back to skillId
+    for (const prereqId of newPrereqs) {
+      visited.clear();
+      recursionStack.clear();
+      recursionStack.add(skillId); // Mark skillId as in the current path
+      if (hasCycle(prereqId)) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   /**
@@ -2148,18 +2209,23 @@ export class ProceduralMemory {
 
     for (const currentSkill of chain) {
       attempts++;
+      const startTime = Date.now();
       try {
         const success = await executor(currentSkill);
+        const duration = Date.now() - startTime;
         if (success) {
-          // Record success
-          await this.recordSkillExecution(currentSkill.id, true, 0);
+          // Record success with actual duration
+          await this.recordSkillExecution(currentSkill.id, true, duration);
           return { success: true, executedSkillId: currentSkill.id, attempts };
         }
+        // Record failure with actual duration
+        await this.recordSkillExecution(currentSkill.id, false, duration);
       } catch (error) {
+        const duration = Date.now() - startTime;
         console.error(`[ProceduralMemory] Skill ${currentSkill.name} failed, trying next fallback`);
+        // Record failure with actual duration
+        await this.recordSkillExecution(currentSkill.id, false, duration);
       }
-      // Record failure
-      await this.recordSkillExecution(currentSkill.id, false, 0);
     }
 
     return { success: false, executedSkillId: skillId, attempts };

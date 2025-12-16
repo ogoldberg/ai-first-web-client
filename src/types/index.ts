@@ -393,6 +393,12 @@ export interface ProceduralMemoryConfig {
   mergeThreshold: number;
   // Skill file path
   filePath: string;
+  // Maximum versions to keep per skill (default: 10)
+  maxVersionsPerSkill?: number;
+  // Maximum feedback log entries to keep (default: 500)
+  maxFeedbackLogSize?: number;
+  // Threshold for auto-rollback on negative feedback (default: 0.3)
+  autoRollbackThreshold?: number;
 }
 
 /**
