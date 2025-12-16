@@ -60,7 +60,7 @@ const apiCallTool = new ApiCallTool(browserManager);
 const server = new Server(
   {
     name: 'llm-browser',
-    version: '0.3.0',
+    version: '0.4.0',
   },
   {
     capabilities: {
@@ -285,6 +285,193 @@ Actions:
             },
           },
           required: ['action'],
+        },
+      },
+
+      // ============================================
+      // SKILL VERSIONING & ROLLBACK
+      // ============================================
+      {
+        name: 'get_skill_versions',
+        description: `Get version history for a skill.
+
+Shows all recorded versions of a skill including:
+- Version number and when it was created
+- What triggered the version (merge, update, rollback)
+- Metrics snapshot at each version
+- Best performing version
+
+Use this to understand how a skill has evolved and identify the best version.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            skillId: {
+              type: 'string',
+              description: 'The ID of the skill to get versions for',
+            },
+          },
+          required: ['skillId'],
+        },
+      },
+      {
+        name: 'rollback_skill',
+        description: `Rollback a skill to a previous version.
+
+If performance has degraded, rollback to a better-performing version.
+By default rolls back to the previous version, or specify a target version number.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            skillId: {
+              type: 'string',
+              description: 'The ID of the skill to rollback',
+            },
+            targetVersion: {
+              type: 'number',
+              description: 'Target version number to rollback to (optional, defaults to previous)',
+            },
+          },
+          required: ['skillId'],
+        },
+      },
+
+      // ============================================
+      // USER FEEDBACK
+      // ============================================
+      {
+        name: 'rate_skill_application',
+        description: `Rate the application of a skill (thumbs up/down).
+
+Provide feedback on whether a skill worked well or not. This feedback:
+- Updates the skill's success/failure metrics
+- May trigger auto-rollback if too many negative ratings
+- Helps improve skill selection over time
+
+Use this after a skill is applied to help the browser learn.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            skillId: {
+              type: 'string',
+              description: 'The ID of the skill that was applied',
+            },
+            rating: {
+              type: 'string',
+              enum: ['positive', 'negative'],
+              description: 'Thumbs up (positive) or down (negative)',
+            },
+            url: {
+              type: 'string',
+              description: 'The URL where the skill was applied',
+            },
+            reason: {
+              type: 'string',
+              description: 'Optional reason for the rating',
+            },
+          },
+          required: ['skillId', 'rating', 'url'],
+        },
+      },
+
+      // ============================================
+      // SKILL EXPLANATION
+      // ============================================
+      {
+        name: 'get_skill_explanation',
+        description: `Get a human-readable explanation of what a skill does.
+
+Returns:
+- Plain English summary of the skill
+- Step-by-step breakdown of actions
+- When/where the skill is applicable
+- Reliability information
+- Tips for best results`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            skillId: {
+              type: 'string',
+              description: 'The ID of the skill to explain',
+            },
+          },
+          required: ['skillId'],
+        },
+      },
+
+      // ============================================
+      // ANTI-PATTERNS
+      // ============================================
+      {
+        name: 'get_anti_patterns',
+        description: `Get learned anti-patterns (things to avoid).
+
+Anti-patterns are actions that have been learned NOT to do on specific domains.
+Shows what actions cause problems and should be avoided.
+
+Use this to understand known issues with a domain.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            domain: {
+              type: 'string',
+              description: 'Filter anti-patterns by domain (optional)',
+            },
+          },
+        },
+      },
+
+      // ============================================
+      // SKILL DEPENDENCIES & FALLBACKS
+      // ============================================
+      {
+        name: 'manage_skill_dependencies',
+        description: `Manage skill dependencies and fallback chains.
+
+Actions:
+- add_fallbacks: Add fallback skills that run if the primary fails
+- add_prerequisites: Add skills that must run before this one
+- get_chain: Get the full dependency chain for a skill
+
+This enables building complex multi-skill workflows with error recovery.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            action: {
+              type: 'string',
+              enum: ['add_fallbacks', 'add_prerequisites', 'get_chain'],
+              description: 'The dependency action to perform',
+            },
+            skillId: {
+              type: 'string',
+              description: 'The skill to manage dependencies for',
+            },
+            relatedSkillIds: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'Skill IDs to add as fallbacks or prerequisites',
+            },
+          },
+          required: ['action', 'skillId'],
+        },
+      },
+
+      // ============================================
+      // BOOTSTRAP
+      // ============================================
+      {
+        name: 'bootstrap_skills',
+        description: `Bootstrap procedural memory with common skill templates.
+
+Initializes the browser with basic skills for common tasks:
+- Cookie banner dismissal
+- Pagination navigation
+- Form extraction
+- Table extraction
+
+Use this when starting fresh to get basic capabilities quickly.`,
+        inputSchema: {
+          type: 'object',
+          properties: {},
         },
       },
 
@@ -723,6 +910,283 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       // ============================================
+      // SKILL VERSIONING & ROLLBACK
+      // ============================================
+      case 'get_skill_versions': {
+        const proceduralMemory = smartBrowser.getProceduralMemory();
+        const skillId = args.skillId as string;
+        const skill = proceduralMemory.getSkill(skillId);
+
+        if (!skill) {
+          return {
+            content: [{ type: 'text', text: JSON.stringify({ error: `Skill not found: ${skillId}` }) }],
+            isError: true,
+          };
+        }
+
+        const versions = proceduralMemory.getVersionHistory(skillId);
+        const bestVersion = proceduralMemory.getBestVersion(skillId);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                skillId,
+                skillName: skill.name,
+                totalVersions: versions.length,
+                versions: versions.map(v => ({
+                  version: v.version,
+                  createdAt: new Date(v.createdAt).toISOString(),
+                  changeReason: v.changeReason,
+                  changeDescription: v.changeDescription,
+                  successRate: Math.round(v.metricsSnapshot.successRate * 100) + '%',
+                  timesUsed: v.metricsSnapshot.timesUsed,
+                })),
+                bestVersion: bestVersion ? {
+                  version: bestVersion.version,
+                  successRate: Math.round(bestVersion.metricsSnapshot.successRate * 100) + '%',
+                } : null,
+              }, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'rollback_skill': {
+        const proceduralMemory = smartBrowser.getProceduralMemory();
+        const skillId = args.skillId as string;
+        const targetVersion = args.targetVersion as number | undefined;
+
+        const success = await proceduralMemory.rollbackSkill(skillId, targetVersion);
+
+        if (!success) {
+          return {
+            content: [{ type: 'text', text: JSON.stringify({ error: 'Rollback failed - check skill ID and version history' }) }],
+            isError: true,
+          };
+        }
+
+        const skill = proceduralMemory.getSkill(skillId);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                message: `Successfully rolled back skill ${skill?.name}`,
+                newSuccessRate: skill ? Math.round((skill.metrics.successCount / Math.max(skill.metrics.timesUsed, 1)) * 100) + '%' : 'N/A',
+              }, null, 2),
+            },
+          ],
+        };
+      }
+
+      // ============================================
+      // USER FEEDBACK
+      // ============================================
+      case 'rate_skill_application': {
+        const proceduralMemory = smartBrowser.getProceduralMemory();
+        const skillId = args.skillId as string;
+        const rating = args.rating as 'positive' | 'negative';
+        const url = args.url as string;
+        const reason = args.reason as string | undefined;
+
+        const domain = new URL(url).hostname;
+        await proceduralMemory.recordFeedback(skillId, rating, { url, domain }, reason);
+
+        const feedbackSummary = proceduralMemory.getFeedbackSummary(skillId);
+        const skill = proceduralMemory.getSkill(skillId);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                message: `Recorded ${rating} feedback for skill ${skill?.name || skillId}`,
+                feedbackSummary: {
+                  positive: feedbackSummary.positive,
+                  negative: feedbackSummary.negative,
+                  commonIssues: feedbackSummary.commonIssues,
+                },
+                currentSuccessRate: skill ? Math.round((skill.metrics.successCount / Math.max(skill.metrics.timesUsed, 1)) * 100) + '%' : 'N/A',
+              }, null, 2),
+            },
+          ],
+        };
+      }
+
+      // ============================================
+      // SKILL EXPLANATION
+      // ============================================
+      case 'get_skill_explanation': {
+        const proceduralMemory = smartBrowser.getProceduralMemory();
+        const skillId = args.skillId as string;
+
+        const explanation = proceduralMemory.generateSkillExplanation(skillId);
+
+        if (!explanation) {
+          return {
+            content: [{ type: 'text', text: JSON.stringify({ error: `Skill not found: ${skillId}` }) }],
+            isError: true,
+          };
+        }
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(explanation, null, 2),
+            },
+          ],
+        };
+      }
+
+      // ============================================
+      // ANTI-PATTERNS
+      // ============================================
+      case 'get_anti_patterns': {
+        const proceduralMemory = smartBrowser.getProceduralMemory();
+        const domain = args.domain as string | undefined;
+
+        const antiPatterns = domain
+          ? proceduralMemory.getAntiPatternsForDomain(domain)
+          : proceduralMemory.getAllAntiPatterns();
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                totalAntiPatterns: antiPatterns.length,
+                antiPatterns: antiPatterns.map(ap => ({
+                  id: ap.id,
+                  name: ap.name,
+                  description: ap.description,
+                  domain: ap.sourceDomain,
+                  avoidActions: ap.avoidActions,
+                  occurrenceCount: ap.occurrenceCount,
+                  consequences: ap.consequences,
+                  lastUpdated: new Date(ap.updatedAt).toISOString(),
+                })),
+              }, null, 2),
+            },
+          ],
+        };
+      }
+
+      // ============================================
+      // SKILL DEPENDENCIES & FALLBACKS
+      // ============================================
+      case 'manage_skill_dependencies': {
+        const proceduralMemory = smartBrowser.getProceduralMemory();
+        const action = args.action as string;
+        const skillId = args.skillId as string;
+        const relatedSkillIds = args.relatedSkillIds as string[] | undefined;
+
+        switch (action) {
+          case 'add_fallbacks': {
+            if (!relatedSkillIds || relatedSkillIds.length === 0) {
+              return {
+                content: [{ type: 'text', text: JSON.stringify({ error: 'No fallback skill IDs provided' }) }],
+                isError: true,
+              };
+            }
+            const success = await proceduralMemory.addFallbackSkills(skillId, relatedSkillIds);
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify({
+                    success,
+                    message: success ? `Added ${relatedSkillIds.length} fallback skills` : 'Failed to add fallbacks',
+                  }, null, 2),
+                },
+              ],
+            };
+          }
+
+          case 'add_prerequisites': {
+            if (!relatedSkillIds || relatedSkillIds.length === 0) {
+              return {
+                content: [{ type: 'text', text: JSON.stringify({ error: 'No prerequisite skill IDs provided' }) }],
+                isError: true,
+              };
+            }
+            const success = await proceduralMemory.addPrerequisites(skillId, relatedSkillIds);
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify({
+                    success,
+                    message: success ? `Added ${relatedSkillIds.length} prerequisite skills` : 'Failed to add prerequisites (check for circular dependencies)',
+                  }, null, 2),
+                },
+              ],
+            };
+          }
+
+          case 'get_chain': {
+            const skill = proceduralMemory.getSkill(skillId);
+            if (!skill) {
+              return {
+                content: [{ type: 'text', text: JSON.stringify({ error: `Skill not found: ${skillId}` }) }],
+                isError: true,
+              };
+            }
+
+            const prerequisites = proceduralMemory.getPrerequisiteSkills(skillId);
+            const fallbacks = proceduralMemory.getFallbackSkills(skillId);
+
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify({
+                    skill: { id: skill.id, name: skill.name },
+                    prerequisites: prerequisites.map(s => ({ id: s.id, name: s.name })),
+                    fallbacks: fallbacks.map(s => ({ id: s.id, name: s.name })),
+                    executionOrder: [
+                      ...prerequisites.map(s => `[prereq] ${s.name}`),
+                      `[main] ${skill.name}`,
+                      ...fallbacks.map(s => `[fallback] ${s.name}`),
+                    ],
+                  }, null, 2),
+                },
+              ],
+            };
+          }
+
+          default:
+            return {
+              content: [{ type: 'text', text: JSON.stringify({ error: `Unknown action: ${action}` }) }],
+              isError: true,
+            };
+        }
+      }
+
+      // ============================================
+      // BOOTSTRAP
+      // ============================================
+      case 'bootstrap_skills': {
+        const proceduralMemory = smartBrowser.getProceduralMemory();
+        const bootstrapped = await proceduralMemory.bootstrapFromTemplates();
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                message: `Bootstrapped ${bootstrapped} skills from templates`,
+                totalSkills: proceduralMemory.getStats().totalSkills,
+                templates: ['cookie_banner_dismiss', 'pagination_navigate', 'form_extraction', 'table_extraction'],
+              }, null, 2),
+            },
+          ],
+        };
+      }
+
+      // ============================================
       // LEGACY TOOLS
       // ============================================
       case 'browse': {
@@ -859,9 +1323,10 @@ async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
 
-  console.error('LLM Browser MCP Server v0.3.0 running');
+  console.error('LLM Browser MCP Server v0.4.0 running');
   console.error('Primary tool: smart_browse (with automatic learning)');
   console.error('Features: Domain patterns, API discovery, Procedural memory (skills)');
+  console.error('New in v0.4: Skill versioning, anti-patterns, user feedback, dependencies');
   console.error('Domain groups: spanish_gov, us_gov, eu_gov');
 
   // Cleanup on exit

@@ -460,3 +460,148 @@ export interface CoverageStats {
     priority: 'high' | 'medium' | 'low';
   }>;
 }
+
+// ============================================
+// SKILL VERSIONING & ROLLBACK
+// ============================================
+
+/**
+ * A snapshot of a skill at a specific version
+ */
+export interface SkillVersion {
+  // Version number (monotonically increasing)
+  version: number;
+  // When this version was created
+  createdAt: number;
+  // Snapshot of the action sequence at this version
+  actionSequence: BrowsingAction[];
+  // Snapshot of the embedding at this version
+  embedding: number[];
+  // Metrics at the time of versioning
+  metricsSnapshot: {
+    successCount: number;
+    failureCount: number;
+    successRate: number;
+    avgDuration: number;
+    timesUsed: number;
+  };
+  // What triggered this version (merge, update, manual)
+  changeReason: 'initial' | 'merge' | 'update' | 'rollback' | 'optimization';
+  // Description of what changed
+  changeDescription?: string;
+}
+
+/**
+ * Extended skill with versioning support
+ */
+export interface VersionedBrowsingSkill extends BrowsingSkill {
+  // Current version number
+  currentVersion: number;
+  // Version history (last N versions kept)
+  versionHistory: SkillVersion[];
+  // Performance thresholds for auto-rollback
+  rollbackThreshold?: {
+    // Minimum success rate before considering rollback
+    minSuccessRate: number;
+    // Minimum uses before rollback is considered
+    minUsesBeforeRollback: number;
+  };
+}
+
+// ============================================
+// NEGATIVE SKILLS (ANTI-PATTERNS)
+// ============================================
+
+/**
+ * An anti-pattern - something learned NOT to do
+ */
+export interface AntiPattern {
+  // Unique identifier
+  id: string;
+  // Human-readable name
+  name: string;
+  // Description of what NOT to do
+  description: string;
+  // When this anti-pattern applies
+  preconditions: SkillPreconditions;
+  // The action(s) to avoid
+  avoidActions: Array<{
+    type: BrowsingAction['type'];
+    selector?: string;
+    reason: string;
+  }>;
+  // How many times this mistake was made before learning
+  occurrenceCount: number;
+  // Consequences of the anti-pattern (what went wrong)
+  consequences: string[];
+  // Suggested alternative actions
+  alternatives?: BrowsingAction[];
+  // Metadata
+  createdAt: number;
+  updatedAt: number;
+  sourceDomain?: string;
+  sourceUrl?: string;
+}
+
+// ============================================
+// SKILL EXPLANATION
+// ============================================
+
+/**
+ * Human-readable explanation of a skill
+ */
+export interface SkillExplanation {
+  // Plain English summary of what the skill does
+  summary: string;
+  // Step-by-step breakdown of actions
+  steps: Array<{
+    stepNumber: number;
+    action: string;
+    target?: string;
+    purpose: string;
+  }>;
+  // When and where this skill should be used
+  applicability: string;
+  // Success rate and reliability info
+  reliability: string;
+  // Tips for best results
+  tips?: string[];
+}
+
+// ============================================
+// USER FEEDBACK
+// ============================================
+
+/**
+ * User feedback on a skill application
+ */
+export interface SkillFeedback {
+  // ID of the skill that was applied
+  skillId: string;
+  // Thumbs up (positive) or down (negative)
+  rating: 'positive' | 'negative';
+  // Optional reason for the rating
+  reason?: string;
+  // Context when feedback was given
+  context: {
+    url: string;
+    domain: string;
+    timestamp: number;
+  };
+  // Whether this feedback was acted upon
+  processed: boolean;
+}
+
+// ============================================
+// SKILL DEPENDENCIES & FALLBACKS
+// ============================================
+
+/**
+ * Extended preconditions with dependencies and fallbacks
+ */
+export interface ExtendedSkillPreconditions extends SkillPreconditions {
+  // Skills that must run before this one
+  prerequisites?: string[];
+  // Fallback skills if this one fails
+  fallbackSkillIds?: string[];
+}
