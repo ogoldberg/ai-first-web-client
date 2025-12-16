@@ -1,4 +1,4 @@
-# LLM Browser MCP Server v0.2
+# LLM Browser MCP Server v0.3
 
 An intelligent, self-learning browser designed for AI agents. Unlike traditional web scraping tools, this MCP server learns from every interaction, building intelligence that makes it more effective over time.
 
@@ -87,6 +87,37 @@ Returns:
 5. **Change Frequency** - How often content updates (for refresh scheduling)
 6. **Pagination Patterns** - How sites paginate their content
 7. **Failure Patterns** - What causes failures (to avoid and recover)
+8. **Browsing Skills** - Reusable action sequences learned from successful trajectories (v0.3)
+
+### Procedural Memory (v0.3)
+
+The procedural memory system learns reusable browsing skills from successful interactions:
+
+```
+User: "Extract data from this government form"
+
+Claude: smart_browse("https://example.gov/forms/application")
+
+Behind the scenes:
+1. Record browsing trajectory (actions taken)
+2. Create vector embedding of page context
+3. Match against existing skills (cosine similarity)
+4. If successful, extract and store as new skill
+5. Skills are automatically applied to similar pages
+```
+
+**Key Features:**
+- **Embedding-based skill matching** - Find relevant skills across different domains
+- **Automatic skill extraction** - Learn from successful browsing sessions
+- **Skill composition** - Combine skills into multi-step workflows
+- **Active learning** - Identify coverage gaps and suggest improvements
+- **Decay and pruning** - Remove stale or failing skills automatically
+
+**MCP Tools:**
+- `get_procedural_memory_stats` - View learned skills and metrics
+- `find_applicable_skills` - Find skills for a given URL
+- `get_skill_details` - Inspect a specific skill
+- `manage_skills` - Export, import, prune, or reset skills
 
 ### Domain Groups
 
@@ -168,16 +199,16 @@ Returns:
 ```
                     smart_browse (Primary Interface)
                               |
-          +-------------------+-------------------+
-          |                   |                   |
-    Learning Engine     Smart Browser       Utilities
-          |                   |                   |
-    +-----+-----+      +------+------+     +------+------+
-    |           |      |             |     |             |
-  Selector   Pattern  Content     API    Rate      Retry
-  Chains    Validator Extractor  Calls  Limiter   Logic
-    |           |      |             |     |             |
-    +-----------+------+-------------+-----+-------------+
+     +------------------------+------------------------+
+     |                        |                        |
+Learning Engine      Procedural Memory         Smart Browser
+     |                        |                        |
++----+----+            +------+------+          +------+------+
+|         |            |             |          |             |
+Selector Pattern     Skill        Skill       Content      API
+Chains  Validator  Embeddings   Workflows    Extractor   Calls
+     |         |            |             |          |             |
+     +---------+------------+-------------+----------+-------------+
                               |
                     Browser Manager (Playwright)
                               |
@@ -191,12 +222,20 @@ Returns:
 - Applies selector fallback chains
 - Validates responses
 - Handles pagination
+- Records browsing trajectories
 
 **LearningEngine** (`src/core/learning-engine.ts`)
 - Stores and retrieves learned patterns
 - Applies confidence decay
 - Transfers patterns across domain groups
 - Tracks failure contexts
+
+**ProceduralMemory** (`src/core/procedural-memory.ts`)
+- Learns reusable browsing skills from trajectories
+- Vector embedding-based skill retrieval
+- Skill composition into workflows
+- Active learning for coverage gaps
+- Automatic decay and pruning
 
 **BrowserManager** (`src/core/browser-manager.ts`)
 - Playwright wrapper for browsing
@@ -261,10 +300,11 @@ npm start      # Run MCP server
 - `./sessions/` - Saved authentication sessions
 - `./knowledge-base.json` - Legacy pattern storage
 - `./enhanced-knowledge-base.json` - Full learning state
+- `./procedural-memory.json` - Learned browsing skills and workflows
 
 ## Roadmap
 
-**Completed:**
+### Completed (v0.1 - v0.2)
 - Smart browsing with automatic learning
 - Selector fallback chains
 - Cross-domain pattern transfer
@@ -274,11 +314,50 @@ npm start      # Run MCP server
 - Change frequency tracking
 - Failure context learning
 
-**Coming Soon:**
-- Action recording/replay
+### Completed (v0.3)
+- Procedural memory with embedding-based skill retrieval
+- Automatic skill extraction from successful trajectories
+- Skill decay and pruning for maintenance
+- Page context detection (forms, tables, pagination)
+- Skill composition into workflows
+- Active learning for coverage gap identification
+- MCP tools for skill management (export/import/prune/reset)
+
+### Planned - High Impact
+
+| Feature | Description | Status |
+|---------|-------------|--------|
+| **Skill Versioning & Rollback** | Track skill evolution over time, revert if performance degrades | Planned |
+| **Real Neural Embeddings** | Use sentence-transformers or similar for semantic embeddings instead of hash-based | Planned |
+| **Negative Skills (Anti-patterns)** | Learn what NOT to do on certain sites (e.g., "never click this popup") | Planned |
+| **Skill Explanation** | Generate human-readable descriptions of what a skill does and why it matched | Planned |
+| **User Feedback Loop** | Allow explicit thumbs up/down on skill applications to accelerate learning | Planned |
+
+### Planned - Medium Impact
+
+| Feature | Description | Status |
+|---------|-------------|--------|
+| **Fallback Skill Chains** | Define ordered fallback skills when primary fails | Planned |
+| **Skill Generalization** | Automatically abstract domain-specific skills to work cross-domain | Planned |
+| **Temporal Patterns** | Learn time-based behaviors (sites that update at specific times, rate limits by hour) | Planned |
+| **Skill Dependencies** | Define prerequisite skills (e.g., "login" before "access dashboard") | Planned |
+| **Performance Benchmarking Dashboard** | Track metrics over time with trend analysis | Planned |
+
+### Planned - Nice to Have
+
+| Feature | Description | Status |
+|---------|-------------|--------|
+| **Skill Sharing/Community Repository** | Import/export skills from a central catalog | Planned |
+| **A/B Testing for Skills** | Test skill variations to find optimal approaches | Planned |
+| **Skill Decomposition** | Automatically break complex skills into reusable atomic sub-skills | Planned |
+| **Visual Skill Editor** | UI to view/edit skill action sequences | Planned |
+| **Confidence Calibration** | Ensure similarity scores actually correlate with success probability | Planned |
+
+### Other Planned Features
 - Natural language selectors
-- Pattern export/import
 - Stealth mode for anti-bot sites
+- Multi-browser support (Firefox, WebKit)
+- Distributed learning across instances
 
 ## License
 
