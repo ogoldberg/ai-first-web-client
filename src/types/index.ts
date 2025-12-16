@@ -611,3 +611,50 @@ export interface ExtendedSkillPreconditions extends SkillPreconditions {
   // Fallback skills if this one fails
   fallbackSkillIds?: string[];
 }
+
+// ============================================
+// TIERED RENDERING TYPES
+// ============================================
+
+/**
+ * Rendering tier for content fetching
+ * - static: Plain HTTP fetch, no JS (fastest, ~50ms)
+ * - lightweight: HTTP + linkedom + Node VM (medium, ~200-500ms)
+ * - playwright: Full Chromium browser (slowest, ~2-5s)
+ */
+export type RenderTier = 'static' | 'lightweight' | 'playwright';
+
+/**
+ * Domain-specific rendering preference
+ */
+export interface DomainRenderPreference {
+  domain: string;
+  preferredTier: RenderTier;
+  successCount: number;
+  failureCount: number;
+  lastUsed: number;
+  avgResponseTime: number;
+}
+
+/**
+ * Result from tiered fetching
+ */
+export interface TieredFetchResult {
+  html: string;
+  content: {
+    markdown: string;
+    text: string;
+    title: string;
+  };
+  tier: RenderTier;
+  finalUrl: string;
+  fellBack: boolean;
+  tiersAttempted: RenderTier[];
+  tierReason: string;
+  networkRequests: NetworkRequest[];
+  discoveredApis: ApiPattern[];
+  timing: {
+    total: number;
+    perTier: Record<RenderTier, number>;
+  };
+}

@@ -25,6 +25,7 @@ import type {
   BrowsingTrajectory,
   PageContext,
   SkillMatch,
+  RenderTier,
 } from '../types/index.js';
 import { BrowserManager } from './browser-manager.js';
 import { ContentExtractor } from '../utils/content-extractor.js';
@@ -32,6 +33,7 @@ import { ApiAnalyzer } from './api-analyzer.js';
 import { SessionManager } from './session-manager.js';
 import { LearningEngine } from './learning-engine.js';
 import { ProceduralMemory } from './procedural-memory.js';
+import { TieredFetcher, type TieredFetchResult } from './tiered-fetcher.js';
 import { rateLimiter } from '../utils/rate-limiter.js';
 import { withRetry } from '../utils/retry.js';
 import { findPreset, getWaitStrategy } from '../utils/domain-presets.js';
@@ -75,6 +77,11 @@ export interface SmartBrowseOptions extends BrowseOptions {
   // Procedural memory / skills
   useSkills?: boolean; // Try to apply learned skills (default: true)
   recordTrajectory?: boolean; // Record this session for skill learning (default: true)
+
+  // Tiered rendering
+  useTieredFetching?: boolean; // Use lightweight rendering when possible (default: true)
+  forceTier?: RenderTier; // Force a specific rendering tier
+  minContentLength?: number; // Minimum content length for tier validation
 }
 
 export interface SmartBrowseResult extends BrowseResult {
@@ -97,6 +104,12 @@ export interface SmartBrowseResult extends BrowseResult {
     anomalyDetected?: boolean;
     anomalyType?: 'challenge_page' | 'error_page' | 'empty_content' | 'redirect_notice' | 'captcha' | 'rate_limited';
     anomalyAction?: 'wait' | 'retry' | 'use_session' | 'change_agent' | 'skip';
+    // Tiered rendering insights
+    renderTier?: RenderTier;
+    tierFellBack?: boolean;
+    tiersAttempted?: RenderTier[];
+    tierReason?: string;
+    tierTiming?: Record<RenderTier, number>;
   };
 
   // Additional pages if pagination was followed
@@ -109,6 +122,7 @@ export interface SmartBrowseResult extends BrowseResult {
 export class SmartBrowser {
   private learningEngine: LearningEngine;
   private proceduralMemory: ProceduralMemory;
+  private tieredFetcher: TieredFetcher;
   private currentTrajectory: BrowsingTrajectory | null = null;
 
   constructor(
@@ -119,11 +133,19 @@ export class SmartBrowser {
   ) {
     this.learningEngine = new LearningEngine();
     this.proceduralMemory = new ProceduralMemory();
+    this.tieredFetcher = new TieredFetcher(browserManager, contentExtractor);
   }
 
   async initialize(): Promise<void> {
     await this.learningEngine.initialize();
     await this.proceduralMemory.initialize();
+  }
+
+  /**
+   * Get the tiered fetcher for direct access
+   */
+  getTieredFetcher(): TieredFetcher {
+    return this.tieredFetcher;
   }
 
   /**
@@ -193,6 +215,24 @@ export class SmartBrowser {
       if (bypassablePatterns.length > 0) {
         learning.confidenceLevel = 'high';
         console.error(`[SmartBrowser] Found ${bypassablePatterns.length} bypassable API patterns for ${domain}`);
+      }
+    }
+
+    // Try tiered fetching if enabled (faster for static/simple pages)
+    const useTieredFetching = options.useTieredFetching !== false;
+    const needsFullBrowser = options.followPagination || options.waitForSelector || learning.skillApplied;
+
+    if (useTieredFetching && !needsFullBrowser) {
+      try {
+        const tieredResult = await this.browseWithTieredFetching(url, options, learning, startTime);
+        if (tieredResult) {
+          // Tiered fetching succeeded without needing Playwright
+          return tieredResult;
+        }
+        // If tieredResult is null, it fell back to playwright - continue below
+      } catch (error) {
+        // Tiered fetching failed completely, fall through to Playwright
+        console.error(`[SmartBrowser] Tiered fetching failed, falling back to Playwright: ${error}`);
       }
     }
 
@@ -514,6 +554,128 @@ export class SmartBrowser {
       learning,
       additionalPages,
     };
+  }
+
+  /**
+   * Browse using tiered fetching (static -> lightweight -> playwright)
+   * Returns null if it needs to fall back to full Playwright path
+   */
+  private async browseWithTieredFetching(
+    url: string,
+    options: SmartBrowseOptions,
+    learning: SmartBrowseResult['learning'],
+    startTime: number
+  ): Promise<SmartBrowseResult | null> {
+    const domain = new URL(url).hostname;
+    const enableLearning = options.enableLearning !== false;
+    const recordTrajectory = options.recordTrajectory !== false;
+
+    try {
+      const result = await this.tieredFetcher.fetch(url, {
+        forceTier: options.forceTier,
+        minContentLength: options.minContentLength || 200,
+        tierTimeout: options.timeout || 30000,
+        enableLearning,
+        headers: options.sessionProfile ? undefined : undefined, // Could add header support
+        sessionProfile: options.sessionProfile,
+        waitFor: options.waitFor,
+        useRateLimiting: options.useRateLimiting,
+      });
+
+      // If it fell back to playwright and returned a page, we should use the full Playwright path
+      // for better integration with the rest of the system
+      if (result.tier === 'playwright' && result.page) {
+        // Close the page - we'll redo with full Playwright integration
+        await result.page.close();
+        return null;
+      }
+
+      // Update learning with tier info
+      learning.renderTier = result.tier;
+      learning.tierFellBack = result.fellBack;
+      learning.tiersAttempted = result.tiersAttempted;
+      learning.tierReason = result.tierReason;
+      learning.tierTiming = result.timing.perTier;
+
+      console.error(`[SmartBrowser] Used ${result.tier} tier for ${domain} (${result.timing.total}ms)`);
+
+      // Extract tables
+      const tables = this.contentExtractor.extractTablesAsJSON(result.html);
+
+      // Detect language
+      let language: string | undefined;
+      if (options.detectLanguage !== false) {
+        language = this.detectLanguage(result.html);
+      }
+
+      // Validate content with learned rules
+      if (options.validateContent !== false && enableLearning) {
+        const validationResult = this.learningEngine.validateContent(
+          domain,
+          result.content.text,
+          result.finalUrl
+        );
+        learning.validationResult = validationResult;
+
+        if (!validationResult.valid) {
+          console.error(`[SmartBrowser] Content validation failed: ${validationResult.reasons.join(', ')}`);
+          learning.confidenceLevel = 'low';
+        } else {
+          this.learningEngine.learnValidator(domain, result.content.text, result.finalUrl);
+        }
+      }
+
+      // Determine confidence level
+      if (learning.confidenceLevel === 'unknown') {
+        if (result.content.text.length > 500 && !result.fellBack) {
+          learning.confidenceLevel = 'high';
+        } else if (result.fellBack) {
+          learning.confidenceLevel = 'medium';
+        } else {
+          learning.confidenceLevel = 'medium';
+        }
+      }
+
+      // Record trajectory for procedural memory
+      if (recordTrajectory && this.currentTrajectory) {
+        const success = learning.confidenceLevel !== 'low' && result.content.text.length > MIN_SUCCESS_TEXT_LENGTH;
+        await this.completeTrajectory(
+          result.finalUrl,
+          success,
+          Date.now() - startTime,
+          {
+            text: result.content.text,
+            tables: tables.length,
+            apis: result.discoveredApis.length,
+          }
+        );
+        learning.trajectoryRecorded = true;
+      }
+
+      return {
+        url,
+        title: result.content.title,
+        content: {
+          html: result.html,
+          markdown: result.content.markdown,
+          text: result.content.text,
+        },
+        tables: tables.length > 0 ? tables : undefined,
+        network: result.networkRequests,
+        console: [], // No console in lightweight rendering
+        discoveredApis: result.discoveredApis,
+        metadata: {
+          loadTime: result.timing.total,
+          timestamp: Date.now(),
+          finalUrl: result.finalUrl,
+          language,
+        },
+        learning,
+      };
+    } catch (error) {
+      console.error(`[SmartBrowser] Tiered fetching error: ${error}`);
+      throw error;
+    }
   }
 
   /**
