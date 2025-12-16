@@ -1,10 +1,28 @@
+# Dependencies
 node_modules/
+
+# Build output
 dist/
+
+# Logs
 *.log
+
+# OS files
 .DS_Store
+
+# Environment
 .env
+
+# Runtime data (user-specific)
 sessions/
 knowledge-base.json
+procedural-memory.json
+learning-engine.json
 *.enc
+
+# Debug/temp
 debug/
 temp/
+
+# Claude Code local settings (user-specific)
+.claude/settings.local.json
