@@ -28,7 +28,7 @@ import type {
   RenderTier,
 } from '../types/index.js';
 import { BrowserManager } from './browser-manager.js';
-import { ContentExtractor } from '../utils/content-extractor.js';
+import { ContentExtractor, type TableAsJSON } from '../utils/content-extractor.js';
 import { ApiAnalyzer } from './api-analyzer.js';
 import { SessionManager } from './session-manager.js';
 import { LearningEngine } from './learning-engine.js';
@@ -346,135 +346,174 @@ export class SmartBrowser {
     // Note: Bot challenge handling is done in waitForBotChallenge() during browse
     // The page content here should already be post-challenge
 
-    // Run universal anomaly detection
-    const anomalyResult = this.learningEngine.detectContentAnomalies(
-      html,
-      finalUrl,
-      options.contentType // Use content type as expected topic hint
-    );
+    // Run universal anomaly detection (with error boundary)
+    try {
+      const anomalyResult = this.learningEngine.detectContentAnomalies(
+        html,
+        finalUrl,
+        options.contentType // Use content type as expected topic hint
+      );
 
-    if (anomalyResult.isAnomaly) {
-      console.error(`[SmartBrowser] Content anomaly detected: ${anomalyResult.anomalyType} (${Math.round(anomalyResult.confidence * 100)}% confidence)`);
-      console.error(`[SmartBrowser] Reasons: ${anomalyResult.reasons.join('; ')}`);
+      if (anomalyResult.isAnomaly) {
+        console.error(`[SmartBrowser] Content anomaly detected: ${anomalyResult.anomalyType} (${Math.round(anomalyResult.confidence * 100)}% confidence)`);
+        console.error(`[SmartBrowser] Reasons: ${anomalyResult.reasons.join('; ')}`);
 
-      // Record anomaly in learning results
-      learning.anomalyDetected = true;
-      learning.anomalyType = anomalyResult.anomalyType;
-      learning.anomalyAction = anomalyResult.suggestedAction;
+        // Record anomaly in learning results
+        learning.anomalyDetected = true;
+        learning.anomalyType = anomalyResult.anomalyType;
+        learning.anomalyAction = anomalyResult.suggestedAction;
 
-      if (anomalyResult.suggestedAction) {
-        console.error(`[SmartBrowser] Suggested action: ${anomalyResult.suggestedAction}`);
-      }
+        if (anomalyResult.suggestedAction) {
+          console.error(`[SmartBrowser] Suggested action: ${anomalyResult.suggestedAction}`);
+        }
 
-      // Take automated action based on anomaly type
-      if (anomalyResult.suggestedAction === 'wait' && anomalyResult.waitTimeMs) {
-        console.error(`[SmartBrowser] Waiting ${anomalyResult.waitTimeMs}ms for challenge/rate limit...`);
-        await this.delay(anomalyResult.waitTimeMs);
+        // Take automated action based on anomaly type
+        if (anomalyResult.suggestedAction === 'wait' && anomalyResult.waitTimeMs) {
+          console.error(`[SmartBrowser] Waiting ${anomalyResult.waitTimeMs}ms for challenge/rate limit...`);
+          await this.delay(anomalyResult.waitTimeMs);
 
-        // Re-fetch content after waiting
-        html = await page.content();
-        finalUrl = page.url();
-        console.error(`[SmartBrowser] Post-wait HTML length: ${html.length} chars`);
+          // Re-fetch content after waiting
+          html = await page.content();
+          finalUrl = page.url();
+          console.error(`[SmartBrowser] Post-wait HTML length: ${html.length} chars`);
 
-        // Check if anomaly is resolved
-        const postWaitAnomaly = this.learningEngine.detectContentAnomalies(html, finalUrl, options.contentType);
-        if (!postWaitAnomaly.isAnomaly) {
-          console.error(`[SmartBrowser] Anomaly resolved after waiting`);
-        } else {
-          console.error(`[SmartBrowser] Anomaly persists: ${postWaitAnomaly.anomalyType}`);
+          // Check if anomaly is resolved
+          const postWaitAnomaly = this.learningEngine.detectContentAnomalies(html, finalUrl, options.contentType);
+          if (!postWaitAnomaly.isAnomaly) {
+            console.error(`[SmartBrowser] Anomaly resolved after waiting`);
+          } else {
+            console.error(`[SmartBrowser] Anomaly persists: ${postWaitAnomaly.anomalyType}`);
+            learning.validationResult = {
+              valid: false,
+              reasons: postWaitAnomaly.reasons,
+            };
+            learning.confidenceLevel = 'low';
+          }
+        } else if (anomalyResult.anomalyType === 'error_page') {
+          // Record this for learning but don't retry - page doesn't exist
           learning.validationResult = {
             valid: false,
-            reasons: postWaitAnomaly.reasons,
+            reasons: anomalyResult.reasons,
           };
           learning.confidenceLevel = 'low';
         }
-      } else if (anomalyResult.anomalyType === 'error_page') {
-        // Record this for learning but don't retry - page doesn't exist
-        learning.validationResult = {
-          valid: false,
-          reasons: anomalyResult.reasons,
-        };
-        learning.confidenceLevel = 'low';
       }
+    } catch (anomalyError) {
+      console.error(`[SmartBrowser] Anomaly detection failed (non-fatal): ${anomalyError}`);
+      // Continue without anomaly detection - non-critical feature
     }
 
-    // Detect page context for better skill matching
+    // Detect page context for better skill matching (with error boundary)
     if (useSkills) {
-      const detectedContext = await this.detectPageContext(page, finalUrl);
+      try {
+        const detectedContext = await this.detectPageContext(page, finalUrl);
 
-      // Re-match skills with full page context
-      const matchedSkills = this.proceduralMemory.retrieveSkills(detectedContext, 3);
-      if (matchedSkills.length > 0) {
-        learning.skillsMatched = matchedSkills;
-        const bestMatch = matchedSkills[0];
-        if (bestMatch.preconditionsMet && bestMatch.similarity > 0.75) {
-          learning.skillApplied = bestMatch.skill.name;
-          console.error(`[SmartBrowser] Matched skill with context: ${bestMatch.skill.name} (${detectedContext.pageType} page, similarity: ${bestMatch.similarity.toFixed(2)})`);
+        // Re-match skills with full page context
+        const matchedSkills = this.proceduralMemory.retrieveSkills(detectedContext, 3);
+        if (matchedSkills.length > 0) {
+          learning.skillsMatched = matchedSkills;
+          const bestMatch = matchedSkills[0];
+          if (bestMatch.preconditionsMet && bestMatch.similarity > 0.75) {
+            learning.skillApplied = bestMatch.skill.name;
+            console.error(`[SmartBrowser] Matched skill with context: ${bestMatch.skill.name} (${detectedContext.pageType} page, similarity: ${bestMatch.similarity.toFixed(2)})`);
+          }
         }
+      } catch (contextError) {
+        console.error(`[SmartBrowser] Page context detection failed (non-fatal): ${contextError}`);
+        // Continue without skill matching - non-critical feature
       }
     }
 
-    // Try to extract content with learned selectors
-    let extractedContent = await this.extractContentWithLearning(
-      page,
-      html,
-      finalUrl,
-      domain,
-      options.contentType || 'main_content',
-      learning,
-      enableLearning
-    );
+    // Try to extract content with learned selectors (with error boundary)
+    let extractedContent: { markdown: string; text: string; title: string };
+    try {
+      extractedContent = await this.extractContentWithLearning(
+        page,
+        html,
+        finalUrl,
+        domain,
+        options.contentType || 'main_content',
+        learning,
+        enableLearning
+      );
+    } catch (extractError) {
+      console.error(`[SmartBrowser] Learned extraction failed, falling back to basic: ${extractError}`);
+      // Fallback to basic extraction
+      extractedContent = this.contentExtractor.extract(html, finalUrl);
+    }
 
     console.error(`[SmartBrowser] Extracted content: ${extractedContent.text.length} chars, title: "${extractedContent.title?.slice(0, 50) || 'none'}"`);
 
-    // Extract tables
-    const tables = this.contentExtractor.extractTablesAsJSON(html);
+    // Extract tables (with error boundary)
+    let tables: TableAsJSON[] = [];
+    try {
+      tables = this.contentExtractor.extractTablesAsJSON(html);
+    } catch (tableError) {
+      console.error(`[SmartBrowser] Table extraction failed (non-fatal): ${tableError}`);
+    }
 
-    // Detect language
+    // Detect language (with error boundary)
     let language: string | undefined;
     if (options.detectLanguage !== false) {
-      language = this.detectLanguage(html);
+      try {
+        language = this.detectLanguage(html);
+      } catch (langError) {
+        console.error(`[SmartBrowser] Language detection failed (non-fatal): ${langError}`);
+      }
     }
 
-    // Validate content with learned rules
+    // Validate content with learned rules (with error boundary)
     if (options.validateContent !== false && enableLearning) {
-      const validationResult = this.learningEngine.validateContent(
-        domain,
-        extractedContent.text,
-        finalUrl
-      );
-      learning.validationResult = validationResult;
+      try {
+        const validationResult = this.learningEngine.validateContent(
+          domain,
+          extractedContent.text,
+          finalUrl
+        );
+        learning.validationResult = validationResult;
 
-      if (!validationResult.valid) {
-        console.error(`[SmartBrowser] Content validation failed: ${validationResult.reasons.join(', ')}`);
-        learning.confidenceLevel = 'low';
-      } else if (enableLearning) {
-        // Learn from successful validation
-        this.learningEngine.learnValidator(domain, extractedContent.text, finalUrl);
-      }
-    }
-
-    // Analyze APIs and learn
-    const discoveredApis = this.apiAnalyzer.analyzeRequests(network);
-    if (enableLearning && discoveredApis.length > 0) {
-      for (const api of discoveredApis) {
-        this.learningEngine.learnApiPattern(domain, api);
-      }
-      console.error(`[SmartBrowser] Learned ${discoveredApis.length} API pattern(s) from ${domain}`);
-    }
-
-    // Check for content changes
-    if (options.checkForChanges) {
-      const cached = pageCache.get(url);
-      if (cached) {
-        const newHash = ContentCache.hashContent(html);
-        const changed = cached.contentHash !== newHash;
-        learning.contentChanged = changed;
-
-        if (enableLearning) {
-          this.learningEngine.recordContentCheck(domain, finalUrl, html, changed);
-          learning.recommendedRefreshHours = this.learningEngine.getRecommendedRefreshInterval(domain, finalUrl);
+        if (!validationResult.valid) {
+          console.error(`[SmartBrowser] Content validation failed: ${validationResult.reasons.join(', ')}`);
+          learning.confidenceLevel = 'low';
+        } else if (enableLearning) {
+          // Learn from successful validation
+          this.learningEngine.learnValidator(domain, extractedContent.text, finalUrl);
         }
+      } catch (validationError) {
+        console.error(`[SmartBrowser] Content validation error (non-fatal): ${validationError}`);
+      }
+    }
+
+    // Analyze APIs and learn (with error boundary)
+    let discoveredApis: ReturnType<typeof this.apiAnalyzer.analyzeRequests> = [];
+    try {
+      discoveredApis = this.apiAnalyzer.analyzeRequests(network);
+      if (enableLearning && discoveredApis.length > 0) {
+        for (const api of discoveredApis) {
+          this.learningEngine.learnApiPattern(domain, api);
+        }
+        console.error(`[SmartBrowser] Learned ${discoveredApis.length} API pattern(s) from ${domain}`);
+      }
+    } catch (apiError) {
+      console.error(`[SmartBrowser] API analysis failed (non-fatal): ${apiError}`);
+    }
+
+    // Check for content changes (with error boundary)
+    if (options.checkForChanges) {
+      try {
+        const cached = pageCache.get(url);
+        if (cached) {
+          const newHash = ContentCache.hashContent(html);
+          const changed = cached.contentHash !== newHash;
+          learning.contentChanged = changed;
+
+          if (enableLearning) {
+            this.learningEngine.recordContentCheck(domain, finalUrl, html, changed);
+            learning.recommendedRefreshHours = this.learningEngine.getRecommendedRefreshInterval(domain, finalUrl);
+          }
+        }
+      } catch (changeError) {
+        console.error(`[SmartBrowser] Content change detection failed (non-fatal): ${changeError}`);
       }
     }
 
@@ -485,21 +524,31 @@ export class SmartBrowser {
       fetchedAt: Date.now(),
     });
 
-    // Detect pagination
-    const paginationPattern = await this.detectPagination(page, finalUrl, domain, enableLearning);
-    if (paginationPattern) {
-      learning.paginationDetected = paginationPattern;
+    // Detect pagination (with error boundary)
+    let paginationPattern: PaginationPattern | null = null;
+    try {
+      paginationPattern = await this.detectPagination(page, finalUrl, domain, enableLearning);
+      if (paginationPattern) {
+        learning.paginationDetected = paginationPattern;
+      }
+    } catch (paginationError) {
+      console.error(`[SmartBrowser] Pagination detection failed (non-fatal): ${paginationError}`);
     }
 
-    // Follow pagination if requested
+    // Follow pagination if requested (with error boundary)
     let additionalPages: SmartBrowseResult['additionalPages'];
     if (options.followPagination && paginationPattern) {
-      additionalPages = await this.followPagination(
-        page,
-        paginationPattern,
-        options.maxPages || 5,
-        domain
-      );
+      try {
+        additionalPages = await this.followPagination(
+          page,
+          paginationPattern,
+          options.maxPages || 5,
+          domain
+        );
+      } catch (followError) {
+        console.error(`[SmartBrowser] Following pagination failed (non-fatal): ${followError}`);
+        // Continue with just the first page
+      }
     }
 
     // Close the page
@@ -516,20 +565,25 @@ export class SmartBrowser {
       }
     }
 
-    // Complete trajectory recording for procedural memory
+    // Complete trajectory recording for procedural memory (with error boundary)
     if (recordTrajectory && this.currentTrajectory) {
-      const success = learning.confidenceLevel !== 'low' && extractedContent.text.length > MIN_SUCCESS_TEXT_LENGTH;
-      await this.completeTrajectory(
-        finalUrl,
-        success,
-        Date.now() - startTime,
-        {
-          text: extractedContent.text,
-          tables: tables.length,
-          apis: discoveredApis.length,
-        }
-      );
-      learning.trajectoryRecorded = true;
+      try {
+        const success = learning.confidenceLevel !== 'low' && extractedContent.text.length > MIN_SUCCESS_TEXT_LENGTH;
+        await this.completeTrajectory(
+          finalUrl,
+          success,
+          Date.now() - startTime,
+          {
+            text: extractedContent.text,
+            tables: tables.length,
+            apis: discoveredApis.length,
+          }
+        );
+        learning.trajectoryRecorded = true;
+      } catch (trajectoryError) {
+        console.error(`[SmartBrowser] Trajectory recording failed (non-fatal): ${trajectoryError}`);
+        // Continue without recording - non-critical feature
+      }
     }
 
     return {
@@ -599,29 +653,42 @@ export class SmartBrowser {
 
       console.error(`[SmartBrowser] Used ${result.tier} tier for ${domain} (${result.timing.total}ms)`);
 
-      // Extract tables
-      const tables = this.contentExtractor.extractTablesAsJSON(result.html);
-
-      // Detect language
-      let language: string | undefined;
-      if (options.detectLanguage !== false) {
-        language = this.detectLanguage(result.html);
+      // Extract tables (with error boundary)
+      let tables: TableAsJSON[] = [];
+      try {
+        tables = this.contentExtractor.extractTablesAsJSON(result.html);
+      } catch (tableError) {
+        console.error(`[SmartBrowser] Table extraction failed (non-fatal): ${tableError}`);
       }
 
-      // Validate content with learned rules
-      if (options.validateContent !== false && enableLearning) {
-        const validationResult = this.learningEngine.validateContent(
-          domain,
-          result.content.text,
-          result.finalUrl
-        );
-        learning.validationResult = validationResult;
+      // Detect language (with error boundary)
+      let language: string | undefined;
+      if (options.detectLanguage !== false) {
+        try {
+          language = this.detectLanguage(result.html);
+        } catch (langError) {
+          console.error(`[SmartBrowser] Language detection failed (non-fatal): ${langError}`);
+        }
+      }
 
-        if (!validationResult.valid) {
-          console.error(`[SmartBrowser] Content validation failed: ${validationResult.reasons.join(', ')}`);
-          learning.confidenceLevel = 'low';
-        } else {
-          this.learningEngine.learnValidator(domain, result.content.text, result.finalUrl);
+      // Validate content with learned rules (with error boundary)
+      if (options.validateContent !== false && enableLearning) {
+        try {
+          const validationResult = this.learningEngine.validateContent(
+            domain,
+            result.content.text,
+            result.finalUrl
+          );
+          learning.validationResult = validationResult;
+
+          if (!validationResult.valid) {
+            console.error(`[SmartBrowser] Content validation failed: ${validationResult.reasons.join(', ')}`);
+            learning.confidenceLevel = 'low';
+          } else {
+            this.learningEngine.learnValidator(domain, result.content.text, result.finalUrl);
+          }
+        } catch (validationError) {
+          console.error(`[SmartBrowser] Content validation error (non-fatal): ${validationError}`);
         }
       }
 
@@ -636,20 +703,24 @@ export class SmartBrowser {
         }
       }
 
-      // Record trajectory for procedural memory
+      // Record trajectory for procedural memory (with error boundary)
       if (recordTrajectory && this.currentTrajectory) {
-        const success = learning.confidenceLevel !== 'low' && result.content.text.length > MIN_SUCCESS_TEXT_LENGTH;
-        await this.completeTrajectory(
-          result.finalUrl,
-          success,
-          Date.now() - startTime,
-          {
-            text: result.content.text,
-            tables: tables.length,
-            apis: result.discoveredApis.length,
-          }
-        );
-        learning.trajectoryRecorded = true;
+        try {
+          const success = learning.confidenceLevel !== 'low' && result.content.text.length > MIN_SUCCESS_TEXT_LENGTH;
+          await this.completeTrajectory(
+            result.finalUrl,
+            success,
+            Date.now() - startTime,
+            {
+              text: result.content.text,
+              tables: tables.length,
+              apis: result.discoveredApis.length,
+            }
+          );
+          learning.trajectoryRecorded = true;
+        } catch (trajectoryError) {
+          console.error(`[SmartBrowser] Trajectory recording failed (non-fatal): ${trajectoryError}`);
+        }
       }
 
       return {
