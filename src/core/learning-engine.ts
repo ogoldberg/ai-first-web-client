@@ -793,6 +793,161 @@ export class LearningEngine {
     return { valid, reasons };
   }
 
+  /**
+   * Universal content anomaly detection - works without prior learning
+   * Detects challenge pages, errors, and suspicious content patterns
+   */
+  detectContentAnomalies(
+    content: string,
+    url: string,
+    expectedTopic?: string
+  ): {
+    isAnomaly: boolean;
+    anomalyType?: 'challenge_page' | 'error_page' | 'empty_content' | 'redirect_notice' | 'captcha' | 'rate_limited';
+    confidence: number;
+    reasons: string[];
+    suggestedAction?: 'wait' | 'retry' | 'use_session' | 'change_agent' | 'skip';
+    waitTimeMs?: number;
+  } {
+    const contentLower = content.toLowerCase();
+    const reasons: string[] = [];
+    let confidence = 0;
+
+    // ============================================
+    // CHALLENGE PAGE DETECTION
+    // ============================================
+    const challengeIndicators = [
+      { pattern: /checking your browser/i, weight: 0.9, type: 'challenge_page' as const },
+      { pattern: /please wait/i, weight: 0.4, type: 'challenge_page' as const },
+      { pattern: /just a moment/i, weight: 0.7, type: 'challenge_page' as const },
+      { pattern: /ddos protection/i, weight: 0.9, type: 'challenge_page' as const },
+      { pattern: /cloudflare/i, weight: 0.6, type: 'challenge_page' as const },
+      { pattern: /verifying you are human/i, weight: 0.9, type: 'captcha' as const },
+      { pattern: /please verify/i, weight: 0.5, type: 'captcha' as const },
+      { pattern: /security check/i, weight: 0.6, type: 'challenge_page' as const },
+      { pattern: /voight-kampff/i, weight: 0.95, type: 'challenge_page' as const },
+      { pattern: /browser check/i, weight: 0.8, type: 'challenge_page' as const },
+      { pattern: /you'll be redirected/i, weight: 0.7, type: 'redirect_notice' as const },
+      { pattern: /access denied/i, weight: 0.8, type: 'rate_limited' as const },
+      { pattern: /rate limit/i, weight: 0.9, type: 'rate_limited' as const },
+      { pattern: /too many requests/i, weight: 0.9, type: 'rate_limited' as const },
+      { pattern: /temporarily unavailable/i, weight: 0.6, type: 'rate_limited' as const },
+    ];
+
+    let maxChallengeWeight = 0;
+    let detectedType: 'challenge_page' | 'error_page' | 'empty_content' | 'redirect_notice' | 'captcha' | 'rate_limited' | undefined;
+
+    for (const indicator of challengeIndicators) {
+      if (indicator.pattern.test(contentLower)) {
+        if (indicator.weight > maxChallengeWeight) {
+          maxChallengeWeight = indicator.weight;
+          detectedType = indicator.type;
+        }
+        reasons.push(`Detected: ${indicator.pattern.source}`);
+      }
+    }
+
+    if (maxChallengeWeight > 0.5) {
+      confidence = maxChallengeWeight;
+    }
+
+    // ============================================
+    // ERROR PAGE DETECTION
+    // ============================================
+    const errorIndicators = [
+      { pattern: /error 404/i, weight: 0.95, type: 'error_page' as const },
+      { pattern: /page not found/i, weight: 0.9, type: 'error_page' as const },
+      { pattern: /not found/i, weight: 0.4, type: 'error_page' as const },
+      { pattern: /error 500/i, weight: 0.95, type: 'error_page' as const },
+      { pattern: /internal server error/i, weight: 0.95, type: 'error_page' as const },
+      { pattern: /error 403/i, weight: 0.9, type: 'error_page' as const },
+      { pattern: /forbidden/i, weight: 0.6, type: 'error_page' as const },
+      { pattern: /no existe/i, weight: 0.7, type: 'error_page' as const }, // Spanish
+      { pattern: /p.gina no encontrada/i, weight: 0.9, type: 'error_page' as const }, // Spanish 404
+    ];
+
+    for (const indicator of errorIndicators) {
+      if (indicator.pattern.test(contentLower)) {
+        if (indicator.weight > confidence) {
+          confidence = indicator.weight;
+          detectedType = indicator.type;
+        }
+        reasons.push(`Error indicator: ${indicator.pattern.source}`);
+      }
+    }
+
+    // ============================================
+    // CONTENT LENGTH ANALYSIS
+    // ============================================
+    // Very short content is suspicious (unless it's a known short page)
+    if (content.length < 200) {
+      confidence = Math.max(confidence, 0.8);
+      detectedType = detectedType || 'empty_content';
+      reasons.push(`Suspiciously short content: ${content.length} chars`);
+    } else if (content.length < 500) {
+      confidence = Math.max(confidence, 0.5);
+      reasons.push(`Short content: ${content.length} chars`);
+    }
+
+    // ============================================
+    // STRUCTURAL ANALYSIS
+    // ============================================
+    // Real content pages typically have paragraphs, lists, or structured content
+    const hasParagraphs = /<p[^>]*>[\s\S]{50,}<\/p>/i.test(content) || content.split(/\n\n/).length > 3;
+    const hasLists = /<(ul|ol)[^>]*>/i.test(content);
+    const hasHeadings = /<h[1-6][^>]*>/i.test(content);
+    const hasStructure = hasParagraphs || hasLists || hasHeadings;
+
+    if (!hasStructure && content.length < 1000) {
+      confidence = Math.max(confidence, 0.6);
+      detectedType = detectedType || 'empty_content';
+      reasons.push('Lacks typical page structure (no paragraphs, lists, or headings)');
+    }
+
+    // ============================================
+    // TOPIC RELEVANCE (if expected topic provided)
+    // ============================================
+    if (expectedTopic) {
+      const topicTerms = expectedTopic.toLowerCase().split(/[._-]/).filter(t => t.length > 2);
+      const matchedTerms = topicTerms.filter(term => contentLower.includes(term));
+      const matchRatio = matchedTerms.length / topicTerms.length;
+
+      if (matchRatio < 0.2 && content.length > 100) {
+        confidence = Math.max(confidence, 0.5);
+        reasons.push(`Content doesn't match expected topic "${expectedTopic}" (${Math.round(matchRatio * 100)}% term match)`);
+      }
+    }
+
+    // ============================================
+    // DETERMINE SUGGESTED ACTION
+    // ============================================
+    let suggestedAction: 'wait' | 'retry' | 'use_session' | 'change_agent' | 'skip' | undefined;
+    let waitTimeMs: number | undefined;
+
+    if (detectedType === 'challenge_page' || detectedType === 'redirect_notice') {
+      suggestedAction = 'wait';
+      waitTimeMs = 10000; // Wait 10 seconds for challenge to complete
+    } else if (detectedType === 'captcha') {
+      suggestedAction = 'use_session'; // Need human to solve captcha and save session
+    } else if (detectedType === 'rate_limited') {
+      suggestedAction = 'wait';
+      waitTimeMs = 60000; // Wait 1 minute for rate limit
+    } else if (detectedType === 'error_page') {
+      suggestedAction = 'skip'; // Page doesn't exist, no point retrying
+    } else if (detectedType === 'empty_content') {
+      suggestedAction = 'retry'; // Might be a loading issue
+    }
+
+    return {
+      isAnomaly: confidence > 0.5,
+      anomalyType: detectedType,
+      confidence,
+      reasons,
+      suggestedAction,
+      waitTimeMs,
+    };
+  }
+
   // ============================================
   // PAGINATION PATTERN LEARNING
   // ============================================
