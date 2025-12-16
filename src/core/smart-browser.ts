@@ -303,19 +303,8 @@ export class SmartBrowser {
     console.error(`[SmartBrowser] Page loaded: ${finalUrl}`);
     console.error(`[SmartBrowser] HTML length: ${html.length} chars`);
 
-    // Check if we passed through a bot challenge - if so, get the new content
-    const challengeIndicators = ['Checking Your Browser', 'Voight-Kampff', 'Just a moment', 'Cloudflare'];
-    const wasChallengePage = challengeIndicators.some(indicator =>
-      html.toLowerCase().includes(indicator.toLowerCase())
-    );
-
-    if (wasChallengePage) {
-      console.error(`[SmartBrowser] Challenge page detected, re-fetching content after challenge...`);
-      // Get the updated content after challenge completion
-      html = await page.content();
-      finalUrl = page.url();
-      console.error(`[SmartBrowser] Post-challenge HTML length: ${html.length} chars`);
-    }
+    // Note: Bot challenge handling is done in waitForBotChallenge() during browse
+    // The page content here should already be post-challenge
 
     // Run universal anomaly detection
     const anomalyResult = this.learningEngine.detectContentAnomalies(

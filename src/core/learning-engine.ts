@@ -900,6 +900,7 @@ export class LearningEngine {
 
     if (!hasStructure && content.length < 1000) {
       confidence = Math.max(confidence, 0.6);
+      detectedType = detectedType || 'empty_content';
       reasons.push('Lacks typical page structure (no paragraphs, lists, or headings)');
     }
 
