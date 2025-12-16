@@ -19,12 +19,6 @@ Tasks are organized by priority and category. Each task includes:
 | T-002 | Add integration tests for tiered fetcher | M | Testing | Test tier cascade and fallback |
 | T-003 | End-to-end test: full browse cycle | M | Testing | From MCP call to response |
 
-### Reliability
-
-| ID | Task | Effort | Category | Notes |
-|----|------|--------|----------|-------|
-| R-002 | Add error boundaries to SmartBrowser | M | Reliability | Prevent cascading failures |
-
 ---
 
 ## P1: High Priority (Do Soon)
@@ -128,6 +122,7 @@ Tasks are organized by priority and category. Each task includes:
 
 | ID | Task | Completed | Notes |
 |----|------|-----------|-------|
+| R-002 | Add error boundaries to SmartBrowser | 2025-12-16 | Wrap non-critical ops in try-catch, PR #9 |
 | R-003 | Graceful degradation when Playwright missing | 2024-12-16 | Lazy loading, clear errors, tier fallback |
 | R-001 | Fix rate limiter potential deadlock | 2024-12-16 | Removed lock check from acquire() |
 | - | Vitest test framework setup | 2024-12-16 | PR #4 |
