@@ -1,4 +1,4 @@
-# LLM Browser MCP Server v0.3
+# LLM Browser MCP Server v0.4
 
 An intelligent, self-learning browser designed for AI agents. Unlike traditional web scraping tools, this MCP server learns from every interaction, building intelligence that makes it more effective over time.
 
@@ -112,12 +112,23 @@ Behind the scenes:
 - **Skill composition** - Combine skills into multi-step workflows
 - **Active learning** - Identify coverage gaps and suggest improvements
 - **Decay and pruning** - Remove stale or failing skills automatically
+- **Skill versioning** - Track skill evolution with auto-rollback on degradation (v0.4)
+- **Anti-patterns** - Learn and avoid problematic actions (v0.4)
+- **User feedback** - Thumbs up/down to accelerate learning (v0.4)
+- **Dependencies & fallbacks** - Build complex skill chains (v0.4)
 
 **MCP Tools:**
 - `get_procedural_memory_stats` - View learned skills and metrics
 - `find_applicable_skills` - Find skills for a given URL
 - `get_skill_details` - Inspect a specific skill
 - `manage_skills` - Export, import, prune, or reset skills
+- `get_skill_explanation` - Human-readable explanation of what a skill does (v0.4)
+- `get_skill_versions` - View version history for a skill (v0.4)
+- `rollback_skill` - Rollback to a previous version (v0.4)
+- `rate_skill_application` - User feedback (thumbs up/down) (v0.4)
+- `get_anti_patterns` - View learned anti-patterns (things to avoid) (v0.4)
+- `manage_skill_dependencies` - Configure skill prerequisites and fallbacks (v0.4)
+- `bootstrap_skills` - Initialize with common skill templates (v0.4)
 
 ### Domain Groups
 
@@ -323,24 +334,30 @@ npm start      # Run MCP server
 - Active learning for coverage gap identification
 - MCP tools for skill management (export/import/prune/reset)
 
+### Completed (v0.4)
+
+| Feature | Description | Status |
+|---------|-------------|--------|
+| **Skill Versioning & Rollback** | Track skill evolution over time, auto-rollback if performance degrades beyond threshold | Completed |
+| **Negative Skills (Anti-patterns)** | Learn what NOT to do on certain sites (e.g., "never click this popup") with consequences tracking | Completed |
+| **Skill Explanation** | Generate human-readable descriptions of what a skill does, step-by-step breakdown, and reliability info | Completed |
+| **User Feedback Loop** | Explicit thumbs up/down via `rate_skill_application` tool, triggers auto-rollback on poor ratings | Completed |
+| **Fallback Skill Chains** | Define ordered fallback skills when primary fails, execute with fallback chain | Completed |
+| **Skill Dependencies** | Define prerequisite skills (e.g., "login" before "access dashboard") with circular dependency detection | Completed |
+| **Bootstrap Templates** | Initialize with common skill templates (cookie dismiss, pagination, form/table extraction) | Completed |
+
 ### Planned - High Impact
 
 | Feature | Description | Status |
 |---------|-------------|--------|
-| **Skill Versioning & Rollback** | Track skill evolution over time, revert if performance degrades | Planned |
 | **Real Neural Embeddings** | Use sentence-transformers or similar for semantic embeddings instead of hash-based | Planned |
-| **Negative Skills (Anti-patterns)** | Learn what NOT to do on certain sites (e.g., "never click this popup") | Planned |
-| **Skill Explanation** | Generate human-readable descriptions of what a skill does and why it matched | Planned |
-| **User Feedback Loop** | Allow explicit thumbs up/down on skill applications to accelerate learning | Planned |
 
 ### Planned - Medium Impact
 
 | Feature | Description | Status |
 |---------|-------------|--------|
-| **Fallback Skill Chains** | Define ordered fallback skills when primary fails | Planned |
 | **Skill Generalization** | Automatically abstract domain-specific skills to work cross-domain | Planned |
 | **Temporal Patterns** | Learn time-based behaviors (sites that update at specific times, rate limits by hour) | Planned |
-| **Skill Dependencies** | Define prerequisite skills (e.g., "login" before "access dashboard") | Planned |
 | **Performance Benchmarking Dashboard** | Track metrics over time with trend analysis | Planned |
 
 ### Planned - Nice to Have

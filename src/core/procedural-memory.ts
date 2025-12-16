@@ -24,6 +24,11 @@ import type {
   ProceduralMemoryConfig,
   SkillWorkflow,
   CoverageStats,
+  SkillVersion,
+  AntiPattern,
+  SkillExplanation,
+  SkillFeedback,
+  ExtendedSkillPreconditions,
 } from '../types/index.js';
 
 // Default configuration
@@ -34,6 +39,9 @@ const DEFAULT_CONFIG: ProceduralMemoryConfig = {
   minTrajectoryLength: 2,
   mergeThreshold: 0.9,
   filePath: './procedural-memory.json',
+  maxVersionsPerSkill: 10,
+  maxFeedbackLogSize: 500,
+  autoRollbackThreshold: 0.3,
 };
 
 // Embedding feature layout configuration
@@ -110,6 +118,15 @@ export class ProceduralMemory {
   private visitedDomains: Set<string> = new Set();
   private visitedPageTypes: Map<string, number> = new Map(); // pageType -> count
   private failedExtractions: Map<string, number> = new Map(); // domain -> failure count
+
+  // Versioning support
+  private skillVersions: Map<string, SkillVersion[]> = new Map(); // skillId -> version history
+
+  // Anti-patterns (negative skills)
+  private antiPatterns: Map<string, AntiPattern> = new Map();
+
+  // User feedback
+  private feedbackLog: SkillFeedback[] = [];
 
   constructor(config: Partial<ProceduralMemoryConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
@@ -792,7 +809,25 @@ export class ProceduralMemory {
         this.failedExtractions = new Map(Object.entries(data.failedExtractions));
       }
 
-      console.error(`[ProceduralMemory] Loaded ${this.skills.size} skills, ${this.workflows.size} workflows from ${this.config.filePath}`);
+      // Load versioning data
+      if (data.skillVersions) {
+        this.skillVersions = new Map(Object.entries(data.skillVersions));
+      }
+
+      // Load anti-patterns
+      if (data.antiPatterns) {
+        this.antiPatterns = new Map();
+        for (const ap of data.antiPatterns) {
+          this.antiPatterns.set(ap.id, ap);
+        }
+      }
+
+      // Load user feedback
+      if (data.feedbackLog) {
+        this.feedbackLog = data.feedbackLog;
+      }
+
+      console.error(`[ProceduralMemory] Loaded ${this.skills.size} skills, ${this.workflows.size} workflows, ${this.antiPatterns.size} anti-patterns from ${this.config.filePath}`);
     } catch {
       console.error('[ProceduralMemory] No existing memory found, starting fresh');
     }
@@ -808,6 +843,14 @@ export class ProceduralMemory {
         visitedDomains: Array.from(this.visitedDomains),
         visitedPageTypes: Object.fromEntries(this.visitedPageTypes),
         failedExtractions: Object.fromEntries(this.failedExtractions),
+        // Versioning data
+        skillVersions: Object.fromEntries(
+          Array.from(this.skillVersions.entries())
+        ),
+        // Anti-patterns
+        antiPatterns: Array.from(this.antiPatterns.values()),
+        // User feedback
+        feedbackLog: this.feedbackLog.slice(-(this.config.maxFeedbackLogSize ?? 500)),
         lastSaved: Date.now(),
         config: this.config,
       };
@@ -1410,8 +1453,922 @@ export class ProceduralMemory {
     this.visitedDomains.clear();
     this.visitedPageTypes.clear();
     this.failedExtractions.clear();
+    this.skillVersions.clear();
+    this.antiPatterns.clear();
+    this.feedbackLog = [];
     await this.save();
     console.error('[ProceduralMemory] Reset complete');
+  }
+
+  // ============================================
+  // SKILL VERSIONING & ROLLBACK
+  // ============================================
+
+  /**
+   * Create a version snapshot of a skill
+   */
+  private createVersion(
+    skill: BrowsingSkill,
+    reason: SkillVersion['changeReason'],
+    description?: string
+  ): SkillVersion {
+    const successRate = skill.metrics.timesUsed > 0
+      ? skill.metrics.successCount / skill.metrics.timesUsed
+      : 0;
+
+    const versions = this.skillVersions.get(skill.id) || [];
+    const nextVersion = versions.length > 0
+      ? Math.max(...versions.map(v => v.version)) + 1
+      : 1;
+
+    const version: SkillVersion = {
+      version: nextVersion,
+      createdAt: Date.now(),
+      actionSequence: [...skill.actionSequence],
+      embedding: [...skill.embedding],
+      metricsSnapshot: {
+        successCount: skill.metrics.successCount,
+        failureCount: skill.metrics.failureCount,
+        successRate,
+        avgDuration: skill.metrics.avgDuration,
+        timesUsed: skill.metrics.timesUsed,
+      },
+      changeReason: reason,
+      changeDescription: description,
+    };
+
+    return version;
+  }
+
+  /**
+   * Save a version to the skill's history
+   */
+  private saveVersion(skillId: string, version: SkillVersion): void {
+    if (!this.skillVersions.has(skillId)) {
+      this.skillVersions.set(skillId, []);
+    }
+
+    const versions = this.skillVersions.get(skillId)!;
+    versions.push(version);
+
+    // Keep only the last N versions
+    const maxVersions = this.config.maxVersionsPerSkill ?? 10;
+    if (versions.length > maxVersions) {
+      versions.splice(0, versions.length - maxVersions);
+    }
+  }
+
+  /**
+   * Get version history for a skill
+   */
+  getVersionHistory(skillId: string): SkillVersion[] {
+    return this.skillVersions.get(skillId) || [];
+  }
+
+  /**
+   * Rollback a skill to a previous version
+   */
+  async rollbackSkill(skillId: string, targetVersion?: number): Promise<boolean> {
+    const skill = this.skills.get(skillId);
+    if (!skill) {
+      console.error(`[ProceduralMemory] Skill not found for rollback: ${skillId}`);
+      return false;
+    }
+
+    const versions = this.skillVersions.get(skillId);
+    if (!versions || versions.length === 0) {
+      console.error(`[ProceduralMemory] No version history for skill: ${skillId}`);
+      return false;
+    }
+
+    // Find target version
+    let targetVersionData: SkillVersion;
+    if (targetVersion !== undefined) {
+      const found = versions.find(v => v.version === targetVersion);
+      if (!found) {
+        console.error(`[ProceduralMemory] Version ${targetVersion} not found for skill: ${skillId}`);
+        return false;
+      }
+      targetVersionData = found;
+    } else {
+      // Rollback to previous version (second to last if exists)
+      if (versions.length < 2) {
+        targetVersionData = versions[0];
+      } else {
+        targetVersionData = versions[versions.length - 2];
+      }
+    }
+
+    // Save current state as new version before rollback
+    const currentVersion = this.createVersion(skill, 'rollback', `Rolled back to version ${targetVersionData.version}`);
+    this.saveVersion(skillId, currentVersion);
+
+    // Apply rollback
+    skill.actionSequence = [...targetVersionData.actionSequence];
+    skill.embedding = [...targetVersionData.embedding];
+    skill.metrics.successCount = targetVersionData.metricsSnapshot.successCount;
+    skill.metrics.failureCount = targetVersionData.metricsSnapshot.failureCount;
+    skill.metrics.timesUsed = targetVersionData.metricsSnapshot.timesUsed;
+    skill.metrics.avgDuration = targetVersionData.metricsSnapshot.avgDuration;
+    skill.updatedAt = Date.now();
+
+    await this.save();
+    console.error(`[ProceduralMemory] Rolled back skill ${skill.name} to version ${targetVersionData.version}`);
+    return true;
+  }
+
+  /**
+   * Check if a skill should be auto-rolled back based on performance degradation
+   */
+  checkForAutoRollback(skillId: string, threshold?: number): boolean {
+    const effectiveThreshold = threshold ?? this.config.autoRollbackThreshold ?? 0.5;
+    const skill = this.skills.get(skillId);
+    if (!skill) return false;
+
+    const versions = this.skillVersions.get(skillId);
+    if (!versions || versions.length < 2) return false;
+
+    // Get current success rate
+    const currentSuccessRate = skill.metrics.timesUsed > 0
+      ? skill.metrics.successCount / skill.metrics.timesUsed
+      : 0;
+
+    // Get best historical success rate
+    const bestHistoricalRate = Math.max(
+      ...versions.map(v => v.metricsSnapshot.successRate)
+    );
+
+    // Check if current performance is significantly worse
+    const degradation = bestHistoricalRate - currentSuccessRate;
+    if (degradation > effectiveThreshold && skill.metrics.timesUsed >= 5) {
+      console.error(`[ProceduralMemory] Performance degradation detected for ${skill.name}: ${(degradation * 100).toFixed(1)}% drop`);
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Get the best performing version of a skill
+   */
+  getBestVersion(skillId: string): SkillVersion | null {
+    const versions = this.skillVersions.get(skillId);
+    if (!versions || versions.length === 0) return null;
+
+    return versions.reduce((best, current) =>
+      current.metricsSnapshot.successRate > best.metricsSnapshot.successRate ? current : best
+    );
+  }
+
+  // ============================================
+  // NEGATIVE SKILLS (ANTI-PATTERNS)
+  // ============================================
+
+  /**
+   * Record an anti-pattern from a failed action
+   */
+  async recordAntiPattern(
+    action: BrowsingAction,
+    context: PageContext,
+    consequences: string[],
+    alternatives?: BrowsingAction[]
+  ): Promise<AntiPattern> {
+    // Check if we already have this anti-pattern
+    const existingKey = `${context.domain}:${action.type}:${action.selector || 'none'}`;
+    const existing = Array.from(this.antiPatterns.values()).find(
+      ap => ap.sourceDomain === context.domain &&
+        ap.avoidActions.some(a => a.type === action.type && a.selector === action.selector)
+    );
+
+    if (existing) {
+      // Update existing anti-pattern
+      existing.occurrenceCount++;
+      existing.updatedAt = Date.now();
+      // Add only new, unique consequences
+      for (const consequence of consequences) {
+        if (!existing.consequences.includes(consequence)) {
+          existing.consequences.push(consequence);
+        }
+      }
+      await this.save();
+      return existing;
+    }
+
+    // Create new anti-pattern
+    const antiPattern: AntiPattern = {
+      id: `ap_${crypto.randomBytes(6).toString('hex')}`,
+      name: this.generateAntiPatternName(action, context),
+      description: `Avoid ${action.type} on ${action.selector || 'this element'} - causes issues`,
+      preconditions: {
+        domainPatterns: [context.domain],
+        urlPatterns: context.url ? [this.extractUrlPattern(context.url)] : undefined,
+        pageType: context.pageType,
+      },
+      avoidActions: [{
+        type: action.type,
+        selector: action.selector,
+        reason: consequences[0] || 'Causes failures',
+      }],
+      occurrenceCount: 1,
+      consequences,
+      alternatives,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      sourceDomain: context.domain,
+      sourceUrl: context.url,
+    };
+
+    this.antiPatterns.set(antiPattern.id, antiPattern);
+    await this.save();
+    console.error(`[ProceduralMemory] Recorded anti-pattern: ${antiPattern.name}`);
+    return antiPattern;
+  }
+
+  /**
+   * Generate a name for an anti-pattern
+   */
+  private generateAntiPatternName(action: BrowsingAction, context: PageContext): string {
+    const domain = context.domain.replace(/^www\./, '').split('.')[0];
+    const selectorHint = action.selector
+      ? action.selector.includes('#') ? 'id_element'
+        : action.selector.includes('.') ? 'class_element'
+          : 'element'
+      : 'generic';
+    return `avoid_${action.type}_${selectorHint}_on_${domain}`;
+  }
+
+  /**
+   * Check if an action matches any known anti-patterns
+   */
+  checkAntiPatterns(action: BrowsingAction, context: PageContext): AntiPattern | null {
+    for (const antiPattern of this.antiPatterns.values()) {
+      // Check domain match
+      if (antiPattern.preconditions.domainPatterns) {
+        const domainMatch = antiPattern.preconditions.domainPatterns.some(pattern =>
+          context.domain.includes(pattern) || pattern.includes(context.domain)
+        );
+        if (!domainMatch) continue;
+      }
+
+      // Check if the action matches
+      const actionMatch = antiPattern.avoidActions.some(avoid =>
+        avoid.type === action.type &&
+        (!avoid.selector || avoid.selector === action.selector)
+      );
+
+      if (actionMatch) {
+        return antiPattern;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Get all anti-patterns for a domain
+   */
+  getAntiPatternsForDomain(domain: string): AntiPattern[] {
+    return Array.from(this.antiPatterns.values()).filter(
+      ap => ap.sourceDomain === domain ||
+        ap.preconditions.domainPatterns?.some(p => domain.includes(p))
+    );
+  }
+
+  /**
+   * Get all anti-patterns
+   */
+  getAllAntiPatterns(): AntiPattern[] {
+    return Array.from(this.antiPatterns.values());
+  }
+
+  // ============================================
+  // SKILL EXPLANATION
+  // ============================================
+
+  /**
+   * Generate a human-readable explanation for a skill
+   */
+  generateSkillExplanation(skillId: string): SkillExplanation | null {
+    const skill = this.skills.get(skillId);
+    if (!skill) return null;
+
+    const steps = skill.actionSequence.map((action, index) => ({
+      stepNumber: index + 1,
+      action: this.describeAction(action),
+      target: action.selector,
+      purpose: this.inferActionPurpose(action, skill.actionSequence, index),
+    }));
+
+    const successRate = skill.metrics.timesUsed > 0
+      ? skill.metrics.successCount / skill.metrics.timesUsed
+      : 0;
+
+    const explanation: SkillExplanation = {
+      summary: this.generateSkillSummary(skill),
+      steps,
+      applicability: this.describeApplicability(skill.preconditions),
+      reliability: this.describeReliability(skill.metrics, successRate),
+      tips: this.generateTips(skill),
+    };
+
+    return explanation;
+  }
+
+  /**
+   * Describe an action in plain English
+   */
+  private describeAction(action: BrowsingAction): string {
+    switch (action.type) {
+      case 'navigate':
+        return `Navigate to ${action.url || 'a new page'}`;
+      case 'click':
+        return `Click on ${action.selector || 'an element'}`;
+      case 'fill':
+        return `Fill in ${action.selector || 'a form field'} with "${action.value || 'a value'}"`;
+      case 'select':
+        return `Select "${action.value || 'an option'}" from ${action.selector || 'a dropdown'}`;
+      case 'scroll':
+        return 'Scroll the page to load more content';
+      case 'wait':
+        return `Wait for ${action.waitFor || 'the page'} to be ready`;
+      case 'extract':
+        return `Extract content from ${action.selector || 'the page'}`;
+      case 'dismiss_banner':
+        return 'Dismiss a cookie/consent banner';
+      default:
+        return `Perform ${action.type} action`;
+    }
+  }
+
+  /**
+   * Infer the purpose of an action based on context
+   */
+  private inferActionPurpose(
+    action: BrowsingAction,
+    sequence: BrowsingAction[],
+    index: number
+  ): string {
+    if (index === 0 && action.type === 'navigate') {
+      return 'Start the browsing session at the target page';
+    }
+
+    if (action.type === 'dismiss_banner') {
+      return 'Clear obstructions for better content access';
+    }
+
+    if (action.type === 'wait') {
+      return 'Ensure dynamic content has loaded';
+    }
+
+    if (action.type === 'scroll') {
+      return 'Trigger lazy-loaded content or reveal more items';
+    }
+
+    if (action.type === 'extract') {
+      return 'Capture the desired information from the page';
+    }
+
+    if (action.type === 'click' && action.selector) {
+      if (action.selector.includes('next') || action.selector.includes('page')) {
+        return 'Navigate to the next page of results';
+      }
+      if (action.selector.includes('submit') || action.selector.includes('button')) {
+        return 'Submit the form or trigger an action';
+      }
+      if (action.selector.includes('expand') || action.selector.includes('more')) {
+        return 'Expand hidden content or show more details';
+      }
+    }
+
+    if (action.type === 'fill') {
+      return 'Provide required input for the form or search';
+    }
+
+    return 'Complete a step in the browsing workflow';
+  }
+
+  /**
+   * Generate a summary for a skill
+   */
+  private generateSkillSummary(skill: BrowsingSkill): string {
+    const actionTypes = [...new Set(skill.actionSequence.map(a => a.type))];
+    const domain = skill.sourceDomain || 'unknown sites';
+
+    if (actionTypes.includes('fill') && actionTypes.includes('extract')) {
+      return `This skill fills out forms and extracts data from ${domain}`;
+    }
+
+    if (actionTypes.includes('click') && skill.actionSequence.some(a =>
+      a.selector?.includes('next') || a.selector?.includes('page')
+    )) {
+      return `This skill navigates through paginated content on ${domain}`;
+    }
+
+    if (actionTypes.includes('dismiss_banner')) {
+      return `This skill dismisses consent banners and accesses content on ${domain}`;
+    }
+
+    if (actionTypes.includes('extract')) {
+      return `This skill extracts specific content from pages on ${domain}`;
+    }
+
+    return `This skill performs a ${skill.actionSequence.length}-step browsing workflow on ${domain}`;
+  }
+
+  /**
+   * Describe when a skill is applicable
+   */
+  private describeApplicability(preconditions: SkillPreconditions): string {
+    const parts: string[] = [];
+
+    if (preconditions.domainPatterns && preconditions.domainPatterns.length > 0) {
+      parts.push(`Works on: ${preconditions.domainPatterns.join(', ')}`);
+    }
+
+    if (preconditions.pageType && preconditions.pageType !== 'unknown') {
+      parts.push(`Best for ${preconditions.pageType} pages`);
+    }
+
+    if (preconditions.requiredSelectors && preconditions.requiredSelectors.length > 0) {
+      parts.push(`Requires specific elements: ${preconditions.requiredSelectors.slice(0, 3).join(', ')}`);
+    }
+
+    if (preconditions.language) {
+      parts.push(`For ${preconditions.language} language pages`);
+    }
+
+    return parts.length > 0 ? parts.join('. ') : 'Applicable to similar page structures';
+  }
+
+  /**
+   * Describe skill reliability
+   */
+  private describeReliability(
+    metrics: BrowsingSkill['metrics'],
+    successRate: number
+  ): string {
+    const ratePercent = Math.round(successRate * 100);
+
+    if (metrics.timesUsed === 0) {
+      return 'Not yet tested - new skill';
+    }
+
+    if (metrics.timesUsed < 3) {
+      return `Limited testing (${metrics.timesUsed} uses) - ${ratePercent}% success rate`;
+    }
+
+    if (successRate >= 0.9) {
+      return `Highly reliable: ${ratePercent}% success rate over ${metrics.timesUsed} uses`;
+    }
+
+    if (successRate >= 0.7) {
+      return `Generally reliable: ${ratePercent}% success rate over ${metrics.timesUsed} uses`;
+    }
+
+    if (successRate >= 0.5) {
+      return `Moderately reliable: ${ratePercent}% success rate - may need refinement`;
+    }
+
+    return `Low reliability: ${ratePercent}% success rate - consider alternatives`;
+  }
+
+  /**
+   * Generate usage tips for a skill
+   */
+  private generateTips(skill: BrowsingSkill): string[] {
+    const tips: string[] = [];
+
+    if (skill.actionSequence.some(a => a.type === 'wait')) {
+      tips.push('This skill includes wait steps - ensure sufficient timeout');
+    }
+
+    if (skill.actionSequence.some(a => a.type === 'scroll')) {
+      tips.push('Scrolling is required - may need JavaScript enabled');
+    }
+
+    const antiPatterns = this.getAntiPatternsForDomain(skill.sourceDomain || '');
+    if (antiPatterns.length > 0) {
+      tips.push(`Known issues on this domain - ${antiPatterns.length} anti-patterns recorded`);
+    }
+
+    if (skill.metrics.avgDuration > 5000) {
+      tips.push(`This skill takes ${Math.round(skill.metrics.avgDuration / 1000)}s on average`);
+    }
+
+    if (skill.preconditions.requiredSelectors && skill.preconditions.requiredSelectors.length > 0) {
+      tips.push('Verify required elements exist before applying');
+    }
+
+    return tips;
+  }
+
+  // ============================================
+  // USER FEEDBACK
+  // ============================================
+
+  /**
+   * Record user feedback on a skill application
+   */
+  async recordFeedback(
+    skillId: string,
+    rating: 'positive' | 'negative',
+    context: { url: string; domain: string },
+    reason?: string
+  ): Promise<void> {
+    const feedback: SkillFeedback = {
+      skillId,
+      rating,
+      reason,
+      context: {
+        ...context,
+        timestamp: Date.now(),
+      },
+      processed: false,
+    };
+
+    this.feedbackLog.push(feedback);
+
+    // Apply feedback to skill metrics
+    const skill = this.skills.get(skillId);
+    if (skill) {
+      if (rating === 'positive') {
+        skill.metrics.successCount++;
+      } else {
+        skill.metrics.failureCount++;
+
+        // Check if we should auto-rollback
+        if (this.checkForAutoRollback(skillId)) {
+          console.error(`[ProceduralMemory] Auto-rollback triggered for skill ${skill.name} due to negative feedback`);
+          await this.rollbackSkill(skillId);
+        }
+      }
+      skill.metrics.timesUsed++;
+      skill.updatedAt = Date.now();
+
+      feedback.processed = true;
+    }
+
+    // Keep feedback log bounded
+    const maxSize = this.config.maxFeedbackLogSize ?? 500;
+    if (this.feedbackLog.length > maxSize * 2) {
+      this.feedbackLog = this.feedbackLog.slice(-maxSize);
+    }
+
+    await this.save();
+    console.error(`[ProceduralMemory] Recorded ${rating} feedback for skill ${skillId}`);
+  }
+
+  /**
+   * Get feedback summary for a skill
+   */
+  getFeedbackSummary(skillId: string): {
+    positive: number;
+    negative: number;
+    recentFeedback: SkillFeedback[];
+    commonIssues: string[];
+  } {
+    const skillFeedback = this.feedbackLog.filter(f => f.skillId === skillId);
+    const positive = skillFeedback.filter(f => f.rating === 'positive').length;
+    const negative = skillFeedback.filter(f => f.rating === 'negative').length;
+
+    // Get unique negative reasons
+    const commonIssues = [...new Set(
+      skillFeedback
+        .filter(f => f.rating === 'negative' && f.reason)
+        .map(f => f.reason!)
+    )];
+
+    return {
+      positive,
+      negative,
+      recentFeedback: skillFeedback.slice(-5),
+      commonIssues,
+    };
+  }
+
+  /**
+   * Get all feedback
+   */
+  getAllFeedback(): SkillFeedback[] {
+    return [...this.feedbackLog];
+  }
+
+  // ============================================
+  // SKILL DEPENDENCIES & FALLBACKS
+  // ============================================
+
+  /**
+   * Add fallback skills to a skill
+   */
+  async addFallbackSkills(skillId: string, fallbackSkillIds: string[]): Promise<boolean> {
+    const skill = this.skills.get(skillId);
+    if (!skill) return false;
+
+    // Validate fallback skills exist
+    for (const fallbackId of fallbackSkillIds) {
+      if (!this.skills.has(fallbackId)) {
+        console.error(`[ProceduralMemory] Fallback skill not found: ${fallbackId}`);
+        return false;
+      }
+    }
+
+    // Extend preconditions with fallbacks
+    (skill.preconditions as ExtendedSkillPreconditions).fallbackSkillIds = fallbackSkillIds;
+    skill.updatedAt = Date.now();
+
+    await this.save();
+    console.error(`[ProceduralMemory] Added ${fallbackSkillIds.length} fallback skills to ${skill.name}`);
+    return true;
+  }
+
+  /**
+   * Add prerequisite skills to a skill
+   */
+  async addPrerequisites(skillId: string, prerequisiteSkillIds: string[]): Promise<boolean> {
+    const skill = this.skills.get(skillId);
+    if (!skill) return false;
+
+    // Validate prerequisite skills exist
+    for (const prereqId of prerequisiteSkillIds) {
+      if (!this.skills.has(prereqId)) {
+        console.error(`[ProceduralMemory] Prerequisite skill not found: ${prereqId}`);
+        return false;
+      }
+    }
+
+    // Check for circular dependencies using DFS
+    if (this.wouldCreateCircularDependency(skillId, prerequisiteSkillIds)) {
+      console.error(`[ProceduralMemory] Circular dependency detected when adding prerequisites to ${skillId}`);
+      return false;
+    }
+
+    // Extend preconditions with prerequisites
+    (skill.preconditions as ExtendedSkillPreconditions).prerequisites = prerequisiteSkillIds;
+    skill.updatedAt = Date.now();
+
+    await this.save();
+    console.error(`[ProceduralMemory] Added ${prerequisiteSkillIds.length} prerequisites to ${skill.name}`);
+    return true;
+  }
+
+  /**
+   * Check if adding prerequisites would create a circular dependency using DFS
+   */
+  private wouldCreateCircularDependency(skillId: string, newPrereqs: string[]): boolean {
+    // Build a temporary graph with the proposed new edges
+    const visited = new Set<string>();
+    const recursionStack = new Set<string>();
+
+    // DFS to detect cycles
+    const hasCycle = (currentId: string): boolean => {
+      if (recursionStack.has(currentId)) {
+        return true; // Cycle detected
+      }
+      if (visited.has(currentId)) {
+        return false; // Already fully explored
+      }
+
+      visited.add(currentId);
+      recursionStack.add(currentId);
+
+      // Get prerequisites for this skill
+      let prereqs: string[] = [];
+      if (currentId === skillId) {
+        // Use the proposed new prerequisites
+        prereqs = newPrereqs;
+      } else {
+        const skill = this.skills.get(currentId);
+        if (skill) {
+          prereqs = (skill.preconditions as ExtendedSkillPreconditions).prerequisites || [];
+        }
+      }
+
+      // Check each prerequisite
+      for (const prereqId of prereqs) {
+        if (hasCycle(prereqId)) {
+          return true;
+        }
+      }
+
+      recursionStack.delete(currentId);
+      return false;
+    };
+
+    // Start DFS from each new prerequisite to see if any path leads back to skillId
+    for (const prereqId of newPrereqs) {
+      visited.clear();
+      recursionStack.clear();
+      recursionStack.add(skillId); // Mark skillId as in the current path
+      if (hasCycle(prereqId)) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Get fallback skills for a skill
+   */
+  getFallbackSkills(skillId: string): BrowsingSkill[] {
+    const skill = this.skills.get(skillId);
+    if (!skill) return [];
+
+    const fallbackIds = (skill.preconditions as ExtendedSkillPreconditions).fallbackSkillIds || [];
+    return fallbackIds
+      .map(id => this.skills.get(id))
+      .filter((s): s is BrowsingSkill => s !== undefined);
+  }
+
+  /**
+   * Get prerequisite skills for a skill
+   */
+  getPrerequisiteSkills(skillId: string): BrowsingSkill[] {
+    const skill = this.skills.get(skillId);
+    if (!skill) return [];
+
+    const prereqIds = (skill.preconditions as ExtendedSkillPreconditions).prerequisites || [];
+    return prereqIds
+      .map(id => this.skills.get(id))
+      .filter((s): s is BrowsingSkill => s !== undefined);
+  }
+
+  /**
+   * Execute a skill with fallback chain
+   */
+  async executeWithFallbacks(
+    skillId: string,
+    executor: (skill: BrowsingSkill) => Promise<boolean>
+  ): Promise<{ success: boolean; executedSkillId: string; attempts: number }> {
+    const skill = this.skills.get(skillId);
+    if (!skill) {
+      return { success: false, executedSkillId: skillId, attempts: 0 };
+    }
+
+    let attempts = 0;
+    const chain = [skill, ...this.getFallbackSkills(skillId)];
+
+    for (const currentSkill of chain) {
+      attempts++;
+      const startTime = Date.now();
+      try {
+        const success = await executor(currentSkill);
+        const duration = Date.now() - startTime;
+        if (success) {
+          // Record success with actual duration
+          await this.recordSkillExecution(currentSkill.id, true, duration);
+          return { success: true, executedSkillId: currentSkill.id, attempts };
+        }
+        // Record failure with actual duration
+        await this.recordSkillExecution(currentSkill.id, false, duration);
+      } catch (error) {
+        const duration = Date.now() - startTime;
+        console.error(`[ProceduralMemory] Skill ${currentSkill.name} failed, trying next fallback`);
+        // Record failure with actual duration
+        await this.recordSkillExecution(currentSkill.id, false, duration);
+      }
+    }
+
+    return { success: false, executedSkillId: skillId, attempts };
+  }
+
+  // ============================================
+  // BOOTSTRAP FROM TEMPLATES
+  // ============================================
+
+  /**
+   * Bootstrap procedural memory with common skill templates
+   */
+  async bootstrapFromTemplates(): Promise<number> {
+    let bootstrapped = 0;
+
+    for (const template of SKILL_TEMPLATES) {
+      // Check if we already have a similar skill
+      const existingSkill = Array.from(this.skills.values()).find(
+        s => s.name === template.name
+      );
+
+      if (existingSkill) {
+        console.error(`[ProceduralMemory] Skipping template ${template.name} - already exists`);
+        continue;
+      }
+
+      // Create skill from template
+      const skill = this.addManualSkill(
+        template.name!,
+        template.description!,
+        template.preconditions!,
+        this.generateTemplateActions(template.name!)
+      );
+
+      if (skill) {
+        // Create initial version
+        const version = this.createVersion(skill, 'initial', 'Bootstrapped from template');
+        this.saveVersion(skill.id, version);
+        bootstrapped++;
+      }
+    }
+
+    if (bootstrapped > 0) {
+      await this.save();
+      console.error(`[ProceduralMemory] Bootstrapped ${bootstrapped} skills from templates`);
+    }
+
+    return bootstrapped;
+  }
+
+  /**
+   * Generate default actions for a template skill
+   */
+  private generateTemplateActions(templateName: string): BrowsingAction[] {
+    const now = Date.now();
+
+    switch (templateName) {
+      case 'cookie_banner_dismiss':
+        return [
+          {
+            type: 'wait',
+            waitFor: 'load',
+            timestamp: now,
+            success: true,
+          },
+          {
+            type: 'dismiss_banner',
+            selector: '[class*="cookie"], [class*="consent"], [id*="cookie"], [id*="consent"], [class*="gdpr"]',
+            timestamp: now + 100,
+            success: true,
+          },
+        ];
+
+      case 'pagination_navigate':
+        return [
+          {
+            type: 'wait',
+            waitFor: 'load',
+            timestamp: now,
+            success: true,
+          },
+          {
+            type: 'extract',
+            selector: 'main, article, .content, #content',
+            timestamp: now + 100,
+            success: true,
+          },
+          {
+            type: 'click',
+            selector: '[class*="next"], [rel="next"], .pagination a:last-child, [aria-label*="next"]',
+            timestamp: now + 200,
+            success: true,
+          },
+        ];
+
+      case 'form_extraction':
+        return [
+          {
+            type: 'wait',
+            waitFor: 'load',
+            timestamp: now,
+            success: true,
+          },
+          {
+            type: 'extract',
+            selector: 'form',
+            timestamp: now + 100,
+            success: true,
+          },
+        ];
+
+      case 'table_extraction':
+        return [
+          {
+            type: 'wait',
+            waitFor: 'load',
+            timestamp: now,
+            success: true,
+          },
+          {
+            type: 'extract',
+            selector: 'table',
+            timestamp: now + 100,
+            success: true,
+          },
+        ];
+
+      default:
+        return [
+          {
+            type: 'wait',
+            waitFor: 'load',
+            timestamp: now,
+            success: true,
+          },
+          {
+            type: 'extract',
+            selector: 'body',
+            timestamp: now + 100,
+            success: true,
+          },
+        ];
+    }
   }
 }
 
