@@ -568,16 +568,23 @@ Captures cookies, localStorage, sessionStorage for future requests.`,
         description: `Get statistics about tiered rendering performance.
 
 The browser uses a tiered approach for fetching:
-- Tier 1 (static): Plain HTTP fetch (~50ms) - for static HTML pages
+- Tier 1 (intelligence): Content Intelligence (~50-200ms)
+  - Framework data extraction (Next.js, Nuxt, Gatsby, Remix)
+  - Structured data (JSON-LD, OpenGraph)
+  - API prediction and direct calling
+  - Google Cache / Archive.org fallbacks
+  - Static HTML parsing
 - Tier 2 (lightweight): HTTP + JS execution (~200-500ms) - for simple dynamic pages
-- Tier 3 (playwright): Full browser (~2-5s) - for complex SPAs and anti-bot sites
+- Tier 3 (playwright): Full browser (~2-5s) - OPTIONAL, for complex SPAs
+
+Playwright is OPTIONAL - if not installed, the system gracefully skips it.
 
 Shows:
 - Domains using each tier
 - Average response times per tier
-- Success/failure rates
+- Whether Playwright is available
 
-Use this to understand rendering efficiency and identify optimization opportunities.`,
+Use this to understand rendering efficiency.`,
         inputSchema: {
           type: 'object',
           properties: {},
@@ -588,9 +595,9 @@ Use this to understand rendering efficiency and identify optimization opportunit
         description: `Manually set the preferred rendering tier for a domain.
 
 Use this to override automatic tier selection:
-- 'static' for known static sites (fastest)
-- 'lightweight' for sites with simple JS
-- 'playwright' for sites requiring full browser
+- 'intelligence' for most sites (fastest, uses multiple strategies)
+- 'lightweight' for sites needing simple JS execution
+- 'playwright' for sites requiring full browser (if available)
 
 The setting persists until the browser learns differently or is reset.`,
         inputSchema: {
@@ -602,7 +609,7 @@ The setting persists until the browser learns differently or is reset.`,
             },
             tier: {
               type: 'string',
-              enum: ['static', 'lightweight', 'playwright'],
+              enum: ['intelligence', 'lightweight', 'playwright'],
               description: 'The rendering tier to use',
             },
           },
@@ -1327,17 +1334,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 summary: {
                   totalDomains: tierStats.totalDomains,
                   domainsByTier: tierStats.byTier,
+                  playwrightAvailable: tierStats.playwrightAvailable,
                 },
                 performance: {
                   avgResponseTimes: {
-                    static: Math.round(tierStats.avgResponseTimes.static) + 'ms',
+                    intelligence: Math.round(tierStats.avgResponseTimes.intelligence) + 'ms',
                     lightweight: Math.round(tierStats.avgResponseTimes.lightweight) + 'ms',
                     playwright: Math.round(tierStats.avgResponseTimes.playwright) + 'ms',
                   },
                 },
                 efficiency: {
-                  staticPercent: tierStats.totalDomains > 0
-                    ? Math.round((tierStats.byTier.static / tierStats.totalDomains) * 100) + '%'
+                  intelligencePercent: tierStats.totalDomains > 0
+                    ? Math.round((tierStats.byTier.intelligence / tierStats.totalDomains) * 100) + '%'
                     : '0%',
                   lightweightPercent: tierStats.totalDomains > 0
                     ? Math.round((tierStats.byTier.lightweight / tierStats.totalDomains) * 100) + '%'
@@ -1345,9 +1353,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                   playwrightPercent: tierStats.totalDomains > 0
                     ? Math.round((tierStats.byTier.playwright / tierStats.totalDomains) * 100) + '%'
                     : '0%',
-                  message: tierStats.byTier.static + tierStats.byTier.lightweight > tierStats.byTier.playwright
+                  message: tierStats.byTier.intelligence + tierStats.byTier.lightweight > tierStats.byTier.playwright
                     ? 'Good! Most requests are using lightweight rendering'
-                    : 'Consider optimizing - many requests still require full browser',
+                    : tierStats.playwrightAvailable
+                    ? 'Consider optimizing - many requests still require full browser'
+                    : 'Playwright not installed - using lightweight strategies only',
                 },
               }, null, 2),
             },
@@ -1358,7 +1368,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'set_domain_tier': {
         const tieredFetcher = smartBrowser.getTieredFetcher();
         const domain = args.domain as string;
-        const tier = args.tier as 'static' | 'lightweight' | 'playwright';
+        const tier = args.tier as 'intelligence' | 'lightweight' | 'playwright';
 
         tieredFetcher.setDomainPreference(domain, tier);
 
@@ -1369,11 +1379,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               text: JSON.stringify({
                 success: true,
                 message: `Set ${domain} to use ${tier} tier`,
-                note: tier === 'static'
-                  ? 'Fastest rendering - will fail if page needs JavaScript'
+                note: tier === 'intelligence'
+                  ? 'Content Intelligence - tries framework extraction, API prediction, caches, then static parsing'
                   : tier === 'lightweight'
-                  ? 'Balanced - handles basic JS without full browser'
-                  : 'Full browser - handles all pages but slowest',
+                  ? 'Lightweight JS - executes scripts without full browser'
+                  : 'Full browser - handles all pages but slowest (requires Playwright)',
               }, null, 2),
             },
           ],

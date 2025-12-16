@@ -3,32 +3,45 @@
  *
  * Implements a cascade of rendering strategies from fastest to most capable:
  *
- * Tier 1: Static fetch (fastest, ~50ms)
- *   - Plain HTTP fetch + HTML parsing
- *   - No JavaScript execution
- *   - Best for: Documentation, blogs, government sites, static content
+ * Tier 1: Content Intelligence (fastest, ~50-200ms)
+ *   - Framework data extraction (__NEXT_DATA__, etc.)
+ *   - Structured data (JSON-LD)
+ *   - API prediction
+ *   - Google Cache / Archive.org
+ *   - Static HTML parsing
+ *   - Best for: Most sites, especially modern frameworks
  *
  * Tier 2: Lightweight JS (~200-500ms)
  *   - HTTP fetch + linkedom + Node VM script execution
  *   - Handles basic JS-rendered content
- *   - Best for: Server-rendered pages with hydration, simple SPAs
+ *   - Best for: Sites that need simple JS but not full browser
  *
- * Tier 3: Full browser (slowest, ~2-5s)
- *   - Playwright with full Chromium
+ * Tier 3: Full browser (slowest, ~2-5s, OPTIONAL)
+ *   - Playwright with full Chromium (if installed)
  *   - Handles everything including anti-bot
- *   - Best for: Complex SPAs, sites with anti-bot, heavy interactivity
+ *   - Best for: Complex SPAs, sites with anti-bot
+ *   - Gracefully skipped if Playwright not available
  *
  * The fetcher learns over time which tier works best for each domain.
  */
 
-import { LightweightRenderer, LightweightRenderResult } from './lightweight-renderer.js';
+import { LightweightRenderer } from './lightweight-renderer.js';
+import { ContentIntelligence, type ContentResult, type ExtractionStrategy } from './content-intelligence.js';
 import { BrowserManager } from './browser-manager.js';
 import { ContentExtractor } from '../utils/content-extractor.js';
 import { rateLimiter } from '../utils/rate-limiter.js';
 import type { NetworkRequest, ApiPattern } from '../types/index.js';
 import type { Page } from 'playwright';
 
-export type RenderTier = 'static' | 'lightweight' | 'playwright';
+export type RenderTier = 'intelligence' | 'lightweight' | 'playwright';
+
+// Map old tier names to new ones for backward compatibility
+const TIER_ALIASES: Record<string, RenderTier> = {
+  'static': 'intelligence',
+  'intelligence': 'intelligence',
+  'lightweight': 'lightweight',
+  'playwright': 'playwright',
+};
 
 export interface TieredFetchOptions {
   // Force a specific tier (skip auto-detection)
@@ -59,9 +72,12 @@ export interface TieredFetchResult {
     markdown: string;
     text: string;
     title: string;
+    structured?: Record<string, unknown>; // Structured data if available
   };
   // Which tier was used
   tier: RenderTier;
+  // Specific extraction strategy used (for intelligence tier)
+  extractionStrategy?: ExtractionStrategy;
   // Final URL after redirects
   finalUrl: string;
   // Whether we had to fall back to a higher tier
@@ -87,6 +103,7 @@ export interface TieredFetchResult {
     isJSHeavy: boolean;
     needsFullBrowser: boolean;
     contentComplete: boolean;
+    playwrightAvailable: boolean;
   };
 }
 
@@ -145,6 +162,7 @@ export interface DomainPreference {
 }
 
 export class TieredFetcher {
+  private contentIntelligence: ContentIntelligence;
   private lightweightRenderer: LightweightRenderer;
   private browserManager: BrowserManager;
   private contentExtractor: ContentExtractor;
@@ -156,6 +174,7 @@ export class TieredFetcher {
   ) {
     this.browserManager = browserManager;
     this.contentExtractor = contentExtractor;
+    this.contentIntelligence = new ContentIntelligence();
     this.lightweightRenderer = new LightweightRenderer();
   }
 
@@ -167,9 +186,14 @@ export class TieredFetcher {
     const domain = new URL(url).hostname;
     const timing: TieredFetchResult['timing'] = {
       total: 0,
-      perTier: { static: 0, lightweight: 0, playwright: 0 },
+      perTier: { intelligence: 0, lightweight: 0, playwright: 0 },
     };
     const tiersAttempted: RenderTier[] = [];
+
+    // Normalize tier name (handle 'static' -> 'intelligence' alias)
+    if (options.forceTier && TIER_ALIASES[options.forceTier]) {
+      options.forceTier = TIER_ALIASES[options.forceTier];
+    }
 
     // Apply rate limiting if enabled
     if (options.useRateLimiting !== false) {
@@ -213,10 +237,11 @@ export class TieredFetcher {
               : `${tier} tier successful`,
             timing,
             detection: {
-              isStatic: tier === 'static',
+              isStatic: tier === 'intelligence',
               isJSHeavy: tier === 'playwright',
               needsFullBrowser: tier === 'playwright',
               contentComplete: true,
+              playwrightAvailable: ContentIntelligence.isPlaywrightAvailable(),
             },
           };
         }
@@ -249,33 +274,57 @@ export class TieredFetcher {
     options: TieredFetchOptions
   ): Promise<Omit<TieredFetchResult, 'tier' | 'fellBack' | 'tiersAttempted' | 'tierReason' | 'timing' | 'detection'>> {
     switch (tier) {
-      case 'static':
-        return this.executeStatic(url, options);
+      case 'intelligence':
+        return this.executeIntelligence(url, options);
       case 'lightweight':
         return this.executeLightweight(url, options);
       case 'playwright':
         return this.executePlaywright(url, options);
+      default:
+        // Handle legacy 'static' tier
+        return this.executeIntelligence(url, options);
     }
   }
 
   /**
-   * Tier 1: Static fetch
+   * Tier 1: Content Intelligence (framework extraction, structured data, API prediction, caches)
    */
-  private async executeStatic(
+  private async executeIntelligence(
     url: string,
     options: TieredFetchOptions
   ): Promise<Omit<TieredFetchResult, 'tier' | 'fellBack' | 'tiersAttempted' | 'tierReason' | 'timing' | 'detection'>> {
-    const result = await this.lightweightRenderer.renderStatic(url, {
-      headers: options.headers,
+    const result = await this.contentIntelligence.extract(url, {
       timeout: options.tierTimeout,
+      minContentLength: options.minContentLength,
+      headers: options.headers,
+      // Don't use browser in this tier - that's what the playwright tier is for
+      allowBrowser: false,
     });
 
-    const content = this.contentExtractor.extract(result.html, result.finalUrl);
+    // If extraction failed completely, throw to trigger fallback
+    if (result.error) {
+      throw new Error(result.error);
+    }
+
+    // Build a minimal HTML representation for compatibility
+    const html = `<!DOCTYPE html>
+<html>
+<head><title>${result.content.title}</title></head>
+<body>
+<article>${result.content.markdown}</article>
+</body>
+</html>`;
 
     return {
-      html: result.html,
-      content,
-      finalUrl: result.finalUrl,
+      html,
+      content: {
+        title: result.content.title,
+        text: result.content.text,
+        markdown: result.content.markdown,
+        structured: result.content.structured,
+      },
+      extractionStrategy: result.meta.strategy,
+      finalUrl: result.meta.finalUrl,
       networkRequests: [],
       discoveredApis: [],
     };
@@ -364,34 +413,35 @@ export class TieredFetcher {
     // Check learned preferences first
     const preference = this.domainPreferences.get(domain);
     if (preference && preference.successCount > 2) {
-      return preference.preferredTier;
+      // Normalize legacy tier names
+      return TIER_ALIASES[preference.preferredTier] || preference.preferredTier;
     }
 
-    // Check known static domains
-    if (KNOWN_STATIC_DOMAINS.some(pattern => pattern.test(domain))) {
-      return 'static';
-    }
-
-    // Check known browser-required domains
+    // Check known browser-required domains (social media, etc.)
     if (KNOWN_BROWSER_REQUIRED.some(pattern => pattern.test(domain))) {
       return 'playwright';
     }
 
-    // Default to static (fastest) and let it fall back if needed
-    return 'static';
+    // Default to intelligence tier (fastest) - it tries multiple strategies
+    return 'intelligence';
   }
 
   /**
    * Get the order of tiers to try
    */
   private getTierOrder(startTier: RenderTier): RenderTier[] {
-    switch (startTier) {
-      case 'static':
-        return ['static', 'lightweight', 'playwright'];
+    // Normalize legacy tier name
+    const tier = TIER_ALIASES[startTier] || startTier;
+
+    switch (tier) {
+      case 'intelligence':
+        return ['intelligence', 'lightweight', 'playwright'];
       case 'lightweight':
         return ['lightweight', 'playwright'];
       case 'playwright':
         return ['playwright'];
+      default:
+        return ['intelligence', 'lightweight', 'playwright'];
     }
   }
 
@@ -472,14 +522,14 @@ export class TieredFetcher {
 
       // If we're failing too often, try a higher tier next time
       if (existing.failureCount > 2 && tier !== 'playwright') {
-        const nextTier = tier === 'static' ? 'lightweight' : 'playwright';
+        const nextTier = tier === 'intelligence' ? 'lightweight' : 'playwright';
         existing.preferredTier = nextTier;
         existing.successCount = 0;
         existing.failureCount = 0;
       }
     } else {
       // Create preference pointing to next tier
-      const nextTier = tier === 'static' ? 'lightweight' : 'playwright';
+      const nextTier = tier === 'intelligence' ? 'lightweight' : 'playwright';
       this.domainPreferences.set(domain, {
         domain,
         preferredTier: nextTier,
@@ -498,20 +548,24 @@ export class TieredFetcher {
     totalDomains: number;
     byTier: Record<RenderTier, number>;
     avgResponseTimes: Record<RenderTier, number>;
+    playwrightAvailable: boolean;
   } {
-    const byTier: Record<RenderTier, number> = { static: 0, lightweight: 0, playwright: 0 };
-    const responseTimes: Record<RenderTier, number[]> = { static: [], lightweight: [], playwright: [] };
+    const byTier: Record<RenderTier, number> = { intelligence: 0, lightweight: 0, playwright: 0 };
+    const responseTimes: Record<RenderTier, number[]> = { intelligence: [], lightweight: [], playwright: [] };
 
     for (const pref of this.domainPreferences.values()) {
-      byTier[pref.preferredTier]++;
+      // Normalize legacy tier names
+      const tier = TIER_ALIASES[pref.preferredTier] || pref.preferredTier;
+      byTier[tier] = (byTier[tier] || 0) + 1;
       if (pref.avgResponseTime > 0) {
-        responseTimes[pref.preferredTier].push(pref.avgResponseTime);
+        responseTimes[tier] = responseTimes[tier] || [];
+        responseTimes[tier].push(pref.avgResponseTime);
       }
     }
 
     const avgResponseTimes: Record<RenderTier, number> = {
-      static: responseTimes.static.length > 0
-        ? responseTimes.static.reduce((a, b) => a + b, 0) / responseTimes.static.length
+      intelligence: responseTimes.intelligence.length > 0
+        ? responseTimes.intelligence.reduce((a, b) => a + b, 0) / responseTimes.intelligence.length
         : 0,
       lightweight: responseTimes.lightweight.length > 0
         ? responseTimes.lightweight.reduce((a, b) => a + b, 0) / responseTimes.lightweight.length
@@ -525,6 +579,7 @@ export class TieredFetcher {
       totalDomains: this.domainPreferences.size,
       byTier,
       avgResponseTimes,
+      playwrightAvailable: ContentIntelligence.isPlaywrightAvailable(),
     };
   }
 

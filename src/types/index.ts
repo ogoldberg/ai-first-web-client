@@ -618,11 +618,16 @@ export interface ExtendedSkillPreconditions extends SkillPreconditions {
 
 /**
  * Rendering tier for content fetching
- * - static: Plain HTTP fetch, no JS (fastest, ~50ms)
+ * - intelligence: Content Intelligence (fastest, ~50-200ms)
+ *   - Framework data extraction (__NEXT_DATA__, etc.)
+ *   - Structured data (JSON-LD, OpenGraph)
+ *   - API prediction and direct calling
+ *   - Google Cache / Archive.org fallbacks
+ *   - Static HTML parsing
  * - lightweight: HTTP + linkedom + Node VM (medium, ~200-500ms)
- * - playwright: Full Chromium browser (slowest, ~2-5s)
+ * - playwright: Full Chromium browser (slowest, ~2-5s, OPTIONAL)
  */
-export type RenderTier = 'static' | 'lightweight' | 'playwright';
+export type RenderTier = 'intelligence' | 'lightweight' | 'playwright';
 
 /**
  * Domain-specific rendering preference
