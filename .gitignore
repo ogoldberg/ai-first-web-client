@@ -26,3 +26,4 @@ temp/
 
 # Claude Code local settings (user-specific)
 .claude/settings.local.json
+enhanced-knowledge-base.json
