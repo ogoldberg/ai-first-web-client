@@ -6,6 +6,7 @@ import { BrowserContext } from 'playwright';
 import { promises as fs } from 'fs';
 import path from 'path';
 import type { SessionStore } from '../types/index.js';
+import { logger } from '../utils/logger.js';
 
 /**
  * Session health status
@@ -139,7 +140,7 @@ export class SessionManager {
     // Persist to disk
     await this.persistSession(sessionKey, sessionStore);
 
-    console.error(`Session saved for ${domain} (profile: ${profile})`);
+    logger.session.debug('Session saved', { domain, profile, cookieCount: cookies.length });
   }
 
   /**
@@ -166,7 +167,7 @@ export class SessionManager {
     session.lastUsed = Date.now();
     await this.persistSession(sessionKey, session);
 
-    console.error(`Session loaded for ${domain} (profile: ${profile})`);
+    logger.session.debug('Session loaded', { domain, profile });
     return true;
   }
 
@@ -347,31 +348,31 @@ export class SessionManager {
    */
   async refreshSession(domain: string, profile: string = 'default'): Promise<boolean> {
     if (!this.refreshCallback) {
-      console.error(`[Session] No refresh callback registered for auto-refresh`);
+      logger.session.warn('No refresh callback registered for auto-refresh');
       return false;
     }
 
     const health = this.getSessionHealth(domain, profile);
 
     if (health.status === 'healthy') {
-      console.error(`[Session] Session for ${domain} is healthy, no refresh needed`);
+      logger.session.debug('Session is healthy, no refresh needed', { domain });
       return true;
     }
 
-    console.error(`[Session] Attempting to refresh ${health.status} session for ${domain}`);
+    logger.session.info('Attempting to refresh session', { domain, status: health.status });
 
     try {
       const success = await this.refreshCallback(domain, profile);
 
       if (success) {
-        console.error(`[Session] Successfully refreshed session for ${domain}`);
+        logger.session.info('Successfully refreshed session', { domain });
       } else {
-        console.error(`[Session] Failed to refresh session for ${domain}`);
+        logger.session.warn('Failed to refresh session', { domain });
       }
 
       return success;
     } catch (error) {
-      console.error(`[Session] Error during refresh for ${domain}:`, error);
+      logger.session.error('Error during session refresh', { domain, error });
       return false;
     }
   }
@@ -537,7 +538,7 @@ export class SessionManager {
         }
       }
 
-      console.error(`Loaded ${this.sessions.size} saved session(s)`);
+      logger.session.info('Loaded saved sessions', { count: this.sessions.size });
     } catch (error) {
       // No sessions directory yet
     }

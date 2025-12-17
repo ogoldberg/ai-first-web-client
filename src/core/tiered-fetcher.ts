@@ -28,6 +28,7 @@
 import { LightweightRenderer } from './lightweight-renderer.js';
 import { ContentIntelligence, type ContentResult, type ExtractionStrategy } from './content-intelligence.js';
 import { BrowserManager, type Page } from './browser-manager.js';
+import { logger } from '../utils/logger.js';
 import { ContentExtractor } from '../utils/content-extractor.js';
 import { rateLimiter } from '../utils/rate-limiter.js';
 import { TIMEOUTS } from '../utils/timeouts.js';
@@ -455,7 +456,7 @@ export class TieredFetcher {
           : ['lightweight'];
       case 'playwright':
         if (!playwrightAvailable) {
-          console.error('[TieredFetcher] Playwright tier requested but Playwright is not available. Falling back to lightweight tier.');
+          logger.tieredFetcher.warn('Playwright tier requested but not available, falling back to lightweight');
           return ['lightweight'];
         }
         return ['playwright'];

@@ -14,6 +14,7 @@
 
 import { promises as fs } from 'fs';
 import * as crypto from 'crypto';
+import { logger } from '../utils/logger.js';
 import type {
   EnhancedApiPattern,
   EnhancedKnowledgeBaseEntry,
@@ -1309,9 +1310,9 @@ export class LearningEngine {
         this.learningEvents = data.learningEvents;
       }
 
-      console.error(`[LearningEngine] Loaded ${this.entries.size} domain(s) from knowledge base`);
+      logger.learning.info('Loaded knowledge base', { domainCount: this.entries.size });
     } catch {
-      console.error('[LearningEngine] No existing knowledge base found, starting fresh');
+      logger.learning.info('No existing knowledge base found, starting fresh');
     }
   }
 
@@ -1325,7 +1326,7 @@ export class LearningEngine {
 
       await fs.writeFile(this.filePath, JSON.stringify(data, null, 2), 'utf-8');
     } catch (error) {
-      console.error('[LearningEngine] Failed to save knowledge base:', error);
+      logger.learning.error('Failed to save knowledge base', { error });
     }
   }
 

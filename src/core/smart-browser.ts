@@ -39,6 +39,7 @@ import { withRetry } from '../utils/retry.js';
 import { findPreset, getWaitStrategy } from '../utils/domain-presets.js';
 import { pageCache, ContentCache } from '../utils/cache.js';
 import { TIMEOUTS } from '../utils/timeouts.js';
+import { logger } from '../utils/logger.js';
 
 // Procedural memory thresholds
 const SKILL_APPLICATION_THRESHOLD = 0.8;  // Minimum similarity to auto-apply a skill
@@ -176,7 +177,7 @@ export class SmartBrowser {
     const domainGroup = this.learningEngine.getDomainGroup(domain);
     if (domainGroup) {
       learning.domainGroup = domainGroup.name;
-      console.error(`[SmartBrowser] Using patterns from domain group: ${domainGroup.name}`);
+      logger.smartBrowser.debug('Using patterns from domain group', { groupName: domainGroup.name });
     }
 
     // Check for applicable skills from procedural memory
@@ -190,13 +191,13 @@ export class SmartBrowser {
       const matchedSkills = this.proceduralMemory.retrieveSkills(pageContext, 3);
       if (matchedSkills.length > 0) {
         learning.skillsMatched = matchedSkills;
-        console.error(`[SmartBrowser] Found ${matchedSkills.length} potentially applicable skills`);
+        logger.smartBrowser.debug('Found potentially applicable skills', { count: matchedSkills.length });
 
         // Record the best match for later application
         const bestMatch = matchedSkills[0];
         if (bestMatch.preconditionsMet && bestMatch.similarity > SKILL_APPLICATION_THRESHOLD) {
           learning.skillApplied = bestMatch.skill.name;
-          console.error(`[SmartBrowser] Will apply skill: ${bestMatch.skill.name} (similarity: ${bestMatch.similarity.toFixed(2)})`);
+          logger.smartBrowser.debug('Will apply skill', { skillName: bestMatch.skill.name, similarity: bestMatch.similarity.toFixed(2) });
         }
       }
     }
@@ -204,7 +205,7 @@ export class SmartBrowser {
     // Check if we should back off due to recent failures
     const failurePatterns = this.learningEngine.getFailurePatterns(domain);
     if (failurePatterns.shouldBackoff) {
-      console.error(`[SmartBrowser] Backing off from ${domain} due to ${failurePatterns.mostCommonType} errors`);
+      logger.smartBrowser.debug('Backing off from domain', { domain, errorType: failurePatterns.mostCommonType });
       // Add extra delay
       await this.delay(TIMEOUTS.FAILURE_BACKOFF);
     }
@@ -215,7 +216,7 @@ export class SmartBrowser {
       const bypassablePatterns = entry.apiPatterns.filter(p => p.canBypass);
       if (bypassablePatterns.length > 0) {
         learning.confidenceLevel = 'high';
-        console.error(`[SmartBrowser] Found ${bypassablePatterns.length} bypassable API patterns for ${domain}`);
+        logger.smartBrowser.debug('Found bypassable API patterns', { domain, count: bypassablePatterns.length });
       }
     }
 
@@ -233,7 +234,7 @@ export class SmartBrowser {
         // If tieredResult is null, it fell back to playwright - continue below
       } catch (error) {
         // Tiered fetching failed completely, fall through to Playwright
-        console.error(`[SmartBrowser] Tiered fetching failed, falling back to Playwright: ${error}`);
+        logger.smartBrowser.debug('Tiered fetching failed, falling back to Playwright', { error: String(error) });
       }
     }
 
@@ -252,7 +253,7 @@ export class SmartBrowser {
       const context = await this.browserManager.getContext(options.sessionProfile || 'default');
       const hasSession = await this.sessionManager.loadSession(domain, context, options.sessionProfile || 'default');
       if (hasSession) {
-        console.error(`[SmartBrowser] Using saved session for ${domain}`);
+        logger.smartBrowser.debug('Using saved session', { domain });
       }
 
       // Use preset or learned wait strategy
@@ -341,8 +342,7 @@ export class SmartBrowser {
     let html = await page.content();
     let finalUrl = page.url();
 
-    console.error(`[SmartBrowser] Page loaded: ${finalUrl}`);
-    console.error(`[SmartBrowser] HTML length: ${html.length} chars`);
+    logger.smartBrowser.debug('Page loaded', { finalUrl, htmlLength: html.length });
 
     // Note: Bot challenge handling is done in waitForBotChallenge() during browse
     // The page content here should already be post-challenge
@@ -356,8 +356,11 @@ export class SmartBrowser {
       );
 
       if (anomalyResult.isAnomaly) {
-        console.error(`[SmartBrowser] Content anomaly detected: ${anomalyResult.anomalyType} (${Math.round(anomalyResult.confidence * 100)}% confidence)`);
-        console.error(`[SmartBrowser] Reasons: ${anomalyResult.reasons.join('; ')}`);
+        logger.smartBrowser.warn('Content anomaly detected', {
+          anomalyType: anomalyResult.anomalyType,
+          confidence: Math.round(anomalyResult.confidence * 100),
+          reasons: anomalyResult.reasons,
+        });
 
         // Record anomaly in learning results
         learning.anomalyDetected = true;
@@ -365,25 +368,25 @@ export class SmartBrowser {
         learning.anomalyAction = anomalyResult.suggestedAction;
 
         if (anomalyResult.suggestedAction) {
-          console.error(`[SmartBrowser] Suggested action: ${anomalyResult.suggestedAction}`);
+          logger.smartBrowser.debug('Suggested action', { action: anomalyResult.suggestedAction });
         }
 
         // Take automated action based on anomaly type
         if (anomalyResult.suggestedAction === 'wait' && anomalyResult.waitTimeMs) {
-          console.error(`[SmartBrowser] Waiting ${anomalyResult.waitTimeMs}ms for challenge/rate limit...`);
+          logger.smartBrowser.debug('Waiting for challenge/rate limit', { waitTimeMs: anomalyResult.waitTimeMs });
           await this.delay(anomalyResult.waitTimeMs);
 
           // Re-fetch content after waiting
           html = await page.content();
           finalUrl = page.url();
-          console.error(`[SmartBrowser] Post-wait HTML length: ${html.length} chars`);
+          logger.smartBrowser.debug('Post-wait HTML length', { htmlLength: html.length });
 
           // Check if anomaly is resolved
           const postWaitAnomaly = this.learningEngine.detectContentAnomalies(html, finalUrl, options.contentType);
           if (!postWaitAnomaly.isAnomaly) {
-            console.error(`[SmartBrowser] Anomaly resolved after waiting`);
+            logger.smartBrowser.debug('Anomaly resolved after waiting');
           } else {
-            console.error(`[SmartBrowser] Anomaly persists: ${postWaitAnomaly.anomalyType}`);
+            logger.smartBrowser.warn('Anomaly persists after waiting', { anomalyType: postWaitAnomaly.anomalyType });
             learning.validationResult = {
               valid: false,
               reasons: postWaitAnomaly.reasons,
@@ -400,7 +403,7 @@ export class SmartBrowser {
         }
       }
     } catch (anomalyError) {
-      console.error(`[SmartBrowser] Anomaly detection failed (non-fatal): ${anomalyError}`);
+      logger.smartBrowser.debug('Anomaly detection failed (non-fatal)', { error: String(anomalyError) });
       // Continue without anomaly detection - non-critical feature
     }
 
@@ -416,11 +419,15 @@ export class SmartBrowser {
           const bestMatch = matchedSkills[0];
           if (bestMatch.preconditionsMet && bestMatch.similarity > 0.75) {
             learning.skillApplied = bestMatch.skill.name;
-            console.error(`[SmartBrowser] Matched skill with context: ${bestMatch.skill.name} (${detectedContext.pageType} page, similarity: ${bestMatch.similarity.toFixed(2)})`);
+            logger.smartBrowser.debug('Matched skill with context', {
+              skillName: bestMatch.skill.name,
+              pageType: detectedContext.pageType,
+              similarity: bestMatch.similarity.toFixed(2),
+            });
           }
         }
       } catch (contextError) {
-        console.error(`[SmartBrowser] Page context detection failed (non-fatal): ${contextError}`);
+        logger.smartBrowser.debug('Page context detection failed (non-fatal)', { error: String(contextError) });
         // Continue without skill matching - non-critical feature
       }
     }
@@ -438,19 +445,19 @@ export class SmartBrowser {
         enableLearning
       );
     } catch (extractError) {
-      console.error(`[SmartBrowser] Learned extraction failed, falling back to basic: ${extractError}`);
+      logger.smartBrowser.debug('Learned extraction failed, falling back to basic', { error: String(extractError) });
       // Fallback to basic extraction
       extractedContent = this.contentExtractor.extract(html, finalUrl);
     }
 
-    console.error(`[SmartBrowser] Extracted content: ${extractedContent.text.length} chars, title: "${extractedContent.title?.slice(0, 50) || 'none'}"`);
+    logger.smartBrowser.debug('Extracted content', { textLength: extractedContent.text.length, title: extractedContent.title?.slice(0, 50) || 'none' });
 
     // Extract tables (with error boundary)
     let tables: TableAsJSON[] = [];
     try {
       tables = this.contentExtractor.extractTablesAsJSON(html);
     } catch (tableError) {
-      console.error(`[SmartBrowser] Table extraction failed (non-fatal): ${tableError}`);
+      logger.smartBrowser.debug('Table extraction failed (non-fatal)', { error: String(tableError) });
     }
 
     // Detect language (with error boundary)
@@ -459,7 +466,7 @@ export class SmartBrowser {
       try {
         language = this.detectLanguage(html);
       } catch (langError) {
-        console.error(`[SmartBrowser] Language detection failed (non-fatal): ${langError}`);
+        logger.smartBrowser.debug('Language detection failed (non-fatal)', { error: String(langError) });
       }
     }
 
@@ -474,14 +481,14 @@ export class SmartBrowser {
         learning.validationResult = validationResult;
 
         if (!validationResult.valid) {
-          console.error(`[SmartBrowser] Content validation failed: ${validationResult.reasons.join(', ')}`);
+          logger.smartBrowser.warn('Content validation failed', { reasons: validationResult.reasons });
           learning.confidenceLevel = 'low';
         } else if (enableLearning) {
           // Learn from successful validation
           this.learningEngine.learnValidator(domain, extractedContent.text, finalUrl);
         }
       } catch (validationError) {
-        console.error(`[SmartBrowser] Content validation error (non-fatal): ${validationError}`);
+        logger.smartBrowser.debug('Content validation error (non-fatal)', { error: String(validationError) });
       }
     }
 
@@ -493,10 +500,10 @@ export class SmartBrowser {
         for (const api of discoveredApis) {
           this.learningEngine.learnApiPattern(domain, api);
         }
-        console.error(`[SmartBrowser] Learned ${discoveredApis.length} API pattern(s) from ${domain}`);
+        logger.smartBrowser.debug('Learned API patterns', { domain, count: discoveredApis.length });
       }
     } catch (apiError) {
-      console.error(`[SmartBrowser] API analysis failed (non-fatal): ${apiError}`);
+      logger.smartBrowser.debug('API analysis failed (non-fatal)', { error: String(apiError) });
     }
 
     // Check for content changes (with error boundary)
@@ -514,7 +521,7 @@ export class SmartBrowser {
           }
         }
       } catch (changeError) {
-        console.error(`[SmartBrowser] Content change detection failed (non-fatal): ${changeError}`);
+        logger.smartBrowser.debug('Content change detection failed (non-fatal)', { error: String(changeError) });
       }
     }
 
@@ -533,7 +540,7 @@ export class SmartBrowser {
         learning.paginationDetected = paginationPattern;
       }
     } catch (paginationError) {
-      console.error(`[SmartBrowser] Pagination detection failed (non-fatal): ${paginationError}`);
+      logger.smartBrowser.debug('Pagination detection failed (non-fatal)', { error: String(paginationError) });
     }
 
     // Follow pagination if requested (with error boundary)
@@ -547,7 +554,7 @@ export class SmartBrowser {
           domain
         );
       } catch (followError) {
-        console.error(`[SmartBrowser] Following pagination failed (non-fatal): ${followError}`);
+        logger.smartBrowser.debug('Following pagination failed (non-fatal)', { error: String(followError) });
         // Continue with just the first page
       }
     }
@@ -582,7 +589,7 @@ export class SmartBrowser {
         );
         learning.trajectoryRecorded = true;
       } catch (trajectoryError) {
-        console.error(`[SmartBrowser] Trajectory recording failed (non-fatal): ${trajectoryError}`);
+        logger.smartBrowser.debug('Trajectory recording failed (non-fatal)', { error: String(trajectoryError) });
         // Continue without recording - non-critical feature
       }
     }
@@ -652,14 +659,14 @@ export class SmartBrowser {
       learning.tierReason = result.tierReason;
       learning.tierTiming = result.timing.perTier;
 
-      console.error(`[SmartBrowser] Used ${result.tier} tier for ${domain} (${result.timing.total}ms)`);
+      logger.smartBrowser.debug('Used tier', { tier: result.tier, domain, timingMs: result.timing.total });
 
       // Extract tables (with error boundary)
       let tables: TableAsJSON[] = [];
       try {
         tables = this.contentExtractor.extractTablesAsJSON(result.html);
       } catch (tableError) {
-        console.error(`[SmartBrowser] Table extraction failed (non-fatal): ${tableError}`);
+        logger.smartBrowser.debug('Table extraction failed (non-fatal)', { error: String(tableError) });
       }
 
       // Detect language (with error boundary)
@@ -668,7 +675,7 @@ export class SmartBrowser {
         try {
           language = this.detectLanguage(result.html);
         } catch (langError) {
-          console.error(`[SmartBrowser] Language detection failed (non-fatal): ${langError}`);
+          logger.smartBrowser.debug('Language detection failed (non-fatal)', { error: String(langError) });
         }
       }
 
@@ -683,13 +690,13 @@ export class SmartBrowser {
           learning.validationResult = validationResult;
 
           if (!validationResult.valid) {
-            console.error(`[SmartBrowser] Content validation failed: ${validationResult.reasons.join(', ')}`);
+            logger.smartBrowser.warn('Content validation failed', { reasons: validationResult.reasons });
             learning.confidenceLevel = 'low';
           } else {
             this.learningEngine.learnValidator(domain, result.content.text, result.finalUrl);
           }
         } catch (validationError) {
-          console.error(`[SmartBrowser] Content validation error (non-fatal): ${validationError}`);
+          logger.smartBrowser.debug('Content validation error (non-fatal)', { error: String(validationError) });
         }
       }
 
@@ -720,7 +727,7 @@ export class SmartBrowser {
           );
           learning.trajectoryRecorded = true;
         } catch (trajectoryError) {
-          console.error(`[SmartBrowser] Trajectory recording failed (non-fatal): ${trajectoryError}`);
+          logger.smartBrowser.debug('Trajectory recording failed (non-fatal)', { error: String(trajectoryError) });
         }
       }
 
@@ -745,7 +752,7 @@ export class SmartBrowser {
         learning,
       };
     } catch (error) {
-      console.error(`[SmartBrowser] Tiered fetching error: ${error}`);
+      logger.smartBrowser.error('Tiered fetching error', { error });
       throw error;
     }
   }
@@ -769,11 +776,11 @@ export class SmartBrowser {
       try {
         await page.waitForSelector(selector, { timeout: TIMEOUTS.SELECTOR_WAIT });
         learning.selectorsSucceeded.push(selector);
-        console.error(`[SmartBrowser] Found selector: ${selector}`);
+        logger.smartBrowser.debug('Found selector', { selector });
         return true;
       } catch {
         learning.selectorsFailed.push(selector);
-        console.error(`[SmartBrowser] Selector not found: ${selector}`);
+        logger.smartBrowser.debug('Selector not found', { selector });
       }
     }
 
@@ -803,7 +810,7 @@ export class SmartBrowser {
           if (isVisible) {
             const startTime = Date.now();
             await button.click();
-            console.error(`[SmartBrowser] Dismissed cookie banner using: ${selector}`);
+            logger.smartBrowser.debug('Dismissed cookie banner', { selector });
 
             // Record action for procedural memory
             this.recordAction({
@@ -875,7 +882,7 @@ export class SmartBrowser {
                   success: true,
                 });
 
-                console.error(`[SmartBrowser] Extracted content using learned selector: ${selector}`);
+                logger.smartBrowser.debug('Extracted content using learned selector', { selector });
                 return extracted;
               }
             }
@@ -892,9 +899,9 @@ export class SmartBrowser {
     }
 
     // Fall back to default extraction
-    console.error(`[SmartBrowser] Falling back to default extraction for ${url}`);
+    logger.smartBrowser.debug('Falling back to default extraction', { url });
     const defaultExtracted = this.contentExtractor.extract(html, url);
-    console.error(`[SmartBrowser] Default extraction result: ${defaultExtracted.text.length} chars`);
+    logger.smartBrowser.debug('Default extraction result', { textLength: defaultExtracted.text.length });
 
     // Learn from the successful extraction
     if (enableLearning && defaultExtracted.text.length > 100) {
@@ -908,7 +915,7 @@ export class SmartBrowser {
             // Compare against text length as a heuristic
             if (elementHtml && elementHtml.length > defaultExtracted.text.length * 0.5) {
               this.learningEngine.learnSelector(domain, selector, contentType);
-              console.error(`[SmartBrowser] Learned new selector for ${domain}: ${selector}`);
+              logger.smartBrowser.debug('Learned new selector', { domain, selector });
               break;
             }
           }
@@ -1024,7 +1031,7 @@ export class SmartBrowser {
           break; // For now, only button-based is fully implemented
         }
       } catch (error) {
-        console.error(`[SmartBrowser] Pagination failed at page ${i + 2}:`, error);
+        logger.smartBrowser.debug('Pagination failed at page', { page: i + 2, error: String(error) });
         break;
       }
     }
@@ -1086,7 +1093,7 @@ export class SmartBrowser {
       return false;
     }
 
-    console.error(`[SmartBrowser] Bot challenge detected on ${domain}, waiting for completion...`);
+    logger.smartBrowser.info('Bot challenge detected, waiting for completion', { domain });
 
     // Wait for the challenge to complete
     const maxWaitTime = TIMEOUTS.BOT_CHALLENGE_MAX;
@@ -1103,7 +1110,7 @@ export class SmartBrowser {
       );
 
       if (!stillChallenging) {
-        console.error(`[SmartBrowser] Bot challenge completed on ${domain}`);
+        logger.smartBrowser.info('Bot challenge completed', { domain });
         // Wait a bit more for page to fully load after challenge
         await page.waitForTimeout(TIMEOUTS.CLOUDFLARE_WAIT);
         return true;
@@ -1112,13 +1119,13 @@ export class SmartBrowser {
       // Check if URL changed (redirect after challenge)
       const currentUrl = page.url();
       if (!currentUrl.includes(domain)) {
-        console.error(`[SmartBrowser] Redirected after challenge to ${currentUrl}`);
+        logger.smartBrowser.debug('Redirected after challenge', { currentUrl });
         await page.waitForTimeout(TIMEOUTS.CAPTCHA_WAIT);
         return true;
       }
     }
 
-    console.error(`[SmartBrowser] Bot challenge timeout on ${domain} - may need session cookies`);
+    logger.smartBrowser.warn('Bot challenge timeout - may need session cookies', { domain });
     return false;
   }
 

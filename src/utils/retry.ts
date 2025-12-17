@@ -4,6 +4,8 @@
  * Handles transient failures common with government websites
  */
 
+import { logger } from './logger.js';
+
 export interface RetryOptions {
   maxAttempts?: number;
   initialDelayMs?: number;
@@ -59,9 +61,12 @@ export async function withRetry<T>(
       opts.onRetry(attempt, lastError, delay);
 
       // Log retry attempt
-      console.error(
-        `[Retry] Attempt ${attempt}/${opts.maxAttempts} failed: ${lastError.message}. Retrying in ${delay}ms...`
-      );
+      logger.create('Retry').warn('Attempt failed, retrying', {
+        attempt,
+        maxAttempts: opts.maxAttempts,
+        error: lastError.message,
+        delayMs: delay,
+      });
 
       // Wait before retrying
       await sleep(delay);
