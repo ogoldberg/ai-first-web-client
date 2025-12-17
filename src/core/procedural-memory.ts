@@ -14,6 +14,7 @@
 
 import { promises as fs } from 'fs';
 import * as crypto from 'crypto';
+import { logger } from '../utils/logger.js';
 import type {
   BrowsingSkill,
   BrowsingAction,
@@ -138,7 +139,7 @@ export class ProceduralMemory {
     this.applySkillDecay();
     // Prune consistently failing skills
     this.pruneFailedSkills();
-    console.log(`[ProceduralMemory] Initialized with ${this.skills.size} skills`);
+    logger.proceduralMemory.info(`Initialized with ${this.skills.size} skills`);
   }
 
   // ============================================
@@ -470,7 +471,7 @@ export class ProceduralMemory {
     };
 
     await this.addSkill(skill);
-    console.log(`[ProceduralMemory] Learned new skill: ${skill.name}`);
+    logger.proceduralMemory.info(`Learned new skill: ${skill.name}`);
 
     return skill;
   }
@@ -578,7 +579,7 @@ export class ProceduralMemory {
     existing.updatedAt = Date.now();
     await this.save();
 
-    console.log(`[ProceduralMemory] Merged into existing skill: ${existing.name}`);
+    logger.proceduralMemory.info(`Merged into existing skill: ${existing.name}`);
     return existing;
   }
 
@@ -615,7 +616,7 @@ export class ProceduralMemory {
 
     if (leastUsed) {
       this.skills.delete(leastUsed.id);
-      console.error(`[ProceduralMemory] Evicted skill: ${leastUsed.name}`);
+      logger.proceduralMemory.info(`Evicted skill: ${leastUsed.name}`);
     }
   }
 
@@ -827,9 +828,9 @@ export class ProceduralMemory {
         this.feedbackLog = data.feedbackLog;
       }
 
-      console.error(`[ProceduralMemory] Loaded ${this.skills.size} skills, ${this.workflows.size} workflows, ${this.antiPatterns.size} anti-patterns from ${this.config.filePath}`);
+      logger.proceduralMemory.info(`Loaded ${this.skills.size} skills, ${this.workflows.size} workflows, ${this.antiPatterns.size} anti-patterns from ${this.config.filePath}`);
     } catch {
-      console.error('[ProceduralMemory] No existing memory found, starting fresh');
+      logger.proceduralMemory.info('No existing memory found, starting fresh');
     }
   }
 
@@ -857,7 +858,7 @@ export class ProceduralMemory {
 
       await fs.writeFile(this.config.filePath, JSON.stringify(data, null, 2), 'utf-8');
     } catch (error) {
-      console.error('[ProceduralMemory] Failed to save:', error);
+      logger.proceduralMemory.error('Failed to save', { error });
     }
   }
 
@@ -906,10 +907,10 @@ export class ProceduralMemory {
       }
 
       await this.save();
-      console.error(`[ProceduralMemory] Imported ${imported} skills`);
+      logger.proceduralMemory.info(`Imported ${imported} skills`);
       return imported;
     } catch (error) {
-      console.error('[ProceduralMemory] Failed to import skills:', error);
+      logger.proceduralMemory.error('Failed to import skills', { error });
       return 0;
     }
   }
@@ -942,7 +943,7 @@ export class ProceduralMemory {
 
     if (decayedCount > 0) {
       this.save();
-      console.error(`[ProceduralMemory] Applied decay to ${decayedCount} skills`);
+      logger.proceduralMemory.info(`Applied decay to ${decayedCount} skills`);
     }
 
     return decayedCount;
@@ -969,7 +970,7 @@ export class ProceduralMemory {
 
     if (toRemove.length > 0) {
       this.save();
-      console.error(`[ProceduralMemory] Pruned ${toRemove.length} low-performing skills`);
+      logger.proceduralMemory.info(`Pruned ${toRemove.length} low-performing skills`);
     }
 
     return toRemove.length;
@@ -1009,14 +1010,14 @@ export class ProceduralMemory {
     for (const id of skillIds) {
       const skill = this.skills.get(id);
       if (!skill) {
-        console.error(`[ProceduralMemory] Skill not found for workflow: ${id}`);
+        logger.proceduralMemory.warn(`Skill not found for workflow: ${id}`);
         return null;
       }
       skills.push(skill);
     }
 
     if (skills.length < 2) {
-      console.error('[ProceduralMemory] Workflow requires at least 2 skills');
+      logger.proceduralMemory.warn('Workflow requires at least 2 skills');
       return null;
     }
 
@@ -1054,7 +1055,7 @@ export class ProceduralMemory {
     this.workflows.set(workflow.id, workflow);
     this.save();
 
-    console.error(`[ProceduralMemory] Created workflow: ${name}`);
+    logger.proceduralMemory.info(`Created workflow: ${name}`);
     return workflow;
   }
 
@@ -1457,7 +1458,7 @@ export class ProceduralMemory {
     this.antiPatterns.clear();
     this.feedbackLog = [];
     await this.save();
-    console.error('[ProceduralMemory] Reset complete');
+    logger.proceduralMemory.info('Reset complete');
   }
 
   // ============================================
@@ -1531,13 +1532,13 @@ export class ProceduralMemory {
   async rollbackSkill(skillId: string, targetVersion?: number): Promise<boolean> {
     const skill = this.skills.get(skillId);
     if (!skill) {
-      console.error(`[ProceduralMemory] Skill not found for rollback: ${skillId}`);
+      logger.proceduralMemory.warn(`Skill not found for rollback: ${skillId}`);
       return false;
     }
 
     const versions = this.skillVersions.get(skillId);
     if (!versions || versions.length === 0) {
-      console.error(`[ProceduralMemory] No version history for skill: ${skillId}`);
+      logger.proceduralMemory.warn(`No version history for skill: ${skillId}`);
       return false;
     }
 
@@ -1546,7 +1547,7 @@ export class ProceduralMemory {
     if (targetVersion !== undefined) {
       const found = versions.find(v => v.version === targetVersion);
       if (!found) {
-        console.error(`[ProceduralMemory] Version ${targetVersion} not found for skill: ${skillId}`);
+        logger.proceduralMemory.warn(`Version ${targetVersion} not found for skill: ${skillId}`);
         return false;
       }
       targetVersionData = found;
@@ -1573,7 +1574,7 @@ export class ProceduralMemory {
     skill.updatedAt = Date.now();
 
     await this.save();
-    console.error(`[ProceduralMemory] Rolled back skill ${skill.name} to version ${targetVersionData.version}`);
+    logger.proceduralMemory.info(`Rolled back skill ${skill.name} to version ${targetVersionData.version}`);
     return true;
   }
 
@@ -1601,7 +1602,7 @@ export class ProceduralMemory {
     // Check if current performance is significantly worse
     const degradation = bestHistoricalRate - currentSuccessRate;
     if (degradation > effectiveThreshold && skill.metrics.timesUsed >= 5) {
-      console.error(`[ProceduralMemory] Performance degradation detected for ${skill.name}: ${(degradation * 100).toFixed(1)}% drop`);
+      logger.proceduralMemory.warn(`Performance degradation detected for ${skill.name}: ${(degradation * 100).toFixed(1)}% drop`);
       return true;
     }
 
@@ -1680,7 +1681,7 @@ export class ProceduralMemory {
 
     this.antiPatterns.set(antiPattern.id, antiPattern);
     await this.save();
-    console.error(`[ProceduralMemory] Recorded anti-pattern: ${antiPattern.name}`);
+    logger.proceduralMemory.info(`Recorded anti-pattern: ${antiPattern.name}`);
     return antiPattern;
   }
 
@@ -1997,7 +1998,7 @@ export class ProceduralMemory {
 
         // Check if we should auto-rollback
         if (this.checkForAutoRollback(skillId)) {
-          console.error(`[ProceduralMemory] Auto-rollback triggered for skill ${skill.name} due to negative feedback`);
+          logger.proceduralMemory.warn(`Auto-rollback triggered for skill ${skill.name} due to negative feedback`);
           await this.rollbackSkill(skillId);
         }
       }
@@ -2014,7 +2015,7 @@ export class ProceduralMemory {
     }
 
     await this.save();
-    console.error(`[ProceduralMemory] Recorded ${rating} feedback for skill ${skillId}`);
+    logger.proceduralMemory.info(`Recorded ${rating} feedback for skill ${skillId}`);
   }
 
   /**
@@ -2066,7 +2067,7 @@ export class ProceduralMemory {
     // Validate fallback skills exist
     for (const fallbackId of fallbackSkillIds) {
       if (!this.skills.has(fallbackId)) {
-        console.error(`[ProceduralMemory] Fallback skill not found: ${fallbackId}`);
+        logger.proceduralMemory.warn(`Fallback skill not found: ${fallbackId}`);
         return false;
       }
     }
@@ -2076,7 +2077,7 @@ export class ProceduralMemory {
     skill.updatedAt = Date.now();
 
     await this.save();
-    console.error(`[ProceduralMemory] Added ${fallbackSkillIds.length} fallback skills to ${skill.name}`);
+    logger.proceduralMemory.info(`Added ${fallbackSkillIds.length} fallback skills to ${skill.name}`);
     return true;
   }
 
@@ -2090,14 +2091,14 @@ export class ProceduralMemory {
     // Validate prerequisite skills exist
     for (const prereqId of prerequisiteSkillIds) {
       if (!this.skills.has(prereqId)) {
-        console.error(`[ProceduralMemory] Prerequisite skill not found: ${prereqId}`);
+        logger.proceduralMemory.warn(`Prerequisite skill not found: ${prereqId}`);
         return false;
       }
     }
 
     // Check for circular dependencies using DFS
     if (this.wouldCreateCircularDependency(skillId, prerequisiteSkillIds)) {
-      console.error(`[ProceduralMemory] Circular dependency detected when adding prerequisites to ${skillId}`);
+      logger.proceduralMemory.warn(`Circular dependency detected when adding prerequisites to ${skillId}`);
       return false;
     }
 
@@ -2106,7 +2107,7 @@ export class ProceduralMemory {
     skill.updatedAt = Date.now();
 
     await this.save();
-    console.error(`[ProceduralMemory] Added ${prerequisiteSkillIds.length} prerequisites to ${skill.name}`);
+    logger.proceduralMemory.info(`Added ${prerequisiteSkillIds.length} prerequisites to ${skill.name}`);
     return true;
   }
 
@@ -2222,7 +2223,7 @@ export class ProceduralMemory {
         await this.recordSkillExecution(currentSkill.id, false, duration);
       } catch (error) {
         const duration = Date.now() - startTime;
-        console.error(`[ProceduralMemory] Skill ${currentSkill.name} failed, trying next fallback`);
+        logger.proceduralMemory.debug(`Skill ${currentSkill.name} failed, trying next fallback`);
         // Record failure with actual duration
         await this.recordSkillExecution(currentSkill.id, false, duration);
       }
@@ -2248,7 +2249,7 @@ export class ProceduralMemory {
       );
 
       if (existingSkill) {
-        console.error(`[ProceduralMemory] Skipping template ${template.name} - already exists`);
+        logger.proceduralMemory.debug(`Skipping template ${template.name} - already exists`);
         continue;
       }
 
@@ -2270,7 +2271,7 @@ export class ProceduralMemory {
 
     if (bootstrapped > 0) {
       await this.save();
-      console.error(`[ProceduralMemory] Bootstrapped ${bootstrapped} skills from templates`);
+      logger.proceduralMemory.info(`Bootstrapped ${bootstrapped} skills from templates`);
     }
 
     return bootstrapped;

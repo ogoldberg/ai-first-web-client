@@ -4,6 +4,7 @@
 
 import { promises as fs } from 'fs';
 import type { ApiPattern, KnowledgeBaseEntry } from '../types/index.js';
+import { logger } from '../utils/logger.js';
 
 export class KnowledgeBase {
   private entries: Map<string, KnowledgeBaseEntry> = new Map();
@@ -178,10 +179,10 @@ export class KnowledgeBase {
       const data = JSON.parse(content);
 
       this.entries = new Map(Object.entries(data));
-      console.error(`Loaded knowledge base with ${this.entries.size} domain(s)`);
+      logger.knowledgeBase.info('Loaded knowledge base', { totalDomains: this.entries.size });
     } catch (error) {
       // No knowledge base file yet
-      console.error('No existing knowledge base found, starting fresh');
+      logger.knowledgeBase.info('No existing knowledge base found, starting fresh');
     }
   }
 
@@ -197,7 +198,7 @@ export class KnowledgeBase {
         'utf-8'
       );
     } catch (error) {
-      console.error('Failed to save knowledge base:', error);
+      logger.knowledgeBase.error('Failed to save knowledge base', { error });
     }
   }
 }

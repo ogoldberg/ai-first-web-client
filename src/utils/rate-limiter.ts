@@ -4,6 +4,10 @@
  * Prevents overwhelming government websites and getting blocked
  */
 
+import { logger } from './logger.js';
+
+const log = logger.create('RateLimiter');
+
 interface DomainConfig {
   requestsPerMinute: number;
   minDelayMs: number;
@@ -122,7 +126,7 @@ export class RateLimiter {
     // Calculate and wait for rate limit delay
     const delay = this.calculateDelay(domain);
     if (delay > 0) {
-      console.error(`[RateLimiter] Waiting ${delay}ms before request to ${domain}`);
+      log.debug('Waiting before request', { domain, delayMs: delay });
       await new Promise((resolve) => setTimeout(resolve, delay));
     }
 
