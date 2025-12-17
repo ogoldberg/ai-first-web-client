@@ -23,7 +23,6 @@ No P0 tasks remaining - all critical items completed.
 |----|------|--------|----------|-------|
 | O-001 | Replace console.error with structured logging | M | Debt | Use Pino or similar |
 | O-002 | Add performance timing to all tiers | M | Performance | Track and expose metrics |
-| O-003 | Create tier usage analytics | S | Features | Which tier for which domains |
 | O-004 | Add learning progress stats | M | Features | Skills, patterns, anti-patterns |
 
 ### Testing (Continued)
@@ -116,6 +115,7 @@ No P0 tasks remaining - all critical items completed.
 
 | ID | Task | Completed | Notes |
 |----|------|-----------|-------|
+| O-003 | Create tier usage analytics | 2025-12-17 | get_tier_usage_by_domain MCP tool, PR #13 |
 | T-001 | Add integration tests for smart_browse tool | 2025-12-17 | 40 tests for smart_browse and related MCP tools, PR #12 |
 | T-003 | End-to-end test: full browse cycle | 2025-12-16 | 13 tests for SmartBrowser browse flow, PR #11 |
 | T-002 | Add integration tests for tiered fetcher | 2025-12-16 | 24 tests for tier cascade and fallback, PR #10 |
