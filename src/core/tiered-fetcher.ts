@@ -30,6 +30,7 @@ import { ContentIntelligence, type ContentResult, type ExtractionStrategy } from
 import { BrowserManager, type Page } from './browser-manager.js';
 import { ContentExtractor } from '../utils/content-extractor.js';
 import { rateLimiter } from '../utils/rate-limiter.js';
+import { TIMEOUTS } from '../utils/timeouts.js';
 import type { NetworkRequest, ApiPattern } from '../types/index.js';
 
 export type RenderTier = 'intelligence' | 'lightweight' | 'playwright';
@@ -380,14 +381,14 @@ export class TieredFetcher {
     const result = await this.browserManager.browse(url, {
       profile: options.sessionProfile,
       waitFor: options.waitFor || 'networkidle',
-      timeout: options.tierTimeout || 30000,
+      timeout: options.tierTimeout || TIMEOUTS.TIER_ATTEMPT,
       captureNetwork: true,
       captureConsole: false,
     });
 
     // Wait for specific selector if requested
     if (options.waitForSelector) {
-      await result.page.waitForSelector(options.waitForSelector, { timeout: 5000 }).catch(() => {});
+      await result.page.waitForSelector(options.waitForSelector, { timeout: TIMEOUTS.SELECTOR_WAIT }).catch(() => {});
     }
 
     const html = await result.page.content();

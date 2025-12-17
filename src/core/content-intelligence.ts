@@ -19,6 +19,7 @@
 import { CookieJar, Cookie } from 'tough-cookie';
 import * as cheerio from 'cheerio';
 import TurndownService from 'turndown';
+import { TIMEOUTS } from '../utils/timeouts.js';
 
 // Types
 export interface ContentResult {
@@ -79,7 +80,7 @@ export interface ContentIntelligenceOptions {
 }
 
 const DEFAULT_OPTIONS: ContentIntelligenceOptions = {
-  timeout: 30000,
+  timeout: TIMEOUTS.NETWORK_FETCH,
   minContentLength: 100,
   skipStrategies: [],
   allowBrowser: true,
@@ -690,7 +691,7 @@ export class ContentIntelligence {
 
       await page.goto(url, {
         waitUntil: 'networkidle',
-        timeout: opts.timeout || 30000,
+        timeout: opts.timeout || TIMEOUTS.PAGE_LOAD,
       });
 
       const html = await page.content();
@@ -743,7 +744,7 @@ export class ContentIntelligence {
     }
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), opts.timeout || 30000);
+    const timeoutId = setTimeout(() => controller.abort(), opts.timeout || TIMEOUTS.NETWORK_FETCH);
 
     try {
       const response = await fetch(url, {
@@ -764,7 +765,7 @@ export class ContentIntelligence {
 
       return response;
     } finally {
-      clearTimeout(timeout);
+      clearTimeout(timeoutId);
     }
   }
 

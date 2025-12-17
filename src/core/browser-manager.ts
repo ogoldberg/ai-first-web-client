@@ -7,6 +7,7 @@
 
 import type { Browser, BrowserContext, Page } from 'playwright';
 import type { NetworkRequest, ConsoleMessage } from '../types/index.js';
+import { TIMEOUTS } from '../utils/timeouts.js';
 import * as fs from 'fs';
 
 // Re-export Page type for consumers
@@ -235,11 +236,11 @@ export class BrowserManager {
     const waitUntil = options.waitFor || 'networkidle';
     await page.goto(url, {
       waitUntil,
-      timeout: options.timeout || 30000,
+      timeout: options.timeout || TIMEOUTS.PAGE_LOAD,
     });
 
     // Give JavaScript a moment to execute
-    await page.waitForTimeout(1000);
+    await page.waitForTimeout(TIMEOUTS.PAGE_STABILIZE);
 
     return {
       page,
