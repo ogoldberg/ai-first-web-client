@@ -7,12 +7,53 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import type { SessionStore } from '../types/index.js';
 
+/**
+ * Session health status
+ */
+export interface SessionHealth {
+  status: 'healthy' | 'expiring_soon' | 'expired' | 'stale' | 'not_found';
+  domain: string;
+  profile: string;
+  isAuthenticated: boolean;
+  expiredCookies: number;
+  totalCookies: number;
+  lastUsed: number;
+  staleDays: number;
+  expiresInMs?: number;
+  message: string;
+}
+
+/**
+ * Refresh callback function type
+ * Return true if refresh succeeded, false otherwise
+ */
+export type SessionRefreshCallback = (domain: string, profile: string) => Promise<boolean>;
+
+/**
+ * Session expiration thresholds
+ */
+const SESSION_THRESHOLDS = {
+  /** Warn when session expires within this time (24 hours) */
+  EXPIRING_SOON_MS: 24 * 60 * 60 * 1000,
+  /** Consider session stale after this many days of non-use */
+  STALE_DAYS: 30,
+};
+
 export class SessionManager {
   private sessionsDir: string;
   private sessions: Map<string, SessionStore> = new Map();
+  private refreshCallback?: SessionRefreshCallback;
 
   constructor(sessionsDir: string = './sessions') {
     this.sessionsDir = sessionsDir;
+  }
+
+  /**
+   * Register a callback for auto-refreshing expired sessions
+   * The callback should perform re-authentication and save the new session
+   */
+  setRefreshCallback(callback: SessionRefreshCallback): void {
+    this.refreshCallback = callback;
   }
 
   async initialize(): Promise<void> {
@@ -200,6 +241,248 @@ export class SessionManager {
     } catch (e) {
       // File might not exist
     }
+  }
+
+  /**
+   * Check session health - detects expired, expiring soon, and stale sessions
+   */
+  getSessionHealth(domain: string, profile: string = 'default'): SessionHealth {
+    const sessionKey = `${domain}:${profile}`;
+    const session = this.sessions.get(sessionKey);
+
+    if (!session) {
+      return {
+        status: 'not_found',
+        domain,
+        profile,
+        isAuthenticated: false,
+        expiredCookies: 0,
+        totalCookies: 0,
+        lastUsed: 0,
+        staleDays: 0,
+        message: `No session found for ${domain} (profile: ${profile})`,
+      };
+    }
+
+    const now = Date.now();
+    const daysSinceUse = (now - session.lastUsed) / (1000 * 60 * 60 * 24);
+
+    // Check for stale session (unused for too long)
+    if (daysSinceUse > SESSION_THRESHOLDS.STALE_DAYS) {
+      return {
+        status: 'stale',
+        domain,
+        profile,
+        isAuthenticated: session.isAuthenticated,
+        expiredCookies: 0,
+        totalCookies: session.cookies.length,
+        lastUsed: session.lastUsed,
+        staleDays: Math.floor(daysSinceUse),
+        message: `Session unused for ${Math.floor(daysSinceUse)} days`,
+      };
+    }
+
+    // Check cookie expiration (only for auth cookies)
+    const { expiredAuthCookieCount, soonestExpiry } = this.analyzeSessionCookies(session.cookies);
+    const totalCookies = session.cookies.length;
+    const totalAuthCookies = this.countAuthCookies(session.cookies);
+
+    // All auth cookies expired (only if there were auth cookies to begin with)
+    if (totalAuthCookies > 0 && expiredAuthCookieCount >= totalAuthCookies) {
+      return {
+        status: 'expired',
+        domain,
+        profile,
+        isAuthenticated: false,
+        expiredCookies: expiredAuthCookieCount,
+        totalCookies,
+        lastUsed: session.lastUsed,
+        staleDays: Math.floor(daysSinceUse),
+        message: `${expiredAuthCookieCount} authentication cookie(s) expired`,
+      };
+    }
+
+    // Session expiring soon (only if there are auth cookies)
+    if (soonestExpiry !== null && soonestExpiry < SESSION_THRESHOLDS.EXPIRING_SOON_MS) {
+      const hoursUntilExpiry = Math.ceil(soonestExpiry / (1000 * 60 * 60));
+      return {
+        status: 'expiring_soon',
+        domain,
+        profile,
+        isAuthenticated: session.isAuthenticated,
+        expiredCookies: expiredAuthCookieCount,
+        totalCookies,
+        lastUsed: session.lastUsed,
+        staleDays: Math.floor(daysSinceUse),
+        expiresInMs: soonestExpiry,
+        message: `Session expires in ${hoursUntilExpiry} hour(s)`,
+      };
+    }
+
+    return {
+      status: 'healthy',
+      domain,
+      profile,
+      isAuthenticated: session.isAuthenticated,
+      expiredCookies: expiredAuthCookieCount,
+      totalCookies,
+      lastUsed: session.lastUsed,
+      staleDays: Math.floor(daysSinceUse),
+      expiresInMs: soonestExpiry ?? undefined,
+      message: 'Session is healthy',
+    };
+  }
+
+  /**
+   * Check if a session is expired
+   */
+  isSessionExpired(domain: string, profile: string = 'default'): boolean {
+    const health = this.getSessionHealth(domain, profile);
+    return health.status === 'expired' || health.status === 'not_found';
+  }
+
+  /**
+   * Attempt to refresh an expired session using the registered callback
+   * Returns true if refresh succeeded
+   */
+  async refreshSession(domain: string, profile: string = 'default'): Promise<boolean> {
+    if (!this.refreshCallback) {
+      console.error(`[Session] No refresh callback registered for auto-refresh`);
+      return false;
+    }
+
+    const health = this.getSessionHealth(domain, profile);
+
+    if (health.status === 'healthy') {
+      console.error(`[Session] Session for ${domain} is healthy, no refresh needed`);
+      return true;
+    }
+
+    console.error(`[Session] Attempting to refresh ${health.status} session for ${domain}`);
+
+    try {
+      const success = await this.refreshCallback(domain, profile);
+
+      if (success) {
+        console.error(`[Session] Successfully refreshed session for ${domain}`);
+      } else {
+        console.error(`[Session] Failed to refresh session for ${domain}`);
+      }
+
+      return success;
+    } catch (error) {
+      console.error(`[Session] Error during refresh for ${domain}:`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Load session with optional auto-refresh for expired sessions
+   */
+  async loadSessionWithRefresh(
+    domain: string,
+    context: BrowserContext,
+    profile: string = 'default'
+  ): Promise<{ loaded: boolean; refreshed: boolean }> {
+    const health = this.getSessionHealth(domain, profile);
+
+    if (health.status === 'not_found') {
+      return { loaded: false, refreshed: false };
+    }
+
+    // If session is expired or expiring soon, try to refresh
+    if (health.status === 'expired' || health.status === 'expiring_soon') {
+      const refreshed = await this.refreshSession(domain, profile);
+
+      if (refreshed) {
+        // Load the newly refreshed session
+        const loaded = await this.loadSession(domain, context, profile);
+        return { loaded, refreshed: true };
+      }
+
+      // If refresh failed but session exists, try loading anyway (might still work)
+      if (health.status === 'expiring_soon') {
+        const loaded = await this.loadSession(domain, context, profile);
+        return { loaded, refreshed: false };
+      }
+
+      return { loaded: false, refreshed: false };
+    }
+
+    // Session is healthy or just stale - load it
+    const loaded = await this.loadSession(domain, context, profile);
+    return { loaded, refreshed: false };
+  }
+
+  /**
+   * Get health status for all sessions
+   */
+  getAllSessionHealth(): SessionHealth[] {
+    const healthStatuses: SessionHealth[] = [];
+
+    for (const [key] of this.sessions) {
+      const [domain, profile] = key.split(':');
+      healthStatuses.push(this.getSessionHealth(domain, profile));
+    }
+
+    return healthStatuses.sort((a, b) => {
+      // Sort by status priority: expired > expiring_soon > stale > healthy
+      const statusPriority = { expired: 0, expiring_soon: 1, stale: 2, healthy: 3, not_found: 4 };
+      return statusPriority[a.status] - statusPriority[b.status];
+    });
+  }
+
+  /**
+   * Analyze cookies for expiration
+   * Only counts expired AUTH cookies for determining session expiration
+   */
+  private analyzeSessionCookies(cookies: any[]): {
+    expiredAuthCookieCount: number;
+    soonestExpiry: number | null;
+  } {
+    const now = Date.now();
+    let expiredAuthCookieCount = 0;
+    let soonestExpiry: number | null = null;
+
+    for (const cookie of cookies) {
+      // Skip session cookies (no expiry or -1)
+      if (!cookie.expires || cookie.expires === -1) {
+        continue;
+      }
+
+      // Playwright uses seconds, convert to ms
+      const expiryMs = cookie.expires * 1000;
+      const timeUntilExpiry = expiryMs - now;
+
+      // Only track auth cookies for expiration status
+      if (this.isAuthCookie(cookie)) {
+        if (timeUntilExpiry <= 0) {
+          expiredAuthCookieCount++;
+        } else {
+          // Track soonest expiry among auth cookies
+          if (soonestExpiry === null || timeUntilExpiry < soonestExpiry) {
+            soonestExpiry = timeUntilExpiry;
+          }
+        }
+      }
+    }
+
+    return { expiredAuthCookieCount, soonestExpiry };
+  }
+
+  /**
+   * Count authentication cookies
+   */
+  private countAuthCookies(cookies: any[]): number {
+    return cookies.filter((cookie) => this.isAuthCookie(cookie)).length;
+  }
+
+  /**
+   * Check if a cookie is likely an authentication cookie
+   */
+  private isAuthCookie(cookie: any): boolean {
+    const authPatterns = [/session/i, /auth/i, /token/i, /user/i, /login/i, /jwt/i, /sid/i];
+    return authPatterns.some((pattern) => pattern.test(cookie.name));
   }
 
   /**

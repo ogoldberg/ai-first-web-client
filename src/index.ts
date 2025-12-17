@@ -541,6 +541,32 @@ Captures cookies, localStorage, sessionStorage for future requests.`,
         },
       },
       {
+        name: 'get_session_health',
+        description: `Check the health status of saved sessions.
+
+Detects:
+- Expired sessions (auth cookies expired)
+- Expiring soon (within 24 hours)
+- Stale sessions (unused for 30+ days)
+- Healthy sessions
+
+Use this to proactively identify sessions that need re-authentication.
+Can check a specific domain or all sessions.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            domain: {
+              type: 'string',
+              description: 'Domain to check (optional - if not provided, checks all sessions)',
+            },
+            profile: {
+              type: 'string',
+              description: 'Session profile (default: "default")',
+            },
+          },
+        },
+      },
+      {
         name: 'get_knowledge_stats',
         description: '[LEGACY] Use get_learning_stats instead for more detail.',
         inputSchema: {
@@ -1337,6 +1363,37 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return {
           content: [{ type: 'text', text: JSON.stringify({ sessions }, null, 2) }],
         };
+      }
+
+      case 'get_session_health': {
+        if (args.domain) {
+          // Check specific domain
+          const health = sessionManager.getSessionHealth(
+            args.domain as string,
+            (args.profile as string) || 'default'
+          );
+          return {
+            content: [{ type: 'text', text: JSON.stringify(health, null, 2) }],
+          };
+        } else {
+          // Check all sessions
+          const allHealth = sessionManager.getAllSessionHealth();
+          const summary = {
+            total: allHealth.length,
+            healthy: allHealth.filter((h) => h.status === 'healthy').length,
+            expiringSoon: allHealth.filter((h) => h.status === 'expiring_soon').length,
+            expired: allHealth.filter((h) => h.status === 'expired').length,
+            stale: allHealth.filter((h) => h.status === 'stale').length,
+          };
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({ summary, sessions: allHealth }, null, 2),
+              },
+            ],
+          };
+        }
       }
 
       case 'get_knowledge_stats': {
