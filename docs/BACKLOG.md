@@ -116,7 +116,7 @@ No P0 tasks remaining - all critical items completed.
 
 | ID | Task | Completed | Notes |
 |----|------|-----------|-------|
-| T-001 | Add integration tests for smart_browse tool | 2025-12-16 | 40 tests for smart_browse and related MCP tools |
+| T-001 | Add integration tests for smart_browse tool | 2025-12-16 | 40 tests for smart_browse and related MCP tools, PR #12 |
 | T-003 | End-to-end test: full browse cycle | 2025-12-16 | 13 tests for SmartBrowser browse flow, PR #11 |
 | T-002 | Add integration tests for tiered fetcher | 2025-12-16 | 24 tests for tier cascade and fallback, PR #10 |
 | R-002 | Add error boundaries to SmartBrowser | 2025-12-16 | Wrap non-critical ops in try-catch, PR #9 |
