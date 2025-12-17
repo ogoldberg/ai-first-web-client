@@ -40,7 +40,6 @@ No P0 tasks remaining - all critical items completed.
 |----|------|--------|----------|-------|
 | R-004 | Session health monitoring | M | Reliability | Detect expired sessions |
 | R-005 | Auto-refresh expired sessions | S | Reliability | Automatic re-auth |
-| R-006 | Connection timeout optimization | S | Reliability | Consistent timeout behavior |
 
 ---
 
@@ -115,6 +114,7 @@ No P0 tasks remaining - all critical items completed.
 
 | ID | Task | Completed | Notes |
 |----|------|-----------|-------|
+| R-006 | Connection timeout optimization | 2025-12-17 | Central timeout config in src/utils/timeouts.ts, PR #14 |
 | O-003 | Create tier usage analytics | 2025-12-17 | get_tier_usage_by_domain MCP tool, PR #13 |
 | T-001 | Add integration tests for smart_browse tool | 2025-12-17 | 40 tests for smart_browse and related MCP tools, PR #12 |
 | T-003 | End-to-end test: full browse cycle | 2025-12-16 | 13 tests for SmartBrowser browse flow, PR #11 |
