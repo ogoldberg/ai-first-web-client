@@ -21,7 +21,10 @@ import { rateLimiter } from '../utils/rate-limiter.js';
 import { withRetry } from '../utils/retry.js';
 import { findPreset, getWaitStrategy } from '../utils/domain-presets.js';
 import { pageCache, ContentCache } from '../utils/cache.js';
+import { logger } from '../utils/logger.js';
 import type { Page } from 'playwright';
+
+const log = logger.browseTool;
 
 // Common cookie consent selectors across different banner providers
 const COOKIE_BANNER_SELECTORS = [
@@ -97,7 +100,7 @@ export class BrowseTool {
           const isVisible = await button.isVisible();
           if (isVisible) {
             await button.click();
-            console.error(`[Cookie] Dismissed cookie banner using: ${selector}`);
+            log.debug('Dismissed cookie banner', { selector });
             // Wait for banner to disappear
             await page.waitForTimeout(500);
             return true;
@@ -146,11 +149,11 @@ export class BrowseTool {
     const preset = findPreset(url);
 
     if (knownPattern && knownPattern.canBypass && knownPattern.confidence === 'high') {
-      console.error(`[Optimization] Found high-confidence pattern for ${domain}`);
+      log.info('Found high-confidence pattern', { domain });
     }
 
     if (preset) {
-      console.error(`[Preset] Using preset for ${preset.name}`);
+      log.info('Using preset', { presetName: preset.name });
     }
 
     // The core browsing operation
@@ -169,7 +172,7 @@ export class BrowseTool {
       const hasSession = await this.sessionManager.loadSession(domain, context, profile);
 
       if (hasSession) {
-        console.error(`[Session] Loaded saved session for ${domain}`);
+        log.info('Loaded saved session', { domain, profile });
       }
 
       // Use preset wait strategy if available
@@ -190,9 +193,9 @@ export class BrowseTool {
           await result.page.waitForSelector(options.waitForSelector, {
             timeout: options.timeout || 30000,
           });
-          console.error(`[SPA] Found selector: ${options.waitForSelector}`);
+          log.debug('Found selector', { selector: options.waitForSelector });
         } catch (e) {
-          console.error(`[SPA] Selector not found: ${options.waitForSelector}`);
+          log.warn('Selector not found', { selector: options.waitForSelector });
         }
       }
 
@@ -257,7 +260,7 @@ export class BrowseTool {
     // Learn from this browsing session
     if (discoveredApis.length > 0) {
       this.knowledgeBase.learn(domain, discoveredApis);
-      console.error(`[Learning] Discovered ${discoveredApis.length} API pattern(s) for ${domain}`);
+      log.info('Discovered API patterns', { domain, count: discoveredApis.length });
     }
 
     // Cache the content for change detection

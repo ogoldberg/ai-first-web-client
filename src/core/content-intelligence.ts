@@ -19,6 +19,7 @@
 import { CookieJar, Cookie } from 'tough-cookie';
 import * as cheerio from 'cheerio';
 import TurndownService from 'turndown';
+import { logger } from '../utils/logger.js';
 
 // Types
 export interface ContentResult {
@@ -106,8 +107,8 @@ async function tryLoadPlaywright(): Promise<typeof import('playwright') | null> 
     return playwrightModule;
   } catch (error) {
     playwrightLoadError = error instanceof Error ? error.message : 'Failed to load Playwright';
-    console.error(`[ContentIntelligence] Playwright not available: ${playwrightLoadError}`);
-    console.error('[ContentIntelligence] Continuing without browser support - this is fine for most sites');
+    logger.intelligence.warn('Playwright not available', { error: playwrightLoadError });
+    logger.intelligence.info('Continuing without browser support - this is fine for most sites');
     return null;
   }
 }

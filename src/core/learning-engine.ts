@@ -28,6 +28,7 @@ import type {
   ConfidenceDecayConfig,
   ApiPattern,
 } from '../types/index.js';
+import { logger } from '../utils/logger.js';
 
 // Default confidence decay configuration
 const DEFAULT_DECAY_CONFIG: ConfidenceDecayConfig = {
@@ -1309,9 +1310,9 @@ export class LearningEngine {
         this.learningEvents = data.learningEvents;
       }
 
-      console.error(`[LearningEngine] Loaded ${this.entries.size} domain(s) from knowledge base`);
+      logger.learning.info('Loaded knowledge base', { totalDomains: this.entries.size });
     } catch {
-      console.error('[LearningEngine] No existing knowledge base found, starting fresh');
+      logger.learning.info('No existing knowledge base found, starting fresh');
     }
   }
 
@@ -1325,7 +1326,7 @@ export class LearningEngine {
 
       await fs.writeFile(this.filePath, JSON.stringify(data, null, 2), 'utf-8');
     } catch (error) {
-      console.error('[LearningEngine] Failed to save knowledge base:', error);
+      logger.learning.error('Failed to save knowledge base', { error });
     }
   }
 

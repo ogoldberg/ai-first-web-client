@@ -6,6 +6,7 @@ import { BrowserContext } from 'playwright';
 import { promises as fs } from 'fs';
 import path from 'path';
 import type { SessionStore } from '../types/index.js';
+import { logger } from '../utils/logger.js';
 
 export class SessionManager {
   private sessionsDir: string;
@@ -98,7 +99,7 @@ export class SessionManager {
     // Persist to disk
     await this.persistSession(sessionKey, sessionStore);
 
-    console.error(`Session saved for ${domain} (profile: ${profile})`);
+    logger.session.debug('Session saved', { domain, profile });
   }
 
   /**
@@ -125,7 +126,7 @@ export class SessionManager {
     session.lastUsed = Date.now();
     await this.persistSession(sessionKey, session);
 
-    console.error(`Session loaded for ${domain} (profile: ${profile})`);
+    logger.session.debug('Session loaded', { domain, profile });
     return true;
   }
 
@@ -254,7 +255,7 @@ export class SessionManager {
         }
       }
 
-      console.error(`Loaded ${this.sessions.size} saved session(s)`);
+      logger.session.info('Loaded saved sessions', { count: this.sessions.size });
     } catch (error) {
       // No sessions directory yet
     }

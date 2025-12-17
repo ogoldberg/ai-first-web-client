@@ -8,6 +8,7 @@
 import type { Browser, BrowserContext, Page } from 'playwright';
 import type { NetworkRequest, ConsoleMessage } from '../types/index.js';
 import * as fs from 'fs';
+import { logger } from '../utils/logger.js';
 
 // Re-export Page type for consumers
 export type { Page } from 'playwright';
@@ -32,9 +33,9 @@ async function tryLoadPlaywright(): Promise<typeof import('playwright') | null> 
     return playwrightModule;
   } catch (error) {
     playwrightLoadError = error instanceof Error ? error.message : 'Failed to load Playwright';
-    console.error('[BrowserManager] Playwright not available:', playwrightLoadError);
-    console.error('[BrowserManager] The system will work without Playwright using intelligence and lightweight tiers.');
-    console.error('[BrowserManager] To enable full browser rendering, install Playwright: npm install playwright && npx playwright install chromium');
+    logger.browser.warn('Playwright not available', { error: playwrightLoadError });
+    logger.browser.info('System will work without Playwright using intelligence and lightweight tiers');
+    logger.browser.info('To enable full browser rendering, install Playwright: npm install playwright && npx playwright install chromium');
     return null;
   }
 }

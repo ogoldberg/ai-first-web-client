@@ -31,6 +31,7 @@ import { BrowserManager, type Page } from './browser-manager.js';
 import { ContentExtractor } from '../utils/content-extractor.js';
 import { rateLimiter } from '../utils/rate-limiter.js';
 import type { NetworkRequest, ApiPattern } from '../types/index.js';
+import { logger } from '../utils/logger.js';
 
 export type RenderTier = 'intelligence' | 'lightweight' | 'playwright';
 
@@ -454,7 +455,7 @@ export class TieredFetcher {
           : ['lightweight'];
       case 'playwright':
         if (!playwrightAvailable) {
-          console.error('[TieredFetcher] Playwright tier requested but Playwright is not available. Falling back to lightweight tier.');
+          logger.tieredFetcher.warn('Playwright tier requested but Playwright is not available', { fallback: 'lightweight' });
           return ['lightweight'];
         }
         return ['playwright'];

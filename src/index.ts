@@ -30,6 +30,7 @@ import { KnowledgeBase } from './core/knowledge-base.js';
 import { SmartBrowser } from './core/smart-browser.js';
 import { BrowseTool } from './tools/browse-tool.js';
 import { ApiCallTool } from './tools/api-call-tool.js';
+import { logger } from './utils/logger.js';
 
 // Initialize core components
 const browserManager = new BrowserManager();
@@ -1455,22 +1456,23 @@ async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
 
-  console.error('LLM Browser MCP Server v0.4.0 running');
-  console.error('Primary tool: smart_browse (with automatic learning)');
-  console.error('Features: Tiered rendering, Domain patterns, API discovery, Procedural memory');
-  console.error('New in v0.4: Skill versioning, anti-patterns, user feedback, dependencies');
-  console.error('Tiers: static (~50ms) -> lightweight (~200-500ms) -> playwright (~2-5s)');
-  console.error('Domain groups: spanish_gov, us_gov, eu_gov');
+  logger.server.info('LLM Browser MCP Server started', {
+    version: '0.4.0',
+    primaryTool: 'smart_browse',
+    features: ['Tiered rendering', 'Domain patterns', 'API discovery', 'Procedural memory'],
+    tiers: { intelligence: '~50ms', lightweight: '~200-500ms', playwright: '~2-5s' },
+    domainGroups: ['spanish_gov', 'us_gov', 'eu_gov'],
+  });
 
   // Cleanup on exit
   process.on('SIGINT', async () => {
-    console.error('Shutting down...');
+    logger.server.info('Shutting down');
     await browserManager.cleanup();
     process.exit(0);
   });
 }
 
 main().catch((error) => {
-  console.error('Fatal error:', error);
+  logger.server.error('Fatal error', { error });
   process.exit(1);
 });

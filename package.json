@@ -32,9 +32,11 @@
   "license": "MIT",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^0.6.0",
+    "@types/pino": "^7.0.4",
     "cheerio": "^1.0.0",
     "linkedom": "^0.18.12",
     "pdf-parse": "^1.1.1",
+    "pino": "^10.1.0",
     "playwright": "^1.48.0",
     "tough-cookie": "^6.0.0",
     "turndown": "^7.2.0"
