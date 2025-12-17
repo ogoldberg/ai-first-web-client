@@ -21,7 +21,7 @@ No P0 tasks remaining - all critical items completed.
 
 | ID | Task | Effort | Category | Notes |
 |----|------|--------|----------|-------|
-| O-002 | Add performance timing to all tiers | M | Performance | Track and expose metrics |
+| O-002 | Add performance timing to all tiers | M | Performance | Track and expose metrics - IN PROGRESS |
 | O-004 | Add learning progress stats | M | Features | Skills, patterns, anti-patterns |
 
 ### Testing (Continued)
