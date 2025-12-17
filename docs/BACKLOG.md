@@ -21,7 +21,6 @@ No P0 tasks remaining - all critical items completed.
 
 | ID | Task | Effort | Category | Notes |
 |----|------|--------|----------|-------|
-| O-001 | Replace console.error with structured logging | M | Debt | Use Pino or similar |
 | O-002 | Add performance timing to all tiers | M | Performance | Track and expose metrics |
 | O-004 | Add learning progress stats | M | Features | Skills, patterns, anti-patterns |
 
@@ -105,6 +104,7 @@ No P0 tasks remaining - all critical items completed.
 
 | ID | Task | Completed | Notes |
 |----|------|-----------|-------|
+| O-001 | Replace console.error with structured logging | 2025-12-17 | Pino-based logger with component child loggers, PR #20 |
 | T-007 | Add tests for lightweight renderer | 2025-12-17 | 43 tests covering linkedom integration, script execution, anti-bot detection, PR #17 |
 | T-006 | Add tests for content intelligence | 2025-12-17 | 31 tests covering framework extraction, structured data, fallbacks, PR #16 |
 | R-004 | Session health monitoring | 2025-12-17 | Included in R-005 (PR #15) |
