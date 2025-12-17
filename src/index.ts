@@ -616,6 +616,45 @@ The setting persists until the browser learns differently or is reset.`,
           required: ['domain', 'tier'],
         },
       },
+      {
+        name: 'get_tier_usage_by_domain',
+        description: `Get detailed tier usage analytics broken down by domain.
+
+Shows which rendering tier is used for each domain, including:
+- Preferred tier per domain
+- Success and failure counts
+- Average response time per domain
+- Last access timestamp
+
+This helps understand:
+- Which domains require full browser rendering
+- Which domains are optimized for fast intelligence-based fetching
+- Which domains have reliability issues (high failure counts)
+
+Options:
+- filterTier: Only show domains using a specific tier
+- sortBy: Sort by 'domain', 'tier', 'successRate', 'responseTime', or 'lastUsed'
+- limit: Maximum number of domains to return (default: 50)`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            filterTier: {
+              type: 'string',
+              enum: ['intelligence', 'lightweight', 'playwright'],
+              description: 'Filter to show only domains using this tier',
+            },
+            sortBy: {
+              type: 'string',
+              enum: ['domain', 'tier', 'successRate', 'responseTime', 'lastUsed'],
+              description: 'Sort results by this field (default: lastUsed)',
+            },
+            limit: {
+              type: 'number',
+              description: 'Maximum number of domains to return (default: 50)',
+            },
+          },
+        },
+      },
     ],
   };
 });
@@ -1384,6 +1423,88 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                   : tier === 'lightweight'
                   ? 'Lightweight JS - executes scripts without full browser'
                   : 'Full browser - handles all pages but slowest (requires Playwright)',
+              }, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'get_tier_usage_by_domain': {
+        const tieredFetcher = smartBrowser.getTieredFetcher();
+        const preferences = tieredFetcher.exportPreferences();
+        const filterTier = args.filterTier as string | undefined;
+        const sortBy = (args.sortBy as string) || 'lastUsed';
+        const limit = (args.limit as number) || 50;
+
+        // Filter by tier if requested
+        let filtered = preferences;
+        if (filterTier) {
+          filtered = preferences.filter(p => p.preferredTier === filterTier);
+        }
+
+        // Sort results
+        const sorted = [...filtered].sort((a, b) => {
+          switch (sortBy) {
+            case 'domain':
+              return a.domain.localeCompare(b.domain);
+            case 'tier':
+              return a.preferredTier.localeCompare(b.preferredTier);
+            case 'successRate': {
+              const rateA = a.successCount + a.failureCount > 0
+                ? a.successCount / (a.successCount + a.failureCount)
+                : 0;
+              const rateB = b.successCount + b.failureCount > 0
+                ? b.successCount / (b.successCount + b.failureCount)
+                : 0;
+              return rateB - rateA; // Higher success rate first
+            }
+            case 'responseTime':
+              return a.avgResponseTime - b.avgResponseTime; // Faster first
+            case 'lastUsed':
+            default:
+              return b.lastUsed - a.lastUsed; // Most recent first
+          }
+        });
+
+        // Apply limit
+        const limited = sorted.slice(0, limit);
+
+        // Format results
+        const formatted = limited.map(p => {
+          const totalAttempts = p.successCount + p.failureCount;
+          const successRate = totalAttempts > 0
+            ? Math.round((p.successCount / totalAttempts) * 100)
+            : 0;
+          return {
+            domain: p.domain,
+            tier: p.preferredTier,
+            successCount: p.successCount,
+            failureCount: p.failureCount,
+            successRate: `${successRate}%`,
+            avgResponseTime: `${Math.round(p.avgResponseTime)}ms`,
+            lastUsed: new Date(p.lastUsed).toISOString(),
+          };
+        });
+
+        // Calculate summary by tier
+        const summary = {
+          intelligence: filtered.filter(p => p.preferredTier === 'intelligence').length,
+          lightweight: filtered.filter(p => p.preferredTier === 'lightweight').length,
+          playwright: filtered.filter(p => p.preferredTier === 'playwright').length,
+        };
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                totalDomains: preferences.length,
+                filteredCount: filtered.length,
+                showing: limited.length,
+                filter: filterTier || 'none',
+                sortedBy: sortBy,
+                summary: filterTier ? undefined : summary,
+                domains: formatted,
               }, null, 2),
             },
           ],
