@@ -31,7 +31,6 @@ No P0 tasks remaining - all critical items completed.
 |----|------|--------|----------|-------|
 | T-004 | Add tests for procedural memory | L | Testing | Skills, versioning, rollback |
 | T-005 | Add tests for learning engine | L | Testing | API discovery, selectors |
-| T-006 | Add tests for content intelligence | M | Testing | Framework extraction |
 | T-007 | Add tests for lightweight renderer | M | Testing | linkedom integration |
 
 ---
@@ -107,6 +106,7 @@ No P0 tasks remaining - all critical items completed.
 
 | ID | Task | Completed | Notes |
 |----|------|-----------|-------|
+| T-006 | Add tests for content intelligence | 2025-12-17 | 31 tests covering framework extraction, structured data, fallbacks, PR #16 |
 | R-004 | Session health monitoring | 2025-12-17 | Included in R-005 (PR #15) |
 | R-005 | Auto-refresh expired sessions | 2025-12-17 | Session health check + auto-refresh callback, PR #15 |
 | R-006 | Connection timeout optimization | 2025-12-17 | Central timeout config in src/utils/timeouts.ts, PR #14 |
