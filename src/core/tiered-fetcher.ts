@@ -33,6 +33,7 @@ import { rateLimiter } from '../utils/rate-limiter.js';
 import { TIMEOUTS } from '../utils/timeouts.js';
 import type { NetworkRequest, ApiPattern } from '../types/index.js';
 import { logger } from '../utils/logger.js';
+import { performanceTracker, type TimingBreakdown } from '../utils/performance-tracker.js';
 
 export type RenderTier = 'intelligence' | 'lightweight' | 'playwright';
 
@@ -97,6 +98,8 @@ export interface TieredFetchResult {
   timing: {
     total: number;
     perTier: Record<RenderTier, number>;
+    // Component-level timing (when available)
+    breakdown?: TimingBreakdown;
   };
   // Detection results
   detection: {
@@ -228,6 +231,20 @@ export class TieredFetcher {
             this.recordSuccess(domain, tier, timing.perTier[tier]);
           }
 
+          // Record to performance tracker
+          performanceTracker.record({
+            domain,
+            url,
+            tier,
+            timing: {
+              total: timing.total,
+              network: timing.perTier[tier], // Approximate - actual tier time
+            },
+            success: true,
+            fellBack,
+            tiersAttempted,
+          });
+
           return {
             ...result,
             tier,
@@ -236,7 +253,13 @@ export class TieredFetcher {
             tierReason: fellBack
               ? `Fell back from ${tiersAttempted[0]} due to: ${validation.reason || 'incomplete content'}`
               : `${tier} tier successful`,
-            timing,
+            timing: {
+              ...timing,
+              breakdown: {
+                total: timing.total,
+                network: timing.perTier[tier],
+              },
+            },
             detection: {
               isStatic: tier === 'intelligence',
               isJSHeavy: tier === 'playwright',
@@ -259,9 +282,23 @@ export class TieredFetcher {
     }
 
     // All tiers failed
+    const totalTime = Date.now() - startTime;
     if (options.enableLearning !== false) {
       this.recordFailure(domain, tiersAttempted[tiersAttempted.length - 1]);
     }
+
+    // Record failure to performance tracker
+    performanceTracker.record({
+      domain,
+      url,
+      tier: tiersAttempted[tiersAttempted.length - 1],
+      timing: {
+        total: totalTime,
+      },
+      success: false,
+      fellBack: true,
+      tiersAttempted,
+    });
 
     throw lastError || new Error('All rendering tiers failed');
   }
@@ -647,5 +684,12 @@ export class TieredFetcher {
    */
   clearPreferences(): void {
     this.domainPreferences.clear();
+  }
+
+  /**
+   * Get the performance tracker for metrics access
+   */
+  getPerformanceTracker(): typeof performanceTracker {
+    return performanceTracker;
   }
 }
