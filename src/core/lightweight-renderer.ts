@@ -21,6 +21,7 @@ import { parseHTML } from 'linkedom';
 import { CookieJar, Cookie } from 'tough-cookie';
 import vm from 'node:vm';
 import { URL } from 'node:url';
+import { TIMEOUTS } from '../utils/timeouts.js';
 
 export interface LightweightRenderOptions {
   // Timeout for the entire render operation (ms)
@@ -118,8 +119,8 @@ const NEEDS_FULL_BROWSER_PATTERNS = [
 ];
 
 const DEFAULT_OPTIONS: LightweightRenderOptions = {
-  timeout: 30000,
-  scriptTimeout: 5000,
+  timeout: TIMEOUTS.NETWORK_FETCH,
+  scriptTimeout: TIMEOUTS.SCRIPT_EXECUTION,
   executeScripts: true,
   asyncWaitTime: 2000,
   userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',

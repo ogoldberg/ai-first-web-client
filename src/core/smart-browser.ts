@@ -38,6 +38,7 @@ import { rateLimiter } from '../utils/rate-limiter.js';
 import { withRetry } from '../utils/retry.js';
 import { findPreset, getWaitStrategy } from '../utils/domain-presets.js';
 import { pageCache, ContentCache } from '../utils/cache.js';
+import { TIMEOUTS } from '../utils/timeouts.js';
 
 // Procedural memory thresholds
 const SKILL_APPLICATION_THRESHOLD = 0.8;  // Minimum similarity to auto-apply a skill
@@ -205,7 +206,7 @@ export class SmartBrowser {
     if (failurePatterns.shouldBackoff) {
       console.error(`[SmartBrowser] Backing off from ${domain} due to ${failurePatterns.mostCommonType} errors`);
       // Add extra delay
-      await this.delay(5000);
+      await this.delay(TIMEOUTS.FAILURE_BACKOFF);
     }
 
     // Get learned patterns for optimization
@@ -263,7 +264,7 @@ export class SmartBrowser {
         captureNetwork: options.captureNetwork !== false,
         captureConsole: options.captureConsole !== false,
         waitFor,
-        timeout: options.timeout || 30000,
+        timeout: options.timeout || TIMEOUTS.PAGE_LOAD,
         profile: options.sessionProfile,
       });
 
@@ -628,7 +629,7 @@ export class SmartBrowser {
       const result = await this.tieredFetcher.fetch(url, {
         forceTier: options.forceTier,
         minContentLength: options.minContentLength || 200,
-        tierTimeout: options.timeout || 30000,
+        tierTimeout: options.timeout || TIMEOUTS.TIER_ATTEMPT,
         enableLearning,
         headers: options.sessionProfile ? undefined : undefined, // Could add header support
         sessionProfile: options.sessionProfile,
@@ -766,7 +767,7 @@ export class SmartBrowser {
 
     for (const selector of allSelectors) {
       try {
-        await page.waitForSelector(selector, { timeout: 5000 });
+        await page.waitForSelector(selector, { timeout: TIMEOUTS.SELECTOR_WAIT });
         learning.selectorsSucceeded.push(selector);
         console.error(`[SmartBrowser] Found selector: ${selector}`);
         return true;
@@ -818,7 +819,7 @@ export class SmartBrowser {
               // Could add cookie banner learning here
             }
 
-            await page.waitForTimeout(500);
+            await page.waitForTimeout(TIMEOUTS.COOKIE_BANNER);
             return true;
           }
         }
@@ -1044,11 +1045,11 @@ export class SmartBrowser {
     while (currentPosition < scrollHeight) {
       currentPosition += scrollStep;
       await page.evaluate((y) => window.scrollTo(0, y), currentPosition);
-      await page.waitForTimeout(300);
+      await page.waitForTimeout(TIMEOUTS.SCROLL_STEP);
     }
 
     await page.evaluate(() => window.scrollTo(0, 0));
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(TIMEOUTS.SCROLL_SETTLE);
   }
 
   /**
@@ -1087,9 +1088,9 @@ export class SmartBrowser {
 
     console.error(`[SmartBrowser] Bot challenge detected on ${domain}, waiting for completion...`);
 
-    // Wait for the challenge to complete (up to 15 seconds)
-    const maxWaitTime = 15000;
-    const checkInterval = 1000;
+    // Wait for the challenge to complete
+    const maxWaitTime = TIMEOUTS.BOT_CHALLENGE_MAX;
+    const checkInterval = TIMEOUTS.BOT_CHECK_INTERVAL;
     const startTime = Date.now();
 
     while (Date.now() - startTime < maxWaitTime) {
@@ -1104,7 +1105,7 @@ export class SmartBrowser {
       if (!stillChallenging) {
         console.error(`[SmartBrowser] Bot challenge completed on ${domain}`);
         // Wait a bit more for page to fully load after challenge
-        await page.waitForTimeout(2000);
+        await page.waitForTimeout(TIMEOUTS.CLOUDFLARE_WAIT);
         return true;
       }
 
@@ -1112,7 +1113,7 @@ export class SmartBrowser {
       const currentUrl = page.url();
       if (!currentUrl.includes(domain)) {
         console.error(`[SmartBrowser] Redirected after challenge to ${currentUrl}`);
-        await page.waitForTimeout(1000);
+        await page.waitForTimeout(TIMEOUTS.CAPTCHA_WAIT);
         return true;
       }
     }

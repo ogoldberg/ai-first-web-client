@@ -21,6 +21,7 @@ import { rateLimiter } from '../utils/rate-limiter.js';
 import { withRetry } from '../utils/retry.js';
 import { findPreset, getWaitStrategy } from '../utils/domain-presets.js';
 import { pageCache, ContentCache } from '../utils/cache.js';
+import { TIMEOUTS } from '../utils/timeouts.js';
 import type { Page } from 'playwright';
 
 // Common cookie consent selectors across different banner providers
@@ -99,7 +100,7 @@ export class BrowseTool {
             await button.click();
             console.error(`[Cookie] Dismissed cookie banner using: ${selector}`);
             // Wait for banner to disappear
-            await page.waitForTimeout(500);
+            await page.waitForTimeout(TIMEOUTS.COOKIE_BANNER);
             return true;
           }
         }
@@ -125,13 +126,13 @@ export class BrowseTool {
       currentPosition += scrollStep;
       await page.evaluate((y) => window.scrollTo(0, y), currentPosition);
       // Wait for content to load
-      await page.waitForTimeout(300);
+      await page.waitForTimeout(TIMEOUTS.SCROLL_STEP);
     }
 
     // Scroll back to top
     await page.evaluate(() => window.scrollTo(0, 0));
     // Wait for any final content
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(TIMEOUTS.SCROLL_SETTLE);
   }
 
   async execute(url: string, options: BrowseOptions = {}): Promise<BrowseResult> {
@@ -180,7 +181,7 @@ export class BrowseTool {
         captureNetwork: options.captureNetwork !== false,
         captureConsole: options.captureConsole !== false,
         waitFor,
-        timeout: options.timeout || 30000,
+        timeout: options.timeout || TIMEOUTS.PAGE_LOAD,
         profile,
       });
 
@@ -188,7 +189,7 @@ export class BrowseTool {
       if (options.waitForSelector) {
         try {
           await result.page.waitForSelector(options.waitForSelector, {
-            timeout: options.timeout || 30000,
+            timeout: options.timeout || TIMEOUTS.PAGE_LOAD,
           });
           console.error(`[SPA] Found selector: ${options.waitForSelector}`);
         } catch (e) {
