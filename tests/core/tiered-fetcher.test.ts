@@ -366,6 +366,75 @@ describe('TieredFetcher', () => {
       expect(newFetcher.getDomainPreference('test1.com')?.preferredTier).toBe('intelligence');
       expect(newFetcher.getDomainPreference('test2.com')?.preferredTier).toBe('lightweight');
     });
+
+    it('should export preferences with complete data structure for analytics', async () => {
+      vi.spyOn(mockContentIntelligence, 'extract').mockResolvedValue(createContentResult());
+
+      // Fetch a URL to create a preference with real stats
+      await fetcher.fetch('https://analytics-test.com');
+
+      const exported = fetcher.exportPreferences();
+      expect(exported).toHaveLength(1);
+
+      const pref = exported[0];
+      expect(pref).toHaveProperty('domain', 'analytics-test.com');
+      expect(pref).toHaveProperty('preferredTier', 'intelligence');
+      expect(pref).toHaveProperty('successCount');
+      expect(pref).toHaveProperty('failureCount');
+      expect(pref).toHaveProperty('lastUsed');
+      expect(pref).toHaveProperty('avgResponseTime');
+      expect(pref.successCount).toBeGreaterThanOrEqual(1);
+      expect(pref.lastUsed).toBeGreaterThan(0);
+      expect(typeof pref.avgResponseTime).toBe('number');
+    });
+
+    it('should track failure counts correctly for analytics', async () => {
+      // Make intelligence tier fail, and then lightweight also fail
+      vi.spyOn(mockContentIntelligence, 'extract').mockRejectedValue(new Error('Failed'));
+      vi.spyOn(mockLightweightRenderer, 'render').mockRejectedValue(new Error('Failed'));
+      vi.mocked(mockBrowserManager.browse).mockRejectedValue(new Error('Failed'));
+
+      try {
+        await fetcher.fetch('https://failing-domain.com');
+      } catch {
+        // Expected to fail
+      }
+
+      const pref = fetcher.getDomainPreference('failing-domain.com');
+      expect(pref).toBeDefined();
+      expect(pref?.failureCount).toBeGreaterThanOrEqual(1);
+    });
+
+    it('should support filtering exported preferences by tier', async () => {
+      fetcher.setDomainPreference('intelligence-site.com', 'intelligence');
+      fetcher.setDomainPreference('lightweight-site.com', 'lightweight');
+      fetcher.setDomainPreference('playwright-site.com', 'playwright');
+
+      const exported = fetcher.exportPreferences();
+      expect(exported).toHaveLength(3);
+
+      // Filter by tier (this would be done by the MCP handler)
+      const intelligenceOnly = exported.filter(p => p.preferredTier === 'intelligence');
+      expect(intelligenceOnly).toHaveLength(1);
+      expect(intelligenceOnly[0].domain).toBe('intelligence-site.com');
+
+      const playwrightOnly = exported.filter(p => p.preferredTier === 'playwright');
+      expect(playwrightOnly).toHaveLength(1);
+      expect(playwrightOnly[0].domain).toBe('playwright-site.com');
+    });
+
+    it('should provide accurate stats breakdown by tier', async () => {
+      fetcher.setDomainPreference('int1.com', 'intelligence');
+      fetcher.setDomainPreference('int2.com', 'intelligence');
+      fetcher.setDomainPreference('light1.com', 'lightweight');
+      fetcher.setDomainPreference('play1.com', 'playwright');
+
+      const stats = fetcher.getStats();
+      expect(stats.totalDomains).toBe(4);
+      expect(stats.byTier.intelligence).toBe(2);
+      expect(stats.byTier.lightweight).toBe(1);
+      expect(stats.byTier.playwright).toBe(1);
+    });
   });
 
   describe('known domain patterns', () => {
