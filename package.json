@@ -1,7 +1,7 @@
 {
-  "name": "llm-browser-mcp",
-  "version": "0.4.1",
-  "description": "LLM-first browser MCP server with API discovery, session management, and intelligent optimization",
+  "name": "llm-browser",
+  "version": "0.5.0",
+  "description": "A web browser where the user is an LLM, not a human. MCP server for machine-first web access with learning, API discovery, and progressive optimization.",
   "type": "module",
   "main": "dist/index.js",
   "exports": {
@@ -11,6 +11,11 @@
   "bin": {
     "llm-browser": "dist/index.js"
   },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
@@ -18,18 +23,35 @@
     "inspect": "node --inspect dist/index.js",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "prepublishOnly": "npm run build && npm test"
   },
   "keywords": [
-    "mcp",
-    "browser",
-    "automation",
     "llm",
+    "mcp",
+    "model-context-protocol",
+    "browser",
+    "ai-agent",
+    "web-scraping",
     "api-discovery",
-    "web-scraping"
+    "machine-readable",
+    "claude",
+    "openai",
+    "anthropic",
+    "web-automation",
+    "headless-browser",
+    "semantic-embeddings"
   ],
   "author": "",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/anthropics/llm-browser"
+  },
+  "homepage": "https://github.com/anthropics/llm-browser#readme",
+  "bugs": {
+    "url": "https://github.com/anthropics/llm-browser/issues"
+  },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^0.6.0",
     "@types/pino": "^7.0.4",
@@ -37,9 +59,12 @@
     "linkedom": "^0.18.12",
     "pdf-parse": "^1.1.1",
     "pino": "^10.1.0",
-    "playwright": "^1.48.0",
     "tough-cookie": "^6.0.0",
     "turndown": "^7.2.0"
+  },
+  "optionalDependencies": {
+    "@xenova/transformers": "^2.17.0",
+    "playwright": "^1.48.0"
   },
   "devDependencies": {
     "@types/node": "^22.8.4",

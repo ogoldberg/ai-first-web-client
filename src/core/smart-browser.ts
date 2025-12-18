@@ -588,6 +588,22 @@ export class SmartBrowser {
       }
     }
 
+    // Record success profile for Playwright path
+    if (enableLearning && learning.confidenceLevel !== 'low') {
+      try {
+        this.learningEngine.recordSuccess(domain, {
+          tier: 'playwright',
+          responseTime: Date.now() - startTime,
+          contentLength: extractedContent.text.length,
+          hasStructuredData: false,
+          hasFrameworkData: false,
+          hasBypassableApis: discoveredApis.length > 0,
+        });
+      } catch (successError) {
+        logger.smartBrowser.error(`Success profile recording failed (non-fatal): ${successError}`);
+      }
+    }
+
     return {
       url,
       title: extractedContent.title,
@@ -629,7 +645,7 @@ export class SmartBrowser {
     try {
       const result = await this.tieredFetcher.fetch(url, {
         forceTier: options.forceTier,
-        minContentLength: options.minContentLength || 200,
+        minContentLength: options.minContentLength,  // Let TieredFetcher use its default (500)
         tierTimeout: options.timeout || TIMEOUTS.TIER_ATTEMPT,
         enableLearning,
         headers: options.sessionProfile ? undefined : undefined, // Could add header support
@@ -722,6 +738,23 @@ export class SmartBrowser {
           learning.trajectoryRecorded = true;
         } catch (trajectoryError) {
           logger.smartBrowser.error(`Trajectory recording failed (non-fatal): ${trajectoryError}`);
+        }
+      }
+
+      // Record success profile for this domain
+      if (enableLearning && learning.confidenceLevel !== 'low') {
+        try {
+          this.learningEngine.recordSuccess(domain, {
+            tier: result.tier,
+            strategy: result.extractionStrategy,
+            responseTime: result.timing.total,
+            contentLength: result.content.text.length,
+            hasStructuredData: !!result.content.structured,
+            hasFrameworkData: result.extractionStrategy?.startsWith('framework:') ?? false,
+            hasBypassableApis: result.discoveredApis.length > 0,
+          });
+        } catch (successError) {
+          logger.smartBrowser.error(`Success profile recording failed (non-fatal): ${successError}`);
         }
       }
 

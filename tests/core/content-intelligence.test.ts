@@ -46,8 +46,9 @@ describe('ContentIntelligence', () => {
         props: {
           pageProps: {
             title: 'Test Article',
-            content: 'This is a test article with enough content to pass validation. '.repeat(5),
+            content: 'This is a test article with enough content to pass validation for the minimum length requirement of 500 characters. '.repeat(5),
             author: 'Test Author',
+            description: 'Additional description text to ensure we meet the content length threshold for successful Next.js extraction.',
           },
         },
         page: '/articles/test',
@@ -119,8 +120,10 @@ describe('ContentIntelligence', () => {
         <body>
           <div id="__nuxt"></div>
           <main>
-            <p>Fallback content for when Nuxt extraction does not work. </p>
-            <p>Additional content to meet minimum length requirements. </p>
+            <p>Fallback content for when Nuxt extraction does not work. This needs at least 500 characters to pass the minimum content length validation requirement. </p>
+            <p>Additional content to meet minimum length requirements. The static HTML parsing strategy will extract this content when framework extraction fails. </p>
+            <p>Third paragraph with more content for the fallback extraction path. This ensures the test passes with the new content validation. </p>
+            <p>Fourth paragraph providing extra text to guarantee successful extraction. Nuxt extraction attempts are logged even if they fail. </p>
           </main>
           <script>window.__NUXT__ = {data:[{"title":"Test"}]};</script>
         </body>
@@ -239,9 +242,10 @@ describe('ContentIntelligence', () => {
           <nav>Navigation</nav>
           <main>
             <h1>Main Heading</h1>
-            <p>This is the main content paragraph with enough text to pass validation. </p>
-            <p>Another paragraph with more content for extraction testing purposes. </p>
-            <p>Third paragraph to ensure we have sufficient text for validation. </p>
+            <p>This is the main content paragraph with enough text to pass validation. It needs at least 500 characters to meet the minimum content length requirement. </p>
+            <p>Another paragraph with more content for extraction testing purposes. The static HTML parsing strategy extracts content from semantic elements. </p>
+            <p>Third paragraph to ensure we have sufficient text for validation. Additional content provides the needed length for successful extraction. </p>
+            <p>Fourth paragraph with extra content to guarantee we pass the minimum threshold. This ensures the test works correctly with the new validation. </p>
           </main>
           <footer>Footer content</footer>
         </body>
@@ -270,8 +274,10 @@ describe('ContentIntelligence', () => {
         <body>
           <article>
             <h1>Article Title</h1>
-            <p>Article content with sufficient text for validation purposes. </p>
-            <p>More article content for extraction testing. </p>
+            <p>Article content with sufficient text for validation purposes. This needs to be long enough to meet the minimum content length requirement of 500 characters. </p>
+            <p>More article content for extraction testing. The extraction system processes HTML and converts it to clean text and markdown format. </p>
+            <p>Third paragraph of article content to ensure we have enough text. Additional content helps validate the extraction process works correctly. </p>
+            <p>Fourth paragraph providing extra content for the minimum length threshold. This ensures successful extraction testing. </p>
           </article>
           <aside>Sidebar content</aside>
         </body>
@@ -298,8 +304,10 @@ describe('ContentIntelligence', () => {
           <div class="popup-overlay">Subscribe to newsletter</div>
           <main>
             <h1>Main Content</h1>
-            <p>This is the actual content we want to extract with enough text. </p>
-            <p>More content for validation testing purposes here. </p>
+            <p>This is the actual content we want to extract with enough text. It needs at least 500 characters to pass the minimum content length validation. </p>
+            <p>More content for validation testing purposes here. The extraction system removes unwanted elements like cookie banners, popups, and advertisements. </p>
+            <p>Third paragraph with additional content to ensure we meet the threshold. This tests the banner removal functionality properly. </p>
+            <p>Fourth paragraph providing extra text for the minimum length requirement. Cookie banners and ads should not appear in extracted content. </p>
           </main>
           <div class="advertisement">Ad content</div>
         </body>
@@ -327,8 +335,9 @@ describe('ContentIntelligence', () => {
           <main>
             <h1>Heading 1</h1>
             <h2>Heading 2</h2>
-            <p>A paragraph with <strong>bold</strong> and <em>italic</em> text. Adding more content here to ensure we meet the minimum content length requirement for extraction.</p>
-            <p>Another paragraph with additional content for the markdown conversion test. This ensures sufficient text.</p>
+            <p>A paragraph with <strong>bold</strong> and <em>italic</em> text. Adding more content here to ensure we meet the minimum content length requirement for extraction. The markdown conversion preserves formatting.</p>
+            <p>Another paragraph with additional content for the markdown conversion test. This ensures sufficient text for validation purposes and tests the conversion quality.</p>
+            <p>Third paragraph with more text content to meet the 500 character minimum. Lists and code blocks are also converted properly to markdown format.</p>
             <ul>
               <li>List item 1</li>
               <li>List item 2</li>
@@ -389,8 +398,10 @@ describe('ContentIntelligence', () => {
         <head><title>Force Strategy Test</title></head>
         <body>
           <main>
-            <p>Content for static parsing with sufficient length for validation. </p>
-            <p>More content to ensure the minimum content length is met. </p>
+            <p>Content for static parsing with sufficient length for validation. This needs at least 500 characters to meet the minimum content length requirement. </p>
+            <p>More content to ensure the minimum content length is met. The forced strategy option limits extraction to only the specified strategy. </p>
+            <p>Third paragraph with additional content for the test. This ensures we have enough text to pass the validation threshold. </p>
+            <p>Fourth paragraph providing extra text to guarantee successful extraction. The forceStrategy option is useful for testing specific extraction paths. </p>
           </main>
         </body>
         </html>
@@ -490,9 +501,13 @@ describe('ContentIntelligence', () => {
 
       const result = await intelligence.extract('https://example.com');
 
-      // Should try framework extraction first, then structured, then static
+      // Should try site-specific APIs first (all return null for non-matching URLs), then framework, then structured, then static
       expect(result.meta.strategiesAttempted.length).toBeGreaterThan(1);
-      expect(result.meta.strategiesAttempted[0]).toBe('framework:nextjs');
+      // Site-specific APIs are first in the chain but return null for non-matching URLs
+      expect(result.meta.strategiesAttempted[0]).toBe('api:reddit');
+      expect(result.meta.strategiesAttempted[1]).toBe('api:hackernews');
+      // More site-specific APIs follow: github, wikipedia, stackoverflow
+      // Then framework extraction
     });
 
     it('should record all attempted strategies', async () => {
@@ -524,8 +539,10 @@ describe('ContentIntelligence', () => {
         <head><title>Warnings Test</title></head>
         <body>
           <main>
-            <p>Content that will pass static parsing but not other strategies. </p>
-            <p>Additional text to meet validation requirements. </p>
+            <p>Content that will pass static parsing but not other strategies. This needs to be long enough to meet the minimum content length requirement of 500 characters. </p>
+            <p>Additional text to meet validation requirements. More content is needed here to ensure we pass the threshold. </p>
+            <p>Third paragraph with more substantial content to ensure extraction succeeds and we can test the warning behavior properly. </p>
+            <p>Fourth paragraph adding even more text content for validation purposes and to ensure the test passes correctly. </p>
           </main>
         </body>
         </html>
@@ -572,8 +589,10 @@ describe('ContentIntelligence', () => {
         <body>
           <script id="__NEXT_DATA__" type="application/json">{invalid json}</script>
           <main>
-            <p>Fallback content should be extracted when JSON is invalid. </p>
-            <p>More content for validation requirements. </p>
+            <p>Fallback content should be extracted when JSON is invalid. This needs to be at least 500 characters to pass content length validation. </p>
+            <p>More content for validation requirements. The extraction system should fall back to static HTML parsing when framework extraction fails. </p>
+            <p>Additional paragraph with substantial content to ensure we meet the minimum content length threshold for successful extraction. </p>
+            <p>Final paragraph providing extra text content needed to pass all validation checks and ensure the test completes successfully. </p>
           </main>
         </body>
         </html>
@@ -598,8 +617,11 @@ describe('ContentIntelligence', () => {
         </head>
         <body>
           <main>
-            <p>Content for fallback extraction when JSON-LD is invalid. </p>
-            <p>Additional content for minimum length validation. </p>
+            <p>Content for fallback extraction when JSON-LD is invalid. This is substantial content that should pass the minimum content length validation of 500 characters. The system handles malformed JSON gracefully. </p>
+            <p>Additional content for minimum length validation to ensure we have enough text. We need to meet the content threshold for successful extraction. This extra text helps meet the minimum. </p>
+            <p>More detailed content about various topics to ensure we pass validation. The extraction should fall back gracefully when structured data is malformed or missing. </p>
+            <p>Even more content here to make absolutely sure we meet the minimum length requirement for extraction. Fallback strategies ensure content is always extracted when possible. </p>
+            <p>Fifth paragraph to guarantee we exceed 500 characters. The content intelligence system tries multiple strategies until one succeeds. </p>
           </main>
         </body>
         </html>
@@ -664,8 +686,10 @@ describe('ContentIntelligence', () => {
         <head><title>Timing Test</title></head>
         <body>
           <main>
-            <p>Content for timing test with sufficient length to pass validation requirements. </p>
-            <p>Additional content for validation to ensure we meet minimum content length. </p>
+            <p>Content for timing test with sufficient length to pass validation requirements. This needs to be at least 500 characters to pass the default minimum content length validation. </p>
+            <p>Additional content for validation to ensure we meet minimum content length. More text is needed here to ensure proper extraction. </p>
+            <p>We need substantial content to test the timing properly and ensure extraction succeeds. The extraction system measures time spent. </p>
+            <p>Final paragraph with more content to ensure minimum length. This should be enough text now for validation to pass. </p>
           </main>
         </body>
         </html>
@@ -687,8 +711,11 @@ describe('ContentIntelligence', () => {
         <head><title>URL Test</title></head>
         <body>
           <main>
-            <p>Content for URL metadata test with sufficient text length for validation. </p>
-            <p>More content for validation to meet minimum requirements for extraction. </p>
+            <p>Content for URL metadata test with sufficient text length for validation. This requires at least 500 characters of content to pass the minimum threshold. </p>
+            <p>More content for validation to meet minimum requirements for extraction. Additional text provides the needed length for successful extraction. </p>
+            <p>Testing URL tracking requires proper content extraction to succeed first. The metadata is recorded during the process and includes both original and final URLs. </p>
+            <p>Enough content here to ensure we pass the minimum content length validation and the test can verify URLs properly with the static parsing strategy. </p>
+            <p>Fifth paragraph to guarantee we exceed the 500 character minimum for this URL metadata test. The extraction system tracks redirects. </p>
           </main>
         </body>
         </html>
@@ -711,10 +738,13 @@ describe('ContentIntelligence', () => {
         props: {
           pageProps: {
             article: {
-              title: 'Nested Title',
+              title: 'Nested Title Article for Testing Text Extraction',
               body: {
-                content: 'This is deeply nested content that should be extracted. '.repeat(5),
-                summary: 'A summary of the article.',
+                content: 'This is deeply nested content that should be extracted by the content intelligence system. '.repeat(6),
+                summary: 'A summary of the article that provides context and additional information about the topic being discussed.',
+              },
+              metadata: {
+                description: 'Additional metadata text to ensure we meet the minimum content length requirement for extraction.',
               },
             },
           },
@@ -744,9 +774,11 @@ describe('ContentIntelligence', () => {
         props: {
           pageProps: {
             items: [
-              { text: 'First item content that is long enough to pass filtering. ' },
-              { text: 'Second item content that is also long enough for extraction. ' },
-              { text: 'Third item content meeting length requirements for text extraction. ' },
+              { text: 'First item content that is long enough to pass filtering with additional details and context for the extraction. ' },
+              { text: 'Second item content that is also long enough for extraction and provides valuable information for the test. ' },
+              { text: 'Third item content meeting length requirements for text extraction with supplementary details included. ' },
+              { text: 'Fourth item content added to ensure we meet the minimum 500 character content length validation threshold. ' },
+              { text: 'Fifth item content provides additional text to guarantee successful extraction with proper validation. ' },
             ],
           },
         },

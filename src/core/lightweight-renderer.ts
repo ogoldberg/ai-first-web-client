@@ -107,15 +107,23 @@ const DEFAULT_SKIP_PATTERNS = [
   /hcaptcha/i,
 ];
 
-// Patterns that indicate this page needs a full browser
-const NEEDS_FULL_BROWSER_PATTERNS = [
-  /cloudflare/i,
-  /challenge-platform/i,
-  /cf-chl-bypass/i,
-  /__cf_chl/i,
+// Patterns that ALWAYS indicate a blocking challenge (high confidence)
+const BLOCKING_CHALLENGE_PATTERNS = [
+  /challenge-platform/i,        // Cloudflare challenge page
+  /cf-chl-bypass/i,             // Cloudflare challenge bypass
+  /__cf_chl/i,                  // Cloudflare challenge token
+  /turnstile/i,                 // Cloudflare Turnstile
+  /please\s+enable\s+javascript/i,  // JS required message
+  /checking\s+your\s+browser/i,     // Browser check message
+  /just\s+a\s+moment/i,             // Cloudflare waiting page
+];
+
+// Patterns that MAY indicate protection but could also be optional features
+// (e.g., recaptcha for comments, login forms)
+const OPTIONAL_PROTECTION_PATTERNS = [
   /recaptcha/i,
   /hcaptcha/i,
-  /turnstile/i,
+  /cloudflare/i,  // Generic cloudflare mention (not challenge-specific)
 ];
 
 const DEFAULT_OPTIONS: LightweightRenderOptions = {
@@ -707,13 +715,32 @@ export class LightweightRenderer {
       reason: undefined as string | undefined,
     };
 
-    // Check for anti-bot patterns
-    for (const pattern of NEEDS_FULL_BROWSER_PATTERNS) {
+    // Check for BLOCKING challenge patterns (high confidence - always need browser)
+    for (const pattern of BLOCKING_CHALLENGE_PATTERNS) {
       if (pattern.test(html)) {
         detection.needsFullBrowser = true;
-        detection.reason = `Detected anti-bot protection: ${pattern.source}`;
+        detection.reason = `Blocking challenge detected: ${pattern.source}`;
         return detection;
       }
+    }
+
+    // For optional protection patterns (recaptcha, hcaptcha), use smarter detection
+    // Only fail if the protection appears to be blocking main content
+    const hasOptionalProtection = OPTIONAL_PROTECTION_PATTERNS.some(p => p.test(html));
+
+    if (hasOptionalProtection) {
+      // Check if this looks like a challenge page vs normal page with optional captcha
+      const isChallengePage = this.looksLikeChallengePage(html);
+
+      if (isChallengePage) {
+        detection.needsFullBrowser = true;
+        detection.reason = 'Page appears to be a challenge/verification page';
+        return detection;
+      }
+
+      // If there's substantial content alongside the captcha, it's likely optional
+      // (e.g., recaptcha for comments on a news site)
+      // Don't flag as needing full browser
     }
 
     // Check for SPA markers (empty body with JS app root)
@@ -732,6 +759,65 @@ export class LightweightRenderer {
     }
 
     return detection;
+  }
+
+  /**
+   * Check if the page looks like a challenge/verification page rather than
+   * a normal page that happens to have a captcha widget
+   */
+  private looksLikeChallengePage(html: string): boolean {
+    // Remove scripts to analyze actual content
+    const contentHtml = html.replace(/<script[\s\S]*?<\/script>/gi, '');
+
+    // Extract visible text (rough approximation)
+    const textContent = contentHtml
+      .replace(/<style[\s\S]*?<\/style>/gi, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    // Challenge pages typically have very little content
+    if (textContent.length < 500) {
+      // Check for challenge-specific messaging
+      const challengeMessages = [
+        /verify\s+(you|that\s+you)/i,
+        /human\s+verification/i,
+        /security\s+check/i,
+        /please\s+complete/i,
+        /prove\s+you/i,
+        /are\s+you\s+a\s+robot/i,
+        /not\s+a\s+robot/i,
+        /access\s+denied/i,
+        /blocked/i,
+      ];
+
+      for (const pattern of challengeMessages) {
+        if (pattern.test(textContent)) {
+          return true;
+        }
+      }
+
+      // Very short content + captcha = likely a challenge page
+      if (textContent.length < 200) {
+        return true;
+      }
+    }
+
+    // Check for challenge page structure indicators
+    const challengeStructure = [
+      /<div[^>]*class="[^"]*challenge[^"]*"/i,
+      /<div[^>]*id="[^"]*challenge[^"]*"/i,
+      /<form[^>]*action="[^"]*challenge[^"]*"/i,
+      /data-ray/i,  // Cloudflare ray ID on challenge pages
+    ];
+
+    for (const pattern of challengeStructure) {
+      if (pattern.test(html)) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   /**

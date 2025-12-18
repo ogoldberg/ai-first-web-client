@@ -190,6 +190,7 @@ export const logger = {
   learning: new Logger('LearningEngine'),
   proceduralMemory: new Logger('ProceduralMemory'),
   knowledgeBase: new Logger('KnowledgeBase'),
+  embedding: new Logger('Embedding'),
 
   // Tools
   browseTool: new Logger('BrowseTool'),

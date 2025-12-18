@@ -61,7 +61,7 @@ const apiCallTool = new ApiCallTool(browserManager);
 const server = new Server(
   {
     name: 'llm-browser',
-    version: '0.4.0',
+    version: '0.5.0',
   },
   {
     capabilities: {
@@ -1812,11 +1812,10 @@ async function main() {
   await server.connect(transport);
 
   logger.server.info('LLM Browser MCP Server started', {
-    version: '0.4.0',
+    version: '0.5.0',
     primaryTool: 'smart_browse',
-    features: ['Tiered rendering', 'Domain patterns', 'API discovery', 'Procedural memory'],
+    features: ['Tiered rendering', 'Semantic embeddings', 'Cross-domain learning', 'API discovery', 'Procedural memory'],
     tiers: { intelligence: '~50ms', lightweight: '~200-500ms', playwright: '~2-5s' },
-    domainGroups: ['spanish_gov', 'us_gov', 'eu_gov'],
   });
 
   // Cleanup on exit

@@ -66,6 +66,11 @@ export interface TieredFetchOptions {
   useRateLimiting?: boolean;
 }
 
+// Default options for fetch
+const DEFAULT_FETCH_OPTIONS: Required<Pick<TieredFetchOptions, 'minContentLength'>> = {
+  minContentLength: 500,  // Prefer substantial content over meta descriptions
+};
+
 export interface TieredFetchResult {
   // The final HTML content
   html: string;
@@ -186,6 +191,9 @@ export class TieredFetcher {
    * Fetch a URL using the optimal tier
    */
   async fetch(url: string, options: TieredFetchOptions = {}): Promise<TieredFetchResult> {
+    // Apply defaults
+    options = { ...DEFAULT_FETCH_OPTIONS, ...options };
+
     const startTime = Date.now();
     const domain = new URL(url).hostname;
     const timing: TieredFetchResult['timing'] = {
@@ -512,7 +520,7 @@ export class TieredFetcher {
     options: TieredFetchOptions
   ): { isValid: boolean; reason?: string } {
     const { html, content } = result;
-    const minLength = options.minContentLength || 200;
+    const minLength = options.minContentLength || DEFAULT_FETCH_OPTIONS.minContentLength;
 
     // Check text length
     if (content.text.length < minLength) {

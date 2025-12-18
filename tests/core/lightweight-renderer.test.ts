@@ -473,7 +473,8 @@ describe('LightweightRenderer', () => {
       const result = await renderer.render('https://example.com');
 
       expect(result.detection.needsFullBrowser).toBe(true);
-      expect(result.detection.reason).toContain('recaptcha');
+      // With smarter detection, pages with ONLY captcha (no real content) are detected as challenge pages
+      expect(result.detection.reason).toContain('challenge');
     });
 
     it('should detect hCaptcha pages', async () => {

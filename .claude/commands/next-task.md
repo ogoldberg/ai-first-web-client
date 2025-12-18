@@ -115,11 +115,12 @@ Skip comments that match ANY of:
 ## Step 3: Start Next Task
 
 1. Switch to main and pull: `git checkout main && git pull`
-2. Read PROJECT_STATUS.md to identify the next task using priority order:
-   - **First:** Any task marked "In Progress" that needs completion
-   - **Second:** Items in "Development Priorities (Next 30 Days)" section
-   - **Third:** Items in "Phase 2: Enhanced Intelligence" section
-   - **Fourth:** Items in "Technical Debt & Known Issues" section
+2. Read docs/BACKLOG.md and docs/PROJECT_STATUS.md to identify the next task using priority order:
+   - **First:** Any task marked "In Progress" in PROJECT_STATUS.md
+   - **Second:** P0 (Critical) tasks in BACKLOG.md
+   - **Third:** P1 (High Priority) tasks in BACKLOG.md
+   - **Fourth:** P2 (Medium Priority) tasks in BACKLOG.md
+   - **Fifth:** Items in "Technical Debt & Known Issues" section of PROJECT_STATUS.md
 
 3. **Claim the task on main FIRST** (prevents other workers from duplicating):
 
@@ -160,7 +161,7 @@ After completing the task:
 
 Stop when ANY condition is met:
 
-1. **No more tasks:** PROJECT_STATUS.md has no unclaimed tasks
+1. **No more tasks:** BACKLOG.md has no unclaimed P0/P1/P2 tasks
 2. **Tasks blocked:** Remaining tasks require external input/dependencies
 3. **Ambiguous tasks:** Next tasks are unclear, need user clarification
 
@@ -202,7 +203,9 @@ git checkout -b recovered-branch-name [COMMIT_HASH]
 - **Test command:** `npm test` (runs Vitest test suite)
 - **Dev mode:** `npm run dev` (watch mode with auto-rebuild)
 - **Start server:** `npm start`
-- **Progress tracking:** Use PROJECT_STATUS.md (not docs/PROGRESS.md)
+- **Task tracking:**
+  - `docs/BACKLOG.md` - Detailed task backlog with priorities (P0-P3) and effort estimates
+  - `docs/PROJECT_STATUS.md` - High-level project status and changelog
 - **Key directories:**
   - `src/core/` - Core components (BrowserManager, ApiAnalyzer, etc.)
   - `src/tools/` - MCP tool implementations
