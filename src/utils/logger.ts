@@ -44,6 +44,59 @@ const DEFAULT_CONFIG: LoggerConfig = {
 };
 
 /**
+ * Paths to redact from logs to prevent secrets from leaking.
+ * Uses Pino's path syntax (wildcards with *)
+ *
+ * See: https://getpino.io/#/docs/redaction
+ */
+const REDACT_PATHS = [
+  // HTTP headers (case variations)
+  '*.authorization',
+  '*.Authorization',
+  '*.cookie',
+  '*.Cookie',
+  '*.set-cookie',
+  '*.Set-Cookie',
+  'headers.authorization',
+  'headers.Authorization',
+  'headers.cookie',
+  'headers.Cookie',
+  'requestHeaders.authorization',
+  'requestHeaders.Authorization',
+  'requestHeaders.cookie',
+  'requestHeaders.Cookie',
+  'responseHeaders.set-cookie',
+  'responseHeaders.Set-Cookie',
+
+  // Common secret field names
+  '*.password',
+  '*.secret',
+  '*.apiKey',
+  '*.api_key',
+  '*.apikey',
+  '*.token',
+  '*.accessToken',
+  '*.access_token',
+  '*.refreshToken',
+  '*.refresh_token',
+  '*.privateKey',
+  '*.private_key',
+  '*.credentials',
+  '*.auth',
+
+  // localStorage/sessionStorage
+  '*.localStorage',
+  '*.sessionStorage',
+
+  // Nested in common objects
+  'session.cookies',
+  'session.auth',
+  'request.headers.authorization',
+  'request.headers.cookie',
+  'response.headers.set-cookie',
+];
+
+/**
  * Create the base Pino logger instance
  */
 function createBaseLogger(config: LoggerConfig = DEFAULT_CONFIG): PinoLogger {
@@ -56,6 +109,10 @@ function createBaseLogger(config: LoggerConfig = DEFAULT_CONFIG): PinoLogger {
     timestamp: pino.stdTimeFunctions.isoTime,
     formatters: {
       level: (label) => ({ level: label }),
+    },
+    redact: {
+      paths: REDACT_PATHS,
+      censor: '[REDACTED]',
     },
   };
 
@@ -100,22 +157,43 @@ export function getLogger(): PinoLogger {
 
 /**
  * Component-specific logger wrapper
+ *
+ * Uses a getter to always access the current baseLogger, allowing
+ * reconfiguration at runtime via configureLogger().
  */
 export class Logger {
-  private logger: PinoLogger;
+  private _logger: PinoLogger | null = null;
+  private _context: LogContext | null = null;
   private component: string;
 
   constructor(component: string, parentLogger?: PinoLogger) {
     this.component = component;
-    this.logger = (parentLogger || baseLogger).child({ component });
+    // If a specific parent logger is provided, cache it (for child loggers)
+    if (parentLogger) {
+      this._logger = parentLogger.child({ component });
+    }
+  }
+
+  /**
+   * Get the internal Pino logger, creating fresh child from baseLogger if needed
+   */
+  private get logger(): PinoLogger {
+    // If we have a cached logger (from parent), use it
+    if (this._logger) {
+      return this._logger;
+    }
+    // Otherwise, create child from current baseLogger each time
+    // This ensures configureLogger() changes take effect
+    return baseLogger.child({ component: this.component });
   }
 
   /**
    * Create a child logger with additional context
    */
   child(context: LogContext): Logger {
-    const childLogger = new Logger(this.component);
-    childLogger.logger = this.logger.child(context);
+    const childLogger = new Logger(this.component, this.logger);
+    childLogger._logger = this.logger.child(context);
+    childLogger._context = context;
     return childLogger;
   }
 

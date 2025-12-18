@@ -24,7 +24,7 @@ Tasks are organized by priority and category. Each task includes:
 | ID | Task | Effort | Category | Notes |
 |----|------|--------|----------|-------|
 | S-001 | Add URL safety policy controls | M | Security | Block private IP ranges (RFC1918), link-local, metadata endpoints, `file://`. Secure defaults with opt-out |
-| S-002 | Redact secrets in logs | S | Security | Use Pino's `redact` option for `authorization`, `cookie`, token-like strings, localStorage |
+| S-002 | Redact secrets in logs | S | Security | Use Pino's `redact` option for `authorization`, `cookie`, token-like strings, localStorage (DONE) |
 
 ---
 
