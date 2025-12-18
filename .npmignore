@@ -1,0 +1,36 @@
+# Development files
+src/
+tests/
+scripts/
+docs/
+
+# Configuration
+.claude/
+tsconfig.json
+vitest.config.ts
+.tool-versions
+
+# Local data
+sessions/
+knowledge-base.json
+enhanced-knowledge-base.json
+*.bak
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+
+# Development notes
+CLAUDE.md
+TODO.md
+NOTES.md
