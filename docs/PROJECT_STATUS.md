@@ -219,7 +219,7 @@ See [BACKLOG.md](BACKLOG.md) for the detailed task backlog with priorities and e
 
 | ID | Task | Effort | Notes |
 |----|------|--------|-------|
-| B-001 | Fix ESM require.resolve usage | S | Runtime bug in browser-manager.ts |
+| B-001 | Fix ESM require.resolve usage | S | Runtime bug in browser-manager.ts - **IN PROGRESS** |
 | B-002 | Add missing LICENSE file | S | Package.json references non-existent file |
 | S-001 | Add URL safety policy controls | M | SSRF protection with secure defaults |
 | S-002 | Redact secrets in logs | S | Pino redact for auth headers, cookies |
