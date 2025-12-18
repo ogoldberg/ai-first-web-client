@@ -211,6 +211,23 @@ Skills are multi-step action sequences that can be applied to similar pages.`,
         },
       },
       {
+        name: 'get_learning_progress',
+        description: `Get comprehensive learning progress statistics.
+
+Shows a combined view of the browser's learning state:
+- **Skills**: Total skills, success rates, top performers, recently created
+- **Anti-patterns**: Things the browser learned NOT to do
+- **Coverage**: Which domains have skills vs need them
+- **Trajectories**: Browsing session outcomes
+
+This is the most comprehensive view of the browser's learning progress.
+Use it to understand overall learning health and identify areas for improvement.`,
+        inputSchema: {
+          type: 'object',
+          properties: {},
+        },
+      },
+      {
         name: 'find_applicable_skills',
         description: `Find browsing skills that might be applicable for a URL.
 
@@ -884,6 +901,67 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
                 },
                 skillsByDomain: proceduralStats.skillsByDomain,
                 mostUsedSkills: proceduralStats.mostUsedSkills.slice(0, 5),
+              }, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'get_learning_progress': {
+        const proceduralMemory = smartBrowser.getProceduralMemory();
+        const learningEngine = smartBrowser.getLearningEngine();
+
+        const progress = proceduralMemory.getLearningProgress();
+        const learningStats = learningEngine.getStats();
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                summary: {
+                  totalSkills: progress.skills.total,
+                  totalAntiPatterns: progress.antiPatterns.total,
+                  totalApiPatterns: learningStats.totalApiPatterns,
+                  coveredDomains: progress.coverage.coveredDomains,
+                  trajectorySuccessRate: progress.trajectories.total > 0
+                    ? Math.round((progress.trajectories.successful / progress.trajectories.total) * 100) + '%'
+                    : 'N/A',
+                },
+                skills: {
+                  byDomain: progress.skills.byDomain,
+                  avgSuccessRate: Math.round(progress.skills.avgSuccessRate * 100) + '%',
+                  topPerformers: progress.skills.topPerformers.map(s => ({
+                    name: s.name,
+                    successRate: Math.round(s.successRate * 100) + '%',
+                    uses: s.uses,
+                  })),
+                  recentlyCreated: progress.skills.recentlyCreated.map(s => ({
+                    name: s.name,
+                    domain: s.domain,
+                    createdAt: new Date(s.createdAt).toISOString(),
+                  })),
+                },
+                antiPatterns: {
+                  total: progress.antiPatterns.total,
+                  byDomain: progress.antiPatterns.byDomain,
+                },
+                patterns: {
+                  totalApiPatterns: learningStats.totalApiPatterns,
+                  bypassablePatterns: learningStats.bypassablePatterns,
+                  totalSelectors: learningStats.totalSelectors,
+                  totalValidators: learningStats.totalValidators,
+                },
+                coverage: {
+                  coveredDomains: progress.coverage.coveredDomains,
+                  uncoveredDomains: progress.coverage.uncoveredDomains,
+                  suggestions: progress.coverage.suggestions,
+                },
+                trajectories: {
+                  total: progress.trajectories.total,
+                  successful: progress.trajectories.successful,
+                  failed: progress.trajectories.failed,
+                },
               }, null, 2),
             },
           ],
