@@ -167,13 +167,13 @@ The LLM Browser MCP Server is an intelligent browser designed specifically for L
 | Issue | Severity | Notes |
 |-------|----------|-------|
 | Session encryption basic | High | File-based, not keychain (S-003) |
-| Dual knowledge stores | High | KnowledgeBase and LearningEngine both persist separately (A-001) |
 | Large god files | Low | `src/index.ts` and `content-intelligence.ts` need splitting (D-010) |
 
 ### Resolved Issues
 
 | Issue | Resolution |
 |-------|------------|
+| Dual knowledge stores | A-001: LearningEngine is now the canonical store. KnowledgeBase deprecated with automatic migration. |
 | Legacy tools not marked deprecated | Added deprecation warnings to browse tool with runtime logging in PR #31 |
 | No SSRF protection | URL safety module with comprehensive SSRF protection in PR #30 |
 | Secrets in logs | Pino redact configuration in PR #29 |
@@ -231,7 +231,6 @@ All P0 tasks complete.
 
 | ID | Task | Effort | Notes |
 |----|------|--------|-------|
-| A-001 | Unify learning persistence | M | Merge KnowledgeBase and LearningEngine (IN PROGRESS) |
 | S-003 | Encrypt sessions at rest | M | Pluggable crypto with user-supplied key |
 
 ### Upcoming (P2)
@@ -250,6 +249,9 @@ All P0 tasks complete.
 
 ### v0.5.0 (2025-12-18)
 
+- Unified learning persistence: LearningEngine is now the canonical store, KnowledgeBase deprecated
+- Added automatic migration from legacy knowledge-base.json to LearningEngine
+- Added KnowledgeBase compatibility methods to LearningEngine (getPatterns, findPattern, learn, etc.)
 - Added PersistentStore utility with debounced writes and atomic persistence (temp file + rename)
 - Applied debounced/atomic persistence to KnowledgeBase, LearningEngine, ProceduralMemory, SessionManager
 - Added output size controls to smart_browse (maxChars, includeTables, includeNetwork, includeConsole, includeHtml)

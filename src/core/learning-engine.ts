@@ -1403,6 +1403,115 @@ export class LearningEngine {
   }
 
   // ============================================
+  // KNOWLEDGEBASE COMPATIBILITY METHODS
+  // ============================================
+
+  /**
+   * Get all API patterns for a domain
+   * (KnowledgeBase compatibility method)
+   */
+  getPatterns(domain: string): EnhancedApiPattern[] {
+    const entry = this.entries.get(domain);
+    return entry?.apiPatterns || [];
+  }
+
+  /**
+   * Get high-confidence patterns that can bypass browser
+   * (KnowledgeBase compatibility method)
+   */
+  getBypassablePatterns(domain: string): EnhancedApiPattern[] {
+    const patterns = this.getPatterns(domain);
+    return patterns.filter(p => p.canBypass && p.confidence === 'high');
+  }
+
+  /**
+   * Find a pattern matching a URL
+   * (KnowledgeBase compatibility method)
+   */
+  findPattern(url: string): EnhancedApiPattern | null {
+    try {
+      const urlObj = new URL(url);
+      const domain = urlObj.hostname;
+      const pathname = urlObj.pathname;
+
+      const entry = this.entries.get(domain);
+      if (!entry) return null;
+
+      // Find exact match first
+      const exactMatch = entry.apiPatterns.find(p => {
+        try {
+          const patternUrl = new URL(p.endpoint);
+          return patternUrl.pathname === pathname;
+        } catch {
+          return false;
+        }
+      });
+
+      if (exactMatch) return exactMatch;
+
+      // Try partial match
+      const partialMatch = entry.apiPatterns.find(p => {
+        try {
+          const patternUrl = new URL(p.endpoint);
+          return pathname.startsWith(patternUrl.pathname);
+        } catch {
+          return false;
+        }
+      });
+
+      return partialMatch || null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Update success rate for a pattern
+   * (KnowledgeBase compatibility method)
+   */
+  updateSuccessRate(domain: string, endpoint: string, success: boolean): void {
+    const entry = this.entries.get(domain);
+    if (!entry) return;
+
+    const pattern = entry.apiPatterns.find(p => p.endpoint === endpoint);
+    if (!pattern) return;
+
+    // Update overall success rate
+    const currentRate = entry.overallSuccessRate;
+    entry.overallSuccessRate = success
+      ? Math.min(1.0, currentRate + 0.1)
+      : Math.max(0.0, currentRate - 0.2);
+
+    // Lower confidence if success rate drops
+    if (entry.overallSuccessRate < 0.6 && pattern.confidence === 'high') {
+      pattern.confidence = 'medium';
+      pattern.canBypass = false;
+    }
+
+    this.save();
+  }
+
+  /**
+   * Clear all learned data
+   * (KnowledgeBase compatibility method)
+   */
+  clear(): void {
+    this.entries.clear();
+    this.learningEvents = [];
+    this.save();
+  }
+
+  /**
+   * Alias for learnApiPattern to maintain KnowledgeBase compatibility
+   * (KnowledgeBase used learn() method)
+   */
+  learn(domain: string, patterns: ApiPattern[]): void {
+    for (const pattern of patterns) {
+      this.learnApiPattern(domain, pattern);
+    }
+  }
+
+  // ============================================
   // PERSISTENCE
   // ============================================
 
@@ -1423,6 +1532,144 @@ export class LearningEngine {
       }
 
       logger.learning.info('Loaded knowledge base', { totalDomains: this.entries.size });
+    }
+
+    // Attempt migration from old KnowledgeBase format
+    await this.migrateFromLegacyKnowledgeBase();
+  }
+
+  /**
+   * Migrate data from legacy knowledge-base.json to enhanced format
+   * This is a one-time migration that preserves existing learned patterns
+   */
+  private async migrateFromLegacyKnowledgeBase(): Promise<void> {
+    const legacyPath = './knowledge-base.json';
+    const migratedMarker = '.knowledge-base-migrated';
+
+    try {
+      // Check if already migrated
+      const fs = await import('node:fs/promises');
+      const path = await import('node:path');
+
+      const markerPath = path.resolve(migratedMarker);
+      try {
+        await fs.access(markerPath);
+        // Marker exists, already migrated
+        return;
+      } catch {
+        // Marker doesn't exist, continue with migration check
+      }
+
+      // Check if legacy file exists
+      const resolvedLegacyPath = path.resolve(legacyPath);
+      try {
+        await fs.access(resolvedLegacyPath);
+      } catch {
+        // No legacy file, nothing to migrate
+        return;
+      }
+
+      // Read legacy data
+      const legacyContent = await fs.readFile(resolvedLegacyPath, 'utf-8');
+      const legacyData = JSON.parse(legacyContent) as Record<string, {
+        domain: string;
+        patterns: ApiPattern[];
+        lastUsed: number;
+        usageCount: number;
+        successRate: number;
+      }>;
+
+      let migratedCount = 0;
+      const now = Date.now();
+
+      for (const [domain, legacyEntry] of Object.entries(legacyData)) {
+        // Check if we already have data for this domain
+        const existingEntry = this.entries.get(domain);
+
+        if (existingEntry) {
+          // Merge patterns - add legacy patterns that don't exist
+          for (const legacyPattern of legacyEntry.patterns) {
+            const exists = existingEntry.apiPatterns.some(
+              p => p.endpoint === legacyPattern.endpoint && p.method === legacyPattern.method
+            );
+
+            if (!exists) {
+              // Convert to enhanced format
+              const enhanced: EnhancedApiPattern = {
+                ...legacyPattern,
+                createdAt: now,
+                lastVerified: legacyEntry.lastUsed || now,
+                verificationCount: 1,
+                failureCount: 0,
+              };
+              existingEntry.apiPatterns.push(enhanced);
+              migratedCount++;
+            }
+          }
+        } else {
+          // Create new entry from legacy data
+          const enhancedEntry: EnhancedKnowledgeBaseEntry = {
+            domain,
+            apiPatterns: legacyEntry.patterns.map(p => ({
+              ...p,
+              createdAt: now,
+              lastVerified: legacyEntry.lastUsed || now,
+              verificationCount: 1,
+              failureCount: 0,
+            })),
+            selectorChains: [],
+            refreshPatterns: [],
+            validators: [],
+            paginationPatterns: {},
+            recentFailures: [],
+            lastUsed: legacyEntry.lastUsed || now,
+            usageCount: legacyEntry.usageCount || 0,
+            overallSuccessRate: legacyEntry.successRate ?? 1.0,
+            createdAt: now,
+            lastUpdated: now,
+          };
+
+          // Check for domain group
+          const group = this.getDomainGroup(domain);
+          if (group) {
+            enhancedEntry.domainGroup = group.name;
+          }
+
+          this.entries.set(domain, enhancedEntry);
+          migratedCount += legacyEntry.patterns.length;
+        }
+      }
+
+      if (migratedCount > 0) {
+        // Save migrated data
+        this.save();
+
+        // Create migration marker
+        await fs.writeFile(markerPath, JSON.stringify({
+          migratedAt: new Date().toISOString(),
+          patternsCount: migratedCount,
+          domainsCount: Object.keys(legacyData).length,
+        }), 'utf-8');
+
+        logger.learning.info('Migrated legacy knowledge base', {
+          domainsCount: Object.keys(legacyData).length,
+          patternsCount: migratedCount,
+        });
+
+        this.recordLearningEvent({
+          type: 'api_discovered',
+          domain: 'system',
+          details: {
+            action: 'legacy_migration',
+            domainsCount: Object.keys(legacyData).length,
+            patternsCount: migratedCount,
+          },
+          timestamp: now,
+        });
+      }
+    } catch (error) {
+      // Migration is best-effort, don't fail initialization
+      logger.learning.warn('Failed to migrate legacy knowledge base', { error });
     }
   }
 

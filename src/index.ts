@@ -26,7 +26,7 @@ import { BrowserManager } from './core/browser-manager.js';
 import { ContentExtractor } from './utils/content-extractor.js';
 import { ApiAnalyzer } from './core/api-analyzer.js';
 import { SessionManager } from './core/session-manager.js';
-import { KnowledgeBase } from './core/knowledge-base.js';
+import { LearningEngine } from './core/learning-engine.js';
 import { SmartBrowser } from './core/smart-browser.js';
 import { BrowseTool } from './tools/browse-tool.js';
 import { ApiCallTool } from './tools/api-call-tool.js';
@@ -37,7 +37,7 @@ const browserManager = new BrowserManager();
 const contentExtractor = new ContentExtractor();
 const apiAnalyzer = new ApiAnalyzer();
 const sessionManager = new SessionManager('./sessions');
-const knowledgeBase = new KnowledgeBase('./knowledge-base.json');
+const learningEngine = new LearningEngine('./enhanced-knowledge-base.json');
 
 // Initialize smart browser (unified intelligent browsing)
 const smartBrowser = new SmartBrowser(
@@ -53,7 +53,7 @@ const browseTool = new BrowseTool(
   contentExtractor,
   apiAnalyzer,
   sessionManager,
-  knowledgeBase
+  learningEngine
 );
 const apiCallTool = new ApiCallTool(browserManager);
 
@@ -1634,14 +1634,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'get_knowledge_stats': {
-        const stats = knowledgeBase.getStats();
+        const stats = learningEngine.getStats();
         return {
           content: [{ type: 'text', text: JSON.stringify(stats, null, 2) }],
         };
       }
 
       case 'get_learned_patterns': {
-        const patterns = knowledgeBase.getPatterns(args.domain as string);
+        const patterns = learningEngine.getPatterns(args.domain as string);
         return {
           content: [
             {
@@ -1977,7 +1977,7 @@ function getRecommendations(intelligence: Awaited<ReturnType<typeof smartBrowser
 // Initialize and start server
 async function main() {
   await sessionManager.initialize();
-  await knowledgeBase.initialize();
+  await learningEngine.initialize();
   await smartBrowser.initialize();
 
   const transport = new StdioServerTransport();

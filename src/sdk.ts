@@ -30,7 +30,6 @@ import { SmartBrowser, type SmartBrowseOptions, type SmartBrowseResult } from '.
 import { TieredFetcher, type TieredFetchOptions, type TieredFetchResult } from './core/tiered-fetcher.js';
 import { ProceduralMemory } from './core/procedural-memory.js';
 import { LearningEngine } from './core/learning-engine.js';
-import { KnowledgeBase } from './core/knowledge-base.js';
 import type { SkillMatch } from './types/index.js';
 
 // Re-export core types from their actual modules
@@ -61,7 +60,6 @@ export {
   BrowserManager,
   SessionManager,
   ApiAnalyzer,
-  KnowledgeBase,
 };
 
 // =============================================================================
@@ -71,8 +69,8 @@ export {
 export interface LLMBrowserConfig {
   /** Directory for storing session data (default: './sessions') */
   sessionsDir?: string;
-  /** Path to knowledge base JSON file (default: './knowledge-base.json') */
-  knowledgeBasePath?: string;
+  /** Path to learning engine JSON file (default: './enhanced-knowledge-base.json') */
+  learningEnginePath?: string;
   /** Browser configuration */
   browser?: BrowserConfig;
   /** Enable procedural memory / skill learning (default: true) */
@@ -95,7 +93,7 @@ export class LLMBrowserClient {
   private contentExtractor: ContentExtractor;
   private apiAnalyzer: ApiAnalyzer;
   private sessionManager: SessionManager;
-  private knowledgeBase: KnowledgeBase;
+  private learningEngine: LearningEngine;
   private smartBrowser: SmartBrowser;
   private initialized = false;
   private config: LLMBrowserConfig;
@@ -107,7 +105,7 @@ export class LLMBrowserClient {
     this.contentExtractor = new ContentExtractor();
     this.apiAnalyzer = new ApiAnalyzer();
     this.sessionManager = new SessionManager(config.sessionsDir ?? './sessions');
-    this.knowledgeBase = new KnowledgeBase(config.knowledgeBasePath ?? './knowledge-base.json');
+    this.learningEngine = new LearningEngine(config.learningEnginePath ?? './enhanced-knowledge-base.json');
 
     this.smartBrowser = new SmartBrowser(
       this.browserManager,
@@ -124,7 +122,7 @@ export class LLMBrowserClient {
     if (this.initialized) return;
 
     await this.sessionManager.initialize();
-    await this.knowledgeBase.initialize();
+    await this.learningEngine.initialize();
     await this.smartBrowser.initialize();
 
     this.initialized = true;

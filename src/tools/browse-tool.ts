@@ -16,7 +16,7 @@ import { BrowserManager } from '../core/browser-manager.js';
 import { ContentExtractor } from '../utils/content-extractor.js';
 import { ApiAnalyzer } from '../core/api-analyzer.js';
 import { SessionManager } from '../core/session-manager.js';
-import { KnowledgeBase } from '../core/knowledge-base.js';
+import { LearningEngine } from '../core/learning-engine.js';
 import { rateLimiter } from '../utils/rate-limiter.js';
 import { withRetry } from '../utils/retry.js';
 import { findPreset, getWaitStrategy } from '../utils/domain-presets.js';
@@ -58,7 +58,7 @@ export class BrowseTool {
     private contentExtractor: ContentExtractor,
     private apiAnalyzer: ApiAnalyzer,
     private sessionManager: SessionManager,
-    private knowledgeBase: KnowledgeBase
+    private learningEngine: LearningEngine
   ) {}
 
   /**
@@ -146,7 +146,7 @@ export class BrowseTool {
 
     // Check if we have a known pattern we can optimize
     const domain = new URL(url).hostname;
-    const knownPattern = this.knowledgeBase.findPattern(url);
+    const knownPattern = this.learningEngine.findPattern(url);
     const preset = findPreset(url);
 
     if (knownPattern && knownPattern.canBypass && knownPattern.confidence === 'high') {
@@ -260,7 +260,7 @@ export class BrowseTool {
 
     // Learn from this browsing session
     if (discoveredApis.length > 0) {
-      this.knowledgeBase.learn(domain, discoveredApis);
+      this.learningEngine.learn(domain, discoveredApis);
       log.info('Discovered API patterns', { domain, count: discoveredApis.length });
     }
 

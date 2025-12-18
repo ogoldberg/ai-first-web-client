@@ -18,6 +18,7 @@ sessions/
 knowledge-base.json
 procedural-memory.json
 learning-engine.json
+.knowledge-base-migrated
 *.enc
 
 # Debug/temp
