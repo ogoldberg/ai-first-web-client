@@ -4,7 +4,7 @@
 **Version:** 0.5.0
 **Current Phase:** Production Readiness (Phase 2)
 **Total Code:** ~15,000 lines TypeScript
-**Tests:** 440 passing
+**Tests:** 440 passing + 25 live tests
 
 ---
 
@@ -72,6 +72,7 @@ The LLM Browser MCP Server is an intelligent browser designed specifically for L
 | Tier Usage Analytics | Complete | get_tier_usage_by_domain tool (PR #13) |
 | Performance Timing | Complete | PerformanceTracker utility, get_performance_metrics tool |
 | Site-Specific APIs | Complete | Reddit, HN, GitHub, Wikipedia, StackOverflow |
+| Site API Live Tests | Complete | 25 tests against real endpoints (LIVE_TESTS=true) |
 | URL Safety (SSRF Protection) | Complete | Blocks RFC1918, localhost, metadata endpoints, dangerous protocols |
 
 ---
@@ -141,7 +142,8 @@ The LLM Browser MCP Server is an intelligent browser designed specifically for L
 | Learning Engine | 64 | API discovery, selectors, validation, anomaly detection |
 | Logger | 10 | Secret redaction, log levels, component loggers |
 | URL Safety | 56 | SSRF protection, protocol blocking, IP range validation |
-| **Total** | **440** | All passing |
+| Site API Live Tests | 25 | Real API requests (Reddit, HN, GitHub, Wikipedia, StackOverflow) |
+| **Total** | **440 + 25 live** | All passing |
 
 ---
 
@@ -230,7 +232,7 @@ All P0 tasks complete.
 |----|------|--------|-------|
 | A-001 | Unify learning persistence | M | Merge KnowledgeBase and LearningEngine |
 | A-002 | Debounced + atomic persistence | M | Prevent write corruption |
-| T-008 | Live tests for site API handlers | M | Verify against real URLs |
+| S-003 | Encrypt sessions at rest | M | Pluggable crypto with user-supplied key |
 
 ### Upcoming (P2)
 
