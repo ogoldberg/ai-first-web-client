@@ -95,6 +95,13 @@ This is the RECOMMENDED browsing tool. It automatically:
 The browser gets smarter with every use. For government sites like boe.es,
 extranjeria.gob.es, uscis.gov, etc., it has pre-configured patterns.
 
+Output size controls (use for large pages):
+- maxChars: Truncate markdown content to this length
+- includeTables: Include extracted tables (default: true)
+- includeNetwork: Include network requests (default: false)
+- includeConsole: Include console logs (default: false)
+- includeHtml: Include raw HTML (default: false)
+
 Returns: Content, tables, APIs discovered, and learning insights.`,
         inputSchema: {
           type: 'object',
@@ -131,6 +138,27 @@ Returns: Content, tables, APIs discovered, and learning insights.`,
             sessionProfile: {
               type: 'string',
               description: 'Session profile for authenticated access (default: "default")',
+            },
+            // Output size controls
+            maxChars: {
+              type: 'number',
+              description: 'Maximum characters for markdown content (default: no limit). Use for large pages.',
+            },
+            includeTables: {
+              type: 'boolean',
+              description: 'Include extracted tables in response (default: true)',
+            },
+            includeNetwork: {
+              type: 'boolean',
+              description: 'Include network request data (default: false). Can be large.',
+            },
+            includeConsole: {
+              type: 'boolean',
+              description: 'Include browser console logs (default: false)',
+            },
+            includeHtml: {
+              type: 'boolean',
+              description: 'Include raw HTML in response (default: false). Can be very large.',
             },
           },
           required: ['url'],
@@ -783,15 +811,47 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           enableLearning: true,
         });
 
+        // Output size control options (with sensible defaults for smaller responses)
+        const maxChars = args.maxChars as number | undefined;
+        const includeTables = args.includeTables !== false; // Default: true
+        const includeNetwork = args.includeNetwork === true; // Default: false
+        const includeConsole = args.includeConsole === true; // Default: false
+        const includeHtml = args.includeHtml === true; // Default: false
+
+        // Apply maxChars truncation to markdown content
+        let markdown = result.content.markdown;
+        let wasTruncated = false;
+        if (maxChars && markdown.length > maxChars) {
+          markdown = markdown.substring(0, maxChars);
+          // Try to break at a word/sentence boundary
+          const lastSpace = markdown.lastIndexOf(' ');
+          const lastNewline = markdown.lastIndexOf('\n');
+          const breakPoint = Math.max(lastSpace, lastNewline);
+          if (breakPoint > maxChars * 0.8) {
+            markdown = markdown.substring(0, breakPoint);
+          }
+          markdown += '\n\n[Content truncated - reached maxChars limit]';
+          wasTruncated = true;
+        }
+
+        // Build content object based on flags
+        const contentOutput: Record<string, unknown> = {
+          markdown,
+          textLength: result.content.text.length,
+        };
+        if (wasTruncated) {
+          contentOutput.truncated = true;
+          contentOutput.originalLength = result.content.markdown.length;
+        }
+        if (includeHtml) {
+          contentOutput.html = result.content.html;
+        }
+
         // Format result for LLM consumption
-        const formattedResult = {
+        const formattedResult: Record<string, unknown> = {
           url: result.url,
           title: result.title,
-          content: {
-            markdown: result.content.markdown,
-            textLength: result.content.text.length,
-          },
-          tables: result.tables,
+          content: contentOutput,
           metadata: result.metadata,
           // Learning insights (key differentiator)
           intelligence: {
@@ -820,12 +880,36 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             canBypassBrowser: api.canBypass,
             confidence: api.confidence,
           })),
-          // Additional pages if pagination was followed
-          additionalPages: result.additionalPages?.map(page => ({
+        };
+
+        // Conditionally include tables
+        if (includeTables && result.tables && result.tables.length > 0) {
+          formattedResult.tables = result.tables;
+        }
+
+        // Conditionally include network data
+        if (includeNetwork && result.network && result.network.length > 0) {
+          formattedResult.network = result.network.map(req => ({
+            url: req.url,
+            method: req.method,
+            status: req.status,
+            contentType: req.contentType,
+            duration: req.duration,
+          }));
+        }
+
+        // Conditionally include console logs
+        if (includeConsole && result.console && result.console.length > 0) {
+          formattedResult.console = result.console;
+        }
+
+        // Additional pages if pagination was followed
+        if (result.additionalPages && result.additionalPages.length > 0) {
+          formattedResult.additionalPages = result.additionalPages.map(page => ({
             url: page.url,
             textLength: page.content.text.length,
-          })),
-        };
+          }));
+        }
 
         return {
           content: [

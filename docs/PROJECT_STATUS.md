@@ -224,10 +224,6 @@ See [BACKLOG.md](BACKLOG.md) for the detailed task backlog with priorities and e
 
 All P0 tasks complete.
 
-### High Priority (P1) - IN PROGRESS
-
-**A-003: Add output size controls** - Add `maxChars`, `includeTables`, `includeNetwork`, `includeConsole` flags
-
 ### High Priority (P1)
 
 | ID | Task | Effort | Notes |
@@ -252,6 +248,7 @@ All P0 tasks complete.
 
 ### v0.5.0 (2025-12-18)
 
+- Added output size controls to smart_browse (maxChars, includeTables, includeNetwork, includeConsole, includeHtml)
 - Deprecated legacy "browse" tool with runtime warnings (use "smart_browse" instead)
 - Added URL safety module with comprehensive SSRF protection (56 tests)
 - Added secret redaction in logs using Pino redact configuration
