@@ -21,7 +21,7 @@ No P0 tasks remaining - all critical items completed.
 
 | ID | Task | Effort | Category | Notes |
 |----|------|--------|----------|-------|
-| T-004 | Add tests for procedural memory | L | Testing | Skills, versioning, rollback |
+| T-004 | Add tests for procedural memory | L | Testing | Skills, versioning, rollback (DONE) |
 | T-005 | Add tests for learning engine | L | Testing | API discovery, selectors |
 | T-008 | Live tests for site API handlers | M | Testing | Verify Reddit, HN, GitHub, Wikipedia, SO handlers against real URLs |
 
