@@ -4,7 +4,7 @@
 **Version:** 0.5.0
 **Current Phase:** Production Readiness (Phase 2)
 **Total Code:** ~15,000 lines TypeScript
-**Tests:** 239 passing
+**Tests:** 374 passing
 
 ---
 
@@ -136,7 +136,9 @@ The LLM Browser MCP Server is an intelligent browser designed specifically for L
 | Tiered Fetcher | 24 | Tier cascade and fallback |
 | SmartBrowser E2E | 13 | Full browse cycle |
 | MCP Tools | 40 | smart_browse and related tools |
-| **Total** | **239** | All passing |
+| Procedural Memory | 71 | Skills, versioning, rollback, workflows |
+| Learning Engine | 64 | API discovery, selectors, validation, anomaly detection |
+| **Total** | **374** | All passing |
 
 ---
 
@@ -211,7 +213,6 @@ See [BACKLOG.md](BACKLOG.md) for the detailed task backlog with priorities and e
 
 | ID | Task | Effort | Notes |
 |----|------|--------|-------|
-| T-005 | Add tests for learning engine | L | API discovery, selectors - **IN PROGRESS** |
 | T-008 | Live tests for site API handlers | M | Verify against real URLs |
 
 ### Upcoming (P2)
@@ -236,7 +237,9 @@ See [BACKLOG.md](BACKLOG.md) for the detailed task backlog with priorities and e
 - Added session health monitoring with auto-refresh callbacks
 - Added tier usage analytics with get_tier_usage_by_domain tool
 - Added centralized timeout configuration
-- Added 239 tests covering all major components
+- Added 374 tests covering all major components
+- Added comprehensive tests for LearningEngine (64 tests)
+- Added comprehensive tests for ProceduralMemory (71 tests)
 - Improved error handling with error boundaries in SmartBrowser
 
 ### v0.4.0 (2024-12-16)

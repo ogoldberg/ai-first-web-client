@@ -22,7 +22,7 @@ No P0 tasks remaining - all critical items completed.
 | ID | Task | Effort | Category | Notes |
 |----|------|--------|----------|-------|
 | T-004 | Add tests for procedural memory | L | Testing | Skills, versioning, rollback (DONE) |
-| T-005 | Add tests for learning engine | L | Testing | API discovery, selectors |
+| T-005 | Add tests for learning engine | L | Testing | API discovery, selectors (DONE) |
 | T-008 | Live tests for site API handlers | M | Testing | Verify Reddit, HN, GitHub, Wikipedia, SO handlers against real URLs |
 
 ---
@@ -106,6 +106,7 @@ No P0 tasks remaining - all critical items completed.
 
 | ID | Task | Completed | Notes |
 |----|------|-----------|-------|
+| T-005 | Add tests for learning engine | 2025-12-17 | 64 tests for API discovery, selectors, validation, anomaly detection, pagination, persistence |
 | O-004 | Add learning progress stats | 2025-12-17 | get_learning_progress MCP tool with skills, anti-patterns, coverage, trajectories, PR #22 |
 | I-014 | HackerNews API handler | 2025-12-17 | Firebase JSON API for items and top stories |
 | I-015 | GitHub API handler | 2025-12-17 | Repos, users, issues, PRs via public REST API |
