@@ -11,13 +11,41 @@ Tasks are organized by priority and category. Each task includes:
 
 ## P0: Critical (Do First)
 
-No P0 tasks remaining - all critical items completed.
+### Runtime & Packaging Bugs
+
+| ID | Task | Effort | Category | Notes |
+|----|------|--------|----------|-------|
+| B-001 | Fix ESM require.resolve usage | S | Debt | `browser-manager.ts` and `content-intelligence.ts` use `require.resolve('playwright')` which fails in ESM. Use `createRequire(import.meta.url)` |
+| B-002 | Add missing LICENSE file | S | Debt | `package.json` lists LICENSE in files but no LICENSE exists at repo root |
+| B-003 | Fix npm packaging hygiene | S | Debt | Prevent `.DS_Store` and stray artifacts in npm tarballs; add `.npmignore` |
+
+### Security
+
+| ID | Task | Effort | Category | Notes |
+|----|------|--------|----------|-------|
+| S-001 | Add URL safety policy controls | M | Security | Block private IP ranges (RFC1918), link-local, metadata endpoints, `file://`. Secure defaults with opt-out |
+| S-002 | Redact secrets in logs | S | Security | Use Pino's `redact` option for `authorization`, `cookie`, token-like strings, localStorage |
 
 ---
 
 ## P1: High Priority (Do Soon)
 
-### Testing (Continued)
+### Architecture & Reliability
+
+| ID | Task | Effort | Category | Notes |
+|----|------|--------|----------|-------|
+| A-001 | Unify learning persistence | M | Debt | Merge `KnowledgeBase` and `LearningEngine` into one canonical store with migration |
+| A-002 | Debounced + atomic persistence | M | Reliability | Debounce saves, batch updates, write atomically (temp + rename) to avoid corruption |
+| A-003 | Add output size controls | M | Features | Add `maxChars`, `includeTables`, `includeNetwork`, `includeConsole` flags; smaller defaults |
+| A-004 | Deprecate legacy tools | S | Debt | Mark legacy browsing tools as deprecated; funnel users to `smart_browse` |
+
+### Security (Continued)
+
+| ID | Task | Effort | Category | Notes |
+|----|------|--------|----------|-------|
+| S-003 | Encrypt sessions at rest | M | Security | Pluggable crypto with user-supplied key (env var) or OS keychain integration |
+
+### Testing
 
 | ID | Task | Effort | Category | Notes |
 |----|------|--------|----------|-------|
@@ -29,6 +57,13 @@ No P0 tasks remaining - all critical items completed.
 
 ## P2: Medium Priority (Plan For)
 
+### Debugging & Observability
+
+| ID | Task | Effort | Category | Notes |
+|----|------|--------|----------|-------|
+| O-005 | Add debug/replay trace recording | M | Features | Record tier decisions, selectors tried, validation reasons for failure reproduction |
+| O-006 | Extraction quality benchmarking | L | Testing | Offline corpus + regression suite for content extraction and table parsing |
+
 ### Features
 
 | ID | Task | Effort | Category | Notes |
@@ -39,6 +74,7 @@ No P0 tasks remaining - all critical items completed.
 | F-004 | Skill composition (chain skills) | L | Features | Combine skills into workflows |
 | F-005 | Screenshot capture on demand | M | Features | Visual debugging |
 | F-006 | HAR file export | M | Features | Network debugging |
+| F-012 | Skill sharing + portability | M | Features | Export/import skill packs by domain vertical (gov, ecommerce, docs) |
 
 ### Intelligence
 
@@ -80,6 +116,8 @@ No P0 tasks remaining - all critical items completed.
 | F-009 | Trace visualization | L | Features | Visual request flow |
 | F-010 | Diff generation for changes | M | Features | Show what changed |
 | F-011 | Webhook notifications | L | Features | External integrations |
+| F-013 | Human-in-the-loop inspection UI | L | Features | Minimal UI to see selectors, extracted content, tier decisions |
+| F-014 | Advanced anti-bot strategies | L | Features | Rotating user agents, smarter wait strategies, proxy provider integration |
 
 ### Technical Debt
 
@@ -88,8 +126,10 @@ No P0 tasks remaining - all critical items completed.
 | D-005 | Configuration file support | M | Debt | .llmbrowserrc |
 | D-006 | Dependency injection refactor | L | Debt | Better testability |
 | D-007 | Improve URL pattern matching | M | Debt | Regex/wildcards |
-| D-008 | Session encryption improvement | M | Debt | Use OS keychain |
+| D-008 | Session encryption improvement | M | Debt | Use OS keychain (superseded by S-003) |
 | D-009 | Type-safe configuration | S | Debt | Validate config at runtime |
+| D-010 | Split large god files | M | Debt | `src/index.ts` and `content-intelligence.ts` are too large; refactor into smaller modules |
+| D-011 | Clean up untracked src files | S | Debt | `skill-generalizer.ts`, `embedding-provider.ts` should be committed or removed |
 
 ### Performance
 

@@ -160,7 +160,13 @@ The LLM Browser MCP Server is an intelligent browser designed specifically for L
 
 | Issue | Severity | Notes |
 |-------|----------|-------|
-| Session encryption basic | Low | File-based, not keychain |
+| ESM require.resolve bug | Critical | `browser-manager.ts` uses `require.resolve` which fails in ESM (B-001) |
+| Missing LICENSE file | Critical | `package.json` lists LICENSE but file doesn't exist (B-002) |
+| No SSRF protection | Critical | Can browse internal networks, metadata endpoints (S-001) |
+| Secrets in logs | Critical | No redaction for cookies, tokens, auth headers (S-002) |
+| Session encryption basic | High | File-based, not keychain (S-003) |
+| Dual knowledge stores | High | KnowledgeBase and LearningEngine both persist separately (A-001) |
+| Large god files | Low | `src/index.ts` and `content-intelligence.ts` need splitting (D-010) |
 
 ### Resolved Issues
 
@@ -209,10 +215,21 @@ ai-first-web-client/
 
 See [BACKLOG.md](BACKLOG.md) for the detailed task backlog with priorities and effort estimates.
 
-### Current Priorities (P1)
+### Critical (P0)
 
 | ID | Task | Effort | Notes |
 |----|------|--------|-------|
+| B-001 | Fix ESM require.resolve usage | S | Runtime bug in browser-manager.ts |
+| B-002 | Add missing LICENSE file | S | Package.json references non-existent file |
+| S-001 | Add URL safety policy controls | M | SSRF protection with secure defaults |
+| S-002 | Redact secrets in logs | S | Pino redact for auth headers, cookies |
+
+### High Priority (P1)
+
+| ID | Task | Effort | Notes |
+|----|------|--------|-------|
+| A-001 | Unify learning persistence | M | Merge KnowledgeBase and LearningEngine |
+| A-002 | Debounced + atomic persistence | M | Prevent write corruption |
 | T-008 | Live tests for site API handlers | M | Verify against real URLs |
 
 ### Upcoming (P2)
