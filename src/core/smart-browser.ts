@@ -40,6 +40,7 @@ import { findPreset, getWaitStrategy } from '../utils/domain-presets.js';
 import { pageCache, ContentCache } from '../utils/cache.js';
 import { TIMEOUTS } from '../utils/timeouts.js';
 import { logger } from '../utils/logger.js';
+import { validateUrlOrThrow, type UrlSafetyConfig } from '../utils/url-safety.js';
 
 // Procedural memory thresholds
 const SKILL_APPLICATION_THRESHOLD = 0.8;  // Minimum similarity to auto-apply a skill
@@ -155,6 +156,10 @@ export class SmartBrowser {
    */
   async browse(url: string, options: SmartBrowseOptions = {}): Promise<SmartBrowseResult> {
     const startTime = Date.now();
+
+    // SSRF Protection: Validate URL before any processing
+    validateUrlOrThrow(url);
+
     const domain = new URL(url).hostname;
     const enableLearning = options.enableLearning !== false;
     const useSkills = options.useSkills !== false;

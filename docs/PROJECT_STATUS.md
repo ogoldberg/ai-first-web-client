@@ -1,10 +1,10 @@
 # LLM Browser MCP Server - Project Status
 
-**Last Updated:** 2025-12-17
+**Last Updated:** 2025-12-18
 **Version:** 0.5.0
 **Current Phase:** Production Readiness (Phase 2)
 **Total Code:** ~15,000 lines TypeScript
-**Tests:** 384 passing
+**Tests:** 440 passing
 
 ---
 
@@ -72,6 +72,7 @@ The LLM Browser MCP Server is an intelligent browser designed specifically for L
 | Tier Usage Analytics | Complete | get_tier_usage_by_domain tool (PR #13) |
 | Performance Timing | Complete | PerformanceTracker utility, get_performance_metrics tool |
 | Site-Specific APIs | Complete | Reddit, HN, GitHub, Wikipedia, StackOverflow |
+| URL Safety (SSRF Protection) | Complete | Blocks RFC1918, localhost, metadata endpoints, dangerous protocols |
 
 ---
 
@@ -139,7 +140,8 @@ The LLM Browser MCP Server is an intelligent browser designed specifically for L
 | Procedural Memory | 71 | Skills, versioning, rollback, workflows |
 | Learning Engine | 64 | API discovery, selectors, validation, anomaly detection |
 | Logger | 10 | Secret redaction, log levels, component loggers |
-| **Total** | **384** | All passing |
+| URL Safety | 56 | SSRF protection, protocol blocking, IP range validation |
+| **Total** | **440** | All passing |
 
 ---
 
@@ -161,7 +163,6 @@ The LLM Browser MCP Server is an intelligent browser designed specifically for L
 
 | Issue | Severity | Notes |
 |-------|----------|-------|
-| No SSRF protection | Critical | Can browse internal networks, metadata endpoints (S-001) |
 | Session encryption basic | High | File-based, not keychain (S-003) |
 | Dual knowledge stores | High | KnowledgeBase and LearningEngine both persist separately (A-001) |
 | Large god files | Low | `src/index.ts` and `content-intelligence.ts` need splitting (D-010) |
@@ -170,6 +171,7 @@ The LLM Browser MCP Server is an intelligent browser designed specifically for L
 
 | Issue | Resolution |
 |-------|------------|
+| No SSRF protection | URL safety module with comprehensive SSRF protection in PR #30 |
 | Secrets in logs | Pino redact configuration in PR #29 |
 | npm packaging hygiene | Added .npmignore in PR #28 |
 | Missing LICENSE file | Added MIT LICENSE in PR #27 |
@@ -219,9 +221,7 @@ See [BACKLOG.md](BACKLOG.md) for the detailed task backlog with priorities and e
 
 ### Critical (P0)
 
-| ID | Task | Effort | Notes |
-|----|------|--------|-------|
-| S-001 | Add URL safety policy controls | M | SSRF protection with secure defaults - **IN PROGRESS** |
+All P0 tasks complete.
 
 ### High Priority (P1)
 
@@ -245,15 +245,17 @@ See [BACKLOG.md](BACKLOG.md) for the detailed task backlog with priorities and e
 
 ## Changelog
 
-### v0.5.0 (2025-12-17)
+### v0.5.0 (2025-12-18)
 
+- Added URL safety module with comprehensive SSRF protection (56 tests)
+- Added secret redaction in logs using Pino redact configuration
 - Added site-specific API handlers (Reddit, HN, GitHub, Wikipedia, StackOverflow)
 - Added performance timing with PerformanceTracker and get_performance_metrics tool
 - Added structured Pino logging with component child loggers
 - Added session health monitoring with auto-refresh callbacks
 - Added tier usage analytics with get_tier_usage_by_domain tool
 - Added centralized timeout configuration
-- Added 374 tests covering all major components
+- Added 440 tests covering all major components
 - Added comprehensive tests for LearningEngine (64 tests)
 - Added comprehensive tests for ProceduralMemory (71 tests)
 - Improved error handling with error boundaries in SmartBrowser
