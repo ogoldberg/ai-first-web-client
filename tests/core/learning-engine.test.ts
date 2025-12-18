@@ -16,7 +16,7 @@
  * - Persistence (save/load/export)
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { LearningEngine } from '../../src/core/learning-engine.js';
 import * as fs from 'fs/promises';
 import * as path from 'path';
@@ -89,6 +89,8 @@ describe('LearningEngine', () => {
     });
 
     it('should decay patterns after grace period', async () => {
+      vi.useFakeTimers();
+
       // Create engine with custom decay config
       const customConfig: ConfidenceDecayConfig = {
         gracePeriodDays: 0, // No grace period for testing
@@ -99,7 +101,7 @@ describe('LearningEngine', () => {
       const customEngine = new LearningEngine(filePath, customConfig);
       await customEngine.initialize();
 
-      // Add pattern
+      // Add pattern (uses fake Date.now())
       const pattern: ApiPattern = {
         endpoint: '/api/decaying',
         method: 'GET',
@@ -108,21 +110,22 @@ describe('LearningEngine', () => {
       };
       customEngine.learnApiPattern('decay.com', pattern);
 
-      // Manually set lastVerified to 2 weeks ago
-      const entry = customEngine.getEntry('decay.com');
-      if (entry) {
-        entry.apiPatterns[0].lastVerified = Date.now() - 14 * 24 * 60 * 60 * 1000;
-      }
+      // Advance time by 2 weeks
+      vi.advanceTimersByTime(14 * 24 * 60 * 60 * 1000);
 
-      // Apply decay
+      // Apply decay (uses fake Date.now())
       customEngine.applyConfidenceDecay();
 
       const decayedEntry = customEngine.getEntry('decay.com');
       expect(decayedEntry?.apiPatterns[0].confidence).not.toBe('high');
       expect(decayedEntry?.apiPatterns[0].canBypass).toBe(false);
+
+      vi.useRealTimers();
     });
 
     it('should respect minimum confidence threshold', async () => {
+      vi.useFakeTimers();
+
       const customConfig: ConfidenceDecayConfig = {
         gracePeriodDays: 0,
         decayRatePerWeek: 1.0, // Aggressive decay
@@ -140,17 +143,16 @@ describe('LearningEngine', () => {
       };
       customEngine.learnApiPattern('threshold.com', pattern);
 
-      // Set lastVerified to very old
-      const entry = customEngine.getEntry('threshold.com');
-      if (entry) {
-        entry.apiPatterns[0].lastVerified = Date.now() - 365 * 24 * 60 * 60 * 1000;
-      }
+      // Advance time by 1 year
+      vi.advanceTimersByTime(365 * 24 * 60 * 60 * 1000);
 
       customEngine.applyConfidenceDecay();
 
       const decayedEntry = customEngine.getEntry('threshold.com');
       // Should be at minimum (low) but not deleted
       expect(decayedEntry?.apiPatterns[0].confidence).toBe('low');
+
+      vi.useRealTimers();
     });
   });
 
@@ -423,19 +425,19 @@ describe('LearningEngine', () => {
     });
 
     it('should track content changes', () => {
+      vi.useFakeTimers();
+
       engine.recordContentCheck('track.com', '/page', 'Content v1', false);
 
-      // Simulate time passing
-      const entry = engine.getEntry('track.com');
-      if (entry?.refreshPatterns[0]) {
-        entry.refreshPatterns[0].lastChecked = Date.now() - 60 * 60 * 1000; // 1 hour ago
-        entry.refreshPatterns[0].lastChanged = Date.now() - 60 * 60 * 1000;
-      }
+      // Advance time by 1 hour
+      vi.advanceTimersByTime(60 * 60 * 1000);
 
       engine.recordContentCheck('track.com', '/page', 'Content v2', true);
 
       const updatedEntry = engine.getEntry('track.com');
       expect(updatedEntry?.refreshPatterns[0].sampleCount).toBe(1);
+
+      vi.useRealTimers();
     });
 
     it('should return default refresh interval for unknown patterns', () => {
