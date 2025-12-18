@@ -1630,6 +1630,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const order = (args.order as 'asc' | 'desc') || (sortBy === 'successRate' ? 'desc' : 'asc');
         const limit = (args.limit as number) || 20;
 
+        // Format percentile stats helper - defined once for reuse
+        const formatStats = (stats: { p50: number; p95: number; p99: number; min: number; max: number; avg: number; count: number } | null) => {
+          if (!stats) return null;
+          return {
+            p50: `${Math.round(stats.p50)}ms`,
+            p95: `${Math.round(stats.p95)}ms`,
+            p99: `${Math.round(stats.p99)}ms`,
+            min: `${Math.round(stats.min)}ms`,
+            max: `${Math.round(stats.max)}ms`,
+            avg: `${Math.round(stats.avg)}ms`,
+            count: stats.count,
+          };
+        };
+
         // If specific domain requested, return detailed metrics
         if (domain) {
           const domainPerf = tracker.getDomainPerformance(domain);
@@ -1646,20 +1660,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               ],
             };
           }
-
-          // Format percentile stats helper
-          const formatStats = (stats: { p50: number; p95: number; p99: number; min: number; max: number; avg: number; count: number } | null) => {
-            if (!stats) return null;
-            return {
-              p50: `${Math.round(stats.p50)}ms`,
-              p95: `${Math.round(stats.p95)}ms`,
-              p99: `${Math.round(stats.p99)}ms`,
-              min: `${Math.round(stats.min)}ms`,
-              max: `${Math.round(stats.max)}ms`,
-              avg: `${Math.round(stats.avg)}ms`,
-              count: stats.count,
-            };
-          };
 
           return {
             content: [
@@ -1687,20 +1687,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const systemPerf = tracker.getSystemPerformance();
         const componentBreakdown = tracker.getComponentBreakdown();
         const domainRankings = tracker.getDomainsByPerformance(sortBy, order, limit);
-
-        // Format percentile stats helper
-        const formatStats = (stats: { p50: number; p95: number; p99: number; min: number; max: number; avg: number; count: number } | null) => {
-          if (!stats) return null;
-          return {
-            p50: `${Math.round(stats.p50)}ms`,
-            p95: `${Math.round(stats.p95)}ms`,
-            p99: `${Math.round(stats.p99)}ms`,
-            min: `${Math.round(stats.min)}ms`,
-            max: `${Math.round(stats.max)}ms`,
-            avg: `${Math.round(stats.avg)}ms`,
-            count: stats.count,
-          };
-        };
 
         return {
           content: [

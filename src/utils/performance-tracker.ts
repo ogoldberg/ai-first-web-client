@@ -141,37 +141,42 @@ export class PerformanceTracker {
       return null;
     }
 
-    const successCount = records.filter(r => r.success).length;
-    const allTimings = records.map(r => r.timing.total);
-
-    // Calculate per-tier stats
-    const tierStats: Record<RenderTier, PercentileStats | null> = {
-      intelligence: null,
-      lightweight: null,
-      playwright: null,
+    // Single pass to collect all metrics
+    let successCount = 0;
+    const allTimings: number[] = [];
+    const timingsByTier: Record<RenderTier, number[]> = {
+      intelligence: [],
+      lightweight: [],
+      playwright: [],
     };
-
-    const tierCounts: Record<RenderTier, number> = {
+    const successfulCountsByTier: Record<RenderTier, number> = {
       intelligence: 0,
       lightweight: 0,
       playwright: 0,
     };
 
-    for (const tier of ['intelligence', 'lightweight', 'playwright'] as RenderTier[]) {
-      const tierRecords = records.filter(r => r.tier === tier);
-      tierCounts[tier] = tierRecords.length;
-      if (tierRecords.length > 0) {
-        tierStats[tier] = this.calculatePercentiles(tierRecords.map(r => r.timing.total));
+    for (const record of records) {
+      allTimings.push(record.timing.total);
+      timingsByTier[record.tier].push(record.timing.total);
+      if (record.success) {
+        successCount++;
+        successfulCountsByTier[record.tier]++;
       }
     }
+
+    // Calculate per-tier stats from grouped data
+    const tierStats: Record<RenderTier, PercentileStats | null> = {
+      intelligence: this.calculatePercentiles(timingsByTier.intelligence),
+      lightweight: this.calculatePercentiles(timingsByTier.lightweight),
+      playwright: this.calculatePercentiles(timingsByTier.playwright),
+    };
 
     // Determine preferred tier (most used successful tier)
     let preferredTier: RenderTier | null = null;
     let maxCount = 0;
-    for (const tier of ['intelligence', 'lightweight', 'playwright'] as RenderTier[]) {
-      const successfulCount = records.filter(r => r.tier === tier && r.success).length;
-      if (successfulCount > maxCount) {
-        maxCount = successfulCount;
+    for (const tier of Object.keys(successfulCountsByTier) as RenderTier[]) {
+      if (successfulCountsByTier[tier] > maxCount) {
+        maxCount = successfulCountsByTier[tier];
         preferredTier = tier;
       }
     }
@@ -191,22 +196,29 @@ export class PerformanceTracker {
    * Get system-wide performance metrics
    */
   getSystemPerformance(): SystemPerformance {
-    const successCount = this.records.filter(r => r.success).length;
-    const allTimings = this.records.map(r => r.timing.total);
-
-    // Calculate per-tier stats
-    const tierStats: Record<RenderTier, PercentileStats | null> = {
-      intelligence: null,
-      lightweight: null,
-      playwright: null,
+    // Single pass to collect all metrics
+    let successCount = 0;
+    const allTimings: number[] = [];
+    const timingsByTier: Record<RenderTier, number[]> = {
+      intelligence: [],
+      lightweight: [],
+      playwright: [],
     };
 
-    for (const tier of ['intelligence', 'lightweight', 'playwright'] as RenderTier[]) {
-      const tierRecords = this.records.filter(r => r.tier === tier);
-      if (tierRecords.length > 0) {
-        tierStats[tier] = this.calculatePercentiles(tierRecords.map(r => r.timing.total));
+    for (const record of this.records) {
+      allTimings.push(record.timing.total);
+      timingsByTier[record.tier].push(record.timing.total);
+      if (record.success) {
+        successCount++;
       }
     }
+
+    // Calculate per-tier stats from grouped data
+    const tierStats: Record<RenderTier, PercentileStats | null> = {
+      intelligence: this.calculatePercentiles(timingsByTier.intelligence),
+      lightweight: this.calculatePercentiles(timingsByTier.lightweight),
+      playwright: this.calculatePercentiles(timingsByTier.playwright),
+    };
 
     // Get domain averages for ranking
     const domainAvgs: Array<{ domain: string; avgTime: number }> = [];
