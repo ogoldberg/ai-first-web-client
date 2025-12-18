@@ -21,7 +21,7 @@ No P0 tasks remaining - all critical items completed.
 
 | ID | Task | Effort | Category | Notes |
 |----|------|--------|----------|-------|
-| O-004 | Add learning progress stats | M | Features | Skills, patterns, anti-patterns |
+| O-004 | Add learning progress stats | M | Features | Skills, patterns, anti-patterns **(IN PROGRESS)** |
 
 ### Testing (Continued)
 
