@@ -51,7 +51,7 @@ Tasks are organized by priority and category. Each task includes:
 |----|------|--------|----------|-------|
 | T-004 | Add tests for procedural memory | L | Testing | Skills, versioning, rollback (DONE) |
 | T-005 | Add tests for learning engine | L | Testing | API discovery, selectors (DONE) |
-| T-008 | Live tests for site API handlers | M | Testing | Verify Reddit, HN, GitHub, Wikipedia, SO handlers against real URLs |
+| T-008 | Live tests for site API handlers | M | Testing | Verify Reddit, HN, GitHub, Wikipedia, SO handlers against real URLs (DONE) |
 
 ---
 
@@ -146,6 +146,7 @@ Tasks are organized by priority and category. Each task includes:
 
 | ID | Task | Completed | Notes |
 |----|------|-----------|-------|
+| T-008 | Live tests for site API handlers | 2025-12-18 | 25 tests against real APIs (Reddit, HN, GitHub, Wikipedia, StackOverflow) - run with LIVE_TESTS=true |
 | A-003 | Add output size controls | 2025-12-18 | maxChars truncation, includeTables/includeNetwork/includeConsole/includeHtml flags for smart_browse |
 | A-004 | Deprecate legacy tools | 2025-12-18 | Added deprecation warnings to browse tool, logs deprecation at runtime, suggests smart_browse |
 | S-001 | Add URL safety policy controls | 2025-12-18 | SSRF protection: blocks RFC1918, localhost, link-local, metadata endpoints, dangerous protocols. 56 tests. |
