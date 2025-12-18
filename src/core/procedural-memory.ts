@@ -772,6 +772,170 @@ export class ProceduralMemory {
     return this.skills.get(skillId) || null;
   }
 
+  /**
+   * Get anti-pattern statistics
+   */
+  getAntiPatternStats(): {
+    totalAntiPatterns: number;
+    byDomain: Record<string, number>;
+    mostCommon: Array<{ name: string; occurrences: number; domain?: string }>;
+    recentlyAdded: Array<{ name: string; domain?: string; createdAt: number }>;
+  } {
+    const byDomain: Record<string, number> = {};
+    const patternList: Array<{ name: string; occurrences: number; domain?: string; createdAt: number }> = [];
+
+    for (const ap of this.antiPatterns.values()) {
+      // Count by domain
+      const domains = ap.preconditions.domainPatterns || [];
+      for (const domain of domains) {
+        byDomain[domain] = (byDomain[domain] || 0) + 1;
+      }
+      if (domains.length === 0) {
+        byDomain['global'] = (byDomain['global'] || 0) + 1;
+      }
+
+      // Track occurrences
+      patternList.push({
+        name: ap.name,
+        occurrences: ap.occurrenceCount,
+        domain: domains[0],
+        createdAt: ap.createdAt,
+      });
+    }
+
+    // Sort by occurrences for most common
+    const sortedByOccurrence = [...patternList].sort((a, b) => b.occurrences - a.occurrences);
+    // Sort by creation time for recently added
+    const sortedByTime = [...patternList].sort((a, b) => b.createdAt - a.createdAt);
+
+    return {
+      totalAntiPatterns: this.antiPatterns.size,
+      byDomain,
+      mostCommon: sortedByOccurrence.slice(0, 5).map(({ name, occurrences, domain }) => ({ name, occurrences, domain })),
+      recentlyAdded: sortedByTime.slice(0, 5).map(({ name, domain, createdAt }) => ({ name, domain, createdAt })),
+    };
+  }
+
+  /**
+   * Get comprehensive learning progress combining skills, anti-patterns, and coverage
+   */
+  getLearningProgress(): {
+    skills: {
+      total: number;
+      byDomain: Record<string, number>;
+      avgSuccessRate: number;
+      topPerformers: Array<{ name: string; successRate: number; uses: number }>;
+      recentlyCreated: Array<{ name: string; domain: string; createdAt: number }>;
+    };
+    antiPatterns: {
+      total: number;
+      byDomain: Record<string, number>;
+    };
+    coverage: {
+      coveredDomains: number;
+      uncoveredDomains: string[];
+      suggestions: Array<{ type: string; value: string; reason: string; priority: string }>;
+    };
+    trajectories: {
+      total: number;
+      successful: number;
+      failed: number;
+    };
+  } {
+    // Skills stats
+    const skillList: Array<{
+      name: string;
+      domain: string;
+      successRate: number;
+      uses: number;
+      createdAt: number;
+    }> = [];
+
+    const skillsByDomain: Record<string, number> = {};
+    let totalSuccesses = 0;
+    let totalExecutions = 0;
+
+    for (const skill of this.skills.values()) {
+      const domain = skill.sourceDomain || 'unknown';
+      skillsByDomain[domain] = (skillsByDomain[domain] || 0) + 1;
+
+      totalSuccesses += skill.metrics.successCount;
+      totalExecutions += skill.metrics.timesUsed;
+
+      const successRate = skill.metrics.timesUsed > 0
+        ? skill.metrics.successCount / skill.metrics.timesUsed
+        : 0;
+
+      skillList.push({
+        name: skill.name,
+        domain,
+        successRate,
+        uses: skill.metrics.timesUsed,
+        createdAt: skill.createdAt,
+      });
+    }
+
+    // Sort for top performers and recently created
+    const topPerformers = [...skillList]
+      .filter(s => s.uses >= 3) // Need at least 3 uses to qualify
+      .sort((a, b) => b.successRate - a.successRate)
+      .slice(0, 5)
+      .map(({ name, successRate, uses }) => ({ name, successRate, uses }));
+
+    const recentlyCreated = [...skillList]
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .slice(0, 5)
+      .map(({ name, domain, createdAt }) => ({ name, domain, createdAt }));
+
+    // Anti-patterns stats (simplified)
+    const antiPatternsByDomain: Record<string, number> = {};
+
+    for (const ap of this.antiPatterns.values()) {
+      const domains = ap.preconditions.domainPatterns || ['global'];
+      for (const domain of domains) {
+        antiPatternsByDomain[domain] = (antiPatternsByDomain[domain] || 0) + 1;
+      }
+    }
+
+    // Coverage stats
+    const coverageStats = this.getCoverageStats();
+
+    // Trajectory stats
+    let successfulTrajectories = 0;
+    let failedTrajectories = 0;
+    for (const traj of this.trajectoryBuffer) {
+      if (traj.success) {
+        successfulTrajectories++;
+      } else {
+        failedTrajectories++;
+      }
+    }
+
+    return {
+      skills: {
+        total: this.skills.size,
+        byDomain: skillsByDomain,
+        avgSuccessRate: totalExecutions > 0 ? totalSuccesses / totalExecutions : 1,
+        topPerformers,
+        recentlyCreated,
+      },
+      antiPatterns: {
+        total: this.antiPatterns.size,
+        byDomain: antiPatternsByDomain,
+      },
+      coverage: {
+        coveredDomains: coverageStats.coveredDomains.length,
+        uncoveredDomains: coverageStats.uncoveredDomains.slice(0, 10),
+        suggestions: coverageStats.suggestions.slice(0, 5),
+      },
+      trajectories: {
+        total: this.trajectoryBuffer.length,
+        successful: successfulTrajectories,
+        failed: failedTrajectories,
+      },
+    };
+  }
+
   // ============================================
   // PERSISTENCE
   // ============================================
