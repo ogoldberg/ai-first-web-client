@@ -131,6 +131,11 @@ export class PersistentStore<T> {
       this.debounceTimer = setTimeout(async () => {
         this.debounceTimer = null;
 
+        // Capture pending data BEFORE any awaits to prevent race conditions
+        // (another save() could overwrite pendingData while we're awaiting)
+        const dataToWrite = this.pendingData;
+        this.pendingData = null;
+
         // If there's already a write in progress, wait for it
         if (this.writePromise) {
           try {
@@ -141,9 +146,6 @@ export class PersistentStore<T> {
         }
 
         // Perform the atomic write
-        const dataToWrite = this.pendingData;
-        this.pendingData = null;
-
         if (dataToWrite !== null) {
           this.writePromise = this.atomicWrite(dataToWrite);
           try {
@@ -205,16 +207,26 @@ export class PersistentStore<T> {
       this.debounceTimer = null;
     }
 
-    const dataToWrite = this.pendingData;
+    const dataToFlush = this.pendingData;
     this.pendingData = null;
 
-    if (dataToWrite !== null) {
-      await this.atomicWrite(dataToWrite);
+    // Wait for any write that might already be in progress
+    if (this.writePromise) {
+      try {
+        await this.writePromise;
+      } catch {
+        // Ignore errors from previous write
+      }
     }
 
-    // Wait for any in-progress write
-    if (this.writePromise) {
-      await this.writePromise;
+    // If there was pending data, write it now (serialized via writePromise)
+    if (dataToFlush !== null) {
+      this.writePromise = this.atomicWrite(dataToFlush);
+      try {
+        await this.writePromise;
+      } finally {
+        this.writePromise = null;
+      }
     }
   }
 
@@ -272,7 +284,7 @@ export class PersistentStore<T> {
    * Perform atomic write: write to temp file, then rename
    */
   private async atomicWrite(data: T): Promise<void> {
-    const tempPath = `${this.filePath}.tmp.${Date.now()}.${Math.random().toString(36).slice(2)}`;
+    const tempPath = `${this.filePath}.tmp.${Date.now()}.${process.pid}.${Math.random().toString(36).slice(2)}`;
 
     try {
       // Create parent directories if needed
