@@ -231,7 +231,7 @@ All P0 tasks complete.
 
 | ID | Task | Effort | Notes |
 |----|------|--------|-------|
-| S-003 | Encrypt sessions at rest | M | Pluggable crypto with user-supplied key |
+| S-003 | Encrypt sessions at rest | M | Pluggable crypto with user-supplied key (IN PROGRESS) |
 
 ### Upcoming (P2)
 
