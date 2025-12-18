@@ -17,12 +17,6 @@ No P0 tasks remaining - all critical items completed.
 
 ## P1: High Priority (Do Soon)
 
-### Observability
-
-| ID | Task | Effort | Category | Notes |
-|----|------|--------|----------|-------|
-| O-004 | Add learning progress stats | M | Features | Skills, patterns, anti-patterns **(IN PROGRESS)** |
-
 ### Testing (Continued)
 
 | ID | Task | Effort | Category | Notes |
@@ -112,6 +106,7 @@ No P0 tasks remaining - all critical items completed.
 
 | ID | Task | Completed | Notes |
 |----|------|-----------|-------|
+| O-004 | Add learning progress stats | 2025-12-17 | get_learning_progress MCP tool with skills, anti-patterns, coverage, trajectories, PR #22 |
 | I-014 | HackerNews API handler | 2025-12-17 | Firebase JSON API for items and top stories |
 | I-015 | GitHub API handler | 2025-12-17 | Repos, users, issues, PRs via public REST API |
 | I-016 | Wikipedia API handler | 2025-12-17 | REST v1 summary API, multi-language support |
