@@ -10,6 +10,10 @@ import type { NetworkRequest, ConsoleMessage } from '../types/index.js';
 import { TIMEOUTS } from '../utils/timeouts.js';
 import * as fs from 'fs';
 import { logger } from '../utils/logger.js';
+import { createRequire } from 'module';
+
+// Create a require function for ESM compatibility
+const require = createRequire(import.meta.url);
 
 // Re-export Page type for consumers
 export type { Page } from 'playwright';

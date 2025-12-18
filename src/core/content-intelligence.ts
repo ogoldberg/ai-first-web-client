@@ -22,6 +22,10 @@ import * as cheerio from 'cheerio';
 import TurndownService from 'turndown';
 import { TIMEOUTS } from '../utils/timeouts.js';
 import { logger } from '../utils/logger.js';
+import { createRequire } from 'module';
+
+// Create a require function for ESM compatibility
+const require = createRequire(import.meta.url);
 
 // Types
 export interface ContentResult {
