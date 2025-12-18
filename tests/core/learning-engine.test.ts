@@ -28,14 +28,17 @@ import type {
 } from '../../src/types/index.js';
 
 /**
- * Helper to wait for async file operations to complete
+ * Helper to wait for async file operations to complete.
+ * Uses a longer timeout (3s) to handle slow CI environments and parallel test execution.
  */
 async function waitForFileSave(
   filePath: string,
   condition: (content: string) => boolean,
-  maxWaitMs: number = 1000
+  maxWaitMs: number = 3000
 ): Promise<boolean> {
   const startTime = Date.now();
+  const pollInterval = 25; // Check more frequently for faster detection
+
   while (Date.now() - startTime < maxWaitMs) {
     try {
       const content = await fs.readFile(filePath, 'utf8');
@@ -45,7 +48,7 @@ async function waitForFileSave(
     } catch {
       // File doesn't exist yet, continue waiting
     }
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await new Promise(resolve => setTimeout(resolve, pollInterval));
   }
   return false;
 }
