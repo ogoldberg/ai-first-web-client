@@ -224,6 +224,10 @@ See [BACKLOG.md](BACKLOG.md) for the detailed task backlog with priorities and e
 
 All P0 tasks complete.
 
+### High Priority (P1) - IN PROGRESS
+
+**A-003: Add output size controls** - Add `maxChars`, `includeTables`, `includeNetwork`, `includeConsole` flags
+
 ### High Priority (P1)
 
 | ID | Task | Effort | Notes |
