@@ -170,6 +170,7 @@ The LLM Browser MCP Server is an intelligent browser designed specifically for L
 
 | Issue | Resolution |
 |-------|------------|
+| npm packaging hygiene | Added .npmignore in PR #28 |
 | Missing LICENSE file | Added MIT LICENSE in PR #27 |
 | ESM require.resolve bug | createRequire fix in PR #26 |
 | Rate limiter potential deadlock | Fixed in PR #3 |
@@ -219,9 +220,8 @@ See [BACKLOG.md](BACKLOG.md) for the detailed task backlog with priorities and e
 
 | ID | Task | Effort | Notes |
 |----|------|--------|-------|
-| B-003 | Fix npm packaging hygiene | S | Add .npmignore to prevent artifacts in tarballs - **IN PROGRESS** |
 | S-001 | Add URL safety policy controls | M | SSRF protection with secure defaults |
-| S-002 | Redact secrets in logs | S | Pino redact for auth headers, cookies |
+| S-002 | Redact secrets in logs | S | Pino redact for auth headers, cookies - **IN PROGRESS** |
 
 ### High Priority (P1)
 
