@@ -160,7 +160,6 @@ The LLM Browser MCP Server is an intelligent browser designed specifically for L
 
 | Issue | Severity | Notes |
 |-------|----------|-------|
-| Missing LICENSE file | Critical | `package.json` lists LICENSE but file doesn't exist (B-002) |
 | No SSRF protection | Critical | Can browse internal networks, metadata endpoints (S-001) |
 | Secrets in logs | Critical | No redaction for cookies, tokens, auth headers (S-002) |
 | Session encryption basic | High | File-based, not keychain (S-003) |
@@ -171,6 +170,7 @@ The LLM Browser MCP Server is an intelligent browser designed specifically for L
 
 | Issue | Resolution |
 |-------|------------|
+| Missing LICENSE file | Added MIT LICENSE in PR #27 |
 | ESM require.resolve bug | createRequire fix in PR #26 |
 | Rate limiter potential deadlock | Fixed in PR #3 |
 | No structured logging | Pino logger in PR #20 |
@@ -219,8 +219,7 @@ See [BACKLOG.md](BACKLOG.md) for the detailed task backlog with priorities and e
 
 | ID | Task | Effort | Notes |
 |----|------|--------|-------|
-| B-002 | Add missing LICENSE file | S | Package.json references non-existent file - **IN PROGRESS** |
-| B-003 | Fix npm packaging hygiene | S | Add .npmignore to prevent artifacts in tarballs |
+| B-003 | Fix npm packaging hygiene | S | Add .npmignore to prevent artifacts in tarballs - **IN PROGRESS** |
 | S-001 | Add URL safety policy controls | M | SSRF protection with secure defaults |
 | S-002 | Redact secrets in logs | S | Pino redact for auth headers, cookies |
 
