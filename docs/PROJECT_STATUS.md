@@ -171,6 +171,7 @@ The LLM Browser MCP Server is an intelligent browser designed specifically for L
 
 | Issue | Resolution |
 |-------|------------|
+| Legacy tools not marked deprecated | Added deprecation warnings to browse tool with runtime logging in PR #31 |
 | No SSRF protection | URL safety module with comprehensive SSRF protection in PR #30 |
 | Secrets in logs | Pino redact configuration in PR #29 |
 | npm packaging hygiene | Added .npmignore in PR #28 |
@@ -223,10 +224,6 @@ See [BACKLOG.md](BACKLOG.md) for the detailed task backlog with priorities and e
 
 All P0 tasks complete.
 
-### High Priority (P1) - IN PROGRESS
-
-**A-004: Deprecate legacy tools** - Mark legacy browsing tools as deprecated; funnel users to `smart_browse`
-
 ### High Priority (P1)
 
 | ID | Task | Effort | Notes |
@@ -251,6 +248,7 @@ All P0 tasks complete.
 
 ### v0.5.0 (2025-12-18)
 
+- Deprecated legacy "browse" tool with runtime warnings (use "smart_browse" instead)
 - Added URL safety module with comprehensive SSRF protection (56 tests)
 - Added secret redaction in logs using Pino redact configuration
 - Added site-specific API handlers (Reddit, HN, GitHub, Wikipedia, StackOverflow)
