@@ -221,7 +221,7 @@ See [BACKLOG.md](BACKLOG.md) for the detailed task backlog with priorities and e
 
 | ID | Task | Effort | Notes |
 |----|------|--------|-------|
-| S-001 | Add URL safety policy controls | M | SSRF protection with secure defaults |
+| S-001 | Add URL safety policy controls | M | SSRF protection with secure defaults - **IN PROGRESS** |
 
 ### High Priority (P1)
 
