@@ -34,6 +34,7 @@ import { TIMEOUTS } from '../utils/timeouts.js';
 import type { NetworkRequest, ApiPattern } from '../types/index.js';
 import { logger } from '../utils/logger.js';
 import { performanceTracker, type TimingBreakdown } from '../utils/performance-tracker.js';
+import { validateUrlOrThrow } from '../utils/url-safety.js';
 
 export type RenderTier = 'intelligence' | 'lightweight' | 'playwright';
 
@@ -191,6 +192,9 @@ export class TieredFetcher {
    * Fetch a URL using the optimal tier
    */
   async fetch(url: string, options: TieredFetchOptions = {}): Promise<TieredFetchResult> {
+    // SSRF Protection: Validate URL before any processing
+    validateUrlOrThrow(url);
+
     // Apply defaults
     options = { ...DEFAULT_FETCH_OPTIONS, ...options };
 
