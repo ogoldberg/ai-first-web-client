@@ -160,7 +160,6 @@ The LLM Browser MCP Server is an intelligent browser designed specifically for L
 
 | Issue | Severity | Notes |
 |-------|----------|-------|
-| ESM require.resolve bug | Critical | `browser-manager.ts` uses `require.resolve` which fails in ESM (B-001) |
 | Missing LICENSE file | Critical | `package.json` lists LICENSE but file doesn't exist (B-002) |
 | No SSRF protection | Critical | Can browse internal networks, metadata endpoints (S-001) |
 | Secrets in logs | Critical | No redaction for cookies, tokens, auth headers (S-002) |
@@ -172,6 +171,7 @@ The LLM Browser MCP Server is an intelligent browser designed specifically for L
 
 | Issue | Resolution |
 |-------|------------|
+| ESM require.resolve bug | createRequire fix in PR #26 |
 | Rate limiter potential deadlock | Fixed in PR #3 |
 | No structured logging | Pino logger in PR #20 |
 | No error boundaries | SmartBrowser error handling in PR #9 |
@@ -219,8 +219,8 @@ See [BACKLOG.md](BACKLOG.md) for the detailed task backlog with priorities and e
 
 | ID | Task | Effort | Notes |
 |----|------|--------|-------|
-| B-001 | Fix ESM require.resolve usage | S | Runtime bug in browser-manager.ts - **IN PROGRESS** |
-| B-002 | Add missing LICENSE file | S | Package.json references non-existent file |
+| B-002 | Add missing LICENSE file | S | Package.json references non-existent file - **IN PROGRESS** |
+| B-003 | Fix npm packaging hygiene | S | Add .npmignore to prevent artifacts in tarballs |
 | S-001 | Add URL safety policy controls | M | SSRF protection with secure defaults |
 | S-002 | Redact secrets in logs | S | Pino redact for auth headers, cookies |
 
