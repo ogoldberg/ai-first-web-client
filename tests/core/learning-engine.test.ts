@@ -66,7 +66,15 @@ describe('LearningEngine', () => {
   });
 
   afterEach(async () => {
-    await fs.rm(tempDir, { recursive: true, force: true });
+    // Flush any pending debounced writes before cleanup
+    await engine.flush();
+    // Small delay to ensure file handles are released
+    await new Promise(resolve => setTimeout(resolve, 10));
+    try {
+      await fs.rm(tempDir, { recursive: true, force: true });
+    } catch {
+      // Ignore cleanup errors in case of race conditions
+    }
   });
 
   // ============================================

@@ -14,6 +14,7 @@ vi.mock('fs', async () => {
       readdir: vi.fn().mockResolvedValue([]),
       readFile: vi.fn(),
       writeFile: vi.fn().mockResolvedValue(undefined),
+      rename: vi.fn().mockResolvedValue(undefined),
       unlink: vi.fn().mockResolvedValue(undefined),
     },
   };
