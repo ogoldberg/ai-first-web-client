@@ -494,11 +494,16 @@ Use this when starting fresh to get basic capabilities quickly.`,
       },
 
       // ============================================
-      // LEGACY TOOLS (Backward Compatibility)
+      // DEPRECATED TOOLS (Backward Compatibility)
+      // These tools are deprecated and will be removed in a future version.
+      // Users should migrate to smart_browse for browsing operations.
       // ============================================
       {
         name: 'browse',
-        description: `[LEGACY] Basic browse - use smart_browse instead for better results.
+        description: `[DEPRECATED] Basic browse - use smart_browse instead.
+
+DEPRECATION WARNING: This tool is deprecated since 2025-01-01 and will be removed in a future version.
+Use "smart_browse" for better results with learning, API discovery, and tiered rendering.
 
 Browses a URL with network capture but without learning features.`,
         inputSchema: {
@@ -1442,17 +1447,36 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       // ============================================
-      // LEGACY TOOLS
+      // DEPRECATED TOOLS
+      // Log deprecation warnings and include notices in responses
       // ============================================
       case 'browse': {
+        // Log deprecation warning
+        logger.server.warn('Deprecated tool called', {
+          tool: 'browse',
+          deprecatedSince: '2025-01-01',
+          replacement: 'smart_browse',
+          url: args.url as string,
+        });
+
         const result = await browseTool.execute(args.url as string, {
           waitFor: args.waitFor as any,
           timeout: args.timeout as number,
           sessionProfile: args.sessionProfile as string,
         });
 
+        // Include deprecation notice in response
+        const response = {
+          _deprecation: {
+            warning: 'The "browse" tool is deprecated and will be removed in a future version.',
+            replacement: 'Use "smart_browse" instead for better results with learning and API discovery.',
+            deprecatedSince: '2025-01-01',
+          },
+          ...result,
+        };
+
         return {
-          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
+          content: [{ type: 'text', text: JSON.stringify(response, null, 2) }],
         };
       }
 
