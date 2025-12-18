@@ -1,6 +1,20 @@
 /**
  * Knowledge Base - Stores and retrieves learned API patterns
  *
+ * @deprecated Use LearningEngine instead. This class is kept for backward
+ * compatibility only. LearningEngine provides all KnowledgeBase functionality
+ * plus enhanced features like selector learning, content validation, and
+ * cross-domain pattern transfer.
+ *
+ * Migration:
+ * - LearningEngine.getPatterns() replaces KnowledgeBase.getPatterns()
+ * - LearningEngine.getBypassablePatterns() replaces KnowledgeBase.getBypassablePatterns()
+ * - LearningEngine.findPattern() replaces KnowledgeBase.findPattern()
+ * - LearningEngine.learn() replaces KnowledgeBase.learn()
+ * - LearningEngine.updateSuccessRate() replaces KnowledgeBase.updateSuccessRate()
+ * - LearningEngine.clear() replaces KnowledgeBase.clear()
+ * - LearningEngine.getStats() replaces KnowledgeBase.getStats()
+ *
  * Uses PersistentStore for:
  * - Debounced writes (batches rapid learn() calls)
  * - Atomic writes (temp file + rename for corruption safety)
@@ -15,15 +29,29 @@ interface KnowledgeBaseData {
   [domain: string]: KnowledgeBaseEntry;
 }
 
+/**
+ * @deprecated Use LearningEngine instead
+ */
 export class KnowledgeBase {
   private entries: Map<string, KnowledgeBaseEntry> = new Map();
   private store: PersistentStore<KnowledgeBaseData>;
+  private deprecationWarned = false;
 
   constructor(filePath: string = './knowledge-base.json') {
     this.store = new PersistentStore<KnowledgeBaseData>(filePath, {
       componentName: 'KnowledgeBase',
       debounceMs: 1000, // Batch rapid writes
     });
+
+    // Log deprecation warning once per instance
+    if (!this.deprecationWarned) {
+      logger.knowledgeBase.warn(
+        'KnowledgeBase is deprecated. Use LearningEngine instead. ' +
+        'LearningEngine provides all KnowledgeBase functionality plus enhanced features. ' +
+        'Data will be automatically migrated on LearningEngine initialization.'
+      );
+      this.deprecationWarned = true;
+    }
   }
 
   async initialize(): Promise<void> {
