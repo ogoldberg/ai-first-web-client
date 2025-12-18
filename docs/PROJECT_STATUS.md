@@ -231,7 +231,7 @@ All P0 tasks complete.
 
 | ID | Task | Effort | Notes |
 |----|------|--------|-------|
-| A-001 | Unify learning persistence | M | Merge KnowledgeBase and LearningEngine |
+| A-001 | Unify learning persistence | M | Merge KnowledgeBase and LearningEngine (IN PROGRESS) |
 | S-003 | Encrypt sessions at rest | M | Pluggable crypto with user-supplied key |
 
 ### Upcoming (P2)
