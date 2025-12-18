@@ -1,17 +1,29 @@
 /**
  * Knowledge Base - Stores and retrieves learned API patterns
+ *
+ * Uses PersistentStore for:
+ * - Debounced writes (batches rapid learn() calls)
+ * - Atomic writes (temp file + rename for corruption safety)
  */
 
-import { promises as fs } from 'fs';
 import type { ApiPattern, KnowledgeBaseEntry } from '../types/index.js';
 import { logger } from '../utils/logger.js';
+import { PersistentStore } from '../utils/persistent-store.js';
+
+/** Serialized format of the knowledge base */
+interface KnowledgeBaseData {
+  [domain: string]: KnowledgeBaseEntry;
+}
 
 export class KnowledgeBase {
   private entries: Map<string, KnowledgeBaseEntry> = new Map();
-  private filePath: string;
+  private store: PersistentStore<KnowledgeBaseData>;
 
   constructor(filePath: string = './knowledge-base.json') {
-    this.filePath = filePath;
+    this.store = new PersistentStore<KnowledgeBaseData>(filePath, {
+      componentName: 'KnowledgeBase',
+      debounceMs: 1000, // Batch rapid writes
+    });
   }
 
   async initialize(): Promise<void> {
@@ -174,31 +186,30 @@ export class KnowledgeBase {
    * Load knowledge base from disk
    */
   private async load(): Promise<void> {
-    try {
-      const content = await fs.readFile(this.filePath, 'utf-8');
-      const data = JSON.parse(content);
-
+    const data = await this.store.load();
+    if (data) {
       this.entries = new Map(Object.entries(data));
       logger.knowledgeBase.info('Loaded knowledge base', { totalDomains: this.entries.size });
-    } catch (error) {
-      // No knowledge base file yet
+    } else {
       logger.knowledgeBase.info('No existing knowledge base found, starting fresh');
     }
   }
 
   /**
-   * Save knowledge base to disk
+   * Save knowledge base to disk (debounced, atomic)
    */
-  private async save(): Promise<void> {
-    try {
-      const data = Object.fromEntries(this.entries);
-      await fs.writeFile(
-        this.filePath,
-        JSON.stringify(data, null, 2),
-        'utf-8'
-      );
-    } catch (error) {
+  private save(): void {
+    const data = Object.fromEntries(this.entries);
+    // Fire and forget - debounced writes are batched
+    this.store.save(data).catch(error => {
       logger.knowledgeBase.error('Failed to save knowledge base', { error });
-    }
+    });
+  }
+
+  /**
+   * Flush any pending writes (for graceful shutdown)
+   */
+  async flush(): Promise<void> {
+    await this.store.flush();
   }
 }

@@ -4,7 +4,7 @@
 **Version:** 0.5.0
 **Current Phase:** Production Readiness (Phase 2)
 **Total Code:** ~15,000 lines TypeScript
-**Tests:** 440 passing + 25 live tests
+**Tests:** 473 passing + 25 live tests
 
 ---
 
@@ -142,8 +142,9 @@ The LLM Browser MCP Server is an intelligent browser designed specifically for L
 | Learning Engine | 64 | API discovery, selectors, validation, anomaly detection |
 | Logger | 10 | Secret redaction, log levels, component loggers |
 | URL Safety | 56 | SSRF protection, protocol blocking, IP range validation |
+| PersistentStore | 33 | Debounced writes, atomic persistence, statistics |
 | Site API Live Tests | 25 | Real API requests (Reddit, HN, GitHub, Wikipedia, StackOverflow) |
-| **Total** | **440 + 25 live** | All passing |
+| **Total** | **473 + 25 live** | All passing |
 
 ---
 
@@ -231,7 +232,6 @@ All P0 tasks complete.
 | ID | Task | Effort | Notes |
 |----|------|--------|-------|
 | A-001 | Unify learning persistence | M | Merge KnowledgeBase and LearningEngine |
-| A-002 | Debounced + atomic persistence | M | Prevent write corruption (IN PROGRESS) |
 | S-003 | Encrypt sessions at rest | M | Pluggable crypto with user-supplied key |
 
 ### Upcoming (P2)
@@ -250,6 +250,8 @@ All P0 tasks complete.
 
 ### v0.5.0 (2025-12-18)
 
+- Added PersistentStore utility with debounced writes and atomic persistence (temp file + rename)
+- Applied debounced/atomic persistence to KnowledgeBase, LearningEngine, ProceduralMemory, SessionManager
 - Added output size controls to smart_browse (maxChars, includeTables, includeNetwork, includeConsole, includeHtml)
 - Deprecated legacy "browse" tool with runtime warnings (use "smart_browse" instead)
 - Added URL safety module with comprehensive SSRF protection (56 tests)
@@ -260,9 +262,10 @@ All P0 tasks complete.
 - Added session health monitoring with auto-refresh callbacks
 - Added tier usage analytics with get_tier_usage_by_domain tool
 - Added centralized timeout configuration
-- Added 440 tests covering all major components
+- Added 473 tests covering all major components
 - Added comprehensive tests for LearningEngine (64 tests)
 - Added comprehensive tests for ProceduralMemory (71 tests)
+- Added comprehensive tests for PersistentStore (33 tests)
 - Improved error handling with error boundaries in SmartBrowser
 
 ### v0.4.0 (2024-12-16)

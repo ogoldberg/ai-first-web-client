@@ -1,5 +1,7 @@
 /**
  * Session Manager - Handles session persistence (cookies, localStorage, etc.)
+ *
+ * Uses atomic writes (temp file + rename) for session files to prevent corruption.
  */
 
 import { BrowserContext } from 'playwright';
@@ -507,17 +509,31 @@ export class SessionManager {
   }
 
   /**
-   * Persist session to disk
+   * Persist session to disk using atomic write (temp file + rename)
    */
   private async persistSession(sessionKey: string, session: SessionStore): Promise<void> {
     const fileName = `${sessionKey.replace(/[:/]/g, '_')}.json`;
     const filePath = path.join(this.sessionsDir, fileName);
+    const content = JSON.stringify(session, null, 2);
 
-    await fs.writeFile(
-      filePath,
-      JSON.stringify(session, null, 2),
-      'utf-8'
+    // Atomic write: write to temp file in same directory, then rename
+    const tempPath = path.join(
+      this.sessionsDir,
+      `.tmp.${Date.now()}.${process.pid}.${Math.random().toString(36).slice(2)}.json`
     );
+
+    try {
+      await fs.writeFile(tempPath, content, 'utf-8');
+      await fs.rename(tempPath, filePath);
+    } catch (error) {
+      // Clean up temp file if rename failed
+      try {
+        await fs.unlink(tempPath);
+      } catch {
+        // Ignore cleanup errors
+      }
+      throw error;
+    }
   }
 
   /**

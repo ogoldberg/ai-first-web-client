@@ -10,10 +10,14 @@
  *
  * Inspired by: "A Coding Guide to Build a Procedural Memory Agent"
  * https://www.marktechpost.com/2025/12/09/a-coding-guide-to-build-a-procedural-memory-agent
+ *
+ * Uses PersistentStore for:
+ * - Debounced writes (batches rapid skill updates)
+ * - Atomic writes (temp file + rename for corruption safety)
  */
 
-import { promises as fs } from 'fs';
 import * as crypto from 'crypto';
+import { PersistentStore } from '../utils/persistent-store.js';
 import { logger } from '../utils/logger.js';
 import type {
   BrowsingSkill,
@@ -109,11 +113,27 @@ const SKILL_TEMPLATES: Partial<BrowsingSkill>[] = [
 /**
  * Procedural Memory Agent for browsing skill learning and retrieval
  */
+/** Serialized format of the procedural memory data */
+interface ProceduralMemoryData {
+  skills: BrowsingSkill[];
+  workflows: SkillWorkflow[];
+  trajectoryBuffer: BrowsingTrajectory[];
+  visitedDomains: string[];
+  visitedPageTypes: { [key: string]: number };
+  failedExtractions: { [key: string]: number };
+  skillVersions: { [key: string]: SkillVersion[] };
+  antiPatterns: AntiPattern[];
+  feedbackLog: SkillFeedback[];
+  lastSaved: number;
+  config: ProceduralMemoryConfig;
+}
+
 export class ProceduralMemory {
   private skills: Map<string, BrowsingSkill> = new Map();
   private workflows: Map<string, SkillWorkflow> = new Map();
   private trajectoryBuffer: BrowsingTrajectory[] = [];
   private config: ProceduralMemoryConfig;
+  private store: PersistentStore<ProceduralMemoryData>;
 
   // Active learning tracking
   private visitedDomains: Set<string> = new Set();
@@ -131,6 +151,10 @@ export class ProceduralMemory {
 
   constructor(config: Partial<ProceduralMemoryConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
+    this.store = new PersistentStore<ProceduralMemoryData>(this.config.filePath, {
+      componentName: 'ProceduralMemory',
+      debounceMs: 1000, // Batch rapid skill updates
+    });
   }
 
   async initialize(): Promise<void> {
@@ -941,10 +965,8 @@ export class ProceduralMemory {
   // ============================================
 
   private async load(): Promise<void> {
-    try {
-      const content = await fs.readFile(this.config.filePath, 'utf-8');
-      const data = JSON.parse(content);
-
+    const data = await this.store.load();
+    if (data) {
       this.skills = new Map();
       if (data.skills) {
         for (const skill of data.skills) {
@@ -992,38 +1014,42 @@ export class ProceduralMemory {
         this.feedbackLog = data.feedbackLog;
       }
 
-      logger.proceduralMemory.info(`Loaded ${this.skills.size} skills, ${this.workflows.size} workflows, ${this.antiPatterns.size} anti-patterns from ${this.config.filePath}`);
-    } catch {
-      logger.proceduralMemory.info('No existing memory found, starting fresh');
+      logger.proceduralMemory.info(`Loaded ${this.skills.size} skills, ${this.workflows.size} workflows, ${this.antiPatterns.size} anti-patterns`);
     }
   }
 
-  private async save(): Promise<void> {
-    try {
-      const data = {
-        skills: Array.from(this.skills.values()),
-        workflows: Array.from(this.workflows.values()),
-        trajectoryBuffer: this.trajectoryBuffer.slice(-50), // Keep last 50
-        // Active learning data
-        visitedDomains: Array.from(this.visitedDomains),
-        visitedPageTypes: Object.fromEntries(this.visitedPageTypes),
-        failedExtractions: Object.fromEntries(this.failedExtractions),
-        // Versioning data
-        skillVersions: Object.fromEntries(
-          Array.from(this.skillVersions.entries())
-        ),
-        // Anti-patterns
-        antiPatterns: Array.from(this.antiPatterns.values()),
-        // User feedback
-        feedbackLog: this.feedbackLog.slice(-(this.config.maxFeedbackLogSize ?? 500)),
-        lastSaved: Date.now(),
-        config: this.config,
-      };
+  private save(): void {
+    const data: ProceduralMemoryData = {
+      skills: Array.from(this.skills.values()),
+      workflows: Array.from(this.workflows.values()),
+      trajectoryBuffer: this.trajectoryBuffer.slice(-50), // Keep last 50
+      // Active learning data
+      visitedDomains: Array.from(this.visitedDomains),
+      visitedPageTypes: Object.fromEntries(this.visitedPageTypes),
+      failedExtractions: Object.fromEntries(this.failedExtractions),
+      // Versioning data
+      skillVersions: Object.fromEntries(
+        Array.from(this.skillVersions.entries())
+      ),
+      // Anti-patterns
+      antiPatterns: Array.from(this.antiPatterns.values()),
+      // User feedback
+      feedbackLog: this.feedbackLog.slice(-(this.config.maxFeedbackLogSize ?? 500)),
+      lastSaved: Date.now(),
+      config: this.config,
+    };
 
-      await fs.writeFile(this.config.filePath, JSON.stringify(data, null, 2), 'utf-8');
-    } catch (error) {
+    // Fire-and-forget save (debounced by PersistentStore)
+    this.store.save(data).catch(error => {
       logger.proceduralMemory.error('Failed to save', { error });
-    }
+    });
+  }
+
+  /**
+   * Flush any pending writes to disk immediately
+   */
+  async flush(): Promise<void> {
+    await this.store.flush();
   }
 
   /**

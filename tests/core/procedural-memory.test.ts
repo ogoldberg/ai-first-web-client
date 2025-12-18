@@ -779,6 +779,9 @@ describe('ProceduralMemory', () => {
         createTestAction('extract'),
       ]);
 
+      // Flush to ensure debounced write completes
+      await memory.flush();
+
       // Poll for file to contain the skill (more reliable than fixed timeout)
       const saved = await waitForFileSave(filePath, (content) => {
         try {
@@ -803,17 +806,13 @@ describe('ProceduralMemory', () => {
       const skill1 = memory.addManualSkill('wf_persist1', '', {}, [createTestAction('click')]);
       const skill2 = memory.addManualSkill('wf_persist2', '', {}, [createTestAction('extract')]);
 
-      // Poll for skills to be saved first
-      await waitForFileSave(filePath, (content) => {
-        try {
-          const data = JSON.parse(content);
-          return data.skills?.length >= 2;
-        } catch {
-          return false;
-        }
-      });
+      // Flush to ensure skills are saved
+      await memory.flush();
 
       memory.createWorkflow('persist_workflow', [skill1.id, skill2.id]);
+
+      // Flush to ensure workflow is saved
+      await memory.flush();
 
       // Poll for workflow save to complete
       const saved = await waitForFileSave(filePath, (content) => {

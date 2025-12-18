@@ -10,10 +10,14 @@
  * - Cross-domain pattern transfer
  * - Response validation
  * - Pagination pattern detection
+ *
+ * Uses PersistentStore for:
+ * - Debounced writes (batches rapid learning calls)
+ * - Atomic writes (temp file + rename for corruption safety)
  */
 
-import { promises as fs } from 'fs';
 import * as crypto from 'crypto';
+import { PersistentStore } from '../utils/persistent-store.js';
 import type {
   EnhancedApiPattern,
   EnhancedKnowledgeBaseEntry,
@@ -141,18 +145,28 @@ const DOMAIN_GROUPS: DomainGroup[] = [
   },
 ];
 
+/** Serialized format of the learning engine data */
+interface LearningEngineData {
+  entries: { [domain: string]: EnhancedKnowledgeBaseEntry };
+  learningEvents: LearningEvent[];
+  lastSaved: number;
+}
+
 export class LearningEngine {
   private entries: Map<string, EnhancedKnowledgeBaseEntry> = new Map();
   private domainGroups: Map<string, DomainGroup> = new Map();
   private learningEvents: LearningEvent[] = [];
-  private filePath: string;
+  private store: PersistentStore<LearningEngineData>;
   private decayConfig: ConfidenceDecayConfig;
 
   constructor(
     filePath: string = './enhanced-knowledge-base.json',
     decayConfig: ConfidenceDecayConfig = DEFAULT_DECAY_CONFIG
   ) {
-    this.filePath = filePath;
+    this.store = new PersistentStore<LearningEngineData>(filePath, {
+      componentName: 'LearningEngine',
+      debounceMs: 1000, // Batch rapid writes
+    });
     this.decayConfig = decayConfig;
 
     // Initialize domain groups
@@ -1393,20 +1407,13 @@ export class LearningEngine {
   // ============================================
 
   private async load(): Promise<void> {
-    try {
-      const content = await fs.readFile(this.filePath, 'utf-8');
-      const data = JSON.parse(content);
-
-      // Convert entries
+    const data = await this.store.load();
+    if (data) {
+      // Convert entries from object to Map
       this.entries = new Map();
       if (data.entries) {
         for (const [domain, entry] of Object.entries(data.entries)) {
-          // Convert paginationPatterns from object to proper format
-          const typedEntry = entry as EnhancedKnowledgeBaseEntry;
-          if (typedEntry.paginationPatterns && !(typedEntry.paginationPatterns instanceof Map)) {
-            // Already an object, that's fine
-          }
-          this.entries.set(domain, typedEntry);
+          this.entries.set(domain, entry as EnhancedKnowledgeBaseEntry);
         }
       }
 
@@ -1416,23 +1423,27 @@ export class LearningEngine {
       }
 
       logger.learning.info('Loaded knowledge base', { totalDomains: this.entries.size });
-    } catch {
-      logger.learning.info('No existing knowledge base found, starting fresh');
     }
   }
 
-  private async save(): Promise<void> {
-    try {
-      const data = {
-        entries: Object.fromEntries(this.entries),
-        learningEvents: this.learningEvents.slice(-100),
-        lastSaved: Date.now(),
-      };
+  private save(): void {
+    const data: LearningEngineData = {
+      entries: Object.fromEntries(this.entries),
+      learningEvents: this.learningEvents.slice(-100),
+      lastSaved: Date.now(),
+    };
 
-      await fs.writeFile(this.filePath, JSON.stringify(data, null, 2), 'utf-8');
-    } catch (error) {
+    // Fire-and-forget save (debounced by PersistentStore)
+    this.store.save(data).catch(error => {
       logger.learning.error('Failed to save knowledge base', { error });
-    }
+    });
+  }
+
+  /**
+   * Flush any pending writes to disk immediately
+   */
+  async flush(): Promise<void> {
+    await this.store.flush();
   }
 
   /**
