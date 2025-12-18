@@ -72,7 +72,7 @@ const CONTENT_TYPES = ['main_content', 'requirements', 'fees', 'timeline', 'docu
 // Common skill templates for bootstrapping new instances
 // These templates define common browsing patterns that can be used to seed
 // the procedural memory with basic skills before any learning has occurred.
-// TODO: Implement bootstrapFromTemplates() method to use these templates
+// See bootstrapFromTemplates() method for implementation
 const SKILL_TEMPLATES: Partial<BrowsingSkill>[] = [
   {
     name: 'cookie_banner_dismiss',

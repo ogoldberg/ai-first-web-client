@@ -19,11 +19,12 @@ describe('TieredFetcher', () => {
   let mockLightweightRenderer: LightweightRenderer;
 
   // Helper to create a successful ContentResult
+  // Content must be at least 500 chars to pass default minContentLength validation
   const createContentResult = (overrides: Partial<ContentResult> = {}): ContentResult => ({
     content: {
       title: 'Test Page',
-      text: 'This is enough test content to pass validation. '.repeat(10),
-      markdown: '# Test Page\n\nThis is test content.',
+      text: 'This is enough test content to pass validation with the default minContentLength of 500 characters. '.repeat(6),
+      markdown: '# Test Page\n\nThis is test content with plenty of markdown text.',
       ...overrides.content,
     },
     meta: {
@@ -76,11 +77,12 @@ describe('TieredFetcher', () => {
     vi.spyOn(BrowserManager, 'isPlaywrightAvailable').mockReturnValue(true);
 
     // Create mock content extractor
+    // Content must be at least 500 chars to pass default minContentLength validation
     mockContentExtractor = {
       extract: vi.fn().mockReturnValue({
         title: 'Extracted Title',
-        text: 'This is extracted content with enough text. '.repeat(10),
-        markdown: '# Extracted\n\nContent here.',
+        text: 'This is extracted content with enough text to pass the default minContentLength of 500 characters. '.repeat(6),
+        markdown: '# Extracted\n\nContent here with plenty of text.',
       }),
     } as unknown as ContentExtractor;
 

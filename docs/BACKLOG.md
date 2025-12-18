@@ -21,7 +21,6 @@ No P0 tasks remaining - all critical items completed.
 
 | ID | Task | Effort | Category | Notes |
 |----|------|--------|----------|-------|
-| O-002 | Add performance timing to all tiers | M | Performance | Track and expose metrics - IN PROGRESS |
 | O-004 | Add learning progress stats | M | Features | Skills, patterns, anti-patterns |
 
 ### Testing (Continued)
@@ -30,6 +29,7 @@ No P0 tasks remaining - all critical items completed.
 |----|------|--------|----------|-------|
 | T-004 | Add tests for procedural memory | L | Testing | Skills, versioning, rollback |
 | T-005 | Add tests for learning engine | L | Testing | API discovery, selectors |
+| T-008 | Live tests for site API handlers | M | Testing | Verify Reddit, HN, GitHub, Wikipedia, SO handlers against real URLs |
 
 ---
 
@@ -55,6 +55,14 @@ No P0 tasks remaining - all critical items completed.
 | I-003 | Better API prediction heuristics | L | Performance | Smarter pattern matching |
 | I-004 | Cross-domain skill transfer | M | Features | Apply skills to similar sites |
 | I-005 | Automatic skill discovery | L | Features | Learn without explicit recording |
+| I-006 | NPM registry API handler | S | Features | `registry.npmjs.org/package/json` |
+| I-007 | PyPI API handler | S | Features | `pypi.org/pypi/{package}/json` |
+| I-008 | Dev.to API handler | S | Features | Public API for articles |
+| I-009 | Medium API handler | M | Features | Undocumented but discoverable |
+| I-010 | YouTube API handler | M | Features | Requires API key configuration |
+| I-011 | OpenAPI spec discovery | L | Features | Auto-detect and use OpenAPI/Swagger specs |
+| I-012 | GraphQL introspection | L | Features | Auto-discover GraphQL schema and query |
+| I-013 | Authentication workflow helper | L | Features | Guide users through API auth setup (OAuth, API keys) |
 
 ### Documentation
 
@@ -104,6 +112,12 @@ No P0 tasks remaining - all critical items completed.
 
 | ID | Task | Completed | Notes |
 |----|------|-----------|-------|
+| I-014 | HackerNews API handler | 2025-12-17 | Firebase JSON API for items and top stories |
+| I-015 | GitHub API handler | 2025-12-17 | Repos, users, issues, PRs via public REST API |
+| I-016 | Wikipedia API handler | 2025-12-17 | REST v1 summary API, multi-language support |
+| I-017 | StackOverflow API handler | 2025-12-17 | SE API 2.3 for questions + answers, all SE network sites |
+| I-018 | Reddit API handler | 2025-12-17 | JSON URL transformation for posts and subreddits |
+| O-002 | Add performance timing to all tiers | 2025-12-17 | PerformanceTracker utility with percentile stats, get_performance_metrics MCP tool |
 | O-001 | Replace console.error with structured logging | 2025-12-17 | Pino-based logger with component child loggers, PR #20 |
 | T-007 | Add tests for lightweight renderer | 2025-12-17 | 43 tests covering linkedom integration, script execution, anti-bot detection, PR #17 |
 | T-006 | Add tests for content intelligence | 2025-12-17 | 31 tests covering framework extraction, structured data, fallbacks, PR #16 |

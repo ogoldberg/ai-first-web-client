@@ -1,9 +1,10 @@
 # LLM Browser MCP Server - Project Status
 
-**Last Updated:** 2024-12-16
-**Version:** 0.4.0
+**Last Updated:** 2025-12-17
+**Version:** 0.5.0
 **Current Phase:** Production Readiness (Phase 2)
-**Total Code:** ~12,500 lines TypeScript
+**Total Code:** ~15,000 lines TypeScript
+**Tests:** 239 passing
 
 ---
 
@@ -59,11 +60,18 @@ The LLM Browser MCP Server is an intelligent browser designed specifically for L
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Integration Tests | Not Started | MCP tool tests needed |
-| End-to-End Tests | Not Started | Full browse cycle tests |
-| Structured Logging | Not Started | Replace console.error |
-| Error Boundaries | Not Started | Prevent cascading failures |
-| Session Health Monitoring | Not Started | Detect expired sessions |
+| Integration Tests | Complete | 40 tests for MCP tools (PR #12) |
+| End-to-End Tests | Complete | 13 tests for SmartBrowser (PR #11) |
+| Tiered Fetcher Tests | Complete | 24 tests (PR #10) |
+| Content Intelligence Tests | Complete | 31 tests (PR #16) |
+| Lightweight Renderer Tests | Complete | 43 tests (PR #17) |
+| Structured Logging | Complete | Pino-based logger (PR #20) |
+| Error Boundaries | Complete | SmartBrowser error handling (PR #9) |
+| Session Health Monitoring | Complete | Auto-refresh callbacks (PR #15) |
+| Timeout Configuration | Complete | Central config (PR #14) |
+| Tier Usage Analytics | Complete | get_tier_usage_by_domain tool (PR #13) |
+| Performance Timing | Complete | PerformanceTracker utility, get_performance_metrics tool |
+| Site-Specific APIs | Complete | Reddit, HN, GitHub, Wikipedia, StackOverflow |
 
 ---
 
@@ -119,13 +127,16 @@ The LLM Browser MCP Server is an intelligent browser designed specifically for L
 
 ## Test Coverage
 
-| Category | Coverage | Notes |
-|----------|----------|-------|
-| Utilities (cache, retry, rate-limiter) | Good | Vitest unit tests |
-| Content Extractor | Good | Unit tests |
-| Core Components | Minimal | Needs integration tests |
-| MCP Tools | None | Priority for Phase 2 |
-| End-to-End | None | Priority for Phase 2 |
+| Category | Tests | Notes |
+|----------|-------|-------|
+| Utilities (cache, retry, rate-limiter) | 25+ | Vitest unit tests |
+| Content Extractor | 10+ | Unit tests |
+| Content Intelligence | 31 | Framework extraction, structured data, fallbacks |
+| Lightweight Renderer | 43 | linkedom integration, script execution |
+| Tiered Fetcher | 24 | Tier cascade and fallback |
+| SmartBrowser E2E | 13 | Full browse cycle |
+| MCP Tools | 40 | smart_browse and related tools |
+| **Total** | **239** | All passing |
 
 ---
 
@@ -147,10 +158,15 @@ The LLM Browser MCP Server is an intelligent browser designed specifically for L
 
 | Issue | Severity | Notes |
 |-------|----------|-------|
-| Rate limiter potential deadlock | Medium | Test currently skipped |
-| No structured logging | Medium | Using console.error |
-| No error boundaries | Medium | Can cause cascading failures |
 | Session encryption basic | Low | File-based, not keychain |
+
+### Resolved Issues
+
+| Issue | Resolution |
+|-------|------------|
+| Rate limiter potential deadlock | Fixed in PR #3 |
+| No structured logging | Pino logger in PR #20 |
+| No error boundaries | SmartBrowser error handling in PR #9 |
 
 ---
 
@@ -189,15 +205,41 @@ ai-first-web-client/
 
 ## What's Next
 
-See [ROADMAP.md](ROADMAP.md) for the full development plan. Immediate priorities:
+See [BACKLOG.md](BACKLOG.md) for the detailed task backlog with priorities and effort estimates.
 
-1. **Sprint 2.1**: Integration tests for MCP tools
-2. **Sprint 2.2**: Structured logging with Pino
-3. **Sprint 2.3**: Session health monitoring
+### Current Priorities (P1)
+
+| ID | Task | Effort | Notes |
+|----|------|--------|-------|
+| O-004 | Add learning progress stats | M | Skills, patterns, anti-patterns |
+| T-004 | Add tests for procedural memory | L | Skills, versioning, rollback |
+| T-005 | Add tests for learning engine | L | API discovery, selectors |
+| T-008 | Live tests for site API handlers | M | Verify against real URLs |
+
+### Upcoming (P2)
+
+| ID | Task | Effort | Notes |
+|----|------|--------|-------|
+| I-006 | NPM registry API handler | S | registry.npmjs.org |
+| I-007 | PyPI API handler | S | pypi.org |
+| I-011 | OpenAPI spec discovery | L | Auto-detect and use OpenAPI/Swagger |
+| I-012 | GraphQL introspection | L | Auto-discover schema and query |
+| I-013 | Authentication workflow helper | L | Guide users through OAuth, API keys |
 
 ---
 
 ## Changelog
+
+### v0.5.0 (2025-12-17)
+
+- Added site-specific API handlers (Reddit, HN, GitHub, Wikipedia, StackOverflow)
+- Added performance timing with PerformanceTracker and get_performance_metrics tool
+- Added structured Pino logging with component child loggers
+- Added session health monitoring with auto-refresh callbacks
+- Added tier usage analytics with get_tier_usage_by_domain tool
+- Added centralized timeout configuration
+- Added 239 tests covering all major components
+- Improved error handling with error boundaries in SmartBrowser
 
 ### v0.4.0 (2024-12-16)
 

@@ -1,380 +1,228 @@
-# LLM Browser MCP Server v0.4
+# llm-browser
 
-An intelligent, self-learning browser designed for AI agents. Unlike traditional web scraping tools, this MCP server learns from every interaction, building intelligence that makes it more effective over time.
+> **This is NOT an AI-enhanced browser for humans.**
+> This is a web browser where **the user is an LLM**.
 
-## The Core Idea
+A browser that AI agents control directly via MCP. It learns from every interaction, discovers APIs automatically, and progressively optimizes to bypass rendering entirely. Machine-first, not human-first.
 
-**Traditional scraping tools** are stateless - every request starts from scratch.
+## What This Actually Does
 
-**LLM Browser** is stateful and intelligent:
-- Learns which selectors work for content extraction
-- Discovers API endpoints and when they can bypass rendering
-- Tracks which sites change frequently
-- Applies learned patterns across similar domains
-- Validates responses to detect errors
-- Automatically handles pagination
+When an LLM browses with `llm-browser`:
 
-The more you use it, the smarter it gets.
+1. **First visit**: Uses tiered rendering (fastest method that works)
+2. **Learning**: Discovers APIs, learns selectors, builds reusable skills
+3. **Future visits**: Often skips browser rendering entirely for 10x faster access
 
-## Quick Start
+```text
+First visit:  LLM -> smart_browse -> Full render (~2-5s) -> Content + learned patterns
+Next visit:   LLM -> smart_browse -> API call (~200ms)   -> Same content, much faster
+```
+
+## What This Does NOT Do
+
+- **Not a visual browser** - No screenshots, no visual rendering for humans
+- **Not magic** - Complex JS-heavy sites still need the browser
+- **Not stealth** - Sites with aggressive bot detection may block it
+- **No code generation** - LLMs use MCP tools directly, no Puppeteer scripts needed
+
+## Installation
 
 ```bash
-# Install and build
-cd ai-first-web-client
-npm install
-npx playwright install chromium
-npm run build
+npm install llm-browser
+```
 
-# Add to Claude Desktop config
-# ~/Library/Application Support/Claude/claude_desktop_config.json
+### Optional Dependencies
+
+Both of these are optional and the package works without them:
+
+```bash
+# For full browser rendering (recommended for best compatibility)
+npm install playwright
+npx playwright install chromium
+
+# For neural embeddings (better cross-domain skill transfer)
+npm install @xenova/transformers
+```
+
+Without Playwright, the browser uses Content Intelligence and Lightweight rendering tiers only. Without transformers, it falls back to hash-based embeddings.
+
+## Usage with Claude Desktop
+
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+
+```json
 {
   "mcpServers": {
     "llm-browser": {
-      "command": "node",
-      "args": ["/path/to/ai-first-web-client/dist/index.js"]
+      "command": "npx",
+      "args": ["llm-browser"]
     }
   }
 }
 ```
 
-## Primary Tool: `smart_browse`
+Or if installed globally:
 
-This is the recommended tool for all browsing. It automatically applies all learned intelligence.
-
-```
-User: "Get visa requirements from extranjeria.gob.es"
-
-Claude: smart_browse("https://extranjeria.gob.es/es/visados")
-
-Returns:
+```json
 {
-  "content": { "markdown": "...", "textLength": 5234 },
-  "tables": [{ "headers": ["Visa Type", "Fee"], "data": [...] }],
-  "intelligence": {
-    "confidenceLevel": "high",
-    "domainGroup": "spanish_gov",
-    "validationPassed": true,
-    "paginationAvailable": true,
-    "selectorsSucceeded": 3
-  },
-  "discoveredApis": [
-    { "endpoint": "/api/visados", "canBypassBrowser": true }
-  ]
+  "mcpServers": {
+    "llm-browser": {
+      "command": "llm-browser"
+    }
+  }
 }
 ```
 
-### Parameters
+Then restart Claude Desktop. The browser tools will be available.
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `url` | string | URL to browse (required) |
-| `contentType` | enum | Content type hint: `main_content`, `requirements`, `fees`, `timeline`, `documents`, `table` |
-| `followPagination` | boolean | Follow detected pagination to get all pages |
-| `maxPages` | number | Maximum pages to follow (default: 5) |
-| `checkForChanges` | boolean | Compare with cached version to detect changes |
-| `waitForSelector` | string | CSS selector to wait for (for SPAs) |
-| `scrollToLoad` | boolean | Scroll to trigger lazy-loaded content |
-| `sessionProfile` | string | Session profile for authenticated access |
+## Programmatic Usage
 
-## Learning System
-
-### What It Learns
-
-1. **Content Selectors** - Which CSS selectors reliably extract content for each domain
-2. **Selector Fallbacks** - Backup selectors when primary fails
-3. **API Patterns** - Discovered APIs that can bypass browser rendering
-4. **Validation Rules** - What valid content looks like (to detect error pages)
-5. **Change Frequency** - How often content updates (for refresh scheduling)
-6. **Pagination Patterns** - How sites paginate their content
-7. **Failure Patterns** - What causes failures (to avoid and recover)
-8. **Browsing Skills** - Reusable action sequences learned from successful trajectories (v0.3)
-
-### Procedural Memory (v0.3)
-
-The procedural memory system learns reusable browsing skills from successful interactions:
-
-```
-User: "Extract data from this government form"
-
-Claude: smart_browse("https://example.gov/forms/application")
-
-Behind the scenes:
-1. Record browsing trajectory (actions taken)
-2. Create vector embedding of page context
-3. Match against existing skills (cosine similarity)
-4. If successful, extract and store as new skill
-5. Skills are automatically applied to similar pages
-```
-
-**Key Features:**
-- **Embedding-based skill matching** - Find relevant skills across different domains
-- **Automatic skill extraction** - Learn from successful browsing sessions
-- **Skill composition** - Combine skills into multi-step workflows
-- **Active learning** - Identify coverage gaps and suggest improvements
-- **Decay and pruning** - Remove stale or failing skills automatically
-- **Skill versioning** - Track skill evolution with auto-rollback on degradation (v0.4)
-- **Anti-patterns** - Learn and avoid problematic actions (v0.4)
-- **User feedback** - Thumbs up/down to accelerate learning (v0.4)
-- **Dependencies & fallbacks** - Build complex skill chains (v0.4)
-
-**MCP Tools:**
-- `get_procedural_memory_stats` - View learned skills and metrics
-- `find_applicable_skills` - Find skills for a given URL
-- `get_skill_details` - Inspect a specific skill
-- `manage_skills` - Export, import, prune, or reset skills
-- `get_skill_explanation` - Human-readable explanation of what a skill does (v0.4)
-- `get_skill_versions` - View version history for a skill (v0.4)
-- `rollback_skill` - Rollback to a previous version (v0.4)
-- `rate_skill_application` - User feedback (thumbs up/down) (v0.4)
-- `get_anti_patterns` - View learned anti-patterns (things to avoid) (v0.4)
-- `manage_skill_dependencies` - Configure skill prerequisites and fallbacks (v0.4)
-- `bootstrap_skills` - Initialize with common skill templates (v0.4)
-
-### Domain Groups
-
-Pre-configured patterns for government sites that share conventions:
-
-**Spanish Government** (`spanish_gov`):
-- boe.es, extranjeria.inclusion.gob.es, agenciatributaria.es, seg-social.es
-
-**US Government** (`us_gov`):
-- uscis.gov, irs.gov, state.gov, ssa.gov, travel.state.gov
-
-**EU Government** (`eu_gov`):
-- ec.europa.eu, europa.eu, europarl.europa.eu
-
-When you browse a site in a domain group, learned patterns from similar sites are automatically applied.
-
-### Confidence Decay
-
-Learned patterns decay over time if not verified:
-- Patterns have a 14-day grace period
-- After grace period, confidence decreases weekly
-- Low-confidence patterns are eventually archived
-- Using a pattern resets its confidence
-
-This prevents stale patterns from causing failures when sites change.
-
-## Intelligence Tools
-
-### `get_domain_intelligence`
-
-Check what the browser knows about a domain before browsing:
-
-```
-Claude: get_domain_intelligence("boe.es")
-
-Returns:
-{
-  "domain": "boe.es",
-  "knownPatterns": 5,
-  "selectorChains": 12,
-  "validators": 3,
-  "paginationPatterns": 2,
-  "successRate": 0.95,
-  "domainGroup": "spanish_gov",
-  "recommendations": [
-    "Part of spanish_gov group - shared patterns will be applied",
-    "12 learned selectors available for reliable extraction",
-    "Pagination patterns learned - use followPagination for multi-page content"
-  ]
-}
-```
-
-### `get_learning_stats`
-
-Get overall learning statistics:
-
-```
-Claude: get_learning_stats()
-
-Returns:
-{
-  "summary": {
-    "totalDomains": 15,
-    "totalApiPatterns": 47,
-    "bypassablePatterns": 23,
-    "totalSelectors": 89,
-    "totalValidators": 12,
-    "domainGroups": ["spanish_gov", "us_gov", "eu_gov"]
-  },
-  "recentLearning": [
-    { "type": "selector_learned", "domain": "boe.es", "timestamp": "..." },
-    { "type": "api_discovered", "domain": "uscis.gov", "timestamp": "..." }
-  ]
-}
-```
-
-## Architecture
-
-```
-                    smart_browse (Primary Interface)
-                              |
-     +------------------------+------------------------+
-     |                        |                        |
-Learning Engine      Procedural Memory         Smart Browser
-     |                        |                        |
-+----+----+            +------+------+          +------+------+
-|         |            |             |          |             |
-Selector Pattern     Skill        Skill       Content      API
-Chains  Validator  Embeddings   Workflows    Extractor   Calls
-     |         |            |             |          |             |
-     +---------+------------+-------------+----------+-------------+
-                              |
-                    Browser Manager (Playwright)
-                              |
-                    Session Manager (Auth)
-```
-
-### Key Components
-
-**SmartBrowser** (`src/core/smart-browser.ts`)
-- Orchestrates all learning features
-- Applies selector fallback chains
-- Validates responses
-- Handles pagination
-- Records browsing trajectories
-
-**LearningEngine** (`src/core/learning-engine.ts`)
-- Stores and retrieves learned patterns
-- Applies confidence decay
-- Transfers patterns across domain groups
-- Tracks failure contexts
-
-**ProceduralMemory** (`src/core/procedural-memory.ts`)
-- Learns reusable browsing skills from trajectories
-- Vector embedding-based skill retrieval
-- Skill composition into workflows
-- Active learning for coverage gaps
-- Automatic decay and pruning
-
-**BrowserManager** (`src/core/browser-manager.ts`)
-- Playwright wrapper for browsing
-- Network capture and API discovery
-- Session and cookie management
-
-## Utility Modules
-
-All utilities are automatically used by `smart_browse`, but can also be used directly:
-
-### Rate Limiting
 ```typescript
-// Pre-configured for government sites
-// boe.es: 10 req/min, extranjeria: 6 req/min
-await rateLimiter.acquire(url);
+import { createLLMBrowser } from 'llm-browser/sdk';
+
+const browser = await createLLMBrowser();
+
+// Browse a page (learns from the interaction)
+const result = await browser.browse('https://example.com');
+console.log(result.content.markdown);
+console.log(result.discoveredApis);
+
+// On subsequent visits, may use learned APIs directly
+const result2 = await browser.browse('https://example.com/page2');
+
+await browser.cleanup();
 ```
 
-### Retry with Backoff
-```typescript
-// Automatic retry on timeout/network errors
-const result = await withRetry(operation, { maxAttempts: 3 });
+## How It Works
+
+### Tiered Rendering
+
+The browser tries the fastest approach first, falling back only when needed:
+
+| Tier | Speed | What It Does | When It's Used |
+|------|-------|--------------|----------------|
+| **Content Intelligence** | ~50-200ms | Static HTML + framework extraction | Sites with server-rendered content |
+| **Lightweight** | ~200-500ms | linkedom + Node VM | Sites needing basic JavaScript |
+| **Playwright** | ~2-5s | Full browser | Sites requiring complex JS or interactions |
+
+The system remembers which tier works for each domain and uses it next time.
+
+### Learning System
+
+Every browse operation teaches the system:
+
+- **Selector patterns**: Which CSS selectors reliably extract content
+- **API endpoints**: Discovered APIs that can bypass rendering
+- **Validation rules**: What valid content looks like (to detect errors)
+- **Browsing skills**: Reusable action sequences (click, fill, extract)
+
+### Semantic Embeddings
+
+Skills are matched using neural embeddings (when `@xenova/transformers` is installed) or hash-based embeddings (fallback). This enables:
+
+- Skills learned on one site can apply to similar sites
+- Automatic domain similarity detection
+- Cross-domain pattern transfer
+
+## MCP Tools
+
+### Primary Tool
+
+**`smart_browse`** - The main tool. Automatically applies all learned intelligence.
+
+```text
+Parameters:
+- url (required): URL to browse
+- contentType: Hint for extraction ('main_content', 'table', 'form', etc.)
+- followPagination: Follow detected pagination
+- waitForSelector: CSS selector to wait for (SPAs)
+- scrollToLoad: Scroll to trigger lazy content
+- sessionProfile: Use saved authentication session
 ```
 
-### Content Extraction
-```typescript
-// HTML to markdown with table support
-const { markdown, tables } = extractor.extract(html);
-```
+### Intelligence Tools
 
-### PDF Extraction
-```typescript
-// Extract structured content from PDFs
-const { sections, lists, keyValues } = await pdfExtractor.extractStructured(url);
-```
+| Tool | Purpose |
+|------|---------|
+| `get_domain_intelligence` | Check what the browser knows about a domain |
+| `get_learning_stats` | Overall learning statistics |
+| `get_tiered_fetcher_stats` | Rendering tier performance |
 
-## Comparison
+### Skill Management Tools
 
-| Feature | Jina/Firecrawl | Puppeteer | LLM Browser |
-|---------|---------------|-----------|-------------|
-| Clean content | Yes | No | Yes |
-| API discovery | No | No | Yes |
-| Learning | No | No | Yes |
-| Selector fallbacks | No | No | Yes |
-| Response validation | No | No | Yes |
-| Cross-domain patterns | No | No | Yes |
-| Pagination detection | No | No | Yes |
-| Change tracking | No | No | Yes |
-| Rate limiting | No | Manual | Automatic |
-| Session persistence | No | Manual | Yes |
-| LLM-native (MCP) | No | No | Yes |
+| Tool | Purpose |
+|------|---------|
+| `get_procedural_memory_stats` | View learned skills |
+| `find_applicable_skills` | Find skills for a URL |
+| `get_skill_explanation` | Human-readable skill description |
+| `rate_skill_application` | Feedback (thumbs up/down) |
+| `bootstrap_skills` | Initialize with common templates |
 
-## Development
+### Session Tools
+
+| Tool | Purpose |
+|------|---------|
+| `save_session` | Save authenticated session |
+| `list_sessions` | List saved sessions |
+| `get_session_health` | Check session validity |
+
+## Configuration
+
+Environment variables:
 
 ```bash
-npm run dev    # Watch mode
-npm run build  # Build
-npm start      # Run MCP server
+LOG_LEVEL=info          # debug, info, warn, error, silent
+LOG_PRETTY=true         # Pretty print logs (dev mode)
 ```
 
 ## Storage
 
+The browser stores learned patterns in the current directory:
+
 - `./sessions/` - Saved authentication sessions
-- `./knowledge-base.json` - Legacy pattern storage
-- `./enhanced-knowledge-base.json` - Full learning state
-- `./procedural-memory.json` - Learned browsing skills and workflows
+- `./enhanced-knowledge-base.json` - Learned patterns and validators
+- `./procedural-memory.json` - Browsing skills and workflows
+- `./embedding-cache.json` - Cached embeddings (when using transformers)
 
-## Roadmap
+## Comparison with Alternatives
 
-### Completed (v0.1 - v0.2)
-- Smart browsing with automatic learning
-- Selector fallback chains
-- Cross-domain pattern transfer
-- Response validation
-- Confidence decay
-- Pagination detection
-- Change frequency tracking
-- Failure context learning
+| Feature | Jina/Firecrawl | Puppeteer | llm-browser |
+|---------|---------------|-----------|-------------|
+| Clean content extraction | Yes | No | Yes |
+| API discovery | No | No | Yes |
+| Learning over time | No | No | Yes |
+| Selector fallbacks | No | No | Yes |
+| MCP integration | No | No | Yes |
+| Works without browser | No | No | Yes (partial) |
+| Progressive optimization | No | No | Yes |
 
-### Completed (v0.3)
-- Procedural memory with embedding-based skill retrieval
-- Automatic skill extraction from successful trajectories
-- Skill decay and pruning for maintenance
-- Page context detection (forms, tables, pagination)
-- Skill composition into workflows
-- Active learning for coverage gap identification
-- MCP tools for skill management (export/import/prune/reset)
+## Limitations
 
-### Completed (v0.4)
+Be honest about what this can and can't do:
 
-| Feature | Description | Status |
-|---------|-------------|--------|
-| **Skill Versioning & Rollback** | Track skill evolution over time, auto-rollback if performance degrades beyond threshold | Completed |
-| **Negative Skills (Anti-patterns)** | Learn what NOT to do on certain sites (e.g., "never click this popup") with consequences tracking | Completed |
-| **Skill Explanation** | Generate human-readable descriptions of what a skill does, step-by-step breakdown, and reliability info | Completed |
-| **User Feedback Loop** | Explicit thumbs up/down via `rate_skill_application` tool, triggers auto-rollback on poor ratings | Completed |
-| **Fallback Skill Chains** | Define ordered fallback skills when primary fails, execute with fallback chain | Completed |
-| **Skill Dependencies** | Define prerequisite skills (e.g., "login" before "access dashboard") with circular dependency detection | Completed |
-| **Bootstrap Templates** | Initialize with common skill templates (cookie dismiss, pagination, form/table extraction) | Completed |
+**Works well for:**
 
-### Planned - High Impact
+- Government websites, documentation sites
+- E-commerce product listings
+- News and content sites
+- Sites with discoverable APIs
 
-| Feature | Description | Status |
-|---------|-------------|--------|
-| **Real Neural Embeddings** | Use sentence-transformers or similar for semantic embeddings instead of hash-based | Planned |
+**May struggle with:**
 
-### Planned - Medium Impact
+- Heavy SPAs that require complex interaction flows
+- Sites with aggressive bot detection (Cloudflare challenges)
+- Sites requiring visual verification (CAPTCHAs)
+- Real-time applications (chat, streaming)
 
-| Feature | Description | Status |
-|---------|-------------|--------|
-| **Skill Generalization** | Automatically abstract domain-specific skills to work cross-domain | Planned |
-| **Temporal Patterns** | Learn time-based behaviors (sites that update at specific times, rate limits by hour) | Planned |
-| **Performance Benchmarking Dashboard** | Track metrics over time with trend analysis | Planned |
+## Development
 
-### Planned - Nice to Have
-
-| Feature | Description | Status |
-|---------|-------------|--------|
-| **Skill Sharing/Community Repository** | Import/export skills from a central catalog | Planned |
-| **A/B Testing for Skills** | Test skill variations to find optimal approaches | Planned |
-| **Skill Decomposition** | Automatically break complex skills into reusable atomic sub-skills | Planned |
-| **Visual Skill Editor** | UI to view/edit skill action sequences | Planned |
-| **Confidence Calibration** | Ensure similarity scores actually correlate with success probability | Planned |
-
-### Other Planned Features
-- Natural language selectors
-- Stealth mode for anti-bot sites
-- Multi-browser support (Firefox, WebKit)
-- Distributed learning across instances
+```bash
+git clone https://github.com/anthropics/llm-browser
+cd llm-browser
+npm install
+npm run build
+npm test
+```
 
 ## License
 

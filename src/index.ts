@@ -61,7 +61,7 @@ const apiCallTool = new ApiCallTool(browserManager);
 const server = new Server(
   {
     name: 'llm-browser',
-    version: '0.4.0',
+    version: '0.5.0',
   },
   {
     capabilities: {
@@ -678,6 +678,56 @@ Options:
             limit: {
               type: 'number',
               description: 'Maximum number of domains to return (default: 50)',
+            },
+          },
+        },
+      },
+
+      // ============================================
+      // PERFORMANCE METRICS
+      // ============================================
+      {
+        name: 'get_performance_metrics',
+        description: `Get comprehensive performance metrics for all tiers.
+
+Returns detailed timing statistics including:
+- System-wide performance summary (total requests, success rate)
+- Per-tier percentile statistics (p50, p95, p99, min, max, avg)
+- Component breakdown (network, parsing, JS execution times)
+- Top fastest and slowest domains
+- Per-domain detailed metrics
+
+Options:
+- domain: Get metrics for a specific domain (optional)
+- sortBy: Sort domains by 'avgTime', 'p95', or 'successRate' (default: avgTime)
+- order: 'asc' or 'desc' (default: asc for time, desc for successRate)
+- limit: Maximum domains to return in ranking (default: 20)
+
+Use this to:
+- Identify performance bottlenecks
+- Compare tier efficiency
+- Find slow or unreliable domains
+- Monitor overall system health`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            domain: {
+              type: 'string',
+              description: 'Get detailed metrics for a specific domain (optional)',
+            },
+            sortBy: {
+              type: 'string',
+              enum: ['avgTime', 'p95', 'successRate'],
+              description: 'Sort domain rankings by this metric (default: avgTime)',
+            },
+            order: {
+              type: 'string',
+              enum: ['asc', 'desc'],
+              description: 'Sort order (default: asc for time metrics, desc for successRate)',
+            },
+            limit: {
+              type: 'number',
+              description: 'Maximum domains to return in rankings (default: 20)',
             },
           },
         },
@@ -1569,6 +1619,119 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
+      // ============================================
+      // PERFORMANCE METRICS
+      // ============================================
+      case 'get_performance_metrics': {
+        const tieredFetcher = smartBrowser.getTieredFetcher();
+        const tracker = tieredFetcher.getPerformanceTracker();
+        const domain = args.domain as string | undefined;
+        const sortBy = (args.sortBy as 'avgTime' | 'p95' | 'successRate') || 'avgTime';
+        const order = (args.order as 'asc' | 'desc') || (sortBy === 'successRate' ? 'desc' : 'asc');
+        const limit = (args.limit as number) || 20;
+
+        // Format percentile stats helper - defined once for reuse
+        const formatStats = (stats: { p50: number; p95: number; p99: number; min: number; max: number; avg: number; count: number } | null) => {
+          if (!stats) return null;
+          return {
+            p50: `${Math.round(stats.p50)}ms`,
+            p95: `${Math.round(stats.p95)}ms`,
+            p99: `${Math.round(stats.p99)}ms`,
+            min: `${Math.round(stats.min)}ms`,
+            max: `${Math.round(stats.max)}ms`,
+            avg: `${Math.round(stats.avg)}ms`,
+            count: stats.count,
+          };
+        };
+
+        // If specific domain requested, return detailed metrics
+        if (domain) {
+          const domainPerf = tracker.getDomainPerformance(domain);
+          if (!domainPerf) {
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: JSON.stringify({
+                    error: `No performance data found for domain: ${domain}`,
+                    suggestion: 'This domain may not have been accessed yet. Try browsing it first with smart_browse.',
+                  }, null, 2),
+                },
+              ],
+            };
+          }
+
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  domain: domainPerf.domain,
+                  totalRequests: domainPerf.totalRequests,
+                  successRate: `${Math.round(domainPerf.successRate * 100)}%`,
+                  preferredTier: domainPerf.preferredTier,
+                  lastUpdated: new Date(domainPerf.lastUpdated).toISOString(),
+                  overall: formatStats(domainPerf.overall),
+                  byTier: {
+                    intelligence: formatStats(domainPerf.byTier.intelligence),
+                    lightweight: formatStats(domainPerf.byTier.lightweight),
+                    playwright: formatStats(domainPerf.byTier.playwright),
+                  },
+                }, null, 2),
+              },
+            ],
+          };
+        }
+
+        // Return system-wide metrics
+        const systemPerf = tracker.getSystemPerformance();
+        const componentBreakdown = tracker.getComponentBreakdown();
+        const domainRankings = tracker.getDomainsByPerformance(sortBy, order, limit);
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                summary: {
+                  totalRequests: systemPerf.totalRequests,
+                  totalDomains: systemPerf.totalDomains,
+                  successRate: `${Math.round(systemPerf.successRate * 100)}%`,
+                },
+                overall: formatStats(systemPerf.overall),
+                byTier: {
+                  intelligence: formatStats(systemPerf.byTier.intelligence),
+                  lightweight: formatStats(systemPerf.byTier.lightweight),
+                  playwright: formatStats(systemPerf.byTier.playwright),
+                },
+                componentBreakdown: {
+                  network: formatStats(componentBreakdown.network),
+                  parsing: formatStats(componentBreakdown.parsing),
+                  jsExecution: formatStats(componentBreakdown.jsExecution),
+                  extraction: formatStats(componentBreakdown.extraction),
+                },
+                topFastestDomains: systemPerf.topFastDomains.map(d => ({
+                  domain: d.domain,
+                  avgTime: `${d.avgTime}ms`,
+                })),
+                topSlowestDomains: systemPerf.topSlowDomains.map(d => ({
+                  domain: d.domain,
+                  avgTime: `${d.avgTime}ms`,
+                })),
+                domainRankings: domainRankings.map(d => ({
+                  domain: d.domain,
+                  requests: d.totalRequests,
+                  successRate: `${Math.round(d.successRate * 100)}%`,
+                  avgTime: `${Math.round(d.overall.avg)}ms`,
+                  p95: `${Math.round(d.overall.p95)}ms`,
+                  preferredTier: d.preferredTier,
+                })),
+              }, null, 2),
+            },
+          ],
+        };
+      }
+
       default:
         throw new Error(`Unknown tool: ${name}`);
     }
@@ -1635,11 +1798,10 @@ async function main() {
   await server.connect(transport);
 
   logger.server.info('LLM Browser MCP Server started', {
-    version: '0.4.0',
+    version: '0.5.0',
     primaryTool: 'smart_browse',
-    features: ['Tiered rendering', 'Domain patterns', 'API discovery', 'Procedural memory'],
+    features: ['Tiered rendering', 'Semantic embeddings', 'Cross-domain learning', 'API discovery', 'Procedural memory'],
     tiers: { intelligence: '~50ms', lightweight: '~200-500ms', playwright: '~2-5s' },
-    domainGroups: ['spanish_gov', 'us_gov', 'eu_gov'],
   });
 
   // Cleanup on exit

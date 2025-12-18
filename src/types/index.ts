@@ -223,6 +223,38 @@ export interface PaginationPattern {
 }
 
 /**
+ * Success profile - what works well for a domain
+ * This helps the system remember successful strategies and skip failed ones
+ */
+export interface SuccessProfile {
+  // Best rendering tier for this domain
+  preferredTier: 'intelligence' | 'lightweight' | 'playwright';
+
+  // Best extraction strategy within the tier
+  preferredStrategy?: string;  // e.g., 'parse:static', 'framework:nextjs'
+
+  // Performance metrics
+  avgResponseTime: number;
+  avgContentLength: number;
+
+  // Success tracking
+  successCount: number;
+  lastSuccess: number;
+
+  // Configuration that works
+  effectiveUserAgent?: string;
+  effectiveHeaders?: Record<string, string>;
+
+  // Content characteristics
+  hasStructuredData: boolean;
+  hasFrameworkData: boolean;
+  hasBypassableApis: boolean;
+
+  // Notes for debugging
+  notes?: string;
+}
+
+/**
  * Enhanced knowledge base entry with all learning features
  */
 export interface EnhancedKnowledgeBaseEntry {
@@ -245,6 +277,9 @@ export interface EnhancedKnowledgeBaseEntry {
 
   // Failure history
   recentFailures: FailureContext[];
+
+  // SUCCESS PROFILE - what works for this domain
+  successProfile?: SuccessProfile;
 
   // Metadata
   domainGroup?: string;

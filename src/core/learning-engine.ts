@@ -27,6 +27,7 @@ import type {
   LearningEvent,
   ConfidenceDecayConfig,
   ApiPattern,
+  SuccessProfile,
 } from '../types/index.js';
 import { logger } from '../utils/logger.js';
 
@@ -388,6 +389,110 @@ export class LearningEngine {
       details: failure,
       timestamp: now,
     });
+  }
+
+  /**
+   * Record a successful fetch with details about what worked
+   * This builds the success profile for a domain
+   */
+  recordSuccess(
+    domain: string,
+    details: {
+      tier: 'intelligence' | 'lightweight' | 'playwright';
+      strategy?: string;
+      responseTime: number;
+      contentLength: number;
+      hasStructuredData?: boolean;
+      hasFrameworkData?: boolean;
+      hasBypassableApis?: boolean;
+    }
+  ): void {
+    const entry = this.getOrCreateEntry(domain);
+    const now = Date.now();
+
+    // Initialize or update success profile
+    if (!entry.successProfile) {
+      entry.successProfile = {
+        preferredTier: details.tier,
+        preferredStrategy: details.strategy,
+        avgResponseTime: details.responseTime,
+        avgContentLength: details.contentLength,
+        successCount: 1,
+        lastSuccess: now,
+        hasStructuredData: details.hasStructuredData ?? false,
+        hasFrameworkData: details.hasFrameworkData ?? false,
+        hasBypassableApis: details.hasBypassableApis ?? false,
+      };
+    } else {
+      const profile = entry.successProfile;
+
+      // Update averages with exponential moving average (weight recent results more)
+      const alpha = 0.3; // Weight for new values
+      profile.avgResponseTime = alpha * details.responseTime + (1 - alpha) * profile.avgResponseTime;
+      profile.avgContentLength = alpha * details.contentLength + (1 - alpha) * profile.avgContentLength;
+
+      // Update preferred tier if this one is faster/better
+      // Prefer faster tiers (intelligence > lightweight > playwright)
+      const tierRanks = { intelligence: 1, lightweight: 2, playwright: 3 };
+      if (tierRanks[details.tier] < tierRanks[profile.preferredTier]) {
+        profile.preferredTier = details.tier;
+        profile.preferredStrategy = details.strategy;
+        logger.learning.debug(`Updated preferred tier for ${domain} to ${details.tier}`);
+      } else if (details.tier === profile.preferredTier && details.strategy) {
+        // Same tier, update strategy if provided
+        profile.preferredStrategy = details.strategy;
+      }
+
+      // Update content characteristics (OR them - if we ever saw it, note it)
+      profile.hasStructuredData = profile.hasStructuredData || (details.hasStructuredData ?? false);
+      profile.hasFrameworkData = profile.hasFrameworkData || (details.hasFrameworkData ?? false);
+      profile.hasBypassableApis = profile.hasBypassableApis || (details.hasBypassableApis ?? false);
+
+      profile.successCount++;
+      profile.lastSuccess = now;
+    }
+
+    // Boost overall success rate
+    entry.overallSuccessRate = Math.min(1, entry.overallSuccessRate + 0.02);
+    entry.lastUsed = now;
+    entry.usageCount++;
+    entry.lastUpdated = now;
+
+    this.save();
+
+    logger.learning.debug(`Recorded success for ${domain}`, {
+      tier: details.tier,
+      strategy: details.strategy,
+      successCount: entry.successProfile?.successCount,
+    });
+  }
+
+  /**
+   * Get the success profile for a domain
+   */
+  getSuccessProfile(domain: string): SuccessProfile | null {
+    const entry = this.entries.get(domain);
+    return entry?.successProfile || null;
+  }
+
+  /**
+   * Check if we should use the success profile for a domain
+   * Returns the profile if it's reliable enough to use
+   */
+  getReliableSuccessProfile(domain: string): SuccessProfile | null {
+    const profile = this.getSuccessProfile(domain);
+    if (!profile) return null;
+
+    // Require at least 3 successes and recent activity
+    const minSuccesses = 3;
+    const maxAge = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+    if (profile.successCount >= minSuccesses &&
+        Date.now() - profile.lastSuccess < maxAge) {
+      return profile;
+    }
+
+    return null;
   }
 
   /**

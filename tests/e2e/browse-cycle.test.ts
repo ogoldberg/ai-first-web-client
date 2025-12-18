@@ -43,7 +43,7 @@ describe('E2E: Full Browse Cycle', () => {
   let apiAnalyzer: ApiAnalyzer;
   let sessionManager: SessionManager;
 
-  // Sample HTML content
+  // Sample HTML content with at least 500 chars of text for minContentLength validation
   const SAMPLE_HTML = `
     <!DOCTYPE html>
     <html lang="en">
@@ -52,9 +52,11 @@ describe('E2E: Full Browse Cycle', () => {
       <main>
         <h1>Welcome to Test Page</h1>
         <article>
-          <p>This is a test article with enough content to pass validation checks.</p>
-          <p>The browser extracts this content and learns patterns for future use.</p>
-          <p>Additional paragraphs ensure we have sufficient text length for processing.</p>
+          <p>This is a test article with enough content to pass validation checks. The content needs to meet the minimum content length requirement of 500 characters.</p>
+          <p>The browser extracts this content and learns patterns for future use. This helps improve performance on subsequent visits to similar pages.</p>
+          <p>Additional paragraphs ensure we have sufficient text length for processing. The smart browser learns from each interaction and optimizes future requests.</p>
+          <p>More content is needed to ensure we pass the 500 character minimum content length validation. This paragraph adds the necessary additional text.</p>
+          <p>Final paragraph to guarantee sufficient content length for all test scenarios. The extraction process validates content quality before returning results.</p>
         </article>
         <table>
           <thead><tr><th>Name</th><th>Value</th></tr></thead>

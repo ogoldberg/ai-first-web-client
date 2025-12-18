@@ -33,6 +33,7 @@ import { rateLimiter } from '../utils/rate-limiter.js';
 import { TIMEOUTS } from '../utils/timeouts.js';
 import type { NetworkRequest, ApiPattern } from '../types/index.js';
 import { logger } from '../utils/logger.js';
+import { performanceTracker, type TimingBreakdown } from '../utils/performance-tracker.js';
 
 export type RenderTier = 'intelligence' | 'lightweight' | 'playwright';
 
@@ -64,6 +65,11 @@ export interface TieredFetchOptions {
   // Apply rate limiting
   useRateLimiting?: boolean;
 }
+
+// Default options for fetch
+const DEFAULT_FETCH_OPTIONS: Required<Pick<TieredFetchOptions, 'minContentLength'>> = {
+  minContentLength: 500,  // Prefer substantial content over meta descriptions
+};
 
 export interface TieredFetchResult {
   // The final HTML content
@@ -97,6 +103,8 @@ export interface TieredFetchResult {
   timing: {
     total: number;
     perTier: Record<RenderTier, number>;
+    // Component-level timing (when available)
+    breakdown?: TimingBreakdown;
   };
   // Detection results
   detection: {
@@ -183,6 +191,9 @@ export class TieredFetcher {
    * Fetch a URL using the optimal tier
    */
   async fetch(url: string, options: TieredFetchOptions = {}): Promise<TieredFetchResult> {
+    // Apply defaults
+    options = { ...DEFAULT_FETCH_OPTIONS, ...options };
+
     const startTime = Date.now();
     const domain = new URL(url).hostname;
     const timing: TieredFetchResult['timing'] = {
@@ -228,6 +239,20 @@ export class TieredFetcher {
             this.recordSuccess(domain, tier, timing.perTier[tier]);
           }
 
+          // Record to performance tracker
+          performanceTracker.record({
+            domain,
+            url,
+            tier,
+            timing: {
+              total: timing.total,
+              network: timing.perTier[tier], // Approximate - actual tier time
+            },
+            success: true,
+            fellBack,
+            tiersAttempted,
+          });
+
           return {
             ...result,
             tier,
@@ -236,7 +261,13 @@ export class TieredFetcher {
             tierReason: fellBack
               ? `Fell back from ${tiersAttempted[0]} due to: ${validation.reason || 'incomplete content'}`
               : `${tier} tier successful`,
-            timing,
+            timing: {
+              ...timing,
+              breakdown: {
+                total: timing.total,
+                network: timing.perTier[tier],
+              },
+            },
             detection: {
               isStatic: tier === 'intelligence',
               isJSHeavy: tier === 'playwright',
@@ -259,9 +290,23 @@ export class TieredFetcher {
     }
 
     // All tiers failed
+    const totalTime = Date.now() - startTime;
     if (options.enableLearning !== false) {
       this.recordFailure(domain, tiersAttempted[tiersAttempted.length - 1]);
     }
+
+    // Record failure to performance tracker
+    performanceTracker.record({
+      domain,
+      url,
+      tier: tiersAttempted[tiersAttempted.length - 1],
+      timing: {
+        total: totalTime,
+      },
+      success: false,
+      fellBack: true,
+      tiersAttempted,
+    });
 
     throw lastError || new Error('All rendering tiers failed');
   }
@@ -475,7 +520,7 @@ export class TieredFetcher {
     options: TieredFetchOptions
   ): { isValid: boolean; reason?: string } {
     const { html, content } = result;
-    const minLength = options.minContentLength || 200;
+    const minLength = options.minContentLength || DEFAULT_FETCH_OPTIONS.minContentLength;
 
     // Check text length
     if (content.text.length < minLength) {
@@ -647,5 +692,12 @@ export class TieredFetcher {
    */
   clearPreferences(): void {
     this.domainPreferences.clear();
+  }
+
+  /**
+   * Get the performance tracker for metrics access
+   */
+  getPerformanceTracker(): typeof performanceTracker {
+    return performanceTracker;
   }
 }
