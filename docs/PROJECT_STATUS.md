@@ -211,9 +211,7 @@ See [BACKLOG.md](BACKLOG.md) for the detailed task backlog with priorities and e
 
 | ID | Task | Effort | Notes |
 |----|------|--------|-------|
-| O-004 | Add learning progress stats | M | Skills, patterns, anti-patterns |
-| T-004 | Add tests for procedural memory | L | Skills, versioning, rollback |
-| T-005 | Add tests for learning engine | L | API discovery, selectors |
+| T-005 | Add tests for learning engine | L | API discovery, selectors - **IN PROGRESS** |
 | T-008 | Live tests for site API handlers | M | Verify against real URLs |
 
 ### Upcoming (P2)
