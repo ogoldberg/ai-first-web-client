@@ -4,7 +4,7 @@
 **Version:** 0.5.0
 **Current Phase:** Production Readiness (Phase 2)
 **Total Code:** ~15,000 lines TypeScript
-**Tests:** 374 passing
+**Tests:** 384 passing
 
 ---
 
@@ -138,7 +138,8 @@ The LLM Browser MCP Server is an intelligent browser designed specifically for L
 | MCP Tools | 40 | smart_browse and related tools |
 | Procedural Memory | 71 | Skills, versioning, rollback, workflows |
 | Learning Engine | 64 | API discovery, selectors, validation, anomaly detection |
-| **Total** | **374** | All passing |
+| Logger | 10 | Secret redaction, log levels, component loggers |
+| **Total** | **384** | All passing |
 
 ---
 
@@ -161,7 +162,6 @@ The LLM Browser MCP Server is an intelligent browser designed specifically for L
 | Issue | Severity | Notes |
 |-------|----------|-------|
 | No SSRF protection | Critical | Can browse internal networks, metadata endpoints (S-001) |
-| Secrets in logs | Critical | No redaction for cookies, tokens, auth headers (S-002) |
 | Session encryption basic | High | File-based, not keychain (S-003) |
 | Dual knowledge stores | High | KnowledgeBase and LearningEngine both persist separately (A-001) |
 | Large god files | Low | `src/index.ts` and `content-intelligence.ts` need splitting (D-010) |
@@ -170,6 +170,7 @@ The LLM Browser MCP Server is an intelligent browser designed specifically for L
 
 | Issue | Resolution |
 |-------|------------|
+| Secrets in logs | Pino redact configuration in PR #29 |
 | npm packaging hygiene | Added .npmignore in PR #28 |
 | Missing LICENSE file | Added MIT LICENSE in PR #27 |
 | ESM require.resolve bug | createRequire fix in PR #26 |
@@ -221,7 +222,6 @@ See [BACKLOG.md](BACKLOG.md) for the detailed task backlog with priorities and e
 | ID | Task | Effort | Notes |
 |----|------|--------|-------|
 | S-001 | Add URL safety policy controls | M | SSRF protection with secure defaults |
-| S-002 | Redact secrets in logs | S | Pino redact for auth headers, cookies - **IN PROGRESS** |
 
 ### High Priority (P1)
 
