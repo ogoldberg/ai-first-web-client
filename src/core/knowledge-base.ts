@@ -44,11 +44,14 @@ export class KnowledgeBase {
     });
 
     // Log deprecation warning once per instance
-    logger.knowledgeBase.warn(
-      'KnowledgeBase is deprecated. Use LearningEngine instead. ' +
-      'LearningEngine provides all KnowledgeBase functionality plus enhanced features. ' +
-      'Data will be automatically migrated on LearningEngine initialization.'
-    );
+    if (!this.deprecationWarned) {
+      logger.knowledgeBase.warn(
+        'KnowledgeBase is deprecated. Use LearningEngine instead. ' +
+        'LearningEngine provides all KnowledgeBase functionality plus enhanced features. ' +
+        'Data will be automatically migrated on LearningEngine initialization.'
+      );
+      this.deprecationWarned = true;
+    }
   }
 
   async initialize(): Promise<void> {

@@ -1435,31 +1435,29 @@ export class LearningEngine {
       const pathname = urlObj.pathname;
 
       const entry = this.entries.get(domain);
-      if (!entry) return null;
+      if (!entry) {
+        return null;
+      }
 
-      // Find exact match first
-      const exactMatch = entry.apiPatterns.find(p => {
+      let partialMatch: EnhancedApiPattern | null = null;
+
+      for (const p of entry.apiPatterns) {
         try {
           const patternUrl = new URL(p.endpoint);
-          return patternUrl.pathname === pathname;
+          if (patternUrl.pathname === pathname) {
+            // Exact match found, this is the best possible match.
+            return p;
+          }
+          // If we haven't found a partial match yet, check for one.
+          if (!partialMatch && pathname.startsWith(patternUrl.pathname)) {
+            partialMatch = p;
+          }
         } catch {
-          return false;
+          // Ignore patterns with invalid endpoints.
         }
-      });
+      }
 
-      if (exactMatch) return exactMatch;
-
-      // Try partial match
-      const partialMatch = entry.apiPatterns.find(p => {
-        try {
-          const patternUrl = new URL(p.endpoint);
-          return pathname.startsWith(patternUrl.pathname);
-        } catch {
-          return false;
-        }
-      });
-
-      return partialMatch || null;
+      return partialMatch;
     } catch {
       return null;
     }
@@ -1598,7 +1596,7 @@ export class LearningEngine {
               const enhanced: EnhancedApiPattern = {
                 ...legacyPattern,
                 createdAt: now,
-                lastVerified: legacyEntry.lastUsed || now,
+                lastVerified: legacyEntry.lastUsed ?? now,
                 verificationCount: 1,
                 failureCount: 0,
               };
@@ -1613,7 +1611,7 @@ export class LearningEngine {
             apiPatterns: legacyEntry.patterns.map(p => ({
               ...p,
               createdAt: now,
-              lastVerified: legacyEntry.lastUsed || now,
+              lastVerified: legacyEntry.lastUsed ?? now,
               verificationCount: 1,
               failureCount: 0,
             })),
@@ -1622,7 +1620,7 @@ export class LearningEngine {
             validators: [],
             paginationPatterns: {},
             recentFailures: [],
-            lastUsed: legacyEntry.lastUsed || now,
+            lastUsed: legacyEntry.lastUsed ?? now,
             usageCount: legacyEntry.usageCount || 0,
             overallSuccessRate: legacyEntry.successRate ?? 1.0,
             createdAt: now,
