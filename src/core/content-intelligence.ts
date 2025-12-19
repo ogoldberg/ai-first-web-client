@@ -2190,7 +2190,8 @@ export class ContentIntelligence {
       lines.push('');
       lines.push('Dependencies:');
       // Filter out extras (those with markers like "; extra ==")
-      const mainDeps = requiresDist.filter((d) => !d.includes('; extra =='));
+      // Using regex to handle variable whitespace per PEP 508
+      const mainDeps = requiresDist.filter((d) => !/;\s*extra\s*==/.test(d));
       for (const dep of mainDeps.slice(0, 10)) {
         // Remove version specifiers for brevity
         const depName = dep.split(/[<>=!;\[]/)[0].trim();
@@ -2235,7 +2236,8 @@ export class ContentIntelligence {
 
     // Dependencies
     if (requiresDist && requiresDist.length > 0) {
-      const mainDeps = requiresDist.filter((d) => !d.includes('; extra =='));
+      // Using regex to handle variable whitespace per PEP 508
+      const mainDeps = requiresDist.filter((d) => !/;\s*extra\s*==/.test(d));
       if (mainDeps.length > 0) {
         markdownLines.push('## Dependencies');
         for (const dep of mainDeps.slice(0, 10)) {
@@ -2324,12 +2326,12 @@ export class ContentIntelligence {
       // PyPI JSON API endpoint
       const apiUrl = `https://pypi.org/pypi/${encodeURIComponent(packageName)}/json`;
 
-      const response = await fetch(apiUrl, {
+      const response = await this.fetchWithCookies(apiUrl, {
+        ...opts,
         headers: {
+          ...opts.headers,
           Accept: 'application/json',
-          'User-Agent': opts.userAgent || BROWSER_USER_AGENT,
         },
-        signal: opts.timeout ? AbortSignal.timeout(opts.timeout) : undefined,
       });
 
       if (!response.ok) {
