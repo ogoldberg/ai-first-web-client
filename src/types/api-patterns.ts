@@ -442,3 +442,154 @@ export interface ApiDomainGroup {
   /** When this group was last updated */
   lastUpdated: number;
 }
+
+// ============================================
+// OPENAPI DISCOVERY TYPES (L-006)
+// ============================================
+
+/**
+ * Common locations to probe for OpenAPI/Swagger specifications
+ */
+export const OPENAPI_PROBE_LOCATIONS = [
+  '/openapi.json',
+  '/openapi.yaml',
+  '/openapi.yml',
+  '/swagger.json',
+  '/swagger.yaml',
+  '/swagger.yml',
+  '/api-docs',
+  '/api-docs.json',
+  '/docs/api',
+  '/docs/api.json',
+  '/.well-known/openapi.json',
+  '/v1/openapi.json',
+  '/v2/openapi.json',
+  '/v3/openapi.json',
+  '/api/openapi.json',
+  '/api/swagger.json',
+] as const;
+
+/**
+ * OpenAPI specification version
+ */
+export type OpenAPIVersion = '2.0' | '3.0' | '3.1';
+
+/**
+ * Simplified OpenAPI parameter representation
+ */
+export interface OpenAPIParameter {
+  name: string;
+  in: 'path' | 'query' | 'header' | 'cookie';
+  required: boolean;
+  type?: string;
+  schema?: {
+    type?: string;
+    format?: string;
+    enum?: string[];
+  };
+  description?: string;
+}
+
+/**
+ * Simplified OpenAPI response representation
+ */
+export interface OpenAPIResponse {
+  statusCode: string;
+  description?: string;
+  contentType?: string;
+  schema?: Record<string, unknown>;
+}
+
+/**
+ * Simplified OpenAPI endpoint representation
+ */
+export interface OpenAPIEndpoint {
+  path: string;
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
+  operationId?: string;
+  summary?: string;
+  description?: string;
+  parameters: OpenAPIParameter[];
+  responses: OpenAPIResponse[];
+  tags?: string[];
+  deprecated?: boolean;
+}
+
+/**
+ * Parsed OpenAPI specification
+ */
+export interface ParsedOpenAPISpec {
+  /** OpenAPI/Swagger version */
+  version: OpenAPIVersion;
+  /** API title */
+  title: string;
+  /** API description */
+  description?: string;
+  /** Base URL for the API */
+  baseUrl: string;
+  /** Available endpoints */
+  endpoints: OpenAPIEndpoint[];
+  /** Security schemes defined */
+  securitySchemes?: Record<string, {
+    type: 'apiKey' | 'http' | 'oauth2' | 'openIdConnect';
+    name?: string;
+    in?: 'query' | 'header' | 'cookie';
+    scheme?: string;
+  }>;
+  /** When the spec was discovered */
+  discoveredAt: number;
+  /** URL where the spec was found */
+  specUrl: string;
+}
+
+/**
+ * Result of OpenAPI discovery attempt
+ */
+export interface OpenAPIDiscoveryResult {
+  /** Whether a spec was found */
+  found: boolean;
+  /** The parsed spec if found */
+  spec?: ParsedOpenAPISpec;
+  /** URL where the spec was found */
+  specUrl?: string;
+  /** Locations that were probed */
+  probedLocations: string[];
+  /** Time taken to discover (ms) */
+  discoveryTime: number;
+  /** Error message if discovery failed */
+  error?: string;
+}
+
+/**
+ * Options for OpenAPI discovery
+ */
+export interface OpenAPIDiscoveryOptions {
+  /** Maximum time to spend probing (ms) */
+  timeout?: number;
+  /** Only probe these specific locations */
+  probeLocations?: string[];
+  /** Skip locations that match these patterns */
+  skipPatterns?: string[];
+  /** Headers to send with probe requests */
+  headers?: Record<string, string>;
+  /** Whether to parse YAML specs (requires yaml parser) */
+  parseYaml?: boolean;
+}
+
+/**
+ * Result of generating patterns from OpenAPI spec
+ */
+export interface OpenAPIPatternGenerationResult {
+  /** Number of patterns generated */
+  patternsGenerated: number;
+  /** IDs of generated patterns */
+  patternIds: string[];
+  /** Endpoints that couldn't be converted to patterns */
+  skippedEndpoints: Array<{
+    path: string;
+    method: string;
+    reason: string;
+  }>;
+  /** Warnings during generation */
+  warnings: string[];
+}
