@@ -81,17 +81,19 @@ See [API_DOCUMENTATION_DISCOVERY_PLAN.md](API_DOCUMENTATION_DISCOVERY_PLAN.md) f
 
 **Goal:** Automatically detect and leverage documented APIs instead of learning through observation. Why learn what's already documented?
 
-| ID | Phase | Task | Effort | Status | Notes |
+Note: "Order" reflects the implementation sequence from the plan document, optimized for dependencies and impact.
+
+| ID | Order | Task | Effort | Status | Notes |
 |----|-------|------|--------|--------|-------|
-| D-001 | 1 | GraphQL Introspection | L | DONE | Auto-discover GraphQL schema via `__schema` query (supersedes I-012) |
-| D-002 | 2 | API Docs Page Detection | L | | Parse HTML API documentation (/docs, /developers, etc.) |
-| D-003 | 3 | Link Relation Discovery | M | | RFC 8288 Link headers, HTML `<link>` tags, HATEOAS |
-| D-004 | 4 | OpenAPI Enhancement | M | | $ref resolution, POST/PUT/DELETE support, better YAML |
-| D-005 | 5 | AsyncAPI Discovery | M | | WebSocket, MQTT, Kafka event-driven APIs |
-| D-006 | 6 | Alt Spec Formats | M | | RAML, API Blueprint, WADL parsing |
-| D-007 | 7 | Robots/Sitemap Analysis | S | | Extract API hints from robots.txt/sitemap.xml |
-| D-008 | 8 | Discovery Orchestrator | L | | Unified pipeline with caching and prioritization |
-| D-009 | 9 | Auth Workflow Helper | L | | Guided authentication setup for discovered APIs (supersedes I-013) |
+| D-001 | 1 | GraphQL Introspection | L | DONE | Auto-discover GraphQL schema via `__schema` query |
+| D-008 | 2 | Discovery Orchestrator | L | | Unified pipeline with caching and prioritization |
+| D-004 | 3 | OpenAPI Enhancement | M | | $ref resolution, POST/PUT/DELETE support, better YAML |
+| D-003 | 4 | Link Discovery | M | | RFC 8288 Link headers, HTML `<link>` tags, HATEOAS |
+| D-002 | 5 | Docs Page Detection | L | | Parse HTML API documentation (/docs, /developers, etc.) |
+| D-009 | 6 | Auth Workflow Helper | L | | Guided authentication setup for discovered APIs |
+| D-005 | 7 | AsyncAPI Discovery | M | | WebSocket, MQTT, Kafka event-driven APIs |
+| D-006 | 8 | Alt Spec Formats | M | | RAML, API Blueprint, WADL parsing |
+| D-007 | 9 | Robots/Sitemap Analysis | S | | Extract API hints from robots.txt/sitemap.xml |
 
 **Supersedes:** I-012 (GraphQL introspection), I-013 (Authentication workflow helper)
 
