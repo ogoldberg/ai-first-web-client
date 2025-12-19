@@ -1810,10 +1810,10 @@ export class ContentIntelligence {
     const license = String(latestInfo.license || pkg.license || 'Unknown');
     const homepage = String(latestInfo.homepage || pkg.homepage || '');
     const repository = this.extractRepoUrl(latestInfo.repository || pkg.repository);
-    const keywords = (latestInfo.keywords || pkg.keywords || []) as string[];
-    const maintainers = (pkg.maintainers || []) as Array<{ name?: string; email?: string }>;
+    const rawKeywords = latestInfo.keywords || pkg.keywords;
+    const keywords: string[] = Array.isArray(rawKeywords) ? rawKeywords : [];
+    const maintainers: Array<{ name?: string; email?: string }> = Array.isArray(pkg.maintainers) ? pkg.maintainers : [];
     const dependencies = latestInfo.dependencies as Record<string, string> | undefined;
-    const devDependencies = latestInfo.devDependencies as Record<string, string> | undefined;
     const peerDependencies = latestInfo.peerDependencies as Record<string, string> | undefined;
     const time = pkg.time as Record<string, string> | undefined;
 
@@ -1951,8 +1951,10 @@ export class ContentIntelligence {
 
     // Last published
     if (time && time[latestVersion]) {
-      const publishDate = new Date(time[latestVersion]).toLocaleDateString();
-      markdownLines.push(`*Last published: ${publishDate}*`);
+      const publishDate = new Date(time[latestVersion]);
+      if (!isNaN(publishDate.getTime())) {
+        markdownLines.push(`*Last published: ${publishDate.toLocaleDateString()}*`);
+      }
     }
 
     return {
@@ -1967,14 +1969,17 @@ export class ContentIntelligence {
    */
   private extractRepoUrl(repo: unknown): string {
     if (!repo) return '';
-    if (typeof repo === 'string') return repo;
-    if (typeof repo === 'object' && repo !== null) {
+
+    let url = '';
+    if (typeof repo === 'string') {
+      url = repo;
+    } else if (typeof repo === 'object' && repo !== null) {
       const repoObj = repo as Record<string, unknown>;
-      const url = String(repoObj.url || '');
-      // Convert git+https:// to https://
-      return url.replace(/^git\+/, '').replace(/\.git$/, '');
+      url = String(repoObj.url || '');
     }
-    return '';
+
+    // Convert git+https:// to https:// and remove .git suffix
+    return url.replace(/^git\+/, '').replace(/\.git$/, '');
   }
 
   /**
