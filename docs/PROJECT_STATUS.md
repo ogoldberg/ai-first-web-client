@@ -4,7 +4,7 @@
 **Version:** 0.5.0
 **Current Phase:** Production Readiness (Phase 2)
 **Total Code:** ~16,000 lines TypeScript
-**Tests:** 594 passing + 44 live tests
+**Tests:** 609 passing + 44 live tests
 
 ---
 
@@ -233,8 +233,8 @@ The next major initiative is building a **Generalized API Learning Layer** that 
 | Phase | Goal | Status |
 |-------|------|--------|
 | 1. Pattern Extraction | Extract patterns from 8 existing handlers | Complete |
-| 2. Learning From Success | Auto-learn when API extraction succeeds | In Progress |
-| 3. Pattern Application | Apply learned patterns to new sites | Planned |
+| 2. Learning From Success | Auto-learn when API extraction succeeds | Complete |
+| 3. Pattern Application | Apply learned patterns to new sites | In Progress |
 | 4. Cross-Site Transfer | Transfer patterns to similar sites | Planned |
 | 5. OpenAPI Discovery | Auto-detect and use API specifications | Planned |
 | 6. Failure Learning | Learn from mistakes, build anti-patterns | Planned |
@@ -252,6 +252,13 @@ The next major initiative is building a **Generalized API Learning Layer** that 
 
 ### v0.5.0 (2025-12-19)
 
+- Added API Pattern Learning System Phase 2: Learning From Success (L-003)
+  - Auto-learn patterns when API extraction succeeds
+  - ApiExtractionSuccess event type and listeners in ContentIntelligence
+  - learnFromExtraction() method in ApiPatternRegistry
+  - Automatic template type inference (json-suffix, registry-lookup, rest-resource, etc.)
+  - Content mapping inference with JSON path finding
+  - 15 new tests for pattern learning
 - Added API Pattern Learning System Phase 1: Pattern Extraction (L-001/L-002)
   - 5 pattern template types: json-suffix, registry-lookup, rest-resource, firebase-rest, query-api
   - 8 bootstrap patterns from existing handlers (Reddit, NPM, PyPI, GitHub, Wikipedia, HackerNews, StackOverflow, Dev.to)
