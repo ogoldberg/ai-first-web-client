@@ -4,7 +4,7 @@
 **Version:** 0.5.0
 **Current Phase:** Production Readiness (Phase 2)
 **Total Code:** ~16,000 lines TypeScript
-**Tests:** 834 passing + 44 live tests
+**Tests:** 852 passing + 44 live tests
 
 ---
 
@@ -252,7 +252,7 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 |----|-------|------|--------|
 | D-001 | 1 | GraphQL Introspection | Complete |
 | D-008 | 2 | Discovery Orchestrator | Complete |
-| D-004 | 3 | OpenAPI Enhancement | Planned |
+| D-004 | 3 | OpenAPI Enhancement | Complete |
 | D-003 | 4 | Link Discovery | Planned |
 | D-002 | 5 | Docs Page Detection | Planned |
 | D-009 | 6 | Auth Workflow Helper | Planned |
@@ -281,6 +281,13 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
   - Pattern deduplication and priority-based ordering
   - Metadata aggregation from multiple sources
   - 39 new tests for discovery orchestrator
+- Added API Documentation Discovery Phase 3: OpenAPI Enhancement (D-004)
+  - Full YAML parsing with js-yaml library (anchors, aliases, multi-line strings)
+  - $ref resolution for local JSON pointers with circular reference handling
+  - POST/PUT/DELETE pattern support with request body schema extraction
+  - Rate limit extraction from x-ratelimit extensions
+  - Request body content type handling (JSON, form-data, etc.)
+  - 18 new tests for OpenAPI enhancements
 - Added API Pattern Learning System Phase 6: Failure Learning (L-007)
   - Failure classification by category (auth, rate limit, timeout, server error, etc.)
   - Anti-pattern creation from repeated failures to avoid wasting requests
