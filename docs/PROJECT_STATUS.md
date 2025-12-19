@@ -216,6 +216,7 @@ ai-first-web-client/
 - [Vision & Strategy](VISION.md)
 - [Development Roadmap](ROADMAP.md)
 - [Task Backlog](BACKLOG.md)
+- [API Learning Plan](API_LEARNING_PLAN.md) - Generalized API pattern learning system
 - [Main README](../README.md)
 - [Development Guide](../CLAUDE.md)
 
@@ -225,19 +226,23 @@ ai-first-web-client/
 
 See [BACKLOG.md](BACKLOG.md) for the detailed task backlog with priorities and effort estimates.
 
-### Critical (P0)
+### Phase 3: API Learning System - PLANNED
 
-All P0 tasks complete.
+The next major initiative is building a **Generalized API Learning Layer** that shifts from hardcoded site-specific handlers to learned patterns. See [API_LEARNING_PLAN.md](API_LEARNING_PLAN.md) for the full plan.
 
-### High Priority (P1)
+| Phase | Goal | Status |
+|-------|------|--------|
+| 1. Pattern Extraction | Extract patterns from 8 existing handlers | Planned |
+| 2. Learning From Success | Auto-learn when API extraction succeeds | Planned |
+| 3. Pattern Application | Apply learned patterns to new sites | Planned |
+| 4. Cross-Site Transfer | Transfer patterns to similar sites | Planned |
+| 5. OpenAPI Discovery | Auto-detect and use API specifications | Planned |
+| 6. Failure Learning | Learn from mistakes, build anti-patterns | Planned |
 
-All P1 tasks complete.
-
-### Upcoming (P2)
+### Other Upcoming (P2)
 
 | ID | Task | Effort | Notes |
 |----|------|--------|-------|
-| I-011 | OpenAPI spec discovery | L | Auto-detect and use OpenAPI/Swagger |
 | I-012 | GraphQL introspection | L | Auto-discover schema and query |
 | I-013 | Authentication workflow helper | L | Guide users through OAuth, API keys |
 

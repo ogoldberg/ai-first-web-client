@@ -55,6 +55,26 @@ Tasks are organized by priority and category. Each task includes:
 
 ---
 
+## P1.5: API Learning System (Next Major Initiative)
+
+See [API_LEARNING_PLAN.md](API_LEARNING_PLAN.md) for the full plan and architecture.
+
+**Goal:** Shift from hardcoded site-specific handlers to a generalized learning system that can discover and apply API patterns automatically.
+
+| ID | Phase | Task | Effort | Notes |
+|----|-------|------|--------|-------|
+| L-001 | 1 | Pattern Extraction | L | Extract templates from 8 existing handlers (json-suffix, registry-lookup, rest-resource, etc.) |
+| L-002 | 1 | Pattern Registry | M | Create storage and lookup for learned API patterns |
+| L-003 | 2 | Learning From Success | L | Auto-learn patterns when API extraction succeeds |
+| L-004 | 3 | Pattern Application | L | Apply learned patterns to new sites (supersedes I-003) |
+| L-005 | 4 | Cross-Site Transfer | M | Transfer patterns to similar sites (supersedes I-004) |
+| L-006 | 5 | OpenAPI Discovery | L | Auto-detect and use OpenAPI/Swagger specs (supersedes I-011) |
+| L-007 | 6 | Failure Learning | M | Learn from mistakes, build anti-patterns |
+
+**Related existing items:** I-003, I-004, I-005, I-011 are superseded by phases above.
+
+---
+
 ## P2: Medium Priority (Plan For)
 
 ### Debugging & Observability
@@ -82,15 +102,15 @@ Tasks are organized by priority and category. Each task includes:
 |----|------|--------|----------|-------|
 | I-001 | Angular framework support | M | Features | Add to Content Intelligence |
 | I-002 | Vue.js framework support | M | Features | Add to Content Intelligence |
-| I-003 | Better API prediction heuristics | L | Performance | Smarter pattern matching |
-| I-004 | Cross-domain skill transfer | M | Features | Apply skills to similar sites |
-| I-005 | Automatic skill discovery | L | Features | Learn without explicit recording |
+| I-003 | Better API prediction heuristics | L | Performance | Superseded by L-004 (API Learning System Phase 3) |
+| I-004 | Cross-domain skill transfer | M | Features | Superseded by L-005 (API Learning System Phase 4) |
+| I-005 | Automatic skill discovery | L | Features | Superseded by L-003 (API Learning System Phase 2) |
 | I-006 | NPM registry API handler | S | Features | `registry.npmjs.org/package/json` (DONE) |
 | I-007 | PyPI API handler | S | Features | `pypi.org/pypi/{package}/json` (DONE) |
 | I-008 | Dev.to API handler | S | Features | `dev.to/api/articles` (DONE) |
 | I-009 | Medium API handler | M | Features | Undocumented but discoverable |
 | I-010 | YouTube API handler | M | Features | Requires API key configuration |
-| I-011 | OpenAPI spec discovery | L | Features | Auto-detect and use OpenAPI/Swagger specs |
+| I-011 | OpenAPI spec discovery | L | Features | Superseded by L-006 (API Learning System Phase 5) |
 | I-012 | GraphQL introspection | L | Features | Auto-discover GraphQL schema and query |
 | I-013 | Authentication workflow helper | L | Features | Guide users through API auth setup (OAuth, API keys) |
 
