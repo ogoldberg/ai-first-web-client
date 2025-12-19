@@ -71,8 +71,8 @@ The LLM Browser MCP Server is an intelligent browser designed specifically for L
 | Timeout Configuration | Complete | Central config (PR #14) |
 | Tier Usage Analytics | Complete | get_tier_usage_by_domain tool (PR #13) |
 | Performance Timing | Complete | PerformanceTracker utility, get_performance_metrics tool |
-| Site-Specific APIs | Complete | Reddit, HN, GitHub, Wikipedia, StackOverflow |
-| Site API Live Tests | Complete | 25 tests against real endpoints (LIVE_TESTS=true) |
+| Site-Specific APIs | Complete | Reddit, HN, GitHub, Wikipedia, StackOverflow, NPM |
+| Site API Live Tests | Complete | 32 tests against real endpoints (LIVE_TESTS=true) |
 | URL Safety (SSRF Protection) | Complete | Blocks RFC1918, localhost, metadata endpoints, dangerous protocols |
 
 ---
@@ -145,8 +145,8 @@ The LLM Browser MCP Server is an intelligent browser designed specifically for L
 | PersistentStore | 33 | Debounced writes, atomic persistence, statistics |
 | SessionCrypto | 28 | AES-256-GCM encryption, key derivation, migration |
 | SessionManager | 27 | Session health, auto-refresh, encryption support |
-| Site API Live Tests | 25 | Real API requests (Reddit, HN, GitHub, Wikipedia, StackOverflow) |
-| **Total** | **505 + 25 live** | All passing |
+| Site API Live Tests | 32 | Real API requests (Reddit, HN, GitHub, Wikipedia, StackOverflow, NPM) |
+| **Total** | **514 + 32 live** | All passing |
 
 ---
 
@@ -237,7 +237,6 @@ All P1 tasks complete.
 
 | ID | Task | Effort | Notes |
 |----|------|--------|-------|
-| I-006 | NPM registry API handler | S | registry.npmjs.org (IN PROGRESS) |
 | I-007 | PyPI API handler | S | pypi.org |
 | I-011 | OpenAPI spec discovery | L | Auto-detect and use OpenAPI/Swagger |
 | I-012 | GraphQL introspection | L | Auto-discover schema and query |
@@ -249,6 +248,7 @@ All P1 tasks complete.
 
 ### v0.5.0 (2025-12-18)
 
+- Added NPM registry API handler for npmjs.com and registry.npmjs.org URLs
 - Added session encryption at rest using AES-256-GCM with PBKDF2 key derivation
 - Set LLM_BROWSER_SESSION_KEY environment variable to enable encryption
 - Automatic migration from unencrypted to encrypted sessions

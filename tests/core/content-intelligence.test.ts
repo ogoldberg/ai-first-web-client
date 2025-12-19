@@ -803,6 +803,241 @@ describe('ContentIntelligence', () => {
     });
   });
 
+  describe('NPM Registry API', () => {
+    it('should extract package info from npmjs.com URL', async () => {
+      const packageData = {
+        name: 'test-package',
+        description: 'A test package for unit testing with enough content to pass validation for the minimum length requirement.',
+        'dist-tags': {
+          latest: '1.0.0',
+          next: '2.0.0-beta.1',
+        },
+        versions: {
+          '1.0.0': {
+            name: 'test-package',
+            version: '1.0.0',
+            description: 'A test package description that is sufficiently long for content validation purposes.',
+            license: 'MIT',
+            homepage: 'https://example.com',
+            repository: {
+              type: 'git',
+              url: 'git+https://github.com/test/test-package.git',
+            },
+            keywords: ['test', 'package', 'unit-testing'],
+            dependencies: {
+              lodash: '^4.17.21',
+              axios: '^1.0.0',
+            },
+          },
+        },
+        maintainers: [
+          { name: 'test-maintainer', email: 'test@example.com' },
+        ],
+        time: {
+          '1.0.0': '2024-01-15T10:00:00.000Z',
+        },
+      };
+
+      mockFetch.mockResolvedValueOnce(createJsonResponse(packageData));
+
+      const result = await intelligence.extract('https://www.npmjs.com/package/test-package', {
+        forceStrategy: 'api:npm',
+        minContentLength: 100, // Ensure we pass content length check
+      });
+
+      expect(result.meta.strategy).toBe('api:npm');
+      expect(result.meta.finalUrl).toBe('https://registry.npmjs.org/test-package');
+      expect(result.meta.confidence).toBe('high');
+      expect(result.content.title).toBe('test-package - npm');
+      expect(result.content.text).toContain('test-package@1.0.0');
+      expect(result.content.text).toContain('License: MIT');
+      expect(result.content.markdown).toContain('npm install test-package');
+    });
+
+    it('should handle scoped packages (@scope/package)', async () => {
+      const packageData = {
+        name: '@types/node',
+        description: 'TypeScript definitions for Node.js with comprehensive type coverage.',
+        'dist-tags': {
+          latest: '20.0.0',
+        },
+        versions: {
+          '20.0.0': {
+            name: '@types/node',
+            version: '20.0.0',
+            license: 'MIT',
+          },
+        },
+        maintainers: [],
+      };
+
+      mockFetch.mockResolvedValueOnce(createJsonResponse(packageData));
+
+      const result = await intelligence.extract('https://www.npmjs.com/package/@types/node', {
+        forceStrategy: 'api:npm',
+        minContentLength: 50, // Lower threshold for this test
+      });
+
+      expect(result.meta.strategy).toBe('api:npm');
+      expect(result.meta.finalUrl).toBe('https://registry.npmjs.org/@types%2Fnode');
+      expect(result.content.title).toBe('@types/node - npm');
+    });
+
+    it('should extract from registry.npmjs.org directly', async () => {
+      const packageData = {
+        name: 'direct-package',
+        description: 'A package fetched directly from the registry with sufficient description text.',
+        'dist-tags': {
+          latest: '1.0.0',
+        },
+        versions: {
+          '1.0.0': {
+            name: 'direct-package',
+            version: '1.0.0',
+          },
+        },
+        maintainers: [],
+      };
+
+      mockFetch.mockResolvedValueOnce(createJsonResponse(packageData));
+
+      const result = await intelligence.extract('https://registry.npmjs.org/direct-package', {
+        forceStrategy: 'api:npm',
+        minContentLength: 50, // Lower threshold for this test
+      });
+
+      expect(result.meta.strategy).toBe('api:npm');
+      expect(result.content.title).toBe('direct-package - npm');
+    });
+
+    it('should return null for non-NPM URLs', async () => {
+      await expect(
+        intelligence.extract('https://example.com/some-page', {
+          forceStrategy: 'api:npm',
+        })
+      ).rejects.toThrow(/returned no result/);
+    });
+
+    it('should return null for NPM URLs without package path', async () => {
+      await expect(
+        intelligence.extract('https://www.npmjs.com/', {
+          forceStrategy: 'api:npm',
+        })
+      ).rejects.toThrow(/returned no result/);
+    });
+
+    it('should handle API errors gracefully', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+        headers: new Headers({ 'content-type': 'application/json' }),
+      });
+
+      await expect(
+        intelligence.extract('https://www.npmjs.com/package/nonexistent-package', {
+          forceStrategy: 'api:npm',
+        })
+      ).rejects.toThrow(/returned no result/);
+    });
+
+    it('should include dist tags in output', async () => {
+      const packageData = {
+        name: 'tagged-package',
+        description: 'A package with multiple dist tags for testing the tag display functionality.',
+        'dist-tags': {
+          latest: '1.0.0',
+          next: '2.0.0-alpha.1',
+          beta: '1.5.0-beta.3',
+        },
+        versions: {
+          '1.0.0': {
+            name: 'tagged-package',
+            version: '1.0.0',
+          },
+        },
+        maintainers: [],
+      };
+
+      mockFetch.mockResolvedValueOnce(createJsonResponse(packageData));
+
+      const result = await intelligence.extract('https://www.npmjs.com/package/tagged-package', {
+        forceStrategy: 'api:npm',
+        minContentLength: 50, // Lower threshold for this test
+      });
+
+      expect(result.content.text).toContain('Dist Tags:');
+      expect(result.content.text).toContain('latest: 1.0.0');
+      expect(result.content.text).toContain('next: 2.0.0-alpha.1');
+      expect(result.content.markdown).toContain('| latest | 1.0.0 |');
+    });
+
+    it('should include dependencies in output', async () => {
+      const packageData = {
+        name: 'deps-package',
+        description: 'A package with dependencies for testing the dependency display functionality.',
+        'dist-tags': { latest: '1.0.0' },
+        versions: {
+          '1.0.0': {
+            name: 'deps-package',
+            version: '1.0.0',
+            dependencies: {
+              express: '^4.18.0',
+              lodash: '^4.17.21',
+            },
+            peerDependencies: {
+              react: '>=18.0.0',
+            },
+          },
+        },
+        maintainers: [],
+      };
+
+      mockFetch.mockResolvedValueOnce(createJsonResponse(packageData));
+
+      const result = await intelligence.extract('https://www.npmjs.com/package/deps-package', {
+        forceStrategy: 'api:npm',
+        minContentLength: 50, // Lower threshold for this test
+      });
+
+      expect(result.content.text).toContain('Dependencies (2)');
+      expect(result.content.text).toContain('express: ^4.18.0');
+      expect(result.content.markdown).toContain('## Dependencies (2)');
+      expect(result.content.markdown).toContain('## Peer Dependencies');
+      expect(result.content.markdown).toContain('`react`: >=18.0.0');
+    });
+
+    it('should convert git+https repository URLs', async () => {
+      const packageData = {
+        name: 'git-repo-package',
+        description: 'A package with a git repository URL that needs conversion for display.',
+        'dist-tags': { latest: '1.0.0' },
+        versions: {
+          '1.0.0': {
+            name: 'git-repo-package',
+            version: '1.0.0',
+            repository: {
+              type: 'git',
+              url: 'git+https://github.com/test/git-repo-package.git',
+            },
+          },
+        },
+        maintainers: [],
+      };
+
+      mockFetch.mockResolvedValueOnce(createJsonResponse(packageData));
+
+      const result = await intelligence.extract('https://www.npmjs.com/package/git-repo-package', {
+        forceStrategy: 'api:npm',
+        minContentLength: 50, // Lower threshold for this test
+      });
+
+      expect(result.content.text).toContain('https://github.com/test/git-repo-package');
+      expect(result.content.text).not.toContain('git+');
+      expect(result.content.text).not.toContain('.git');
+    });
+  });
+
   describe('Static Utility Methods', () => {
     it('should report available strategies', () => {
       const strategies = ContentIntelligence.getAvailableStrategies();
