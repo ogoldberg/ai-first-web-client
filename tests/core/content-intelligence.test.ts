@@ -1452,4 +1452,133 @@ describe('ContentIntelligence', () => {
       expect(() => intelligence.clearCookies()).not.toThrow();
     });
   });
+
+  describe('Extraction Success Events', () => {
+    it('should emit extraction success event for API strategies', async () => {
+      const events: Array<{ sourceUrl: string; apiUrl: string; strategy: string }> = [];
+
+      const intelligence = new ContentIntelligence({
+        onExtractionSuccess: (event) => events.push(event),
+      });
+
+      // Mock a successful Dev.to API response
+      const articleData = {
+        id: 12345,
+        title: 'Test Article',
+        description: 'A test article description.',
+        body_markdown: 'Full body content that is long enough for validation requirements.',
+        user: { username: 'testuser' },
+        reading_time_minutes: 5,
+        positive_reactions_count: 100,
+        comments_count: 25,
+      };
+
+      mockFetch.mockResolvedValueOnce(createJsonResponse(articleData));
+
+      await intelligence.extract('https://dev.to/testuser/test-article', {
+        forceStrategy: 'api:devto',
+        minContentLength: 10,
+      });
+
+      expect(events.length).toBe(1);
+      expect(events[0].strategy).toBe('api:devto');
+      expect(events[0].sourceUrl).toBe('https://dev.to/testuser/test-article');
+      expect(events[0].apiUrl).toContain('/api/articles/');
+    });
+
+    it('should not emit events for non-API strategies', async () => {
+      const events: Array<unknown>[] = [];
+
+      const intelligence = new ContentIntelligence({
+        onExtractionSuccess: (event) => events.push(event),
+      });
+
+      // Mock static HTML response
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        url: 'https://example.com/page',
+        text: async () =>
+          '<html><head><title>Test Page</title></head><body><p>This is enough content to pass the minimum length check for static parsing.</p></body></html>',
+        headers: new Headers({ 'content-type': 'text/html' }),
+      });
+
+      await intelligence.extract('https://example.com/page', {
+        forceStrategy: 'parse:static',
+        minContentLength: 10,
+      });
+
+      // Should not emit for parse:static
+      expect(events.length).toBe(0);
+    });
+
+    it('should allow subscribing and unsubscribing to events', async () => {
+      const intelligence = new ContentIntelligence();
+      const events: unknown[] = [];
+
+      const unsubscribe = intelligence.onExtractionSuccess((event) =>
+        events.push(event)
+      );
+
+      // Mock a successful Dev.to API response
+      const articleData = {
+        id: 12345,
+        title: 'Test Article',
+        description: 'A test article description.',
+        body_markdown: 'Full body content that is long enough.',
+        user: { username: 'testuser' },
+      };
+
+      mockFetch.mockResolvedValueOnce(createJsonResponse(articleData));
+
+      await intelligence.extract('https://dev.to/testuser/test-article', {
+        forceStrategy: 'api:devto',
+        minContentLength: 10,
+      });
+
+      expect(events.length).toBe(1);
+
+      // Unsubscribe
+      unsubscribe();
+
+      // Next extraction should not add to events
+      mockFetch.mockResolvedValueOnce(createJsonResponse(articleData));
+
+      await intelligence.extract('https://dev.to/testuser/test-article-2', {
+        forceStrategy: 'api:devto',
+        minContentLength: 10,
+      });
+
+      expect(events.length).toBe(1); // Still 1, not 2
+    });
+
+    it('should include content in extraction event', async () => {
+      let capturedEvent: { content: { title: string; text: string } } | null = null;
+
+      const intelligence = new ContentIntelligence({
+        onExtractionSuccess: (event) => {
+          capturedEvent = event;
+        },
+      });
+
+      const articleData = {
+        id: 123,
+        title: 'Dev.to Article',
+        description: 'A test article',
+        body_markdown: 'Full body content that is long enough for validation.',
+        user: { username: 'testuser' },
+      };
+
+      mockFetch.mockResolvedValueOnce(createJsonResponse(articleData));
+
+      await intelligence.extract('https://dev.to/testuser/article', {
+        forceStrategy: 'api:devto',
+        minContentLength: 10,
+      });
+
+      expect(capturedEvent).not.toBeNull();
+      expect(capturedEvent?.content.title).toContain('Dev.to Article');
+      expect(capturedEvent?.content.text).toContain('Full body content');
+    });
+  });
 });

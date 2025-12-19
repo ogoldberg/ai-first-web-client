@@ -23,6 +23,7 @@ import TurndownService from 'turndown';
 import { TIMEOUTS } from '../utils/timeouts.js';
 import { logger } from '../utils/logger.js';
 import { createRequire } from 'module';
+import type { ApiExtractionSuccess, ApiExtractionListener } from '../types/api-patterns.js';
 
 // Create a require function for ESM compatibility
 const require = createRequire(import.meta.url);
@@ -91,6 +92,8 @@ export interface ContentIntelligenceOptions {
   userAgent?: string;
   // Whether to try browser as last resort
   allowBrowser?: boolean;
+  // Callback when API extraction succeeds (for pattern learning)
+  onExtractionSuccess?: ApiExtractionListener;
 }
 
 // Realistic browser User-Agent to avoid bot detection
@@ -135,6 +138,7 @@ export class ContentIntelligence {
   private cookieJar: CookieJar;
   private turndown: TurndownService;
   private options: ContentIntelligenceOptions;
+  private extractionListeners: Set<ApiExtractionListener> = new Set();
 
   constructor(options: Partial<ContentIntelligenceOptions> = {}) {
     this.options = { ...DEFAULT_OPTIONS, ...options };
@@ -143,6 +147,33 @@ export class ContentIntelligence {
       headingStyle: 'atx',
       codeBlockStyle: 'fenced',
     });
+
+    // Add options callback if provided
+    if (options.onExtractionSuccess) {
+      this.extractionListeners.add(options.onExtractionSuccess);
+    }
+  }
+
+  /**
+   * Subscribe to API extraction success events
+   * Used for pattern learning
+   */
+  onExtractionSuccess(listener: ApiExtractionListener): () => void {
+    this.extractionListeners.add(listener);
+    return () => this.extractionListeners.delete(listener);
+  }
+
+  /**
+   * Emit an extraction success event to all listeners
+   */
+  private emitExtractionSuccess(event: ApiExtractionSuccess): void {
+    for (const listener of this.extractionListeners) {
+      try {
+        listener(event);
+      } catch (error) {
+        logger.intelligence.error('Extraction listener error', { error });
+      }
+    }
   }
 
   /**
@@ -212,6 +243,7 @@ export class ContentIntelligence {
       strategiesAttempted.push(strategy.name);
 
       try {
+        const strategyStartTime = Date.now();
         const result = await strategy.fn();
 
         if (result && this.isValidContent(result, opts)) {
@@ -219,6 +251,20 @@ export class ContentIntelligence {
           result.meta.strategiesAttempted = strategiesAttempted;
           result.meta.timing = Date.now() - startTime;
           result.warnings = [...warnings, ...result.warnings];
+
+          // Emit extraction success event for API strategies (for pattern learning)
+          if (strategy.name.startsWith('api:') && this.extractionListeners.size > 0) {
+            this.emitExtractionSuccess({
+              sourceUrl: url,
+              apiUrl: result.meta.finalUrl,
+              strategy: strategy.name,
+              responseTime: Date.now() - strategyStartTime,
+              content: result.content,
+              headers: opts.headers,
+              method: 'GET',
+            });
+          }
+
           return result;
         }
 
@@ -291,11 +337,26 @@ export class ContentIntelligence {
       throw new Error(`Unknown strategy: ${strategy}`);
     }
 
+    const strategyStartTime = Date.now();
     const result = await fn();
     if (result) {
       result.meta.strategiesAttempted = strategiesAttempted;
       result.meta.timing = Date.now() - startTime;
       result.warnings = [...warnings, ...result.warnings];
+
+      // Emit extraction success event for API strategies (for pattern learning)
+      if (strategy.startsWith('api:') && this.extractionListeners.size > 0) {
+        this.emitExtractionSuccess({
+          sourceUrl: url,
+          apiUrl: result.meta.finalUrl,
+          strategy,
+          responseTime: Date.now() - strategyStartTime,
+          content: result.content,
+          headers: opts.headers,
+          method: 'GET',
+        });
+      }
+
       return result;
     }
 

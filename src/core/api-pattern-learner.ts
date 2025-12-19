@@ -14,6 +14,7 @@
 import { logger } from '../utils/logger.js';
 import { PersistentStore } from '../utils/persistent-store.js';
 import type {
+  ApiExtractionSuccess,
   ApiPatternTemplate,
   BootstrapPattern,
   ContentMapping,
@@ -960,6 +961,157 @@ export class ApiPatternRegistry {
 
     await this.persist();
     return pattern;
+  }
+
+  /**
+   * Learn from a successful API extraction event
+   * Called by ContentIntelligence when an API strategy succeeds
+   */
+  async learnFromExtraction(event: ApiExtractionSuccess): Promise<LearnedApiPattern | null> {
+    try {
+      const domain = new URL(event.sourceUrl).hostname;
+
+      // Check if we already have a pattern that matches this URL
+      const existingMatches = this.findMatchingPatterns(event.sourceUrl);
+      if (existingMatches.length > 0) {
+        // We have an existing pattern - update its metrics
+        const match = existingMatches[0];
+        await this.updatePatternMetrics(
+          match.pattern.id,
+          true,
+          domain,
+          event.responseTime
+        );
+        patternsLogger.debug('Updated existing pattern metrics', {
+          patternId: match.pattern.id,
+          domain,
+        });
+        return match.pattern;
+      }
+
+      // No existing pattern - learn a new one
+      const templateType = this.inferTemplateType(event.strategy, event.sourceUrl, event.apiUrl);
+      if (!templateType) {
+        patternsLogger.debug('Could not infer template type', {
+          strategy: event.strategy,
+          sourceUrl: event.sourceUrl,
+        });
+        return null;
+      }
+
+      // Infer content mapping from the extracted content
+      const contentMapping = this.inferContentMapping(event.content);
+
+      // Create validation rules based on what we extracted
+      const validation: PatternValidation = {
+        requiredFields: [],
+        minContentLength: Math.min(event.content.text.length, 50),
+      };
+
+      // Learn the pattern
+      const pattern = await this.learnPattern(
+        templateType,
+        event.sourceUrl,
+        event.apiUrl,
+        contentMapping,
+        validation
+      );
+
+      patternsLogger.info('Learned new pattern from extraction', {
+        patternId: pattern.id,
+        templateType,
+        sourceUrl: event.sourceUrl,
+        apiUrl: event.apiUrl,
+      });
+
+      return pattern;
+    } catch (error) {
+      patternsLogger.error('Failed to learn from extraction', {
+        error,
+        sourceUrl: event.sourceUrl,
+      });
+      return null;
+    }
+  }
+
+  /**
+   * Infer the template type from a strategy name and URLs
+   */
+  private inferTemplateType(
+    strategy: string,
+    sourceUrl: string,
+    apiUrl: string
+  ): PatternTemplateType | null {
+    // Map known strategies to template types
+    const strategyToTemplate: Record<string, PatternTemplateType> = {
+      'api:reddit': 'json-suffix',
+      'api:npm': 'registry-lookup',
+      'api:pypi': 'registry-lookup',
+      'api:github': 'rest-resource',
+      'api:wikipedia': 'rest-resource',
+      'api:hackernews': 'firebase-rest',
+      'api:stackoverflow': 'query-api',
+      'api:devto': 'query-api',
+    };
+
+    // Check known strategies first
+    if (strategyToTemplate[strategy]) {
+      return strategyToTemplate[strategy];
+    }
+
+    // Try to infer from URL transformation
+    if (apiUrl === sourceUrl + '.json') {
+      return 'json-suffix';
+    }
+
+    // Check for common registry patterns
+    if (apiUrl.includes('registry') || apiUrl.includes('/pypi/') || apiUrl.includes('/api/')) {
+      const sourceHost = new URL(sourceUrl).hostname;
+      const apiHost = new URL(apiUrl).hostname;
+      if (sourceHost !== apiHost) {
+        return 'registry-lookup';
+      }
+    }
+
+    // Check for query parameters
+    if (new URL(apiUrl).search && !new URL(sourceUrl).search) {
+      return 'query-api';
+    }
+
+    // Default to rest-resource for api subdomain or /api/ path
+    if (apiUrl.includes('api.') || apiUrl.includes('/api/')) {
+      return 'rest-resource';
+    }
+
+    // Fallback to query-api as most general
+    return 'query-api';
+  }
+
+  /**
+   * Infer content mapping from extracted content
+   */
+  private inferContentMapping(content: ApiExtractionSuccess['content']): ContentMapping {
+    const mapping: ContentMapping = {
+      title: 'title',
+    };
+
+    if (content.text) {
+      mapping.description = 'description';
+    }
+
+    if (content.markdown && content.markdown !== content.text) {
+      mapping.body = 'body';
+    }
+
+    if (content.structured) {
+      mapping.metadata = {};
+      // Add structured data keys as metadata mappings
+      for (const key of Object.keys(content.structured)) {
+        mapping.metadata[key] = key;
+      }
+    }
+
+    return mapping;
   }
 
   /**

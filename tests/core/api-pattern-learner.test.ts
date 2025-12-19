@@ -708,3 +708,228 @@ describe('Dev.to Pattern', () => {
     }
   });
 });
+
+// ============================================
+// LEARN FROM EXTRACTION TESTS
+// ============================================
+
+describe('ApiPatternRegistry.learnFromExtraction', () => {
+  let registry: ApiPatternRegistry;
+
+  beforeEach(async () => {
+    registry = new ApiPatternRegistry({
+      filePath: './test-learn-extraction.json',
+      autoPersist: false,
+    });
+    await registry.initialize();
+  });
+
+  afterEach(() => {
+    if (existsSync('./test-learn-extraction.json')) {
+      unlinkSync('./test-learn-extraction.json');
+    }
+  });
+
+  it('should update existing pattern metrics when pattern already exists', async () => {
+    // Bootstrap patterns include reddit
+    const initialMatches = registry.findMatchingPatterns(
+      'https://reddit.com/r/programming/comments/abc123/test'
+    );
+    expect(initialMatches.length).toBeGreaterThan(0);
+    const initialSuccessCount = initialMatches[0].pattern.metrics.successCount;
+
+    // Simulate a successful extraction
+    const result = await registry.learnFromExtraction({
+      sourceUrl: 'https://reddit.com/r/programming/comments/abc123/test',
+      apiUrl: 'https://reddit.com/r/programming/comments/abc123/test.json',
+      strategy: 'api:reddit',
+      responseTime: 150,
+      content: {
+        title: 'Test Post',
+        text: 'Test content',
+        markdown: '# Test Post\n\nTest content',
+      },
+      method: 'GET',
+    });
+
+    expect(result).not.toBeNull();
+    expect(result?.metrics.successCount).toBe(initialSuccessCount + 1);
+  });
+
+  it('should learn new pattern for unknown site', async () => {
+    const initialStats = registry.getStats();
+
+    // Simulate extraction from a new site
+    const result = await registry.learnFromExtraction({
+      sourceUrl: 'https://newsite.com/posts/my-post',
+      apiUrl: 'https://api.newsite.com/v1/posts/my-post',
+      strategy: 'api:discovered',
+      responseTime: 200,
+      content: {
+        title: 'My Post Title',
+        text: 'Post body text',
+        markdown: '# My Post Title\n\nPost body text',
+      },
+      method: 'GET',
+    });
+
+    expect(result).not.toBeNull();
+    expect(result?.id).toContain('learned:');
+
+    const newStats = registry.getStats();
+    expect(newStats.totalPatterns).toBe(initialStats.totalPatterns + 1);
+  });
+
+  it('should infer json-suffix template type', async () => {
+    const result = await registry.learnFromExtraction({
+      sourceUrl: 'https://example.com/posts/123',
+      apiUrl: 'https://example.com/posts/123.json',
+      strategy: 'api:predicted',
+      responseTime: 100,
+      content: {
+        title: 'Post',
+        text: 'Content',
+        markdown: 'Content',
+      },
+      method: 'GET',
+    });
+
+    expect(result?.templateType).toBe('json-suffix');
+  });
+
+  it('should infer registry-lookup template type for different host', async () => {
+    const result = await registry.learnFromExtraction({
+      sourceUrl: 'https://newregistry.com/package/mypackage',
+      apiUrl: 'https://registry.newregistry.com/api/mypackage',
+      strategy: 'api:predicted',
+      responseTime: 100,
+      content: {
+        title: 'mypackage',
+        text: 'Package description',
+        markdown: 'Package description',
+      },
+      method: 'GET',
+    });
+
+    expect(result?.templateType).toBe('registry-lookup');
+  });
+
+  it('should infer query-api template type for query params', async () => {
+    const result = await registry.learnFromExtraction({
+      sourceUrl: 'https://qa.example.com/questions/12345',
+      apiUrl: 'https://api.qa.example.com/questions?id=12345&format=json',
+      strategy: 'api:predicted',
+      responseTime: 100,
+      content: {
+        title: 'Question',
+        text: 'Question body',
+        markdown: 'Question body',
+      },
+      method: 'GET',
+    });
+
+    expect(result?.templateType).toBe('query-api');
+  });
+
+  it('should use known strategy mappings', async () => {
+    // Test that api:npm maps to registry-lookup
+    const result = await registry.learnFromExtraction({
+      sourceUrl: 'https://example-npm.com/package/test-pkg',
+      apiUrl: 'https://registry.example-npm.com/test-pkg',
+      strategy: 'api:npm',
+      responseTime: 100,
+      content: {
+        title: 'test-pkg',
+        text: 'A test package',
+        markdown: 'A test package',
+      },
+      method: 'GET',
+    });
+
+    expect(result?.templateType).toBe('registry-lookup');
+  });
+
+  it('should infer content mapping from extracted content', async () => {
+    const result = await registry.learnFromExtraction({
+      sourceUrl: 'https://blog.example.com/posts/article',
+      apiUrl: 'https://api.blog.example.com/posts/article',
+      strategy: 'api:predicted',
+      responseTime: 100,
+      content: {
+        title: 'Article Title',
+        text: 'Short description',
+        markdown: '# Article Title\n\nFull article body with markdown',
+        structured: {
+          author: 'John Doe',
+          date: '2025-01-15',
+        },
+      },
+      method: 'GET',
+    });
+
+    expect(result?.contentMapping.title).toBe('title');
+    expect(result?.contentMapping.description).toBe('description');
+    expect(result?.contentMapping.body).toBe('body');
+    expect(result?.contentMapping.metadata).toBeDefined();
+    expect(result?.contentMapping.metadata?.author).toBe('author');
+  });
+
+  it('should handle errors gracefully', async () => {
+    const result = await registry.learnFromExtraction({
+      sourceUrl: 'invalid-url',
+      apiUrl: 'https://api.example.com/test',
+      strategy: 'api:predicted',
+      responseTime: 100,
+      content: {
+        title: 'Test',
+        text: 'Content',
+        markdown: 'Content',
+      },
+      method: 'GET',
+    });
+
+    // Should return null on error, not throw
+    expect(result).toBeNull();
+  });
+
+  it('should emit pattern_learned event for new patterns', async () => {
+    const events: { type: string }[] = [];
+    registry.subscribe((event) => events.push(event));
+
+    await registry.learnFromExtraction({
+      sourceUrl: 'https://newblog.com/articles/test',
+      apiUrl: 'https://api.newblog.com/v1/articles/test',
+      strategy: 'api:predicted',
+      responseTime: 100,
+      content: {
+        title: 'Test Article',
+        text: 'Article content',
+        markdown: 'Article content',
+      },
+      method: 'GET',
+    });
+
+    expect(events.some((e) => e.type === 'pattern_learned')).toBe(true);
+  });
+
+  it('should emit pattern_applied event for existing patterns', async () => {
+    const events: { type: string }[] = [];
+    registry.subscribe((event) => events.push(event));
+
+    // Use a URL that matches bootstrap patterns
+    await registry.learnFromExtraction({
+      sourceUrl: 'https://github.com/user/repo',
+      apiUrl: 'https://api.github.com/repos/user/repo',
+      strategy: 'api:github',
+      responseTime: 150,
+      content: {
+        title: 'user/repo',
+        text: 'Repository description',
+        markdown: 'Repository description',
+      },
+      method: 'GET',
+    });
+
+    expect(events.some((e) => e.type === 'pattern_applied')).toBe(true);
+  });
+});

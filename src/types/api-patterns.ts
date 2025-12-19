@@ -327,3 +327,40 @@ export type PatternLearningEvent =
  * Listener for pattern learning events
  */
 export type PatternLearningListener = (event: PatternLearningEvent) => void;
+
+// ============================================
+// API EXTRACTION EVENT TYPES
+// ============================================
+
+/**
+ * Data captured when an API extraction succeeds
+ * Used for learning new patterns
+ */
+export interface ApiExtractionSuccess {
+  /** Original URL that was requested */
+  sourceUrl: string;
+  /** Final URL (API endpoint) that was called */
+  apiUrl: string;
+  /** Strategy that succeeded (e.g., 'api:reddit', 'api:npm') */
+  strategy: string;
+  /** Response time in milliseconds */
+  responseTime: number;
+  /** Raw response data (for analyzing structure) */
+  rawResponse?: unknown;
+  /** Extracted content */
+  content: {
+    title: string;
+    text: string;
+    markdown: string;
+    structured?: Record<string, unknown>;
+  };
+  /** Headers sent with the request */
+  headers?: Record<string, string>;
+  /** HTTP method used */
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE';
+}
+
+/**
+ * Listener for API extraction success events
+ */
+export type ApiExtractionListener = (event: ApiExtractionSuccess) => void;
