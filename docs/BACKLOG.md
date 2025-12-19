@@ -86,7 +86,7 @@ Note: "Order" reflects the implementation sequence from the plan document, optim
 | ID | Order | Task | Effort | Status | Notes |
 |----|-------|------|--------|--------|-------|
 | D-001 | 1 | GraphQL Introspection | L | DONE | Auto-discover GraphQL schema via `__schema` query |
-| D-008 | 2 | Discovery Orchestrator | L | | Unified pipeline with caching and prioritization |
+| D-008 | 2 | Discovery Orchestrator | L | DONE | Unified pipeline with caching and prioritization |
 | D-004 | 3 | OpenAPI Enhancement | M | | $ref resolution, POST/PUT/DELETE support, better YAML |
 | D-003 | 4 | Link Discovery | M | | RFC 8288 Link headers, HTML `<link>` tags, HATEOAS |
 | D-002 | 5 | Docs Page Detection | L | | Parse HTML API documentation (/docs, /developers, etc.) |
