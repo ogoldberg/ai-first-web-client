@@ -320,7 +320,7 @@ export type PatternLearningEvent =
   | {
       type: 'pattern_archived';
       patternId: string;
-      reason: string;
+      reason: 'stale' | 'low_confidence';
     };
 
 /**

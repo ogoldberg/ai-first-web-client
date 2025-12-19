@@ -13,9 +13,6 @@
 
 import { logger } from '../utils/logger.js';
 import { PersistentStore } from '../utils/persistent-store.js';
-
-// Create a logger for patterns
-const patternsLogger = logger.create('ApiPatternRegistry');
 import type {
   ApiPatternTemplate,
   BootstrapPattern,
@@ -33,6 +30,9 @@ import type {
   PatternValidation,
   VariableExtractor,
 } from '../types/api-patterns.js';
+
+// Create a logger for patterns
+const patternsLogger = logger.create('ApiPatternRegistry');
 
 // ============================================
 // PATTERN TEMPLATES
@@ -670,18 +670,57 @@ export class ApiPatternRegistry {
 
   /**
    * Find patterns that match a URL
+   * Optimized to check domain-indexed patterns first before falling back to all patterns
    */
   findMatchingPatterns(url: string): PatternMatch[] {
     const matches: PatternMatch[] = [];
+    const checkedPatternIds = new Set<string>();
 
+    // Extract domain from URL
+    let domain: string;
+    try {
+      domain = new URL(url).hostname;
+    } catch {
+      // Invalid URL, fall back to checking all patterns
+      for (const pattern of this.patterns.values()) {
+        const match = this.tryMatch(url, pattern);
+        if (match) {
+          matches.push(match);
+        }
+      }
+      return matches.sort((a, b) => b.confidence - a.confidence);
+    }
+
+    // First, check patterns indexed for this specific domain (most likely to match)
+    const domainPatternIds = this.domainIndex.get(domain);
+    if (domainPatternIds) {
+      for (const patternId of domainPatternIds) {
+        checkedPatternIds.add(patternId);
+        const pattern = this.patterns.get(patternId);
+        if (pattern) {
+          const match = this.tryMatch(url, pattern);
+          if (match) {
+            matches.push(match);
+          }
+        }
+      }
+    }
+
+    // If we found matches from domain-indexed patterns, return early
+    // This is the common case and avoids checking all patterns
+    if (matches.length > 0) {
+      return matches.sort((a, b) => b.confidence - a.confidence);
+    }
+
+    // Fall back to checking remaining patterns (for cross-domain pattern discovery)
     for (const pattern of this.patterns.values()) {
+      if (checkedPatternIds.has(pattern.id)) continue;
       const match = this.tryMatch(url, pattern);
       if (match) {
         matches.push(match);
       }
     }
 
-    // Sort by confidence
     return matches.sort((a, b) => b.confidence - a.confidence);
   }
 
@@ -717,9 +756,9 @@ export class ApiPatternRegistry {
         if (apiEndpoint === '{url}') {
           apiEndpoint = url;
         } else {
-          // Replace variables in template
+          // Replace variables in template (use replaceAll for multiple occurrences)
           for (const [name, value] of Object.entries(extractedVariables)) {
-            apiEndpoint = apiEndpoint.replace(`{${name}}`, value);
+            apiEndpoint = apiEndpoint.replaceAll(`{${name}}`, value);
           }
         }
 
@@ -822,9 +861,11 @@ export class ApiPatternRegistry {
       pattern.metrics.successCount++;
       pattern.metrics.lastSuccess = Date.now();
       if (responseTime) {
-        pattern.metrics.avgResponseTime = pattern.metrics.avgResponseTime
-          ? (pattern.metrics.avgResponseTime + responseTime) / 2
-          : responseTime;
+        // Use proper rolling average: newAvg = oldAvg + (newValue - oldAvg) / N
+        const currentSuccessCount = pattern.metrics.successCount;
+        const oldAverage = pattern.metrics.avgResponseTime ?? responseTime;
+        pattern.metrics.avgResponseTime =
+          oldAverage + (responseTime - oldAverage) / currentSuccessCount;
       }
       // Add domain if new
       if (!pattern.metrics.domains.includes(domain)) {
@@ -874,10 +915,13 @@ export class ApiPatternRegistry {
     validation: PatternValidation
   ): Promise<LearnedApiPattern> {
     const domain = new URL(sourceUrl).hostname;
-    const id = `learned:${domain}:${Date.now()}`;
+    const id = `learned:${domain}:${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
     // Infer extractors from the URL and endpoint
-    const extractors = this.inferExtractors(sourceUrl, apiEndpoint);
+    const { extractors, extractedValues } = this.inferExtractors(
+      sourceUrl,
+      apiEndpoint
+    );
 
     // Create URL pattern from source URL
     const urlPattern = this.createUrlPattern(sourceUrl);
@@ -886,7 +930,10 @@ export class ApiPatternRegistry {
       id,
       templateType,
       urlPatterns: [urlPattern],
-      endpointTemplate: this.createEndpointTemplate(apiEndpoint, extractors),
+      endpointTemplate: this.createEndpointTemplate(
+        apiEndpoint,
+        extractedValues
+      ),
       extractors,
       method: 'GET',
       headers: { Accept: 'application/json' },
@@ -917,14 +964,16 @@ export class ApiPatternRegistry {
 
   /**
    * Infer variable extractors from URL and endpoint comparison
+   * Returns both the extractors and the actual values that were extracted
    */
   private inferExtractors(
     sourceUrl: string,
     apiEndpoint: string
-  ): VariableExtractor[] {
+  ): { extractors: VariableExtractor[]; extractedValues: Record<string, string> } {
     // This is a simplified implementation
     // A full implementation would do more sophisticated pattern matching
     const extractors: VariableExtractor[] = [];
+    const extractedValues: Record<string, string> = {};
     const parsed = new URL(sourceUrl);
     const pathParts = parsed.pathname.split('/').filter(Boolean);
 
@@ -932,19 +981,23 @@ export class ApiPatternRegistry {
     for (let i = 0; i < pathParts.length; i++) {
       const part = pathParts[i];
       if (apiEndpoint.includes(part) && part.length > 2) {
+        const varName = `var${i}`;
         extractors.push({
-          name: `path${i}`,
+          name: varName,
           source: 'path',
-          pattern: pathParts
-            .slice(0, i + 1)
-            .map((p, j) => (j === i ? '([^/]+)' : p))
-            .join('/'),
+          pattern:
+            '^/' +
+            pathParts
+              .slice(0, i + 1)
+              .map((p, j) => (j === i ? '([^/]+)' : p))
+              .join('/'),
           group: 1,
         });
+        extractedValues[varName] = part;
       }
     }
 
-    return extractors;
+    return { extractors, extractedValues };
   }
 
   /**
@@ -965,20 +1018,19 @@ export class ApiPatternRegistry {
   }
 
   /**
-   * Create an endpoint template from an API endpoint and extractors
+   * Create an endpoint template from an API endpoint and extracted values
+   * Replaces actual values with {varName} placeholders
    */
   private createEndpointTemplate(
     apiEndpoint: string,
-    extractors: VariableExtractor[]
+    extractedValues: Record<string, string>
   ): string {
     let template = apiEndpoint;
 
-    for (const extractor of extractors) {
-      // This is simplified - would need more sophisticated matching
-      template = template.replace(
-        new RegExp(`/${extractor.name}/`, 'g'),
-        `/{${extractor.name}}/`
-      );
+    // Replace each extracted value with its placeholder
+    for (const [varName, value] of Object.entries(extractedValues)) {
+      // Use replaceAll to handle multiple occurrences
+      template = template.replaceAll(value, `{${varName}}`);
     }
 
     return template;
@@ -1026,10 +1078,7 @@ export class ApiPatternRegistry {
         patterns.length > 0 ? totalConfidence / patterns.length : 0,
       highConfidencePatterns: highConfidenceCount,
       patternsNeedingVerification: needsVerification,
-      lastUpdated: Math.max(
-        ...patterns.map((p) => p.updatedAt),
-        0
-      ),
+      lastUpdated: patterns.reduce((max, p) => Math.max(max, p.updatedAt), 0),
     };
   }
 
