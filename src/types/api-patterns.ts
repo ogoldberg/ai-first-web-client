@@ -345,13 +345,12 @@ export interface ApiExtractionSuccess {
   strategy: string;
   /** Response time in milliseconds */
   responseTime: number;
-  /** Raw response data (for analyzing structure) */
-  rawResponse?: unknown;
   /** Extracted content */
   content: {
     title: string;
     text: string;
     markdown: string;
+    /** Structured data from the API response (used for content mapping inference) */
     structured?: Record<string, unknown>;
   };
   /** Headers sent with the request */

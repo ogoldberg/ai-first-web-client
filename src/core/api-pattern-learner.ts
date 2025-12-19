@@ -1064,17 +1064,19 @@ export class ApiPatternRegistry {
       return 'json-suffix';
     }
 
+    // Parse URLs once and reuse
+    const parsedSourceUrl = new URL(sourceUrl);
+    const parsedApiUrl = new URL(apiUrl);
+
     // Check for common registry patterns
     if (apiUrl.includes('registry') || apiUrl.includes('/pypi/') || apiUrl.includes('/api/')) {
-      const sourceHost = new URL(sourceUrl).hostname;
-      const apiHost = new URL(apiUrl).hostname;
-      if (sourceHost !== apiHost) {
+      if (parsedSourceUrl.hostname !== parsedApiUrl.hostname) {
         return 'registry-lookup';
       }
     }
 
     // Check for query parameters
-    if (new URL(apiUrl).search && !new URL(sourceUrl).search) {
+    if (parsedApiUrl.search && !parsedSourceUrl.search) {
       return 'query-api';
     }
 
@@ -1089,29 +1091,80 @@ export class ApiPatternRegistry {
 
   /**
    * Infer content mapping from extracted content
+   * Searches for extracted values within the structured response to find their JSON paths
    */
   private inferContentMapping(content: ApiExtractionSuccess['content']): ContentMapping {
     const mapping: ContentMapping = {
-      title: 'title',
+      title: 'title', // Default, may be overwritten if found in structured data
     };
 
-    if (content.text) {
-      mapping.description = 'description';
-    }
-
-    if (content.markdown && content.markdown !== content.text) {
-      mapping.body = 'body';
-    }
-
     if (content.structured) {
+      // Search for where the title value appears in the structured data
+      const titlePath = this.findValuePath(content.structured, content.title);
+      if (titlePath) {
+        mapping.title = titlePath;
+      }
+
+      // Search for where the text/description value appears
+      if (content.text) {
+        const textPath = this.findValuePath(content.structured, content.text);
+        mapping.description = textPath || 'description';
+      }
+
+      // Search for where the markdown/body value appears
+      if (content.markdown && content.markdown !== content.text) {
+        const bodyPath = this.findValuePath(content.structured, content.markdown);
+        mapping.body = bodyPath || 'body';
+      }
+
+      // For metadata, map top-level keys to their paths
       mapping.metadata = {};
-      // Add structured data keys as metadata mappings
       for (const key of Object.keys(content.structured)) {
         mapping.metadata[key] = key;
+      }
+    } else {
+      // No structured data to search, use default mappings
+      if (content.text) {
+        mapping.description = 'description';
+      }
+      if (content.markdown && content.markdown !== content.text) {
+        mapping.body = 'body';
       }
     }
 
     return mapping;
+  }
+
+  /**
+   * Recursively search for a value within an object and return its JSON path
+   * Returns null if the value is not found
+   */
+  private findValuePath(obj: unknown, target: unknown, path = ''): string | null {
+    // Don't search for empty or very short strings
+    if (typeof target === 'string' && target.length < 3) {
+      return null;
+    }
+
+    // Direct match at current path
+    if (obj === target) {
+      return path || null;
+    }
+
+    // Can't recurse into non-objects
+    if (typeof obj !== 'object' || obj === null) {
+      return null;
+    }
+
+    // Search through object properties
+    for (const [key, value] of Object.entries(obj)) {
+      const newPath = path ? `${path}.${key}` : key;
+      const found = this.findValuePath(value, target, newPath);
+      if (found) {
+        return found;
+      }
+    }
+
+    return null;
   }
 
   /**

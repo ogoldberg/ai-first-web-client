@@ -874,6 +874,44 @@ describe('ApiPatternRegistry.learnFromExtraction', () => {
     expect(result?.contentMapping.metadata?.author).toBe('author');
   });
 
+  it('should find nested JSON paths for content mapping', async () => {
+    // When values appear in structured data, inferContentMapping should find their paths
+    const result = await registry.learnFromExtraction({
+      sourceUrl: 'https://api-test.example.com/articles/test',
+      apiUrl: 'https://api.api-test.example.com/v1/articles/test',
+      strategy: 'api:predicted',
+      responseTime: 100,
+      content: {
+        title: 'Nested Title',
+        text: 'Nested Description',
+        markdown: '# Nested Title\n\nNested Body Content',
+        // Structured data contains the values at nested paths
+        structured: {
+          data: {
+            headline: 'Nested Title',
+            summary: 'Nested Description',
+            content: '# Nested Title\n\nNested Body Content',
+          },
+          meta: {
+            author: 'Test Author',
+          },
+        },
+      },
+      method: 'GET',
+    });
+
+    // Title should be found at data.headline
+    expect(result?.contentMapping.title).toBe('data.headline');
+    // Description should be found at data.summary
+    expect(result?.contentMapping.description).toBe('data.summary');
+    // Body should be found at data.content
+    expect(result?.contentMapping.body).toBe('data.content');
+    // Metadata keys are mapped to top-level keys
+    expect(result?.contentMapping.metadata).toBeDefined();
+    expect(result?.contentMapping.metadata?.data).toBe('data');
+    expect(result?.contentMapping.metadata?.meta).toBe('meta');
+  });
+
   it('should handle errors gracefully', async () => {
     const result = await registry.learnFromExtraction({
       sourceUrl: 'invalid-url',

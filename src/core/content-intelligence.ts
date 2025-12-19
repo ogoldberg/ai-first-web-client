@@ -177,6 +177,29 @@ export class ContentIntelligence {
   }
 
   /**
+   * Helper to emit extraction success event for API strategies if listeners exist
+   */
+  private handleApiExtractionSuccess(
+    result: ContentResult,
+    strategy: string,
+    strategyStartTime: number,
+    url: string,
+    opts: ContentIntelligenceOptions
+  ): void {
+    if (strategy.startsWith('api:') && this.extractionListeners.size > 0) {
+      this.emitExtractionSuccess({
+        sourceUrl: url,
+        apiUrl: result.meta.finalUrl,
+        strategy,
+        responseTime: Date.now() - strategyStartTime,
+        content: result.content,
+        headers: opts.headers,
+        method: 'GET',
+      });
+    }
+  }
+
+  /**
    * Extract content from a URL using the best available strategy
    */
   async extract(url: string, options: Partial<ContentIntelligenceOptions> = {}): Promise<ContentResult> {
@@ -253,17 +276,7 @@ export class ContentIntelligence {
           result.warnings = [...warnings, ...result.warnings];
 
           // Emit extraction success event for API strategies (for pattern learning)
-          if (strategy.name.startsWith('api:') && this.extractionListeners.size > 0) {
-            this.emitExtractionSuccess({
-              sourceUrl: url,
-              apiUrl: result.meta.finalUrl,
-              strategy: strategy.name,
-              responseTime: Date.now() - strategyStartTime,
-              content: result.content,
-              headers: opts.headers,
-              method: 'GET',
-            });
-          }
+          this.handleApiExtractionSuccess(result, strategy.name, strategyStartTime, url, opts);
 
           return result;
         }
@@ -345,17 +358,7 @@ export class ContentIntelligence {
       result.warnings = [...warnings, ...result.warnings];
 
       // Emit extraction success event for API strategies (for pattern learning)
-      if (strategy.startsWith('api:') && this.extractionListeners.size > 0) {
-        this.emitExtractionSuccess({
-          sourceUrl: url,
-          apiUrl: result.meta.finalUrl,
-          strategy,
-          responseTime: Date.now() - strategyStartTime,
-          content: result.content,
-          headers: opts.headers,
-          method: 'GET',
-        });
-      }
+      this.handleApiExtractionSuccess(result, strategy, strategyStartTime, url, opts);
 
       return result;
     }
