@@ -109,21 +109,23 @@ export function resolveRefs(
 
   /**
    * Recursively resolve all $refs in an object
+   * Returns unknown because a $ref can resolve to any type (including primitives)
    */
-  function resolveObject(obj: Record<string, unknown>, depth: number): Record<string, unknown> {
+  function resolveObject(obj: Record<string, unknown>, depth: number): unknown {
     // Handle $ref at current level
     if ('$ref' in obj && typeof obj.$ref === 'string') {
       const resolved = resolveRef(obj.$ref, depth);
-      if (resolved && typeof resolved === 'object') {
+      if (resolved && typeof resolved === 'object' && !Array.isArray(resolved)) {
         // Merge any sibling properties (OpenAPI 3.1 allows siblings with $ref)
         const siblings = { ...obj };
         delete siblings.$ref;
         if (Object.keys(siblings).length > 0) {
           return { ...(resolved as Record<string, unknown>), ...siblings };
         }
-        return resolved as Record<string, unknown>;
+        return resolved;
       }
-      return resolved as Record<string, unknown>;
+      // Return primitive or array values as-is
+      return resolved;
     }
 
     // Recursively process all properties
@@ -146,7 +148,13 @@ export function resolveRefs(
     return result;
   }
 
-  const resolved = resolveObject(document, 0);
+  const resolvedValue = resolveObject(document, 0);
+
+  // The top-level document will always be an object since we pass in Record<string, unknown>
+  // Even if internal $refs resolve to primitives, those are nested values
+  const resolved = (resolvedValue && typeof resolvedValue === 'object' && !Array.isArray(resolvedValue))
+    ? resolvedValue as Record<string, unknown>
+    : document; // Fallback to original if something unexpected happens
 
   if (resolvedRefs.length > 0) {
     refLogger.debug('Resolved references', {

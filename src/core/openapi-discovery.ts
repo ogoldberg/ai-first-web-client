@@ -835,8 +835,8 @@ function createPatternFromEndpoint(
     headers['Content-Type'] = contentType;
   }
 
-  // Map method (PATCH is filtered out earlier)
-  const method = endpoint.method === 'PATCH' ? 'PUT' : endpoint.method;
+  // PATCH is filtered out before calling this function
+  const method = endpoint.method;
 
   return {
     id,
