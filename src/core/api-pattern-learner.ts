@@ -1877,6 +1877,339 @@ export class ApiPatternRegistry {
   getOpenAPIPatterns(domain: string): LearnedApiPattern[] {
     return this.getPatternsForDomain(domain).filter(p => p.id.startsWith('openapi:'));
   }
+
+  // ============================================
+  // FAILURE LEARNING METHODS (L-007)
+  // ============================================
+
+  /** Anti-patterns learned from repeated failures */
+  private antiPatterns: Map<string, import('../types/api-patterns.js').AntiPattern> = new Map();
+
+  /**
+   * Secondary index for O(1) anti-pattern lookup by pattern+category
+   * Maps `${patternId}:${category}` to anti-pattern ID
+   */
+  private antiPatternIndex: Map<string, string> = new Map();
+
+  /**
+   * Record a pattern failure with classification
+   * Returns the failure classification for use in retry logic
+   */
+  async recordPatternFailure(
+    patternId: string,
+    domain: string,
+    attemptedUrl: string,
+    statusCode: number | undefined,
+    errorMessage: string,
+    responseTime?: number
+  ): Promise<import('../types/api-patterns.js').FailureClassification> {
+    const { classifyFailure, createFailureRecord, logFailure } = await import('./failure-learning.js');
+
+    // Classify the failure
+    const classification = classifyFailure(statusCode, errorMessage, responseTime);
+
+    // Log the failure
+    logFailure(classification, {
+      domain,
+      url: attemptedUrl,
+      patternId,
+      statusCode,
+    });
+
+    // Create failure record
+    const failureRecord = createFailureRecord(
+      classification,
+      domain,
+      attemptedUrl,
+      patternId,
+      statusCode,
+      responseTime
+    );
+
+    // Update pattern metrics with extended failure tracking
+    const pattern = this.patterns.get(patternId);
+    if (pattern) {
+      // Update basic metrics
+      await this.updatePatternMetrics(patternId, false, domain, responseTime, errorMessage);
+
+      // Update extended failure tracking
+      await this.updatePatternFailureTracking(patternId, failureRecord);
+
+      // Check if we should create an anti-pattern
+      if (classification.shouldCreateAntiPattern) {
+        await this.maybeCreateAntiPattern(patternId, domain, classification.category);
+      }
+    }
+
+    return classification;
+  }
+
+  /**
+   * Update extended failure tracking for a pattern
+   */
+  private async updatePatternFailureTracking(
+    patternId: string,
+    failureRecord: import('../types/api-patterns.js').FailureRecord
+  ): Promise<void> {
+    const {
+      createEmptyFailureCounts,
+      incrementFailureCount,
+      addFailureRecord,
+    } = await import('./failure-learning.js');
+
+    const pattern = this.patterns.get(patternId);
+    if (!pattern) return;
+
+    // Initialize extended metrics if needed
+    const extendedMetrics = pattern.metrics as import('../types/api-patterns.js').ExtendedPatternMetrics;
+
+    if (!extendedMetrics.failuresByCategory) {
+      extendedMetrics.failuresByCategory = createEmptyFailureCounts();
+    }
+    if (!extendedMetrics.recentFailures) {
+      extendedMetrics.recentFailures = [];
+    }
+
+    // Update category counts
+    extendedMetrics.failuresByCategory = incrementFailureCount(
+      extendedMetrics.failuresByCategory,
+      failureRecord.category
+    );
+
+    // Add to recent failures
+    extendedMetrics.recentFailures = addFailureRecord(
+      extendedMetrics.recentFailures,
+      failureRecord
+    );
+
+    pattern.updatedAt = Date.now();
+    await this.persist();
+  }
+
+  /**
+   * Check if an anti-pattern should be created and create it
+   */
+  private async maybeCreateAntiPattern(
+    patternId: string,
+    domain: string,
+    category: import('../types/api-patterns.js').FailureCategory
+  ): Promise<void> {
+    const {
+      countRecentFailuresByCategory,
+      createAntiPattern,
+      updateAntiPattern,
+    } = await import('./failure-learning.js');
+    const { ANTI_PATTERN_THRESHOLDS } = await import('../types/api-patterns.js');
+
+    const pattern = this.patterns.get(patternId);
+    if (!pattern) return;
+
+    const extendedMetrics = pattern.metrics as import('../types/api-patterns.js').ExtendedPatternMetrics;
+    const recentFailures = extendedMetrics.recentFailures || [];
+
+    // Count recent failures of this category
+    const categoryCount = countRecentFailuresByCategory(recentFailures, category);
+
+    if (categoryCount >= ANTI_PATTERN_THRESHOLDS.minFailures) {
+      // Check if we already have an anti-pattern for this using O(1) index lookup
+      const indexKey = `${patternId}:${category}`;
+      const existingAntiPatternId = this.antiPatternIndex.get(indexKey);
+      const existingAntiPattern = existingAntiPatternId
+        ? this.antiPatterns.get(existingAntiPatternId)
+        : undefined;
+
+      if (existingAntiPattern) {
+        // Update existing anti-pattern
+        const latestFailure = recentFailures[recentFailures.length - 1];
+        const updated = updateAntiPattern(existingAntiPattern, latestFailure);
+        this.antiPatterns.set(updated.id, updated);
+
+        patternsLogger.debug('Updated anti-pattern', {
+          antiPatternId: updated.id,
+          patternId,
+          category,
+          failureCount: updated.failureCount,
+        });
+      } else {
+        // Create new anti-pattern
+        const failuresOfCategory = recentFailures.filter(f => f.category === category);
+        const newAntiPattern = createAntiPattern(failuresOfCategory, patternId);
+
+        if (newAntiPattern) {
+          this.antiPatterns.set(newAntiPattern.id, newAntiPattern);
+
+          // Add to secondary index for O(1) lookup
+          this.antiPatternIndex.set(indexKey, newAntiPattern.id);
+
+          // Track anti-pattern ID in pattern metrics
+          if (!extendedMetrics.activeAntiPatterns) {
+            extendedMetrics.activeAntiPatterns = [];
+          }
+          extendedMetrics.activeAntiPatterns.push(newAntiPattern.id);
+
+          patternsLogger.info('Created anti-pattern from failures', {
+            antiPatternId: newAntiPattern.id,
+            patternId,
+            category,
+            domains: newAntiPattern.domains,
+            failureCount: newAntiPattern.failureCount,
+          });
+
+          this.emit({
+            type: 'anti_pattern_created',
+            antiPattern: newAntiPattern,
+          });
+        }
+      }
+
+      await this.persist();
+    }
+  }
+
+  /**
+   * Check if a URL matches any active anti-patterns
+   * Returns matching anti-patterns if found
+   */
+  async checkAntiPatterns(
+    url: string
+  ): Promise<import('../types/api-patterns.js').AntiPattern[]> {
+    const { matchAntiPatterns, isAntiPatternActive } = await import('./failure-learning.js');
+
+    // Clean up expired anti-patterns first
+    for (const [id, antiPattern] of this.antiPatterns) {
+      if (!isAntiPatternActive(antiPattern)) {
+        this.antiPatterns.delete(id);
+        // Also remove from secondary index
+        if (antiPattern.sourcePatternId) {
+          const indexKey = `${antiPattern.sourcePatternId}:${antiPattern.failureCategory}`;
+          this.antiPatternIndex.delete(indexKey);
+        }
+        patternsLogger.debug('Removed expired anti-pattern', { antiPatternId: id });
+      }
+    }
+
+    return matchAntiPatterns(url, [...this.antiPatterns.values()]);
+  }
+
+  /**
+   * Get retry strategy for a failed pattern
+   */
+  async getRetryStrategy(
+    patternId: string,
+    attemptNumber: number
+  ): Promise<{
+    shouldRetry: boolean;
+    waitMs: number;
+    strategy: import('../types/api-patterns.js').RetryStrategy;
+  }> {
+    const {
+      shouldRetry,
+      calculateRetryWait,
+      getRetryStrategy,
+    } = await import('./failure-learning.js');
+
+    const pattern = this.patterns.get(patternId);
+    if (!pattern) {
+      return { shouldRetry: false, waitMs: 0, strategy: 'none' };
+    }
+
+    const extendedMetrics = pattern.metrics as import('../types/api-patterns.js').ExtendedPatternMetrics;
+    const recentFailures = extendedMetrics.recentFailures || [];
+
+    // Get the most recent failure category
+    const latestFailure = recentFailures[recentFailures.length - 1];
+    if (!latestFailure) {
+      return { shouldRetry: false, waitMs: 0, strategy: 'none' };
+    }
+
+    const category = latestFailure.category;
+    const retry = shouldRetry(category, attemptNumber);
+    const waitMs = retry ? calculateRetryWait(category, attemptNumber) : 0;
+    const strategy = getRetryStrategy(category);
+
+    return {
+      shouldRetry: retry && waitMs >= 0,
+      waitMs: waitMs >= 0 ? waitMs : 0,
+      strategy,
+    };
+  }
+
+  /**
+   * Analyze pattern health based on failure history
+   */
+  async analyzePatternHealth(
+    patternId: string
+  ): Promise<{
+    isHealthy: boolean;
+    dominantFailureType: import('../types/api-patterns.js').FailureCategory | null;
+    suggestedAction: import('../types/api-patterns.js').RetryStrategy;
+    reason: string;
+  }> {
+    const { analyzePatternHealth } = await import('./failure-learning.js');
+
+    const pattern = this.patterns.get(patternId);
+    if (!pattern) {
+      return {
+        isHealthy: true,
+        dominantFailureType: null,
+        suggestedAction: 'none',
+        reason: 'Pattern not found',
+      };
+    }
+
+    const extendedMetrics = pattern.metrics as import('../types/api-patterns.js').ExtendedPatternMetrics;
+    const recentFailures = extendedMetrics.recentFailures || [];
+
+    return analyzePatternHealth(
+      recentFailures,
+      pattern.metrics.successCount,
+      pattern.metrics.failureCount
+    );
+  }
+
+  /**
+   * Get all active anti-patterns
+   */
+  getActiveAntiPatterns(): import('../types/api-patterns.js').AntiPattern[] {
+    return [...this.antiPatterns.values()];
+  }
+
+  /**
+   * Clear an anti-pattern (e.g., after user provides authentication)
+   */
+  async clearAntiPattern(antiPatternId: string): Promise<boolean> {
+    const antiPattern = this.antiPatterns.get(antiPatternId);
+    const deleted = this.antiPatterns.delete(antiPatternId);
+    if (deleted && antiPattern) {
+      // Also remove from secondary index
+      if (antiPattern.sourcePatternId) {
+        const indexKey = `${antiPattern.sourcePatternId}:${antiPattern.failureCategory}`;
+        this.antiPatternIndex.delete(indexKey);
+      }
+      await this.persist();
+      patternsLogger.info('Cleared anti-pattern', { antiPatternId });
+    }
+    return deleted;
+  }
+
+  /**
+   * Get failure summary for a pattern
+   */
+  async getPatternFailureSummary(
+    patternId: string
+  ): Promise<string> {
+    const { getFailureSummary, createEmptyFailureCounts } = await import('./failure-learning.js');
+
+    const pattern = this.patterns.get(patternId);
+    if (!pattern) {
+      return 'Pattern not found';
+    }
+
+    const extendedMetrics = pattern.metrics as import('../types/api-patterns.js').ExtendedPatternMetrics;
+    const counts = extendedMetrics.failuresByCategory || createEmptyFailureCounts();
+
+    return getFailureSummary(counts);
+  }
 }
 
 // ============================================

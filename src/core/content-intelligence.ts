@@ -29,8 +29,10 @@ import type {
   PatternMatch,
   LearnedApiPattern,
   ContentMapping,
+  AntiPattern,
 } from '../types/api-patterns.js';
 import { ApiPatternRegistry } from './api-pattern-learner.js';
+import { classifyFailure } from './failure-learning.js';
 
 // Create a require function for ESM compatibility
 const require = createRequire(import.meta.url);
@@ -860,6 +862,18 @@ export class ContentIntelligence {
     // Ensure pattern registry is initialized
     await this.ensurePatternRegistryInitialized();
 
+    // Check for active anti-patterns that would block this URL
+    const antiPatterns = await this.patternRegistry.checkAntiPatterns(url);
+    if (antiPatterns.length > 0) {
+      logger.intelligence.debug('Skipping URL due to active anti-patterns', {
+        url,
+        antiPatternCount: antiPatterns.length,
+        categories: antiPatterns.map(ap => ap.failureCategory),
+        reasons: antiPatterns.map(ap => ap.reason),
+      });
+      return null; // Skip - this URL matches active anti-patterns
+    }
+
     // Find patterns that match this URL
     const matches = this.patternRegistry.findMatchingPatterns(url);
 
@@ -933,7 +947,8 @@ export class ContentIntelligence {
           domain,
           responseTime,
           `HTTP ${response.status}`,
-          { status: response.status }
+          { status: response.status },
+          match.apiEndpoint
         );
       }
 
@@ -945,7 +960,8 @@ export class ContentIntelligence {
           domain,
           responseTime,
           'Wrong content type',
-          { contentType }
+          { contentType },
+          match.apiEndpoint
         );
       }
 
@@ -965,7 +981,8 @@ export class ContentIntelligence {
             domain,
             responseTime,
             `Missing required field: ${field}`,
-            { missingField: field }
+            { missingField: field },
+            match.apiEndpoint
           );
         }
       }
@@ -980,7 +997,8 @@ export class ContentIntelligence {
           domain,
           responseTime,
           'Content too short',
-          { length: extractedContent.text.length, minRequired: pattern.validation.minContentLength }
+          { length: extractedContent.text.length, minRequired: pattern.validation.minContentLength },
+          match.apiEndpoint
         );
       }
 
@@ -1027,17 +1045,23 @@ export class ContentIntelligence {
       const responseTime = Date.now() - startTime;
       const failureReason = error instanceof Error ? error.message : 'Unknown error';
 
+      // Classify the failure
+      const classification = classifyFailure(undefined, failureReason, responseTime);
+
       logger.intelligence.debug('Learned pattern failed: error', {
         patternId: pattern.id,
         error: failureReason,
+        failureCategory: classification.category,
       });
 
-      await this.patternRegistry.updatePatternMetrics(
+      // Record the failure (updates metrics and may create anti-pattern)
+      await this.patternRegistry.recordPatternFailure(
         pattern.id,
-        false,
         domain,
-        responseTime,
-        failureReason
+        match.apiEndpoint,
+        undefined,
+        failureReason,
+        responseTime
       );
 
       return null;
@@ -1238,7 +1262,8 @@ export class ContentIntelligence {
   }
 
   /**
-   * Handle pattern failure by logging and updating metrics
+   * Handle pattern failure by logging, classifying, and updating metrics
+   * Uses failure learning to track patterns and potentially create anti-patterns
    * Returns null to indicate failure to caller
    */
   private async handlePatternFailure(
@@ -1246,19 +1271,33 @@ export class ContentIntelligence {
     domain: string,
     responseTime: number,
     reason: string,
-    logContext: Record<string, unknown>
+    logContext: Record<string, unknown>,
+    attemptedUrl?: string
   ): Promise<null> {
+    // Extract status code from logContext if present
+    const statusCode = typeof logContext.status === 'number' ? logContext.status : undefined;
+
+    // Classify the failure
+    const classification = classifyFailure(statusCode, reason, responseTime);
+
     logger.intelligence.debug(`Learned pattern failed: ${reason}`, {
       patternId,
+      failureCategory: classification.category,
+      confidence: classification.confidence,
+      recommendedStrategy: classification.recommendedStrategy,
       ...logContext,
     });
-    await this.patternRegistry.updatePatternMetrics(
+
+    // Record the failure with full classification (creates anti-patterns if threshold reached)
+    await this.patternRegistry.recordPatternFailure(
       patternId,
-      false,
       domain,
-      responseTime,
-      reason
+      attemptedUrl || '',
+      statusCode,
+      reason,
+      responseTime
     );
+
     return null;
   }
 
