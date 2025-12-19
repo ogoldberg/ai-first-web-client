@@ -467,6 +467,84 @@ describeIf('Live Site API Handlers', () => {
   });
 
   // ============================================
+  // PYPI API TESTS
+  // ============================================
+  describe('PyPI API', () => {
+    it('should extract package info from pypi.org URL', async () => {
+      const result = await intelligence.extract('https://pypi.org/project/requests', {
+        forceStrategy: 'api:pypi',
+        timeout: LIVE_TEST_TIMEOUT,
+      });
+
+      expectValidResult(result);
+      expect(result.meta.strategy).toBe('api:pypi');
+      expect(result.meta.finalUrl).toBe('https://pypi.org/pypi/requests/json');
+
+      // Verify package structure
+      const structured = result.content.structured as { info?: { name?: string; version?: string } };
+      expect(structured.info?.name).toBe('requests');
+      expect(structured.info?.version).toBeDefined();
+    }, LIVE_TEST_TIMEOUT);
+
+    it('should extract package with complex dependencies (flask)', async () => {
+      const result = await intelligence.extract('https://pypi.org/project/flask', {
+        forceStrategy: 'api:pypi',
+        timeout: LIVE_TEST_TIMEOUT,
+      });
+
+      expectValidResult(result);
+      expect(result.meta.strategy).toBe('api:pypi');
+      expect(result.content.text).toContain('Dependencies:');
+      expect(result.content.markdown).toContain('## Dependencies');
+    }, LIVE_TEST_TIMEOUT);
+
+    it('should include Python version requirements', async () => {
+      const result = await intelligence.extract('https://pypi.org/project/numpy', {
+        forceStrategy: 'api:pypi',
+        timeout: LIVE_TEST_TIMEOUT,
+      });
+
+      expectValidResult(result);
+      expect(result.meta.strategy).toBe('api:pypi');
+
+      // numpy should have Python version requirements
+      const structured = result.content.structured as { info?: { requires_python?: string } };
+      expect(structured.info?.requires_python).toBeDefined();
+    }, LIVE_TEST_TIMEOUT);
+
+    it('should include project URLs when available', async () => {
+      const result = await intelligence.extract('https://pypi.org/project/django', {
+        forceStrategy: 'api:pypi',
+        timeout: LIVE_TEST_TIMEOUT,
+      });
+
+      expectValidResult(result);
+      expect(result.meta.strategy).toBe('api:pypi');
+      expect(result.content.markdown).toContain('## Links');
+    }, LIVE_TEST_TIMEOUT);
+
+    it('should include release count', async () => {
+      const result = await intelligence.extract('https://pypi.org/project/pip', {
+        forceStrategy: 'api:pypi',
+        timeout: LIVE_TEST_TIMEOUT,
+      });
+
+      expectValidResult(result);
+      // pip has many releases
+      expect(result.content.markdown).toContain('releases available');
+    }, LIVE_TEST_TIMEOUT);
+
+    it('should throw for non-PyPI URLs when forced', async () => {
+      await expect(
+        intelligence.extract('https://example.com', {
+          forceStrategy: 'api:pypi',
+          timeout: LIVE_TEST_TIMEOUT,
+        })
+      ).rejects.toThrow(/returned no result/);
+    }, LIVE_TEST_TIMEOUT);
+  });
+
+  // ============================================
   // INTEGRATION TESTS - AUTO STRATEGY SELECTION
   // These tests verify the site-specific APIs are tried first
   // Some APIs may fall back to other strategies due to rate limiting
@@ -540,6 +618,21 @@ describeIf('Live Site API Handlers', () => {
 
       // NPM API should be attempted
       expect(result.meta.strategiesAttempted).toContain('api:npm');
+
+      // If we got a result, validate it
+      if (!result.error) {
+        expectValidResult(result, { allowMediumConfidence: true });
+      }
+    }, LIVE_TEST_TIMEOUT);
+
+    it('should automatically select PyPI API for pypi.org URLs', async () => {
+      const result = await intelligence.extract('https://pypi.org/project/pytest', {
+        timeout: LIVE_TEST_TIMEOUT,
+        allowBrowser: false, // Don't try Playwright
+      });
+
+      // PyPI API should be attempted
+      expect(result.meta.strategiesAttempted).toContain('api:pypi');
 
       // If we got a result, validate it
       if (!result.error) {

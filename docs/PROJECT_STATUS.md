@@ -4,7 +4,7 @@
 **Version:** 0.5.0
 **Current Phase:** Production Readiness (Phase 2)
 **Total Code:** ~15,000 lines TypeScript
-**Tests:** 505 passing + 25 live tests
+**Tests:** 523 passing + 39 live tests
 
 ---
 
@@ -63,7 +63,7 @@ The LLM Browser MCP Server is an intelligent browser designed specifically for L
 | Integration Tests | Complete | 40 tests for MCP tools (PR #12) |
 | End-to-End Tests | Complete | 13 tests for SmartBrowser (PR #11) |
 | Tiered Fetcher Tests | Complete | 24 tests (PR #10) |
-| Content Intelligence Tests | Complete | 31 tests (PR #16) |
+| Content Intelligence Tests | Complete | 49 tests (PR #16, PR #37, PR #38) |
 | Lightweight Renderer Tests | Complete | 43 tests (PR #17) |
 | Structured Logging | Complete | Pino-based logger (PR #20) |
 | Error Boundaries | Complete | SmartBrowser error handling (PR #9) |
@@ -71,8 +71,8 @@ The LLM Browser MCP Server is an intelligent browser designed specifically for L
 | Timeout Configuration | Complete | Central config (PR #14) |
 | Tier Usage Analytics | Complete | get_tier_usage_by_domain tool (PR #13) |
 | Performance Timing | Complete | PerformanceTracker utility, get_performance_metrics tool |
-| Site-Specific APIs | Complete | Reddit, HN, GitHub, Wikipedia, StackOverflow, NPM |
-| Site API Live Tests | Complete | 32 tests against real endpoints (LIVE_TESTS=true) |
+| Site-Specific APIs | Complete | Reddit, HN, GitHub, Wikipedia, StackOverflow, NPM, PyPI |
+| Site API Live Tests | Complete | 39 tests against real endpoints (LIVE_TESTS=true) |
 | URL Safety (SSRF Protection) | Complete | Blocks RFC1918, localhost, metadata endpoints, dangerous protocols |
 
 ---
@@ -133,7 +133,7 @@ The LLM Browser MCP Server is an intelligent browser designed specifically for L
 |----------|-------|-------|
 | Utilities (cache, retry, rate-limiter) | 25+ | Vitest unit tests |
 | Content Extractor | 10+ | Unit tests |
-| Content Intelligence | 31 | Framework extraction, structured data, fallbacks |
+| Content Intelligence | 49 | Framework extraction, structured data, API handlers |
 | Lightweight Renderer | 43 | linkedom integration, script execution |
 | Tiered Fetcher | 24 | Tier cascade and fallback |
 | SmartBrowser E2E | 13 | Full browse cycle |
@@ -145,8 +145,8 @@ The LLM Browser MCP Server is an intelligent browser designed specifically for L
 | PersistentStore | 33 | Debounced writes, atomic persistence, statistics |
 | SessionCrypto | 28 | AES-256-GCM encryption, key derivation, migration |
 | SessionManager | 27 | Session health, auto-refresh, encryption support |
-| Site API Live Tests | 32 | Real API requests (Reddit, HN, GitHub, Wikipedia, StackOverflow, NPM) |
-| **Total** | **514 + 32 live** | All passing |
+| Site API Live Tests | 39 | Real API requests (Reddit, HN, GitHub, Wikipedia, StackOverflow, NPM, PyPI) |
+| **Total** | **523 + 39 live** | All passing |
 
 ---
 
@@ -248,6 +248,7 @@ All P1 tasks complete.
 
 ### v0.5.0 (2025-12-18)
 
+- Added PyPI API handler for pypi.org and pypi.python.org URLs
 - Added NPM registry API handler for npmjs.com and registry.npmjs.org URLs
 - Added session encryption at rest using AES-256-GCM with PBKDF2 key derivation
 - Set LLM_BROWSER_SESSION_KEY environment variable to enable encryption

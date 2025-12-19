@@ -1038,6 +1038,218 @@ describe('ContentIntelligence', () => {
     });
   });
 
+  describe('PyPI API', () => {
+    it('should extract package info from pypi.org URL', async () => {
+      const packageData = {
+        info: {
+          name: 'test-package',
+          version: '1.0.0',
+          summary: 'A test Python package for unit testing with sufficient content.',
+          description: 'This is a longer description that provides more details about the package functionality.',
+          author: 'Test Author',
+          author_email: 'test@example.com',
+          license: 'MIT',
+          requires_python: '>=3.8',
+          home_page: 'https://example.com',
+          project_urls: {
+            Homepage: 'https://example.com',
+            Repository: 'https://github.com/test/test-package',
+          },
+          classifiers: [
+            'Programming Language :: Python :: 3.8',
+            'Programming Language :: Python :: 3.9',
+            'Topic :: Software Development :: Libraries',
+          ],
+          requires_dist: ['requests>=2.28.0', 'click>=8.0.0'],
+        },
+        releases: {
+          '1.0.0': [{ upload_time_iso_8601: '2024-01-15T10:00:00.000Z' }],
+          '0.9.0': [],
+        },
+      };
+
+      mockFetch.mockResolvedValueOnce(createJsonResponse(packageData));
+
+      const result = await intelligence.extract('https://pypi.org/project/test-package', {
+        forceStrategy: 'api:pypi',
+        minContentLength: 50,
+      });
+
+      expect(result.meta.strategy).toBe('api:pypi');
+      expect(result.meta.finalUrl).toBe('https://pypi.org/pypi/test-package/json');
+      expect(result.meta.confidence).toBe('high');
+      expect(result.content.title).toBe('test-package - PyPI');
+      expect(result.content.text).toContain('test-package 1.0.0');
+      expect(result.content.text).toContain('License: MIT');
+      expect(result.content.markdown).toContain('**Version:** 1.0.0');
+    });
+
+    it('should handle pypi.python.org URLs', async () => {
+      const packageData = {
+        info: {
+          name: 'old-style-package',
+          version: '2.0.0',
+          summary: 'A package from the old pypi.python.org domain with sufficient content.',
+          license: 'Apache-2.0',
+        },
+        releases: {},
+      };
+
+      mockFetch.mockResolvedValueOnce(createJsonResponse(packageData));
+
+      const result = await intelligence.extract('https://pypi.python.org/pypi/old-style-package', {
+        forceStrategy: 'api:pypi',
+        minContentLength: 50,
+      });
+
+      expect(result.meta.strategy).toBe('api:pypi');
+      expect(result.content.title).toBe('old-style-package - PyPI');
+    });
+
+    it('should extract dependencies from requires_dist', async () => {
+      const packageData = {
+        info: {
+          name: 'deps-package',
+          version: '1.0.0',
+          summary: 'A package with dependencies for testing dependency display.',
+          requires_dist: [
+            'requests>=2.28.0',
+            'click>=8.0.0',
+            'pytest>=7.0.0; extra == "dev"',
+          ],
+        },
+        releases: {},
+      };
+
+      mockFetch.mockResolvedValueOnce(createJsonResponse(packageData));
+
+      const result = await intelligence.extract('https://pypi.org/project/deps-package', {
+        forceStrategy: 'api:pypi',
+        minContentLength: 50,
+      });
+
+      expect(result.content.text).toContain('Dependencies:');
+      expect(result.content.text).toContain('requests');
+      expect(result.content.text).toContain('click');
+      // extras should be filtered out
+      expect(result.content.text).not.toContain('pytest');
+      expect(result.content.markdown).toContain('## Dependencies');
+    });
+
+    it('should extract Python version classifiers', async () => {
+      const packageData = {
+        info: {
+          name: 'python-versions-package',
+          version: '1.0.0',
+          summary: 'A package with Python version classifiers for testing.',
+          classifiers: [
+            'Programming Language :: Python :: 3.8',
+            'Programming Language :: Python :: 3.9',
+            'Programming Language :: Python :: 3.10',
+            'Programming Language :: Python :: 3.11',
+            'License :: OSI Approved :: MIT License',
+          ],
+        },
+        releases: {},
+      };
+
+      mockFetch.mockResolvedValueOnce(createJsonResponse(packageData));
+
+      const result = await intelligence.extract('https://pypi.org/project/python-versions-package', {
+        forceStrategy: 'api:pypi',
+        minContentLength: 50,
+      });
+
+      expect(result.content.markdown).toContain('**Supported Python:**');
+      expect(result.content.markdown).toContain('3.8');
+      expect(result.content.markdown).toContain('3.9');
+    });
+
+    it('should handle project_urls', async () => {
+      const packageData = {
+        info: {
+          name: 'links-package',
+          version: '1.0.0',
+          summary: 'A package with project URLs for testing link display.',
+          home_page: 'https://example.com',
+          project_urls: {
+            Documentation: 'https://docs.example.com',
+            'Bug Tracker': 'https://github.com/test/links-package/issues',
+            Repository: 'https://github.com/test/links-package',
+          },
+        },
+        releases: {},
+      };
+
+      mockFetch.mockResolvedValueOnce(createJsonResponse(packageData));
+
+      const result = await intelligence.extract('https://pypi.org/project/links-package', {
+        forceStrategy: 'api:pypi',
+        minContentLength: 50,
+      });
+
+      expect(result.content.markdown).toContain('## Links');
+      expect(result.content.markdown).toContain('[Homepage](https://example.com)');
+      expect(result.content.markdown).toContain('[Documentation](https://docs.example.com)');
+    });
+
+    it('should return null for non-PyPI URLs', async () => {
+      await expect(
+        intelligence.extract('https://example.com/some-page', {
+          forceStrategy: 'api:pypi',
+        })
+      ).rejects.toThrow(/returned no result/);
+    });
+
+    it('should return null for PyPI URLs without package path', async () => {
+      await expect(
+        intelligence.extract('https://pypi.org/', {
+          forceStrategy: 'api:pypi',
+        })
+      ).rejects.toThrow(/returned no result/);
+    });
+
+    it('should handle API errors gracefully', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+        headers: new Headers({ 'content-type': 'application/json' }),
+      });
+
+      await expect(
+        intelligence.extract('https://pypi.org/project/nonexistent-package', {
+          forceStrategy: 'api:pypi',
+        })
+      ).rejects.toThrow(/returned no result/);
+    });
+
+    it('should include release count and date', async () => {
+      const packageData = {
+        info: {
+          name: 'release-info-package',
+          version: '3.0.0',
+          summary: 'A package with release information for testing.',
+        },
+        releases: {
+          '1.0.0': [{ upload_time_iso_8601: '2023-01-01T10:00:00.000Z' }],
+          '2.0.0': [{ upload_time_iso_8601: '2023-06-01T10:00:00.000Z' }],
+          '3.0.0': [{ upload_time_iso_8601: '2024-01-15T10:00:00.000Z' }],
+        },
+      };
+
+      mockFetch.mockResolvedValueOnce(createJsonResponse(packageData));
+
+      const result = await intelligence.extract('https://pypi.org/project/release-info-package', {
+        forceStrategy: 'api:pypi',
+        minContentLength: 50,
+      });
+
+      expect(result.content.markdown).toContain('3 releases available');
+      expect(result.content.markdown).toContain('Last release:');
+    });
+  });
+
   describe('Static Utility Methods', () => {
     it('should report available strategies', () => {
       const strategies = ContentIntelligence.getAvailableStrategies();
