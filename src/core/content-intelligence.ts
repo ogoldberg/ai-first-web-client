@@ -32,6 +32,7 @@ import type {
   AntiPattern,
 } from '../types/api-patterns.js';
 import { ApiPatternRegistry } from './api-pattern-learner.js';
+import { discoverGraphQL, isLikelyGraphQL, type GraphQLDiscoveryResult, type GraphQLQueryPattern } from './graphql-introspection.js';
 import { classifyFailure } from './failure-learning.js';
 
 // Create a require function for ESM compatibility
@@ -83,6 +84,7 @@ export type ExtractionStrategy =
   | 'api:devto'
   | 'api:learned'
   | 'api:openapi'
+  | 'api:graphql'
   | 'cache:google'
   | 'cache:archive'
   | 'parse:static'
@@ -283,6 +285,9 @@ export class ContentIntelligence {
       // 5b. OpenAPI/Swagger discovery (probe for API specs - expensive, try after other methods)
       { name: 'api:openapi', fn: () => this.tryOpenAPIDiscovery(url, opts) },
 
+      // 5c. GraphQL introspection (probe for GraphQL API - expensive, try after other methods)
+      { name: 'api:graphql', fn: () => this.tryGraphQLDiscovery(url, opts) },
+
       // 6. Google Cache (fallback only - use if direct fetch failed)
       { name: 'cache:google', fn: () => this.tryGoogleCache(url, opts) },
 
@@ -383,6 +388,7 @@ export class ContentIntelligence {
       'api:devto': () => this.tryDevToAPI(url, opts),
       'api:learned': () => this.tryLearnedPatterns(url, opts),
       'api:openapi': () => this.tryOpenAPIDiscovery(url, opts),
+      'api:graphql': () => this.tryGraphQLDiscovery(url, opts),
       'cache:google': () => this.tryGoogleCache(url, opts),
       'cache:archive': () => this.tryArchiveOrg(url, opts),
       'parse:static': () => this.tryStaticParsing(url, opts),
@@ -1137,6 +1143,196 @@ export class ContentIntelligence {
       });
       return null;
     }
+  }
+
+  /**
+   * Try to discover GraphQL API via introspection
+   */
+  private async tryGraphQLDiscovery(
+    url: string,
+    opts: ContentIntelligenceOptions
+  ): Promise<ContentResult | null> {
+    const domain = new URL(url).hostname;
+    const startTime = Date.now();
+
+    try {
+      // Check if this domain is likely to have GraphQL (optimization)
+      // For unknown domains, we still try but with lower priority
+      const likelyGraphQL = isLikelyGraphQL(domain);
+
+      logger.intelligence.debug('Attempting GraphQL discovery', {
+        domain,
+        likelyGraphQL,
+      });
+
+      // Create a fetch function that uses our cookie jar and timeout handling
+      const graphqlFetch = async (url: string, init?: RequestInit): Promise<Response> => {
+        const cookieString = await this.cookieJar.getCookieString(url);
+
+        const headers: Record<string, string> = {
+          'User-Agent': opts.userAgent || DEFAULT_OPTIONS.userAgent!,
+          ...(init?.headers as Record<string, string> || {}),
+        };
+
+        if (cookieString) {
+          headers['Cookie'] = cookieString;
+        }
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), opts.timeout || TIMEOUTS.NETWORK_FETCH);
+
+        try {
+          const response = await fetch(url, {
+            ...init,
+            headers,
+            signal: controller.signal,
+          });
+          return response;
+        } finally {
+          clearTimeout(timeoutId);
+        }
+      };
+
+      // Try to discover GraphQL endpoint and introspect schema
+      const result = await discoverGraphQL(domain, {
+        headers: opts.headers,
+        fetchFn: graphqlFetch,
+      });
+
+      if (!result.found) {
+        logger.intelligence.debug('No GraphQL endpoint found', {
+          domain,
+          time: Date.now() - startTime,
+        });
+        return null;
+      }
+
+      if (result.introspectionDisabled) {
+        logger.intelligence.debug('GraphQL introspection disabled', {
+          domain,
+          endpoint: result.endpoint,
+          time: Date.now() - startTime,
+        });
+        return null;
+      }
+
+      if (!result.schema || !result.patterns || result.patterns.length === 0) {
+        logger.intelligence.debug('GraphQL discovered but no patterns generated', {
+          domain,
+          endpoint: result.endpoint,
+          time: Date.now() - startTime,
+        });
+        return null;
+      }
+
+      logger.intelligence.info('GraphQL discovery successful', {
+        domain,
+        endpoint: result.endpoint,
+        patterns: result.patterns.length,
+        entityTypes: result.schema.entityTypes.length,
+        paginationPattern: result.schema.paginationPattern,
+        time: Date.now() - startTime,
+      });
+
+      // Filter patterns once for efficiency
+      const queryPatterns = result.patterns.filter(p => p.operationType === 'query');
+      const mutationPatterns = result.patterns.filter(p => p.operationType === 'mutation');
+
+      // For now, return a summary of the discovered schema
+      // In the future, we could execute specific queries based on the URL
+      const schemaInfo = this.formatGraphQLSchemaInfo(result, queryPatterns, mutationPatterns);
+
+      return {
+        content: {
+          title: `GraphQL API: ${domain}`,
+          text: schemaInfo.text,
+          markdown: schemaInfo.markdown,
+          structured: {
+            endpoint: result.endpoint,
+            queryCount: queryPatterns.length,
+            mutationCount: mutationPatterns.length,
+            entityTypes: result.schema.entityTypes,
+            paginationPattern: result.schema.paginationPattern,
+            queries: queryPatterns.map(p => p.queryName),
+            mutations: mutationPatterns.map(p => p.queryName),
+          },
+        },
+        meta: {
+          url,
+          finalUrl: result.endpoint!,
+          strategy: 'api:graphql',
+          strategiesAttempted: ['api:graphql'],
+          timing: Date.now() - startTime,
+          confidence: 'high',
+        },
+        warnings: [],
+      };
+    } catch (error) {
+      logger.intelligence.debug('GraphQL discovery failed', {
+        domain,
+        error: error instanceof Error ? error.message : String(error),
+        time: Date.now() - startTime,
+      });
+      return null;
+    }
+  }
+
+  /**
+   * Format GraphQL schema information for display
+   * Accepts pre-filtered query and mutation patterns for efficiency
+   */
+  private formatGraphQLSchemaInfo(
+    result: GraphQLDiscoveryResult,
+    queryPatterns: GraphQLQueryPattern[],
+    mutationPatterns: GraphQLQueryPattern[]
+  ): { text: string; markdown: string } {
+    if (!result.schema) {
+      return { text: 'GraphQL endpoint found, but introspection failed.', markdown: 'GraphQL endpoint found, but introspection failed.' };
+    }
+
+    const lines: string[] = [
+      `GraphQL API at ${result.endpoint}`,
+      '',
+      `Entity Types: ${result.schema.entityTypes.join(', ')}`,
+      '',
+      `Available Queries (${queryPatterns.length}):`,
+      ...queryPatterns.map(p => `  - ${p.queryName}(${p.requiredArgs.map(a => a.name).join(', ')})`),
+    ];
+
+    if (mutationPatterns.length > 0) {
+      lines.push('', `Available Mutations (${mutationPatterns.length}):`);
+      lines.push(...mutationPatterns.map(p => `  - ${p.queryName}(${p.requiredArgs.map(a => a.name).join(', ')})`));
+    }
+
+    if (result.schema.paginationPattern) {
+      lines.push('', `Pagination Pattern: ${result.schema.paginationPattern}`);
+    }
+
+    const text = lines.join('\n');
+
+    // Markdown version
+    const mdLines: string[] = [
+      `# GraphQL API`,
+      '',
+      `**Endpoint:** ${result.endpoint}`,
+      '',
+      `## Entity Types`,
+      result.schema.entityTypes.map(t => `- ${t}`).join('\n'),
+      '',
+      `## Available Queries (${queryPatterns.length})`,
+      ...queryPatterns.map(p => `- \`${p.queryName}\`${p.requiredArgs.length > 0 ? ` (requires: ${p.requiredArgs.map(a => a.name).join(', ')})` : ''}`),
+    ];
+
+    if (mutationPatterns.length > 0) {
+      mdLines.push('', `## Available Mutations (${mutationPatterns.length})`);
+      mdLines.push(...mutationPatterns.map(p => `- \`${p.queryName}\`${p.requiredArgs.length > 0 ? ` (requires: ${p.requiredArgs.map(a => a.name).join(', ')})` : ''}`));
+    }
+
+    if (result.schema.paginationPattern) {
+      mdLines.push('', `**Pagination Pattern:** ${result.schema.paginationPattern}`);
+    }
+
+    return { text, markdown: mdLines.join('\n') };
   }
 
   /**
@@ -3855,6 +4051,7 @@ export class ContentIntelligence {
       { strategy: 'api:predicted', available: true },
       { strategy: 'api:learned', available: true, note: 'Uses learned API patterns from previous extractions' },
       { strategy: 'api:openapi', available: true, note: 'Discovers and uses OpenAPI/Swagger specifications' },
+      { strategy: 'api:graphql', available: true, note: 'Discovers GraphQL APIs via introspection' },
       { strategy: 'cache:google', available: true, note: 'May be rate-limited' },
       { strategy: 'cache:archive', available: true, note: 'May have stale content' },
       { strategy: 'parse:static', available: true },

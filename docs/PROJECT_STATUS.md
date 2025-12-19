@@ -4,7 +4,7 @@
 **Version:** 0.5.0
 **Current Phase:** Production Readiness (Phase 2)
 **Total Code:** ~16,000 lines TypeScript
-**Tests:** 746 passing + 44 live tests
+**Tests:** 795 passing + 44 live tests
 
 ---
 
@@ -146,8 +146,9 @@ The LLM Browser MCP Server is an intelligent browser designed specifically for L
 | SessionCrypto | 28 | AES-256-GCM encryption, key derivation, migration |
 | SessionManager | 27 | Session health, auto-refresh, encryption support |
 | Failure Learning | 59 | Failure classification, anti-patterns, retry strategies |
+| GraphQL Introspection | 49 | Endpoint detection, schema parsing, pattern generation |
 | Site API Live Tests | 44 | Real API requests (Reddit, HN, GitHub, Wikipedia, StackOverflow, NPM, PyPI, Dev.to) |
-| **Total** | **746 + 44 live** | All passing |
+| **Total** | **795 + 44 live** | All passing |
 
 ---
 
@@ -240,12 +241,21 @@ Building a **Generalized API Learning Layer** that shifts from hardcoded site-sp
 | 5. OpenAPI Discovery | Auto-detect and use API specifications | Complete |
 | 6. Failure Learning | Learn from mistakes, build anti-patterns | Complete |
 
-### Other Upcoming (P2)
+### Phase 4: API Documentation Discovery - IN PROGRESS
 
-| ID | Task | Effort | Notes |
-|----|------|--------|-------|
-| I-012 | GraphQL introspection | L | Auto-discover schema and query |
-| I-013 | Authentication workflow helper | L | Guide users through OAuth, API keys |
+Building a **Documentation-First Discovery Layer** that leverages existing API documentation. See [API_DOCUMENTATION_DISCOVERY_PLAN.md](API_DOCUMENTATION_DISCOVERY_PLAN.md) for the full plan.
+
+| Phase | Goal | Status |
+|-------|------|--------|
+| D-001 | GraphQL Introspection | Complete |
+| D-002 | API Docs Page Detection | Planned |
+| D-003 | Link Relation Discovery | Planned |
+| D-004 | OpenAPI Enhancement | Planned |
+| D-005 | AsyncAPI Discovery | Planned |
+| D-006 | Alt Spec Formats | Planned |
+| D-007 | Robots/Sitemap Analysis | Planned |
+| D-008 | Discovery Orchestrator | Planned |
+| D-009 | Auth Workflow Helper | Planned |
 
 ---
 
@@ -253,6 +263,14 @@ Building a **Generalized API Learning Layer** that shifts from hardcoded site-sp
 
 ### v0.5.0 (2025-12-19)
 
+- Added API Documentation Discovery Phase 1: GraphQL Introspection (D-001)
+  - Automatic GraphQL endpoint detection (probes /graphql, /api/graphql, etc.)
+  - Full introspection query to discover schema types, queries, mutations
+  - Schema parsing with type extraction and relationship mapping
+  - Pagination pattern detection (Relay, offset, cursor, page-based)
+  - Query pattern generation with field selection and argument handling
+  - Integration with ContentIntelligence as 'api:graphql' strategy
+  - 49 new tests for GraphQL introspection
 - Added API Pattern Learning System Phase 6: Failure Learning (L-007)
   - Failure classification by category (auth, rate limit, timeout, server error, etc.)
   - Anti-pattern creation from repeated failures to avoid wasting requests
