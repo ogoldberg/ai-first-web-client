@@ -69,6 +69,7 @@ export type ExtractionStrategy =
   | 'api:wikipedia'
   | 'api:stackoverflow'
   | 'api:npm'
+  | 'api:pypi'
   | 'cache:google'
   | 'cache:archive'
   | 'parse:static'
@@ -170,6 +171,7 @@ export class ContentIntelligence {
       { name: 'api:wikipedia', fn: () => this.tryWikipediaAPI(url, opts) },
       { name: 'api:stackoverflow', fn: () => this.tryStackOverflowAPI(url, opts) },
       { name: 'api:npm', fn: () => this.tryNpmAPI(url, opts) },
+      { name: 'api:pypi', fn: () => this.tryPyPIAPI(url, opts) },
 
       // 2. Framework data extraction (instant if __NEXT_DATA__ etc. present)
       { name: 'framework:nextjs', fn: () => this.tryFrameworkExtraction(url, opts) },
@@ -274,6 +276,7 @@ export class ContentIntelligence {
       'api:wikipedia': () => this.tryWikipediaAPI(url, opts),
       'api:stackoverflow': () => this.tryStackOverflowAPI(url, opts),
       'api:npm': () => this.tryNpmAPI(url, opts),
+      'api:pypi': () => this.tryPyPIAPI(url, opts),
       'cache:google': () => this.tryGoogleCache(url, opts),
       'cache:archive': () => this.tryArchiveOrg(url, opts),
       'parse:static': () => this.tryStaticParsing(url, opts),
@@ -2067,6 +2070,308 @@ export class ContentIntelligence {
       };
     } catch (error) {
       logger.intelligence.debug(`NPM Registry API failed: ${error}`);
+      return null;
+    }
+  }
+
+  // ============================================================================
+  // PyPI API Handler
+  // ============================================================================
+
+  /**
+   * Check if URL is a PyPI package URL
+   * Matches: pypi.org/project/{package}, pypi.python.org/pypi/{package}
+   */
+  private isPyPIUrl(url: string): boolean {
+    try {
+      const parsed = new URL(url);
+      const hostname = parsed.hostname.toLowerCase();
+
+      // Match pypi.org and pypi.python.org
+      if (hostname === 'pypi.org' || hostname === 'www.pypi.org') {
+        // /project/{package} or /project/{package}/{version}
+        return /^\/project\/[^/]+/.test(parsed.pathname);
+      }
+
+      if (hostname === 'pypi.python.org') {
+        // /pypi/{package} or /pypi/{package}/{version}
+        return /^\/pypi\/[^/]+/.test(parsed.pathname);
+      }
+
+      return false;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Extract package name from PyPI URL
+   * Handles various URL formats:
+   * - pypi.org/project/{package}
+   * - pypi.org/project/{package}/{version}
+   * - pypi.python.org/pypi/{package}
+   * - pypi.python.org/pypi/{package}/{version}
+   */
+  private getPyPIPackageName(url: string): string | null {
+    try {
+      const parsed = new URL(url);
+      const hostname = parsed.hostname.toLowerCase();
+      const pathParts = parsed.pathname.split('/').filter(Boolean);
+
+      if (hostname === 'pypi.org' || hostname === 'www.pypi.org') {
+        // /project/{package}/...
+        if (pathParts[0] === 'project' && pathParts[1]) {
+          return pathParts[1];
+        }
+      }
+
+      if (hostname === 'pypi.python.org') {
+        // /pypi/{package}/...
+        if (pathParts[0] === 'pypi' && pathParts[1]) {
+          return pathParts[1];
+        }
+      }
+
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Format PyPI package metadata into readable content
+   */
+  private formatPyPIPackage(
+    pkg: Record<string, unknown>,
+    releases: Record<string, unknown[]>
+  ): { title: string; text: string; markdown: string } {
+    const info = pkg.info as Record<string, unknown> | undefined;
+    if (!info) {
+      return { title: '', text: '', markdown: '' };
+    }
+
+    const name = String(info.name || '');
+    const version = String(info.version || '');
+    const summary = String(info.summary || '');
+    const description = String(info.description || '');
+    const author = String(info.author || info.maintainer || '');
+    const authorEmail = String(info.author_email || info.maintainer_email || '');
+    const license = String(info.license || '');
+    const requiresPython = String(info.requires_python || '');
+    const homePage = String(info.home_page || '');
+    const projectUrls = info.project_urls as Record<string, string> | undefined;
+    const classifiers = info.classifiers as string[] | undefined;
+    const requiresDist = info.requires_dist as string[] | undefined;
+    const keywords = String(info.keywords || '');
+
+    // Build plain text
+    const lines: string[] = [];
+    lines.push(`${name} ${version}`);
+    if (summary) lines.push(summary);
+    lines.push('');
+
+    if (author) lines.push(`Author: ${author}`);
+    if (authorEmail) lines.push(`Email: ${authorEmail}`);
+    if (license) lines.push(`License: ${license}`);
+    if (requiresPython) lines.push(`Requires Python: ${requiresPython}`);
+
+    if (homePage) lines.push(`Homepage: ${homePage}`);
+    if (projectUrls) {
+      const urls = Object.entries(projectUrls);
+      if (urls.length > 0) {
+        lines.push('Links:');
+        for (const [label, link] of urls.slice(0, 5)) {
+          lines.push(`  ${label}: ${link}`);
+        }
+      }
+    }
+
+    if (requiresDist && requiresDist.length > 0) {
+      lines.push('');
+      lines.push('Dependencies:');
+      // Filter out extras (those with markers like "; extra ==")
+      const mainDeps = requiresDist.filter((d) => !d.includes('; extra =='));
+      for (const dep of mainDeps.slice(0, 10)) {
+        // Remove version specifiers for brevity
+        const depName = dep.split(/[<>=!;\[]/)[0].trim();
+        lines.push(`  - ${depName}`);
+      }
+      if (mainDeps.length > 10) {
+        lines.push(`  - ...and ${mainDeps.length - 10} more`);
+      }
+    }
+
+    if (description) {
+      lines.push('');
+      lines.push('Description:');
+      // Truncate long descriptions
+      const truncatedDesc = description.length > 2000 ? description.substring(0, 2000) + '...' : description;
+      lines.push(truncatedDesc);
+    }
+
+    // Build markdown
+    const markdownLines: string[] = [];
+    markdownLines.push(`# ${name}`);
+    markdownLines.push('');
+    if (summary) markdownLines.push(`> ${summary}`);
+    markdownLines.push('');
+    markdownLines.push(`**Version:** ${version}`);
+    if (author) markdownLines.push(`**Author:** ${author}`);
+    if (license) markdownLines.push(`**License:** ${license}`);
+    if (requiresPython) markdownLines.push(`**Python:** ${requiresPython}`);
+    markdownLines.push('');
+
+    // Links
+    if (homePage || (projectUrls && Object.keys(projectUrls).length > 0)) {
+      markdownLines.push('## Links');
+      if (homePage) markdownLines.push(`- [Homepage](${homePage})`);
+      if (projectUrls) {
+        for (const [label, link] of Object.entries(projectUrls).slice(0, 5)) {
+          markdownLines.push(`- [${label}](${link})`);
+        }
+      }
+      markdownLines.push('');
+    }
+
+    // Dependencies
+    if (requiresDist && requiresDist.length > 0) {
+      const mainDeps = requiresDist.filter((d) => !d.includes('; extra =='));
+      if (mainDeps.length > 0) {
+        markdownLines.push('## Dependencies');
+        for (const dep of mainDeps.slice(0, 10)) {
+          const depName = dep.split(/[<>=!;\[]/)[0].trim();
+          markdownLines.push(`- ${depName}`);
+        }
+        if (mainDeps.length > 10) {
+          markdownLines.push(`- *...and ${mainDeps.length - 10} more*`);
+        }
+        markdownLines.push('');
+      }
+    }
+
+    // Classifiers (Python versions, topics, etc.)
+    if (classifiers && classifiers.length > 0) {
+      const pythonVersions = classifiers
+        .filter((c) => c.startsWith('Programming Language :: Python ::'))
+        .map((c) => c.replace('Programming Language :: Python :: ', ''))
+        .filter((v) => /^\d/.test(v)); // Only version numbers
+
+      if (pythonVersions.length > 0) {
+        markdownLines.push(`**Supported Python:** ${pythonVersions.join(', ')}`);
+      }
+
+      const topics = classifiers
+        .filter((c) => c.startsWith('Topic :: '))
+        .map((c) => c.replace('Topic :: ', '').split(' :: ')[0]);
+      const uniqueTopics = [...new Set(topics)];
+
+      if (uniqueTopics.length > 0) {
+        markdownLines.push(`**Topics:** ${uniqueTopics.slice(0, 5).join(', ')}`);
+      }
+      markdownLines.push('');
+    }
+
+    // Keywords
+    if (keywords) {
+      markdownLines.push(`**Keywords:** ${keywords}`);
+      markdownLines.push('');
+    }
+
+    // Release info
+    const releaseVersions = Object.keys(releases || {});
+    if (releaseVersions.length > 0) {
+      markdownLines.push(`*${releaseVersions.length} releases available*`);
+    }
+
+    // Last release date
+    const currentRelease = releases?.[version] as Array<Record<string, unknown>> | undefined;
+    if (currentRelease && currentRelease.length > 0) {
+      const uploadTime = currentRelease[0]?.upload_time_iso_8601 || currentRelease[0]?.upload_time;
+      if (uploadTime) {
+        const releaseDate = new Date(String(uploadTime));
+        if (!isNaN(releaseDate.getTime())) {
+          markdownLines.push(`*Last release: ${releaseDate.toLocaleDateString()}*`);
+        }
+      }
+    }
+
+    return {
+      title: `${name} - PyPI`,
+      text: lines.join('\n'),
+      markdown: markdownLines.join('\n'),
+    };
+  }
+
+  /**
+   * Try to fetch package info from PyPI JSON API
+   */
+  private async tryPyPIAPI(
+    url: string,
+    opts: ContentIntelligenceOptions
+  ): Promise<ContentResult | null> {
+    // Only handle PyPI URLs
+    if (!this.isPyPIUrl(url)) {
+      return null;
+    }
+
+    const packageName = this.getPyPIPackageName(url);
+    if (!packageName) {
+      logger.intelligence.debug('Could not extract PyPI package name from URL');
+      return null;
+    }
+
+    try {
+      // PyPI JSON API endpoint
+      const apiUrl = `https://pypi.org/pypi/${encodeURIComponent(packageName)}/json`;
+
+      const response = await fetch(apiUrl, {
+        headers: {
+          Accept: 'application/json',
+          'User-Agent': opts.userAgent || BROWSER_USER_AGENT,
+        },
+        signal: opts.timeout ? AbortSignal.timeout(opts.timeout) : undefined,
+      });
+
+      if (!response.ok) {
+        logger.intelligence.debug(`PyPI API returned ${response.status} for ${packageName}`);
+        return null;
+      }
+
+      const data = (await response.json()) as Record<string, unknown>;
+      const releases = data.releases as Record<string, unknown[]>;
+      const formatted = this.formatPyPIPackage(data, releases);
+
+      if (!formatted.text || formatted.text.length < (opts.minContentLength || 100)) {
+        logger.intelligence.debug('PyPI API response too short');
+        return null;
+      }
+
+      const info = data.info as Record<string, unknown> | undefined;
+      logger.intelligence.info(`PyPI API extraction successful`, {
+        package: packageName,
+        version: info?.version || 'unknown',
+        contentLength: formatted.text.length,
+      });
+
+      return {
+        content: {
+          title: formatted.title,
+          text: formatted.text,
+          markdown: formatted.markdown,
+          structured: data,
+        },
+        meta: {
+          url,
+          finalUrl: apiUrl,
+          strategy: 'api:pypi',
+          strategiesAttempted: [],
+          timing: 0,
+          confidence: 'high',
+        },
+        warnings: [],
+      };
+    } catch (error) {
+      logger.intelligence.debug(`PyPI API failed: ${error}`);
       return null;
     }
   }

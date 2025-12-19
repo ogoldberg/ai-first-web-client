@@ -86,7 +86,7 @@ Tasks are organized by priority and category. Each task includes:
 | I-004 | Cross-domain skill transfer | M | Features | Apply skills to similar sites |
 | I-005 | Automatic skill discovery | L | Features | Learn without explicit recording |
 | I-006 | NPM registry API handler | S | Features | `registry.npmjs.org/package/json` (DONE) |
-| I-007 | PyPI API handler | S | Features | `pypi.org/pypi/{package}/json` |
+| I-007 | PyPI API handler | S | Features | `pypi.org/pypi/{package}/json` (DONE) |
 | I-008 | Dev.to API handler | S | Features | Public API for articles |
 | I-009 | Medium API handler | M | Features | Undocumented but discoverable |
 | I-010 | YouTube API handler | M | Features | Requires API key configuration |
