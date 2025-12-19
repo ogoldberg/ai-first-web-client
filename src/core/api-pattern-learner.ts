@@ -120,6 +120,9 @@ export const PATTERN_TEMPLATES: ApiPatternTemplate[] = [
  * API domain groups for cross-site pattern transfer.
  * Sites in the same group are more likely to have similar API patterns.
  */
+// Static timestamp for domain groups (when this configuration was last updated)
+const DOMAIN_GROUPS_LAST_UPDATED = new Date('2025-12-19T00:00:00Z').getTime();
+
 export const API_DOMAIN_GROUPS: ApiDomainGroup[] = [
   {
     name: 'package_registries',
@@ -130,7 +133,7 @@ export const API_DOMAIN_GROUPS: ApiDomainGroup[] = [
       authType: 'none',
     },
     commonTemplateTypes: ['registry-lookup'],
-    lastUpdated: Date.now(),
+    lastUpdated: DOMAIN_GROUPS_LAST_UPDATED,
   },
   {
     name: 'code_hosting',
@@ -141,7 +144,7 @@ export const API_DOMAIN_GROUPS: ApiDomainGroup[] = [
       authType: 'bearer',
     },
     commonTemplateTypes: ['rest-resource'],
-    lastUpdated: Date.now(),
+    lastUpdated: DOMAIN_GROUPS_LAST_UPDATED,
   },
   {
     name: 'qa_forums',
@@ -152,7 +155,7 @@ export const API_DOMAIN_GROUPS: ApiDomainGroup[] = [
       authType: 'api_key',
     },
     commonTemplateTypes: ['query-api'],
-    lastUpdated: Date.now(),
+    lastUpdated: DOMAIN_GROUPS_LAST_UPDATED,
   },
   {
     name: 'knowledge_bases',
@@ -163,7 +166,7 @@ export const API_DOMAIN_GROUPS: ApiDomainGroup[] = [
       authType: 'none',
     },
     commonTemplateTypes: ['rest-resource'],
-    lastUpdated: Date.now(),
+    lastUpdated: DOMAIN_GROUPS_LAST_UPDATED,
   },
   {
     name: 'social_news',
@@ -174,7 +177,7 @@ export const API_DOMAIN_GROUPS: ApiDomainGroup[] = [
       authType: 'none',
     },
     commonTemplateTypes: ['json-suffix', 'firebase-rest'],
-    lastUpdated: Date.now(),
+    lastUpdated: DOMAIN_GROUPS_LAST_UPDATED,
   },
   {
     name: 'developer_blogs',
@@ -185,7 +188,7 @@ export const API_DOMAIN_GROUPS: ApiDomainGroup[] = [
       authType: 'none',
     },
     commonTemplateTypes: ['query-api'],
-    lastUpdated: Date.now(),
+    lastUpdated: DOMAIN_GROUPS_LAST_UPDATED,
   },
 ];
 
@@ -198,6 +201,12 @@ const DEFAULT_MIN_SIMILARITY = 0.3;
 
 /** Default confidence decay when transferring patterns */
 const DEFAULT_CONFIDENCE_DECAY = 0.5;
+
+/** Confidence boost multiplier when a transferred pattern succeeds */
+const TRANSFERRED_CONFIDENCE_BOOST = 1.3;
+
+/** Confidence penalty multiplier when a transferred pattern fails */
+const TRANSFERRED_CONFIDENCE_PENALTY = 0.6;
 
 /** Weights for similarity score components */
 const SIMILARITY_WEIGHTS = {
@@ -1458,8 +1467,8 @@ export class ApiPatternRegistry {
     // URL structure similarity - check if path patterns might match
     let urlStructure = 0;
     for (const urlPattern of sourcePattern.urlPatterns) {
-      // Extract path-like components from the pattern
-      const pathMatch = urlPattern.match(/\/[a-z_-]+\//gi);
+      // Extract path-like components from the pattern (including numbers for versioned APIs)
+      const pathMatch = urlPattern.match(/\/([a-z0-9_-]+)/i);
       if (pathMatch) {
         // If the target domain is in the same group, paths are likely similar
         if (sourceGroup && targetGroup && sourceGroup.name === targetGroup.name) {
@@ -1477,10 +1486,9 @@ export class ApiPatternRegistry {
     let templateType = 0;
     if (targetGroup?.commonTemplateTypes?.includes(sourcePattern.templateType)) {
       templateType = 1.0;
-    } else if (sourceGroup?.commonTemplateTypes?.includes(sourcePattern.templateType)) {
-      // Same template type as source's group defaults
-      templateType = 0.5;
     }
+    // Note: We only check if target's group supports the template type, not source's group,
+    // because source group compatibility doesn't tell us anything about the target domain.
 
     // Domain group match - strongest indicator of similarity
     let domainGroup = 0;
@@ -1602,13 +1610,15 @@ export class ApiPatternRegistry {
     // Calculate transferred confidence with decay
     const transferredConfidence = sourcePattern.metrics.confidence * confidenceDecay;
 
-    // Create the transferred pattern
+    // Create the transferred pattern with deep copy to prevent mutations to source
+    // JSON parse/stringify creates a true deep copy of all nested objects
+    const sourceDeepCopy = JSON.parse(JSON.stringify(sourcePattern)) as LearnedApiPattern;
     const transferredPattern: LearnedApiPattern = {
-      ...sourcePattern,
+      ...sourceDeepCopy,
       id: `transfer:${sourcePatternId}:${targetDomain}:${Date.now()}`,
       urlPatterns: [targetUrlPattern],
       metrics: {
-        ...sourcePattern.metrics,
+        ...sourceDeepCopy.metrics,
         successCount: 0,
         failureCount: 0,
         lastSuccess: undefined,
@@ -1699,7 +1709,7 @@ export class ApiPatternRegistry {
   private generateUrlPatternForDomain(
     targetDomain: string,
     targetUrl: string,
-    sourcePattern: LearnedApiPattern
+    _sourcePattern: LearnedApiPattern
   ): string {
     // Escape the target domain for regex
     const escapedDomain = targetDomain.replace(/\./g, '\\.');
@@ -1721,14 +1731,15 @@ export class ApiPatternRegistry {
           return part;
         }).join('/');
 
-        return `${escapedDomain}.*/${patternPath}`;
+        // Anchor pattern to domain and path start to avoid over-matching
+        return `^https?://(www\\.)?${escapedDomain}/${patternPath}`;
       }
     } catch {
       // If URL parsing fails, just use the domain
     }
 
-    // Fallback: just match the domain with any path
-    return `${escapedDomain}/.*`;
+    // Fallback: match the domain with any path, properly anchored
+    return `^https?://(www\\.)?${escapedDomain}/.*`;
   }
 
   /**
@@ -1760,12 +1771,12 @@ export class ApiPatternRegistry {
     );
 
     // For transferred patterns, apply additional confidence adjustments
-    if (isTransferred && pattern) {
+    if (isTransferred) {
       const updatedPattern = this.patterns.get(patternId);
       if (updatedPattern) {
         if (success) {
           // Successful transfer - boost confidence significantly
-          const newConfidence = Math.min(1.0, updatedPattern.metrics.confidence * 1.3);
+          const newConfidence = Math.min(1.0, updatedPattern.metrics.confidence * TRANSFERRED_CONFIDENCE_BOOST);
           updatedPattern.metrics.confidence = newConfidence;
 
           patternsLogger.info('Transferred pattern validated', {
@@ -1775,7 +1786,7 @@ export class ApiPatternRegistry {
           });
         } else {
           // Failed transfer - reduce confidence more aggressively
-          const newConfidence = Math.max(0, updatedPattern.metrics.confidence * 0.6);
+          const newConfidence = Math.max(0, updatedPattern.metrics.confidence * TRANSFERRED_CONFIDENCE_PENALTY);
           updatedPattern.metrics.confidence = newConfidence;
 
           patternsLogger.debug('Transferred pattern failed', {

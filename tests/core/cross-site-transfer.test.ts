@@ -251,7 +251,8 @@ describe('Cross-Site Pattern Transfer (L-005)', () => {
       await registry.transferPattern(
         npmPatterns[0].pattern.id,
         'newpackagesite.example.com',
-        'newpackagesite\\.example\\.com/package/[^/]+'
+        'newpackagesite\\.example\\.com/package/[^/]+',
+        { minSimilarity: 0.1 } // Low threshold for test domain not in any group
       );
 
       const finalStats = registry.getStats();
@@ -270,7 +271,8 @@ describe('Cross-Site Pattern Transfer (L-005)', () => {
       await registry.transferPattern(
         npmPatterns[0].pattern.id,
         'transfertest.example.com',
-        'transfertest\\.example\\.com/.*'
+        'transfertest\\.example\\.com/.*',
+        { minSimilarity: 0.1 } // Low threshold for test domain not in any group
       );
 
       const learnedEvent = events.find(e => e.type === 'pattern_learned');
@@ -326,7 +328,8 @@ describe('Cross-Site Pattern Transfer (L-005)', () => {
       const transferResult = await registry.transferPattern(
         npmPatterns[0].pattern.id,
         'outcome-test.example.com',
-        'outcome-test\\.example\\.com/.*'
+        'outcome-test\\.example\\.com/.*',
+        { minSimilarity: 0.1 } // Low threshold for test domain not in any group
       );
 
       expect(transferResult.success).toBe(true);
@@ -355,7 +358,8 @@ describe('Cross-Site Pattern Transfer (L-005)', () => {
       const transferResult = await registry.transferPattern(
         npmPatterns[0].pattern.id,
         'fail-test.example.com',
-        'fail-test\\.example\\.com/.*'
+        'fail-test\\.example\\.com/.*',
+        { minSimilarity: 0.1 } // Low threshold for test domain not in any group
       );
 
       expect(transferResult.success).toBe(true);
@@ -384,7 +388,8 @@ describe('Cross-Site Pattern Transfer (L-005)', () => {
       const transferResult = await registry.transferPattern(
         npmPatterns[0].pattern.id,
         'metrics-test.example.com',
-        'metrics-test\\.example\\.com/.*'
+        'metrics-test\\.example\\.com/.*',
+        { minSimilarity: 0.1 } // Low threshold for test domain not in any group
       );
 
       expect(transferResult.success).toBe(true);
@@ -451,7 +456,8 @@ describe('Cross-Site Pattern Transfer (L-005)', () => {
       const transferResult = await registry.transferPattern(
         npmPatterns[0].pattern.id,
         'match-test.example.com',
-        'match-test\\.example\\.com/package/[^/]+'
+        'match-test\\.example\\.com/package/[^/]+',
+        { minSimilarity: 0.1 } // Low threshold for test domain not in any group
       );
 
       expect(transferResult.success).toBe(true);
