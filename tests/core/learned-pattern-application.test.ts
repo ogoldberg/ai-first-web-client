@@ -57,59 +57,112 @@ describe('Learned Pattern Application (L-004)', () => {
     });
   });
 
-  describe('getValueAtPath helper', () => {
-    it('should extract values from simple objects', async () => {
+  describe('path extraction behavior', () => {
+    it('should learn content mapping paths from structured data', async () => {
       const registry = intelligence.getPatternRegistry();
       await registry.initialize();
 
-      // Test path extraction by checking the pattern behavior
-      // The getValueAtPath is private, so we test it indirectly through extractContentFromMapping
+      // Create structured data where content appears at specific paths
       const testData = {
-        title: 'Test Title',
-        info: {
-          description: 'Test Description',
+        data: {
+          headline: 'Test Title',
+          summary: 'Test Description',
+        },
+        metadata: {
+          author: 'Test Author',
         },
       };
 
-      // Create a minimal learned pattern and test extraction
+      // Learn a pattern with structured data
       await registry.learnFromExtraction({
-        sourceUrl: 'https://test-site.example.com/item/1',
-        apiUrl: 'https://api.test-site.example.com/items/1',
+        sourceUrl: 'https://path-test.example.com/item/1',
+        apiUrl: 'https://api.path-test.example.com/items/1',
         strategy: 'api:test',
         responseTime: 100,
         content: {
           title: 'Test Title',
           text: 'Test Description',
-          markdown: '# Test',
+          markdown: '# Test Title\n\nTest Description',
           structured: testData,
         },
         method: 'GET',
       });
 
-      // The pattern should be learned
-      const patterns = registry.findMatchingPatterns('https://test-site.example.com/item/2');
-      // May or may not find a pattern depending on matching logic
+      // Verify the pattern was learned
+      const patterns = registry.findMatchingPatterns('https://path-test.example.com/item/1');
+      expect(patterns.length).toBeGreaterThan(0);
+
+      // The content mapping should have found the paths
+      const pattern = patterns[0].pattern;
+      expect(pattern.contentMapping).toBeDefined();
+      // Title should be found at data.headline
+      expect(pattern.contentMapping.title).toBe('data.headline');
     });
 
-    it('should handle array notation in paths', async () => {
-      // Test array access like items[0].title
+    it('should learn nested array paths from structured data', async () => {
+      const registry = intelligence.getPatternRegistry();
+      await registry.initialize();
+
+      // Test that structured data with arrays is properly processed
       const testData = {
         items: [
-          { title: 'First Item' },
-          { title: 'Second Item' },
+          { title: 'First Item', content: 'First content' },
+          { title: 'Second Item', content: 'Second content' },
         ],
+        meta: { total: 2 },
       };
 
-      // We can't directly test private methods, but we can verify the behavior
-      // through the full extraction flow
-      const registry = intelligence.getPatternRegistry();
-      expect(registry).toBeDefined();
+      await registry.learnFromExtraction({
+        sourceUrl: 'https://array-test.example.com/list',
+        apiUrl: 'https://api.array-test.example.com/items',
+        strategy: 'api:test',
+        responseTime: 100,
+        content: {
+          title: 'Item List',
+          text: 'Multiple items',
+          markdown: '# Item List',
+          structured: testData,
+        },
+        method: 'GET',
+      });
+
+      const patterns = registry.findMatchingPatterns('https://array-test.example.com/list');
+      expect(patterns.length).toBeGreaterThan(0);
+      expect(patterns[0].pattern.contentMapping.metadata).toBeDefined();
+      expect(patterns[0].pattern.contentMapping.metadata?.items).toBe('items');
+      expect(patterns[0].pattern.contentMapping.metadata?.meta).toBe('meta');
     });
 
-    it('should return undefined for non-existent paths', async () => {
-      // This is tested through the extraction validation
+    it('should fallback to default mappings when values not found in structured data', async () => {
       const registry = intelligence.getPatternRegistry();
-      expect(registry).toBeDefined();
+      await registry.initialize();
+
+      // Structured data doesn't contain the title or text values
+      const testData = {
+        unrelated: 'data',
+        other: { field: 123 },
+      };
+
+      await registry.learnFromExtraction({
+        sourceUrl: 'https://fallback-test.example.com/item/1',
+        apiUrl: 'https://api.fallback-test.example.com/items/1',
+        strategy: 'api:test',
+        responseTime: 100,
+        content: {
+          title: 'Unique Title Not In Structured',
+          text: 'Unique Text Not In Structured',
+          markdown: '# Fallback Test',
+          structured: testData,
+        },
+        method: 'GET',
+      });
+
+      const patterns = registry.findMatchingPatterns('https://fallback-test.example.com/item/1');
+      expect(patterns.length).toBeGreaterThan(0);
+
+      // Should fallback to default 'title' since value wasn't found
+      expect(patterns[0].pattern.contentMapping.title).toBe('title');
+      expect(patterns[0].pattern.contentMapping.description).toBe('description');
     });
   });
 

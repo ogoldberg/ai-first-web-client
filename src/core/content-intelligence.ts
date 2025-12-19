@@ -839,6 +839,11 @@ export class ContentIntelligence {
   // STRATEGY: Learned API Patterns
   // ============================================
 
+  // Confidence thresholds for pattern application
+  private static readonly MIN_PATTERN_CONFIDENCE = 0.3;
+  private static readonly HIGH_CONFIDENCE_THRESHOLD = 0.8;
+  private static readonly MEDIUM_CONFIDENCE_THRESHOLD = 0.5;
+
   /**
    * Try learned API patterns from previous successful extractions
    * This applies patterns learned from the ApiPatternRegistry
@@ -867,8 +872,8 @@ export class ContentIntelligence {
 
     // Try patterns in confidence order (already sorted)
     for (const match of matches) {
-      // Skip low-confidence patterns (below 0.3)
-      if (match.confidence < 0.3) {
+      // Skip low-confidence patterns
+      if (match.confidence < ContentIntelligence.MIN_PATTERN_CONFIDENCE) {
         logger.intelligence.debug('Skipping low-confidence pattern', {
           patternId: match.pattern.id,
           confidence: match.confidence,
@@ -918,35 +923,25 @@ export class ContentIntelligence {
 
       // Step 2: Validate HTTP response
       if (!response.ok) {
-        logger.intelligence.debug('Learned pattern failed: HTTP error', {
-          patternId: pattern.id,
-          status: response.status,
-        });
-        await this.patternRegistry.updatePatternMetrics(
+        return this.handlePatternFailure(
           pattern.id,
-          false,
           domain,
           responseTime,
-          `HTTP ${response.status}`
+          `HTTP ${response.status}`,
+          { status: response.status }
         );
-        return null;
       }
 
       // Step 3: Validate content type
       const contentType = response.headers.get('content-type') || '';
       if (pattern.responseFormat === 'json' && !contentType.includes('application/json')) {
-        logger.intelligence.debug('Learned pattern failed: wrong content type', {
-          patternId: pattern.id,
-          contentType,
-        });
-        await this.patternRegistry.updatePatternMetrics(
+        return this.handlePatternFailure(
           pattern.id,
-          false,
           domain,
           responseTime,
-          'Wrong content type'
+          'Wrong content type',
+          { contentType }
         );
-        return null;
       }
 
       // Step 4: Parse response
@@ -960,18 +955,13 @@ export class ContentIntelligence {
       // Step 5: Validate required fields
       for (const field of pattern.validation.requiredFields) {
         if (!this.hasFieldAtPath(data, field)) {
-          logger.intelligence.debug('Learned pattern failed: missing field', {
-            patternId: pattern.id,
-            missingField: field,
-          });
-          await this.patternRegistry.updatePatternMetrics(
+          return this.handlePatternFailure(
             pattern.id,
-            false,
             domain,
             responseTime,
-            `Missing required field: ${field}`
+            `Missing required field: ${field}`,
+            { missingField: field }
           );
-          return null;
         }
       }
 
@@ -980,19 +970,13 @@ export class ContentIntelligence {
 
       // Step 7: Validate content length
       if (extractedContent.text.length < pattern.validation.minContentLength) {
-        logger.intelligence.debug('Learned pattern failed: content too short', {
-          patternId: pattern.id,
-          length: extractedContent.text.length,
-          minRequired: pattern.validation.minContentLength,
-        });
-        await this.patternRegistry.updatePatternMetrics(
+        return this.handlePatternFailure(
           pattern.id,
-          false,
           domain,
           responseTime,
-          'Content too short'
+          'Content too short',
+          { length: extractedContent.text.length, minRequired: pattern.validation.minContentLength }
         );
-        return null;
       }
 
       // Step 8: Success! Update metrics
@@ -1026,7 +1010,11 @@ export class ContentIntelligence {
           strategy: 'api:learned',
           strategiesAttempted: [],
           timing: responseTime,
-          confidence: match.confidence > 0.8 ? 'high' : match.confidence > 0.5 ? 'medium' : 'low',
+          confidence: match.confidence > ContentIntelligence.HIGH_CONFIDENCE_THRESHOLD
+            ? 'high'
+            : match.confidence > ContentIntelligence.MEDIUM_CONFIDENCE_THRESHOLD
+              ? 'medium'
+              : 'low',
         },
         warnings: [],
       };
@@ -1090,21 +1078,41 @@ export class ContentIntelligence {
 
   /**
    * Extract content from API response using contentMapping
+   * Handles HTML content by converting to plain text and markdown
    */
   private extractContentFromMapping(
     data: unknown,
     mapping: ContentMapping
   ): { title: string; text: string; markdown: string } {
-    const title = this.getStringAtPath(data, mapping.title) || 'Untitled';
-    const description = mapping.description ? this.getStringAtPath(data, mapping.description) : null;
-    const body = mapping.body ? this.getStringAtPath(data, mapping.body) : null;
+    const rawTitle = this.getStringAtPath(data, mapping.title) || 'Untitled';
+    const rawDescription = mapping.description ? this.getStringAtPath(data, mapping.description) : null;
+    const rawBody = mapping.body ? this.getStringAtPath(data, mapping.body) : null;
 
     // Prefer body content, fall back to description
-    const mainContent = body || description || this.extractTextFromStructured(data);
-    const text = mainContent || '';
-    const markdown = body || description || text;
+    const mainContent = rawBody || rawDescription || this.extractTextFromStructured(data);
 
+    // Strip HTML for title (titles should be plain text)
+    const title = this.isHtmlContent(rawTitle) ? this.htmlToPlainText(rawTitle) : rawTitle;
+
+    // Convert HTML content to plain text and markdown
+    if (mainContent && this.isHtmlContent(mainContent)) {
+      const text = this.htmlToPlainText(mainContent);
+      const markdown = this.turndown.turndown(mainContent);
+      return { title, text, markdown };
+    }
+
+    // Content is already plain text
+    const text = mainContent || '';
+    const markdown = mainContent || '';
     return { title, text, markdown };
+  }
+
+  /**
+   * Check if a string contains HTML content
+   */
+  private isHtmlContent(str: string): boolean {
+    // Simple check for HTML tags
+    return /<[a-z][\s\S]*>/i.test(str);
   }
 
   /**
@@ -1151,6 +1159,31 @@ export class ContentIntelligence {
     }
 
     return '';
+  }
+
+  /**
+   * Handle pattern failure by logging and updating metrics
+   * Returns null to indicate failure to caller
+   */
+  private async handlePatternFailure(
+    patternId: string,
+    domain: string,
+    responseTime: number,
+    reason: string,
+    logContext: Record<string, unknown>
+  ): Promise<null> {
+    logger.intelligence.debug(`Learned pattern failed: ${reason}`, {
+      patternId,
+      ...logContext,
+    });
+    await this.patternRegistry.updatePatternMetrics(
+      patternId,
+      false,
+      domain,
+      responseTime,
+      reason
+    );
+    return null;
   }
 
   // ============================================
