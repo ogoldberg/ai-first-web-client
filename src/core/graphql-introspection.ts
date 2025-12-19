@@ -443,8 +443,10 @@ export async function executeIntrospection(
     graphqlLogger.warn('Introspection failed', { endpoint });
     return null;
   } catch (error) {
+    // Propagate network errors so the caller can handle them appropriately
+    // (distinguishing between "introspection disabled" and "network error")
     graphqlLogger.error('Introspection error', { endpoint, error });
-    return null;
+    throw error;
   }
 }
 

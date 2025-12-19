@@ -438,10 +438,13 @@ describe('GraphQL Introspection', () => {
       );
     });
 
-    it('should handle network errors', async () => {
+    it('should propagate network errors', async () => {
       const mockFetch = vi.fn().mockRejectedValue(new Error('Network error'));
-      const result = await executeIntrospection('https://example.com/graphql', {}, mockFetch);
-      expect(result).toBeNull();
+      // Network errors are now propagated so callers can distinguish
+      // between "introspection disabled" and "network error"
+      await expect(
+        executeIntrospection('https://example.com/graphql', {}, mockFetch)
+      ).rejects.toThrow('Network error');
     });
   });
 });

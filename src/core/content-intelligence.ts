@@ -32,7 +32,7 @@ import type {
   AntiPattern,
 } from '../types/api-patterns.js';
 import { ApiPatternRegistry } from './api-pattern-learner.js';
-import { discoverGraphQL, isLikelyGraphQL, type GraphQLDiscoveryResult } from './graphql-introspection.js';
+import { discoverGraphQL, isLikelyGraphQL, type GraphQLDiscoveryResult, type GraphQLQueryPattern } from './graphql-introspection.js';
 import { classifyFailure } from './failure-learning.js';
 
 // Create a require function for ESM compatibility
@@ -1165,9 +1165,38 @@ export class ContentIntelligence {
         likelyGraphQL,
       });
 
+      // Create a fetch function that uses our cookie jar and timeout handling
+      const graphqlFetch = async (url: string, init?: RequestInit): Promise<Response> => {
+        const cookieString = await this.cookieJar.getCookieString(url);
+
+        const headers: Record<string, string> = {
+          'User-Agent': opts.userAgent || DEFAULT_OPTIONS.userAgent!,
+          ...(init?.headers as Record<string, string> || {}),
+        };
+
+        if (cookieString) {
+          headers['Cookie'] = cookieString;
+        }
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), opts.timeout || TIMEOUTS.NETWORK_FETCH);
+
+        try {
+          const response = await fetch(url, {
+            ...init,
+            headers,
+            signal: controller.signal,
+          });
+          return response;
+        } finally {
+          clearTimeout(timeoutId);
+        }
+      };
+
       // Try to discover GraphQL endpoint and introspect schema
       const result = await discoverGraphQL(domain, {
         headers: opts.headers,
+        fetchFn: graphqlFetch,
       });
 
       if (!result.found) {
@@ -1205,9 +1234,13 @@ export class ContentIntelligence {
         time: Date.now() - startTime,
       });
 
+      // Filter patterns once for efficiency
+      const queryPatterns = result.patterns.filter(p => p.operationType === 'query');
+      const mutationPatterns = result.patterns.filter(p => p.operationType === 'mutation');
+
       // For now, return a summary of the discovered schema
       // In the future, we could execute specific queries based on the URL
-      const schemaInfo = this.formatGraphQLSchemaInfo(result);
+      const schemaInfo = this.formatGraphQLSchemaInfo(result, queryPatterns, mutationPatterns);
 
       return {
         content: {
@@ -1216,12 +1249,12 @@ export class ContentIntelligence {
           markdown: schemaInfo.markdown,
           structured: {
             endpoint: result.endpoint,
-            queryCount: result.patterns.filter(p => p.operationType === 'query').length,
-            mutationCount: result.patterns.filter(p => p.operationType === 'mutation').length,
+            queryCount: queryPatterns.length,
+            mutationCount: mutationPatterns.length,
             entityTypes: result.schema.entityTypes,
             paginationPattern: result.schema.paginationPattern,
-            queries: result.patterns.filter(p => p.operationType === 'query').map(p => p.queryName),
-            mutations: result.patterns.filter(p => p.operationType === 'mutation').map(p => p.queryName),
+            queries: queryPatterns.map(p => p.queryName),
+            mutations: mutationPatterns.map(p => p.queryName),
           },
         },
         meta: {
@@ -1246,14 +1279,16 @@ export class ContentIntelligence {
 
   /**
    * Format GraphQL schema information for display
+   * Accepts pre-filtered query and mutation patterns for efficiency
    */
-  private formatGraphQLSchemaInfo(result: GraphQLDiscoveryResult): { text: string; markdown: string } {
-    if (!result.schema || !result.patterns) {
+  private formatGraphQLSchemaInfo(
+    result: GraphQLDiscoveryResult,
+    queryPatterns: GraphQLQueryPattern[],
+    mutationPatterns: GraphQLQueryPattern[]
+  ): { text: string; markdown: string } {
+    if (!result.schema) {
       return { text: 'GraphQL endpoint found, but introspection failed.', markdown: 'GraphQL endpoint found, but introspection failed.' };
     }
-
-    const queryPatterns = result.patterns.filter(p => p.operationType === 'query');
-    const mutationPatterns = result.patterns.filter(p => p.operationType === 'mutation');
 
     const lines: string[] = [
       `GraphQL API at ${result.endpoint}`,
