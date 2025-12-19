@@ -14,6 +14,7 @@
 import { logger } from '../utils/logger.js';
 import { PersistentStore } from '../utils/persistent-store.js';
 import type {
+  ApiExtractionSuccess,
   ApiPatternTemplate,
   BootstrapPattern,
   ContentMapping,
@@ -960,6 +961,210 @@ export class ApiPatternRegistry {
 
     await this.persist();
     return pattern;
+  }
+
+  /**
+   * Learn from a successful API extraction event
+   * Called by ContentIntelligence when an API strategy succeeds
+   */
+  async learnFromExtraction(event: ApiExtractionSuccess): Promise<LearnedApiPattern | null> {
+    try {
+      const domain = new URL(event.sourceUrl).hostname;
+
+      // Check if we already have a pattern that matches this URL
+      const existingMatches = this.findMatchingPatterns(event.sourceUrl);
+      if (existingMatches.length > 0) {
+        // We have an existing pattern - update its metrics
+        const match = existingMatches[0];
+        await this.updatePatternMetrics(
+          match.pattern.id,
+          true,
+          domain,
+          event.responseTime
+        );
+        patternsLogger.debug('Updated existing pattern metrics', {
+          patternId: match.pattern.id,
+          domain,
+        });
+        return match.pattern;
+      }
+
+      // No existing pattern - learn a new one
+      const templateType = this.inferTemplateType(event.strategy, event.sourceUrl, event.apiUrl);
+      if (!templateType) {
+        patternsLogger.debug('Could not infer template type', {
+          strategy: event.strategy,
+          sourceUrl: event.sourceUrl,
+        });
+        return null;
+      }
+
+      // Infer content mapping from the extracted content
+      const contentMapping = this.inferContentMapping(event.content);
+
+      // Create validation rules based on what we extracted
+      const validation: PatternValidation = {
+        requiredFields: [],
+        minContentLength: Math.min(event.content.text.length, 50),
+      };
+
+      // Learn the pattern
+      const pattern = await this.learnPattern(
+        templateType,
+        event.sourceUrl,
+        event.apiUrl,
+        contentMapping,
+        validation
+      );
+
+      patternsLogger.info('Learned new pattern from extraction', {
+        patternId: pattern.id,
+        templateType,
+        sourceUrl: event.sourceUrl,
+        apiUrl: event.apiUrl,
+      });
+
+      return pattern;
+    } catch (error) {
+      patternsLogger.error('Failed to learn from extraction', {
+        error,
+        sourceUrl: event.sourceUrl,
+      });
+      return null;
+    }
+  }
+
+  /**
+   * Infer the template type from a strategy name and URLs
+   */
+  private inferTemplateType(
+    strategy: string,
+    sourceUrl: string,
+    apiUrl: string
+  ): PatternTemplateType | null {
+    // Map known strategies to template types
+    const strategyToTemplate: Record<string, PatternTemplateType> = {
+      'api:reddit': 'json-suffix',
+      'api:npm': 'registry-lookup',
+      'api:pypi': 'registry-lookup',
+      'api:github': 'rest-resource',
+      'api:wikipedia': 'rest-resource',
+      'api:hackernews': 'firebase-rest',
+      'api:stackoverflow': 'query-api',
+      'api:devto': 'query-api',
+    };
+
+    // Check known strategies first
+    if (strategyToTemplate[strategy]) {
+      return strategyToTemplate[strategy];
+    }
+
+    // Try to infer from URL transformation
+    if (apiUrl === sourceUrl + '.json') {
+      return 'json-suffix';
+    }
+
+    // Parse URLs once and reuse
+    const parsedSourceUrl = new URL(sourceUrl);
+    const parsedApiUrl = new URL(apiUrl);
+
+    // Check for common registry patterns
+    if (apiUrl.includes('registry') || apiUrl.includes('/pypi/') || apiUrl.includes('/api/')) {
+      if (parsedSourceUrl.hostname !== parsedApiUrl.hostname) {
+        return 'registry-lookup';
+      }
+    }
+
+    // Check for query parameters
+    if (parsedApiUrl.search && !parsedSourceUrl.search) {
+      return 'query-api';
+    }
+
+    // Default to rest-resource for api subdomain or /api/ path
+    if (apiUrl.includes('api.') || apiUrl.includes('/api/')) {
+      return 'rest-resource';
+    }
+
+    // Fallback to query-api as most general
+    return 'query-api';
+  }
+
+  /**
+   * Infer content mapping from extracted content
+   * Searches for extracted values within the structured response to find their JSON paths
+   */
+  private inferContentMapping(content: ApiExtractionSuccess['content']): ContentMapping {
+    const mapping: ContentMapping = {
+      title: 'title', // Default, may be overwritten if found in structured data
+    };
+
+    if (content.structured) {
+      // Search for where the title value appears in the structured data
+      const titlePath = this.findValuePath(content.structured, content.title);
+      if (titlePath) {
+        mapping.title = titlePath;
+      }
+
+      // Search for where the text/description value appears
+      if (content.text) {
+        const textPath = this.findValuePath(content.structured, content.text);
+        mapping.description = textPath || 'description';
+      }
+
+      // Search for where the markdown/body value appears
+      if (content.markdown && content.markdown !== content.text) {
+        const bodyPath = this.findValuePath(content.structured, content.markdown);
+        mapping.body = bodyPath || 'body';
+      }
+
+      // For metadata, map top-level keys to their paths
+      mapping.metadata = {};
+      for (const key of Object.keys(content.structured)) {
+        mapping.metadata[key] = key;
+      }
+    } else {
+      // No structured data to search, use default mappings
+      if (content.text) {
+        mapping.description = 'description';
+      }
+      if (content.markdown && content.markdown !== content.text) {
+        mapping.body = 'body';
+      }
+    }
+
+    return mapping;
+  }
+
+  /**
+   * Recursively search for a value within an object and return its JSON path
+   * Returns null if the value is not found
+   */
+  private findValuePath(obj: unknown, target: unknown, path = ''): string | null {
+    // Don't search for empty or very short strings
+    if (typeof target === 'string' && target.length < 3) {
+      return null;
+    }
+
+    // Direct match at current path
+    if (obj === target) {
+      return path || null;
+    }
+
+    // Can't recurse into non-objects
+    if (typeof obj !== 'object' || obj === null) {
+      return null;
+    }
+
+    // Search through object properties
+    for (const [key, value] of Object.entries(obj)) {
+      const newPath = path ? `${path}.${key}` : key;
+      const found = this.findValuePath(value, target, newPath);
+      if (found) {
+        return found;
+      }
+    }
+
+    return null;
   }
 
   /**
