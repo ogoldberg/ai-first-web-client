@@ -1250,6 +1250,176 @@ describe('ContentIntelligence', () => {
     });
   });
 
+  describe('Dev.to API', () => {
+    it('should extract article info from dev.to URL', async () => {
+      const articleData = {
+        id: 12345,
+        title: 'Getting Started with TypeScript',
+        description: 'A comprehensive guide to TypeScript for beginners with examples and best practices.',
+        body_html: '<p>TypeScript is a typed superset of JavaScript that compiles to plain JavaScript. This is a sufficiently long body text to pass content validation requirements.</p>',
+        body_markdown: 'TypeScript is a typed superset of JavaScript that compiles to plain JavaScript. This is a sufficiently long body text to pass content validation requirements.',
+        user: { username: 'testuser' },
+        reading_time_minutes: 5,
+        published_at: '2024-01-15T10:00:00Z',
+        tag_list: ['typescript', 'javascript', 'tutorial'],
+        positive_reactions_count: 100,
+        comments_count: 25,
+        url: 'https://dev.to/testuser/getting-started-with-typescript',
+        cover_image: 'https://dev.to/images/cover.jpg',
+      };
+
+      mockFetch.mockResolvedValueOnce(createJsonResponse(articleData));
+
+      const result = await intelligence.extract('https://dev.to/testuser/getting-started-with-typescript', {
+        forceStrategy: 'api:devto',
+        minContentLength: 50,
+      });
+
+      expect(result.meta.strategy).toBe('api:devto');
+      expect(result.meta.finalUrl).toBe('https://dev.to/api/articles/testuser/getting-started-with-typescript');
+      expect(result.meta.confidence).toBe('high');
+      expect(result.content.title).toBe('Getting Started with TypeScript - DEV Community');
+      expect(result.content.text).toContain('Getting Started with TypeScript');
+      expect(result.content.text).toContain('@testuser');
+      expect(result.content.markdown).toContain('## Tags');
+      expect(result.content.markdown).toContain('#typescript');
+    });
+
+    it('should extract articles by username from profile URL', async () => {
+      const articlesData = [
+        {
+          id: 12345,
+          title: 'First Article',
+          description: 'Description of first article with enough text to pass validation.',
+          slug: 'first-article',
+          reading_time_minutes: 3,
+          readable_publish_date: 'Jan 10',
+          tag_list: ['javascript'],
+          positive_reactions_count: 50,
+          comments_count: 10,
+        },
+        {
+          id: 12346,
+          title: 'Second Article',
+          description: 'Description of second article with enough text to pass validation.',
+          slug: 'second-article',
+          reading_time_minutes: 5,
+          readable_publish_date: 'Jan 15',
+          tag_list: ['typescript'],
+          positive_reactions_count: 75,
+          comments_count: 20,
+        },
+      ];
+
+      mockFetch.mockResolvedValueOnce(createJsonResponse(articlesData));
+
+      const result = await intelligence.extract('https://dev.to/testuser', {
+        forceStrategy: 'api:devto',
+        minContentLength: 50,
+      });
+
+      expect(result.meta.strategy).toBe('api:devto');
+      expect(result.meta.finalUrl).toBe('https://dev.to/api/articles?username=testuser&per_page=10');
+      expect(result.content.title).toBe('@testuser - DEV Community');
+      expect(result.content.text).toContain('Articles by @testuser');
+      expect(result.content.text).toContain('First Article');
+      expect(result.content.text).toContain('Second Article');
+      expect(result.content.markdown).toContain('## [First Article]');
+      expect(result.content.markdown).toContain('## [Second Article]');
+    });
+
+    it('should handle www.dev.to URLs', async () => {
+      const articleData = {
+        id: 12345,
+        title: 'Test Article on WWW',
+        description: 'Testing www subdomain handling with sufficient description length.',
+        body_markdown: 'Test body content that is long enough to pass content validation requirements for the test.',
+        user: { username: 'testuser' },
+        reading_time_minutes: 2,
+        tag_list: ['test'],
+        positive_reactions_count: 10,
+        comments_count: 5,
+      };
+
+      mockFetch.mockResolvedValueOnce(createJsonResponse(articleData));
+
+      const result = await intelligence.extract('https://www.dev.to/testuser/test-article', {
+        forceStrategy: 'api:devto',
+        minContentLength: 50,
+      });
+
+      expect(result.meta.strategy).toBe('api:devto');
+    });
+
+    it('should return null for non-Dev.to URLs', async () => {
+      await expect(
+        intelligence.extract('https://example.com/some-page', {
+          forceStrategy: 'api:devto',
+        })
+      ).rejects.toThrow(/returned no result/);
+    });
+
+    it('should return null for Dev.to special routes', async () => {
+      // Tag pages, search, etc. should be excluded
+      await expect(
+        intelligence.extract('https://dev.to/t/javascript', {
+          forceStrategy: 'api:devto',
+        })
+      ).rejects.toThrow(/returned no result/);
+    });
+
+    it('should handle API errors gracefully', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        statusText: 'Not Found',
+        headers: new Headers({ 'content-type': 'application/json' }),
+      });
+
+      await expect(
+        intelligence.extract('https://dev.to/nonexistent-user/nonexistent-article', {
+          forceStrategy: 'api:devto',
+        })
+      ).rejects.toThrow(/returned no result/);
+    });
+
+    it('should include reactions and comments in output', async () => {
+      const articleData = {
+        id: 12345,
+        title: 'Popular Article',
+        description: 'An article with many reactions for testing the display of reaction counts.',
+        body_markdown: 'Body content that needs to be sufficiently long for content validation.',
+        user: { username: 'testuser' },
+        reading_time_minutes: 10,
+        positive_reactions_count: 500,
+        comments_count: 100,
+        tag_list: ['popular'],
+      };
+
+      mockFetch.mockResolvedValueOnce(createJsonResponse(articleData));
+
+      const result = await intelligence.extract('https://dev.to/testuser/popular-article', {
+        forceStrategy: 'api:devto',
+        minContentLength: 50,
+      });
+
+      expect(result.content.text).toContain('Reactions: 500');
+      expect(result.content.text).toContain('Comments: 100');
+      expect(result.content.markdown).toContain('**Reactions:** 500');
+      expect(result.content.markdown).toContain('**Comments:** 100');
+    });
+
+    it('should handle empty article list for user', async () => {
+      mockFetch.mockResolvedValueOnce(createJsonResponse([]));
+
+      await expect(
+        intelligence.extract('https://dev.to/user-with-no-articles', {
+          forceStrategy: 'api:devto',
+        })
+      ).rejects.toThrow(/returned no result/);
+    });
+  });
+
   describe('Static Utility Methods', () => {
     it('should report available strategies', () => {
       const strategies = ContentIntelligence.getAvailableStrategies();

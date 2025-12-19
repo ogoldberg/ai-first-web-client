@@ -545,6 +545,66 @@ describeIf('Live Site API Handlers', () => {
   });
 
   // ============================================
+  // DEV.TO API TESTS
+  // ============================================
+  describe('Dev.to API', () => {
+    it('should extract article info from dev.to URL', async () => {
+      // Using a popular article that should be stable
+      const result = await intelligence.extract('https://dev.to/ben/how-to-be-a-productive-programmer-36kg', {
+        forceStrategy: 'api:devto',
+        timeout: LIVE_TEST_TIMEOUT,
+      });
+
+      expectValidResult(result);
+      expect(result.meta.strategy).toBe('api:devto');
+      expect(result.meta.finalUrl).toBe('https://dev.to/api/articles/ben/how-to-be-a-productive-programmer-36kg');
+
+      // Verify article structure
+      const structured = result.content.structured as { title?: string; user?: { username?: string } };
+      expect(structured.title).toBeDefined();
+      expect(structured.user?.username).toBe('ben');
+    }, LIVE_TEST_TIMEOUT);
+
+    it('should extract articles by username from profile URL', async () => {
+      // Using the dev.to founder's profile
+      const result = await intelligence.extract('https://dev.to/ben', {
+        forceStrategy: 'api:devto',
+        timeout: LIVE_TEST_TIMEOUT,
+      });
+
+      expectValidResult(result);
+      expect(result.meta.strategy).toBe('api:devto');
+      expect(result.meta.finalUrl).toBe('https://dev.to/api/articles?username=ben&per_page=10');
+
+      // Verify articles list structure
+      const structured = result.content.structured as { articles?: Array<{ title?: string }> };
+      expect(structured.articles).toBeDefined();
+      expect(Array.isArray(structured.articles)).toBe(true);
+      expect(structured.articles!.length).toBeGreaterThan(0);
+    }, LIVE_TEST_TIMEOUT);
+
+    it('should include article metadata in output', async () => {
+      const result = await intelligence.extract('https://dev.to/ben', {
+        forceStrategy: 'api:devto',
+        timeout: LIVE_TEST_TIMEOUT,
+      });
+
+      expectValidResult(result);
+      expect(result.content.text).toContain('Articles by @ben');
+      expect(result.content.markdown).toContain('# Articles by @ben');
+    }, LIVE_TEST_TIMEOUT);
+
+    it('should throw for non-Dev.to URLs when forced', async () => {
+      await expect(
+        intelligence.extract('https://example.com', {
+          forceStrategy: 'api:devto',
+          timeout: LIVE_TEST_TIMEOUT,
+        })
+      ).rejects.toThrow(/returned no result/);
+    }, LIVE_TEST_TIMEOUT);
+  });
+
+  // ============================================
   // INTEGRATION TESTS - AUTO STRATEGY SELECTION
   // These tests verify the site-specific APIs are tried first
   // Some APIs may fall back to other strategies due to rate limiting
@@ -633,6 +693,21 @@ describeIf('Live Site API Handlers', () => {
 
       // PyPI API should be attempted
       expect(result.meta.strategiesAttempted).toContain('api:pypi');
+
+      // If we got a result, validate it
+      if (!result.error) {
+        expectValidResult(result, { allowMediumConfidence: true });
+      }
+    }, LIVE_TEST_TIMEOUT);
+
+    it('should automatically select Dev.to API for dev.to URLs', async () => {
+      const result = await intelligence.extract('https://dev.to/ben', {
+        timeout: LIVE_TEST_TIMEOUT,
+        allowBrowser: false, // Don't try Playwright
+      });
+
+      // Dev.to API should be attempted
+      expect(result.meta.strategiesAttempted).toContain('api:devto');
 
       // If we got a result, validate it
       if (!result.error) {
