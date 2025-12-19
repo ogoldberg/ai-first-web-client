@@ -235,7 +235,7 @@ Building a **Generalized API Learning Layer** that shifts from hardcoded site-sp
 | 1. Pattern Extraction | Extract patterns from 8 existing handlers | Complete |
 | 2. Learning From Success | Auto-learn when API extraction succeeds | Complete |
 | 3. Pattern Application | Apply learned patterns to new sites | Complete |
-| 4. Cross-Site Transfer | Transfer patterns to similar sites | In Progress |
+| 4. Cross-Site Transfer | Transfer patterns to similar sites | Complete |
 | 5. OpenAPI Discovery | Auto-detect and use API specifications | Planned |
 | 6. Failure Learning | Learn from mistakes, build anti-patterns | Planned |
 
@@ -252,6 +252,13 @@ Building a **Generalized API Learning Layer** that shifts from hardcoded site-sp
 
 ### v0.5.0 (2025-12-19)
 
+- Added API Pattern Learning System Phase 4: Cross-Site Pattern Transfer (L-005)
+  - API domain groups for categorizing similar sites (package_registries, code_hosting, qa_forums, etc.)
+  - Site similarity scoring based on URL structure, response format, template type, and domain group
+  - Pattern transfer with configurable confidence decay
+  - Auto-transfer of applicable patterns to new domains
+  - Transfer outcome tracking with confidence adjustments
+  - 30 new tests for cross-site transfer
 - Added API Pattern Learning System Phase 3: Pattern Application (L-004)
   - tryLearnedPatterns() strategy in ContentIntelligence extraction pipeline
   - applyLearnedPattern() method for fetching and validating learned API endpoints
