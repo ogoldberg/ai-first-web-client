@@ -14,6 +14,7 @@
 import { logger } from '../utils/logger.js';
 import { PersistentStore } from '../utils/persistent-store.js';
 import type {
+  ApiDomainGroup,
   ApiExtractionSuccess,
   ApiPatternTemplate,
   BootstrapPattern,
@@ -28,7 +29,10 @@ import type {
   PatternRegistryConfig,
   PatternRegistryStats,
   PatternTemplateType,
+  PatternTransferOptions,
+  PatternTransferResult,
   PatternValidation,
+  SiteSimilarityScore,
   VariableExtractor,
 } from '../types/api-patterns.js';
 
@@ -106,6 +110,102 @@ export const PATTERN_TEMPLATES: ApiPatternTemplate[] = [
     knownImplementations: ['stackoverflow.com', 'dev.to'],
   },
 ];
+
+// ============================================
+// API DOMAIN GROUPS
+// Groups of similar sites for cross-site pattern transfer
+// ============================================
+
+/**
+ * API domain groups for cross-site pattern transfer.
+ * Sites in the same group are more likely to have similar API patterns.
+ */
+export const API_DOMAIN_GROUPS: ApiDomainGroup[] = [
+  {
+    name: 'package_registries',
+    domains: ['npmjs.com', 'registry.npmjs.org', 'pypi.org', 'rubygems.org', 'crates.io', 'packagist.org'],
+    sharedPatterns: {
+      pathPatterns: ['/package/', '/project/', '/crate/', '/packages/'],
+      responseFields: ['name', 'version', 'description', 'author', 'license'],
+      authType: 'none',
+    },
+    commonTemplateTypes: ['registry-lookup'],
+    lastUpdated: Date.now(),
+  },
+  {
+    name: 'code_hosting',
+    domains: ['github.com', 'gitlab.com', 'bitbucket.org', 'codeberg.org'],
+    sharedPatterns: {
+      pathPatterns: ['/repos/', '/projects/', '/users/', '/api/'],
+      responseFields: ['id', 'name', 'full_name', 'description', 'created_at'],
+      authType: 'bearer',
+    },
+    commonTemplateTypes: ['rest-resource'],
+    lastUpdated: Date.now(),
+  },
+  {
+    name: 'qa_forums',
+    domains: ['stackoverflow.com', 'stackexchange.com', 'serverfault.com', 'superuser.com', 'askubuntu.com'],
+    sharedPatterns: {
+      pathPatterns: ['/questions/', '/answers/', '/users/'],
+      responseFields: ['items', 'question_id', 'answer_id', 'body', 'title'],
+      authType: 'api_key',
+    },
+    commonTemplateTypes: ['query-api'],
+    lastUpdated: Date.now(),
+  },
+  {
+    name: 'knowledge_bases',
+    domains: ['wikipedia.org', 'wikimedia.org', 'wiktionary.org', 'wikiquote.org'],
+    sharedPatterns: {
+      pathPatterns: ['/wiki/', '/api/rest_v1/'],
+      responseFields: ['title', 'extract', 'pageid', 'content'],
+      authType: 'none',
+    },
+    commonTemplateTypes: ['rest-resource'],
+    lastUpdated: Date.now(),
+  },
+  {
+    name: 'social_news',
+    domains: ['reddit.com', 'old.reddit.com', 'news.ycombinator.com', 'lobste.rs'],
+    sharedPatterns: {
+      pathPatterns: ['/r/', '/comments/', '/item', '/s/'],
+      responseFields: ['title', 'text', 'score', 'by', 'author'],
+      authType: 'none',
+    },
+    commonTemplateTypes: ['json-suffix', 'firebase-rest'],
+    lastUpdated: Date.now(),
+  },
+  {
+    name: 'developer_blogs',
+    domains: ['dev.to', 'medium.com', 'hashnode.com', 'substack.com'],
+    sharedPatterns: {
+      pathPatterns: ['/api/articles/', '/@', '/p/'],
+      responseFields: ['title', 'body', 'body_markdown', 'author', 'published_at'],
+      authType: 'none',
+    },
+    commonTemplateTypes: ['query-api'],
+    lastUpdated: Date.now(),
+  },
+];
+
+// ============================================
+// CROSS-SITE TRANSFER CONSTANTS
+// ============================================
+
+/** Default minimum similarity for pattern transfer */
+const DEFAULT_MIN_SIMILARITY = 0.3;
+
+/** Default confidence decay when transferring patterns */
+const DEFAULT_CONFIDENCE_DECAY = 0.5;
+
+/** Weights for similarity score components */
+const SIMILARITY_WEIGHTS = {
+  urlStructure: 0.25,
+  responseFormat: 0.15,
+  templateType: 0.35,
+  domainGroup: 0.25,
+};
 
 // ============================================
 // BOOTSTRAP PATTERNS
@@ -1326,6 +1426,377 @@ export class ApiPatternRegistry {
    */
   async flush(): Promise<void> {
     await this.store.flush();
+  }
+
+  // ============================================
+  // CROSS-SITE TRANSFER METHODS (L-005)
+  // ============================================
+
+  /**
+   * Get the API domain group for a domain
+   */
+  getApiDomainGroup(domain: string): ApiDomainGroup | null {
+    for (const group of API_DOMAIN_GROUPS) {
+      if (group.domains.some(d => domain.includes(d) || d.includes(domain))) {
+        return group;
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Calculate similarity score between a source pattern and a target domain
+   */
+  calculateSimilarity(
+    sourcePattern: LearnedApiPattern,
+    targetDomain: string
+  ): SiteSimilarityScore {
+    const sourceDomain = sourcePattern.metrics.domains[0] || '';
+    const sourceGroup = this.getApiDomainGroup(sourceDomain);
+    const targetGroup = this.getApiDomainGroup(targetDomain);
+
+    // URL structure similarity - check if path patterns might match
+    let urlStructure = 0;
+    for (const urlPattern of sourcePattern.urlPatterns) {
+      // Extract path-like components from the pattern
+      const pathMatch = urlPattern.match(/\/[a-z_-]+\//gi);
+      if (pathMatch) {
+        // If the target domain is in the same group, paths are likely similar
+        if (sourceGroup && targetGroup && sourceGroup.name === targetGroup.name) {
+          urlStructure = 0.8;
+          break;
+        }
+        urlStructure = 0.3; // Base similarity for having path patterns
+      }
+    }
+
+    // Response format similarity - JSON is most common, so same format is a bonus
+    const responseFormat = sourcePattern.responseFormat === 'json' ? 0.8 : 0.5;
+
+    // Template type compatibility - if target domain's group uses same template types
+    let templateType = 0;
+    if (targetGroup?.commonTemplateTypes?.includes(sourcePattern.templateType)) {
+      templateType = 1.0;
+    } else if (sourceGroup?.commonTemplateTypes?.includes(sourcePattern.templateType)) {
+      // Same template type as source's group defaults
+      templateType = 0.5;
+    }
+
+    // Domain group match - strongest indicator of similarity
+    let domainGroup = 0;
+    if (sourceGroup && targetGroup && sourceGroup.name === targetGroup.name) {
+      domainGroup = 1.0;
+    } else if (sourceGroup || targetGroup) {
+      // One is in a group, the other isn't - partial match
+      domainGroup = 0.2;
+    }
+
+    // Calculate weighted overall score
+    const overall =
+      urlStructure * SIMILARITY_WEIGHTS.urlStructure +
+      responseFormat * SIMILARITY_WEIGHTS.responseFormat +
+      templateType * SIMILARITY_WEIGHTS.templateType +
+      domainGroup * SIMILARITY_WEIGHTS.domainGroup;
+
+    // Build explanation
+    const explanationParts: string[] = [];
+    if (domainGroup === 1.0) {
+      explanationParts.push(`both in '${sourceGroup!.name}' group`);
+    }
+    if (templateType >= 0.5) {
+      explanationParts.push(`compatible template type '${sourcePattern.templateType}'`);
+    }
+    if (urlStructure >= 0.5) {
+      explanationParts.push('similar URL structure');
+    }
+    if (responseFormat >= 0.7) {
+      explanationParts.push('JSON response format');
+    }
+
+    return {
+      overall,
+      urlStructure,
+      responseFormat,
+      templateType,
+      domainGroup,
+      explanation: explanationParts.length > 0
+        ? `Similarity based on: ${explanationParts.join(', ')}`
+        : 'Low similarity - no matching indicators',
+    };
+  }
+
+  /**
+   * Find patterns that can potentially be transferred to a target domain
+   * Returns patterns from similar sites that might work for the target
+   */
+  findTransferablePatterns(
+    targetDomain: string,
+    options: PatternTransferOptions = {}
+  ): Array<{ pattern: LearnedApiPattern; similarity: SiteSimilarityScore }> {
+    const minSimilarity = options.minSimilarity ?? DEFAULT_MIN_SIMILARITY;
+    const results: Array<{ pattern: LearnedApiPattern; similarity: SiteSimilarityScore }> = [];
+
+    // Skip if we already have patterns for this domain
+    if (this.domainIndex.has(targetDomain)) {
+      return results;
+    }
+
+    // Check all patterns for transferability
+    for (const pattern of this.patterns.values()) {
+      // Skip patterns that already include this domain
+      if (pattern.metrics.domains.includes(targetDomain)) {
+        continue;
+      }
+
+      const similarity = this.calculateSimilarity(pattern, targetDomain);
+      if (similarity.overall >= minSimilarity) {
+        results.push({ pattern, similarity });
+      }
+    }
+
+    // Sort by similarity (highest first)
+    return results.sort((a, b) => b.similarity.overall - a.similarity.overall);
+  }
+
+  /**
+   * Transfer a pattern to a new target domain
+   * Creates a new pattern derived from the source with reduced confidence
+   */
+  async transferPattern(
+    sourcePatternId: string,
+    targetDomain: string,
+    targetUrlPattern: string,
+    options: PatternTransferOptions = {}
+  ): Promise<PatternTransferResult> {
+    const minSimilarity = options.minSimilarity ?? DEFAULT_MIN_SIMILARITY;
+    const confidenceDecay = options.confidenceDecay ?? DEFAULT_CONFIDENCE_DECAY;
+
+    const sourcePattern = this.patterns.get(sourcePatternId);
+    if (!sourcePattern) {
+      return {
+        success: false,
+        similarityScore: {
+          overall: 0,
+          urlStructure: 0,
+          responseFormat: 0,
+          templateType: 0,
+          domainGroup: 0,
+          explanation: 'Source pattern not found',
+        },
+        transferredConfidence: 0,
+        reason: `Source pattern '${sourcePatternId}' not found`,
+      };
+    }
+
+    // Calculate similarity
+    const similarity = this.calculateSimilarity(sourcePattern, targetDomain);
+    if (similarity.overall < minSimilarity) {
+      return {
+        success: false,
+        similarityScore: similarity,
+        transferredConfidence: 0,
+        reason: `Similarity ${similarity.overall.toFixed(2)} below minimum ${minSimilarity}`,
+      };
+    }
+
+    // Calculate transferred confidence with decay
+    const transferredConfidence = sourcePattern.metrics.confidence * confidenceDecay;
+
+    // Create the transferred pattern
+    const transferredPattern: LearnedApiPattern = {
+      ...sourcePattern,
+      id: `transfer:${sourcePatternId}:${targetDomain}:${Date.now()}`,
+      urlPatterns: [targetUrlPattern],
+      metrics: {
+        ...sourcePattern.metrics,
+        successCount: 0,
+        failureCount: 0,
+        lastSuccess: undefined,
+        lastFailure: undefined,
+        lastFailureReason: undefined,
+        confidence: transferredConfidence,
+        domains: [targetDomain],
+        avgResponseTime: undefined,
+      },
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+
+    // Add to registry
+    this.addToIndexes(transferredPattern);
+    await this.persist();
+
+    // Emit learning event
+    this.emit({
+      type: 'pattern_learned',
+      pattern: transferredPattern,
+      source: 'transfer',
+    });
+
+    patternsLogger.info('Pattern transferred', {
+      sourcePatternId,
+      newPatternId: transferredPattern.id,
+      targetDomain,
+      similarity: similarity.overall,
+      transferredConfidence,
+    });
+
+    return {
+      success: true,
+      newPatternId: transferredPattern.id,
+      transferredPattern,
+      similarityScore: similarity,
+      transferredConfidence,
+      reason: `Successfully transferred pattern from ${sourcePattern.metrics.domains[0]} to ${targetDomain}`,
+    };
+  }
+
+  /**
+   * Automatically transfer applicable patterns to a new domain
+   * Called when visiting a domain without existing patterns
+   */
+  async autoTransferPatterns(
+    targetDomain: string,
+    targetUrl: string,
+    options: PatternTransferOptions = {}
+  ): Promise<PatternTransferResult[]> {
+    const results: PatternTransferResult[] = [];
+
+    // Find transferable patterns
+    const transferable = this.findTransferablePatterns(targetDomain, options);
+    if (transferable.length === 0) {
+      patternsLogger.debug('No transferable patterns found', { targetDomain });
+      return results;
+    }
+
+    // Transfer the top patterns (limit to avoid too many)
+    const maxTransfers = 3;
+    for (const { pattern, similarity } of transferable.slice(0, maxTransfers)) {
+      // Generate URL pattern for the target domain
+      const targetUrlPattern = this.generateUrlPatternForDomain(targetDomain, targetUrl, pattern);
+
+      const result = await this.transferPattern(
+        pattern.id,
+        targetDomain,
+        targetUrlPattern,
+        options
+      );
+
+      results.push(result);
+
+      // If one succeeds, that's often enough
+      if (result.success) {
+        break;
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Generate a URL pattern for a new domain based on the source pattern
+   */
+  private generateUrlPatternForDomain(
+    targetDomain: string,
+    targetUrl: string,
+    sourcePattern: LearnedApiPattern
+  ): string {
+    // Escape the target domain for regex
+    const escapedDomain = targetDomain.replace(/\./g, '\\.');
+
+    // Try to extract path structure from the target URL
+    try {
+      const parsed = new URL(targetUrl);
+      const pathParts = parsed.pathname.split('/').filter(Boolean);
+
+      if (pathParts.length > 0) {
+        // Create a pattern that matches the path structure
+        // Replace specific IDs/slugs with wildcards
+        const patternPath = pathParts.map(part => {
+          // If it looks like an ID (all numbers, or UUID-like), use a wildcard
+          if (/^\d+$/.test(part) || /^[a-f0-9-]{8,}$/i.test(part)) {
+            return '[^/]+';
+          }
+          // Keep the literal part
+          return part;
+        }).join('/');
+
+        return `${escapedDomain}.*/${patternPath}`;
+      }
+    } catch {
+      // If URL parsing fails, just use the domain
+    }
+
+    // Fallback: just match the domain with any path
+    return `${escapedDomain}/.*`;
+  }
+
+  /**
+   * Record the outcome of using a transferred pattern
+   * Boosts confidence on success, reduces on failure
+   */
+  async recordTransferOutcome(
+    patternId: string,
+    success: boolean,
+    domain: string,
+    responseTime: number,
+    failureReason?: string
+  ): Promise<void> {
+    const pattern = this.patterns.get(patternId);
+    if (!pattern) {
+      return;
+    }
+
+    // Check if this is a transferred pattern
+    const isTransferred = patternId.startsWith('transfer:');
+
+    // Update metrics (slightly different for transferred patterns)
+    await this.updatePatternMetrics(
+      patternId,
+      success,
+      domain,
+      responseTime,
+      failureReason
+    );
+
+    // For transferred patterns, apply additional confidence adjustments
+    if (isTransferred && pattern) {
+      const updatedPattern = this.patterns.get(patternId);
+      if (updatedPattern) {
+        if (success) {
+          // Successful transfer - boost confidence significantly
+          const newConfidence = Math.min(1.0, updatedPattern.metrics.confidence * 1.3);
+          updatedPattern.metrics.confidence = newConfidence;
+
+          patternsLogger.info('Transferred pattern validated', {
+            patternId,
+            domain,
+            newConfidence,
+          });
+        } else {
+          // Failed transfer - reduce confidence more aggressively
+          const newConfidence = Math.max(0, updatedPattern.metrics.confidence * 0.6);
+          updatedPattern.metrics.confidence = newConfidence;
+
+          patternsLogger.debug('Transferred pattern failed', {
+            patternId,
+            domain,
+            newConfidence,
+            reason: failureReason,
+          });
+        }
+
+        updatedPattern.updatedAt = Date.now();
+        await this.persist();
+      }
+    }
+  }
+
+  /**
+   * Get all API domain groups
+   */
+  getApiDomainGroups(): ApiDomainGroup[] {
+    return API_DOMAIN_GROUPS;
   }
 }
 
