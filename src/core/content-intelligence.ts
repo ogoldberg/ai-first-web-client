@@ -80,6 +80,7 @@ export type ExtractionStrategy =
   | 'api:pypi'
   | 'api:devto'
   | 'api:learned'
+  | 'api:openapi'
   | 'cache:google'
   | 'cache:archive'
   | 'parse:static'
@@ -277,6 +278,9 @@ export class ContentIntelligence {
       // 5. API prediction (may require discovering and calling APIs)
       { name: 'api:predicted', fn: () => this.tryPredictedAPI(url, opts) },
 
+      // 5b. OpenAPI/Swagger discovery (probe for API specs - expensive, try after other methods)
+      { name: 'api:openapi', fn: () => this.tryOpenAPIDiscovery(url, opts) },
+
       // 6. Google Cache (fallback only - use if direct fetch failed)
       { name: 'cache:google', fn: () => this.tryGoogleCache(url, opts) },
 
@@ -376,6 +380,7 @@ export class ContentIntelligence {
       'api:pypi': () => this.tryPyPIAPI(url, opts),
       'api:devto': () => this.tryDevToAPI(url, opts),
       'api:learned': () => this.tryLearnedPatterns(url, opts),
+      'api:openapi': () => this.tryOpenAPIDiscovery(url, opts),
       'cache:google': () => this.tryGoogleCache(url, opts),
       'cache:archive': () => this.tryArchiveOrg(url, opts),
       'parse:static': () => this.tryStaticParsing(url, opts),
@@ -1035,6 +1040,77 @@ export class ContentIntelligence {
         failureReason
       );
 
+      return null;
+    }
+  }
+
+  /**
+   * Try to discover OpenAPI/Swagger specification for the domain
+   * and use it to extract content
+   */
+  private async tryOpenAPIDiscovery(
+    url: string,
+    opts: ContentIntelligenceOptions
+  ): Promise<ContentResult | null> {
+    const domain = new URL(url).hostname;
+
+    // Don't re-discover if we already have OpenAPI patterns for this domain
+    await this.ensurePatternRegistryInitialized();
+    if (this.patternRegistry.hasOpenAPIPatterns(domain)) {
+      // Already have OpenAPI patterns - they'll be tried via tryLearnedPatterns
+      logger.intelligence.debug('OpenAPI patterns already exist for domain', { domain });
+      return null;
+    }
+
+    // Try to discover OpenAPI spec for this domain
+    const startTime = Date.now();
+    try {
+      const result = await this.patternRegistry.discoverFromOpenAPI(domain, {
+        timeout: opts.timeout ? opts.timeout / 2 : 10000, // Use half the total timeout
+        headers: opts.headers,
+      });
+
+      if (!result || result.patternsGenerated === 0) {
+        logger.intelligence.debug('No OpenAPI spec found or no patterns generated', {
+          domain,
+          time: Date.now() - startTime,
+        });
+        return null;
+      }
+
+      logger.intelligence.info('OpenAPI discovery successful', {
+        domain,
+        patternsGenerated: result.patternsGenerated,
+        time: Date.now() - startTime,
+      });
+
+      // Now try to apply the newly discovered patterns
+      // Re-check matching patterns after discovery
+      const matches = this.patternRegistry.findMatchingPatterns(url);
+      const openapiMatches = matches.filter(m => m.pattern.id.startsWith('openapi:'));
+
+      if (openapiMatches.length === 0) {
+        logger.intelligence.debug('No OpenAPI patterns match this URL', { url, domain });
+        return null;
+      }
+
+      // Try the first matching OpenAPI pattern
+      for (const match of openapiMatches) {
+        const contentResult = await this.applyLearnedPattern(match, url, domain, opts);
+        if (contentResult) {
+          // Update strategy to reflect OpenAPI source
+          contentResult.meta.strategy = 'api:openapi';
+          return contentResult;
+        }
+      }
+
+      return null;
+    } catch (error) {
+      logger.intelligence.debug('OpenAPI discovery failed', {
+        domain,
+        error: error instanceof Error ? error.message : String(error),
+        time: Date.now() - startTime,
+      });
       return null;
     }
   }
@@ -3738,6 +3814,8 @@ export class ContentIntelligence {
       { strategy: 'structured:jsonld', available: true },
       { strategy: 'structured:opengraph', available: true },
       { strategy: 'api:predicted', available: true },
+      { strategy: 'api:learned', available: true, note: 'Uses learned API patterns from previous extractions' },
+      { strategy: 'api:openapi', available: true, note: 'Discovers and uses OpenAPI/Swagger specifications' },
       { strategy: 'cache:google', available: true, note: 'May be rate-limited' },
       { strategy: 'cache:archive', available: true, note: 'May have stale content' },
       { strategy: 'parse:static', available: true },

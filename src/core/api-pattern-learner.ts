@@ -1809,6 +1809,74 @@ export class ApiPatternRegistry {
   getApiDomainGroups(): ApiDomainGroup[] {
     return API_DOMAIN_GROUPS;
   }
+
+  // ============================================
+  // OPENAPI DISCOVERY METHODS (L-006)
+  // ============================================
+
+  /**
+   * Discover and learn patterns from OpenAPI/Swagger specification
+   * Probes common locations for specs and generates patterns from found endpoints
+   */
+  async discoverFromOpenAPI(
+    domain: string,
+    options?: import('../types/api-patterns.js').OpenAPIDiscoveryOptions
+  ): Promise<import('../types/api-patterns.js').OpenAPIPatternGenerationResult | null> {
+    const { discoverOpenAPICached, generatePatternsFromOpenAPISpec } = await import('./openapi-discovery.js');
+
+    const discovery = await discoverOpenAPICached(domain, options);
+
+    if (!discovery.found || !discovery.spec) {
+      patternsLogger.debug('No OpenAPI spec found for domain', { domain });
+      return null;
+    }
+
+    // Generate patterns from the spec
+    const patterns = generatePatternsFromOpenAPISpec(discovery.spec);
+
+    // Add each pattern to the registry
+    const patternIds: string[] = [];
+    for (const pattern of patterns) {
+      this.addToIndexes(pattern);
+      patternIds.push(pattern.id);
+
+      this.emit({
+        type: 'pattern_learned',
+        pattern,
+        source: 'extraction', // OpenAPI is a form of structured extraction
+      });
+    }
+
+    await this.persist();
+
+    patternsLogger.info('Learned patterns from OpenAPI spec', {
+      domain,
+      specUrl: discovery.specUrl,
+      patterns: patterns.length,
+    });
+
+    return {
+      patternsGenerated: patterns.length,
+      patternIds,
+      skippedEndpoints: [],
+      warnings: [],
+    };
+  }
+
+  /**
+   * Check if we have OpenAPI-derived patterns for a domain
+   */
+  hasOpenAPIPatterns(domain: string): boolean {
+    const patterns = this.getPatternsForDomain(domain);
+    return patterns.some(p => p.id.startsWith('openapi:'));
+  }
+
+  /**
+   * Get all OpenAPI-derived patterns for a domain
+   */
+  getOpenAPIPatterns(domain: string): LearnedApiPattern[] {
+    return this.getPatternsForDomain(domain).filter(p => p.id.startsWith('openapi:'));
+  }
 }
 
 // ============================================
