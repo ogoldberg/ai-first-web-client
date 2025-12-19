@@ -226,15 +226,15 @@ ai-first-web-client/
 
 See [BACKLOG.md](BACKLOG.md) for the detailed task backlog with priorities and effort estimates.
 
-### Phase 3: API Learning System - PLANNED
+### Phase 3: API Learning System - IN PROGRESS
 
-The next major initiative is building a **Generalized API Learning Layer** that shifts from hardcoded site-specific handlers to learned patterns. See [API_LEARNING_PLAN.md](API_LEARNING_PLAN.md) for the full plan.
+Building a **Generalized API Learning Layer** that shifts from hardcoded site-specific handlers to learned patterns. See [API_LEARNING_PLAN.md](API_LEARNING_PLAN.md) for the full plan.
 
 | Phase | Goal | Status |
 |-------|------|--------|
 | 1. Pattern Extraction | Extract patterns from 8 existing handlers | Complete |
 | 2. Learning From Success | Auto-learn when API extraction succeeds | Complete |
-| 3. Pattern Application | Apply learned patterns to new sites | In Progress |
+| 3. Pattern Application | Apply learned patterns to new sites | Complete |
 | 4. Cross-Site Transfer | Transfer patterns to similar sites | Planned |
 | 5. OpenAPI Discovery | Auto-detect and use API specifications | Planned |
 | 6. Failure Learning | Learn from mistakes, build anti-patterns | Planned |
@@ -252,6 +252,13 @@ The next major initiative is building a **Generalized API Learning Layer** that 
 
 ### v0.5.0 (2025-12-19)
 
+- Added API Pattern Learning System Phase 3: Pattern Application (L-004)
+  - tryLearnedPatterns() strategy in ContentIntelligence extraction pipeline
+  - applyLearnedPattern() method for fetching and validating learned API endpoints
+  - handlePatternFailure() helper for consistent failure handling and metrics updates
+  - HTML content detection and conversion to plain text/markdown
+  - Confidence thresholds as named constants for maintainability
+  - 17 new tests for pattern application
 - Added API Pattern Learning System Phase 2: Learning From Success (L-003)
   - Auto-learn patterns when API extraction succeeds
   - ApiExtractionSuccess event type and listeners in ContentIntelligence

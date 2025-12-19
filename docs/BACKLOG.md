@@ -61,15 +61,15 @@ See [API_LEARNING_PLAN.md](API_LEARNING_PLAN.md) for the full plan and architect
 
 **Goal:** Shift from hardcoded site-specific handlers to a generalized learning system that can discover and apply API patterns automatically.
 
-| ID | Phase | Task | Effort | Notes |
-|----|-------|------|--------|-------|
-| L-001 | 1 | Pattern Extraction | L | Extract templates from 8 existing handlers (json-suffix, registry-lookup, rest-resource, etc.) |
-| L-002 | 1 | Pattern Registry | M | Create storage and lookup for learned API patterns |
-| L-003 | 2 | Learning From Success | L | Auto-learn patterns when API extraction succeeds |
-| L-004 | 3 | Pattern Application | L | Apply learned patterns to new sites (supersedes I-003) |
-| L-005 | 4 | Cross-Site Transfer | M | Transfer patterns to similar sites (supersedes I-004) |
-| L-006 | 5 | OpenAPI Discovery | L | Auto-detect and use OpenAPI/Swagger specs (supersedes I-011) |
-| L-007 | 6 | Failure Learning | M | Learn from mistakes, build anti-patterns |
+| ID | Phase | Task | Effort | Status | Notes |
+|----|-------|------|--------|--------|-------|
+| L-001 | 1 | Pattern Extraction | L | DONE | Extract templates from 8 existing handlers (json-suffix, registry-lookup, rest-resource, etc.) |
+| L-002 | 1 | Pattern Registry | M | DONE | Create storage and lookup for learned API patterns |
+| L-003 | 2 | Learning From Success | L | DONE | Auto-learn patterns when API extraction succeeds |
+| L-004 | 3 | Pattern Application | L | DONE | Apply learned patterns to new sites (supersedes I-003) |
+| L-005 | 4 | Cross-Site Transfer | M | | Transfer patterns to similar sites (supersedes I-004) |
+| L-006 | 5 | OpenAPI Discovery | L | | Auto-detect and use OpenAPI/Swagger specs (supersedes I-011) |
+| L-007 | 6 | Failure Learning | M | | Learn from mistakes, build anti-patterns |
 
 **Related existing items:** I-003, I-004, I-005, I-011 are superseded by phases above.
 
@@ -166,6 +166,8 @@ See [API_LEARNING_PLAN.md](API_LEARNING_PLAN.md) for the full plan and architect
 
 | ID | Task | Completed | Notes |
 |----|------|-----------|-------|
+| L-004 | Pattern Application | 2025-12-19 | Apply learned patterns to new sites. tryLearnedPatterns strategy, handlePatternFailure helper, HTML content conversion, confidence thresholds. 17 tests. PR #42. |
+| L-003 | Learning From Success | 2025-12-19 | Auto-learn patterns when API extraction succeeds. ApiExtractionSuccess events, learnFromExtraction(), content mapping inference. 15 tests. PR #41. |
 | S-003 | Encrypt sessions at rest | 2025-12-18 | AES-256-GCM encryption with PBKDF2 key derivation. Set LLM_BROWSER_SESSION_KEY env var. Auto-migration from unencrypted. 28 tests. |
 | A-001 | Unify learning persistence | 2025-12-18 | LearningEngine now the canonical store. Added KnowledgeBase compatibility methods (getPatterns, getBypassablePatterns, findPattern, updateSuccessRate, learn, clear). Automatic migration from knowledge-base.json. KnowledgeBase deprecated with warnings. |
 | A-002 | Debounced + atomic persistence | 2025-12-18 | PersistentStore utility with debouncing and atomic writes (temp + rename). Applied to KnowledgeBase, LearningEngine, ProceduralMemory, SessionManager. 33 tests. |
