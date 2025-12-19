@@ -4,7 +4,7 @@
 **Version:** 0.5.0
 **Current Phase:** Production Readiness (Phase 2)
 **Total Code:** ~16,000 lines TypeScript
-**Tests:** 795 passing + 44 live tests
+**Tests:** 834 passing + 44 live tests
 
 ---
 
@@ -147,8 +147,9 @@ The LLM Browser MCP Server is an intelligent browser designed specifically for L
 | SessionManager | 27 | Session health, auto-refresh, encryption support |
 | Failure Learning | 59 | Failure classification, anti-patterns, retry strategies |
 | GraphQL Introspection | 49 | Endpoint detection, schema parsing, pattern generation |
+| Discovery Orchestrator | 39 | Cache, source discovery, aggregation, error handling |
 | Site API Live Tests | 44 | Real API requests (Reddit, HN, GitHub, Wikipedia, StackOverflow, NPM, PyPI, Dev.to) |
-| **Total** | **795 + 44 live** | All passing |
+| **Total** | **834 + 44 live** | All passing |
 
 ---
 
@@ -250,7 +251,7 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 | ID | Order | Goal | Status |
 |----|-------|------|--------|
 | D-001 | 1 | GraphQL Introspection | Complete |
-| D-008 | 2 | Discovery Orchestrator | In Progress |
+| D-008 | 2 | Discovery Orchestrator | Complete |
 | D-004 | 3 | OpenAPI Enhancement | Planned |
 | D-003 | 4 | Link Discovery | Planned |
 | D-002 | 5 | Docs Page Detection | Planned |
@@ -273,6 +274,13 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
   - Query pattern generation with field selection and argument handling
   - Integration with ContentIntelligence as 'api:graphql' strategy
   - 49 new tests for GraphQL introspection
+- Added API Documentation Discovery Phase 2: Discovery Orchestrator (D-008)
+  - Unified discovery pipeline that orchestrates all discovery sources
+  - Parallel execution of OpenAPI and GraphQL discovery
+  - Result caching with configurable TTL (default 1 hour)
+  - Pattern deduplication and priority-based ordering
+  - Metadata aggregation from multiple sources
+  - 39 new tests for discovery orchestrator
 - Added API Pattern Learning System Phase 6: Failure Learning (L-007)
   - Failure classification by category (auth, rate limit, timeout, server error, etc.)
   - Anti-pattern creation from repeated failures to avoid wasting requests
