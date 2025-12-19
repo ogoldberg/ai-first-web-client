@@ -1886,6 +1886,12 @@ export class ApiPatternRegistry {
   private antiPatterns: Map<string, import('../types/api-patterns.js').AntiPattern> = new Map();
 
   /**
+   * Secondary index for O(1) anti-pattern lookup by pattern+category
+   * Maps `${patternId}:${category}` to anti-pattern ID
+   */
+  private antiPatternIndex: Map<string, string> = new Map();
+
+  /**
    * Record a pattern failure with classification
    * Returns the failure classification for use in retry logic
    */
@@ -2005,11 +2011,12 @@ export class ApiPatternRegistry {
     const categoryCount = countRecentFailuresByCategory(recentFailures, category);
 
     if (categoryCount >= ANTI_PATTERN_THRESHOLDS.minFailures) {
-      // Check if we already have an anti-pattern for this
-      const existingAntiPatternId = `anti:${patternId}:${category}`;
-      const existingAntiPattern = [...this.antiPatterns.values()].find(
-        ap => ap.sourcePatternId === patternId && ap.failureCategory === category
-      );
+      // Check if we already have an anti-pattern for this using O(1) index lookup
+      const indexKey = `${patternId}:${category}`;
+      const existingAntiPatternId = this.antiPatternIndex.get(indexKey);
+      const existingAntiPattern = existingAntiPatternId
+        ? this.antiPatterns.get(existingAntiPatternId)
+        : undefined;
 
       if (existingAntiPattern) {
         // Update existing anti-pattern
@@ -2030,6 +2037,9 @@ export class ApiPatternRegistry {
 
         if (newAntiPattern) {
           this.antiPatterns.set(newAntiPattern.id, newAntiPattern);
+
+          // Add to secondary index for O(1) lookup
+          this.antiPatternIndex.set(indexKey, newAntiPattern.id);
 
           // Track anti-pattern ID in pattern metrics
           if (!extendedMetrics.activeAntiPatterns) {
@@ -2069,6 +2079,11 @@ export class ApiPatternRegistry {
     for (const [id, antiPattern] of this.antiPatterns) {
       if (!isAntiPatternActive(antiPattern)) {
         this.antiPatterns.delete(id);
+        // Also remove from secondary index
+        if (antiPattern.sourcePatternId) {
+          const indexKey = `${antiPattern.sourcePatternId}:${antiPattern.failureCategory}`;
+          this.antiPatternIndex.delete(indexKey);
+        }
         patternsLogger.debug('Removed expired anti-pattern', { antiPatternId: id });
       }
     }
@@ -2163,8 +2178,14 @@ export class ApiPatternRegistry {
    * Clear an anti-pattern (e.g., after user provides authentication)
    */
   async clearAntiPattern(antiPatternId: string): Promise<boolean> {
+    const antiPattern = this.antiPatterns.get(antiPatternId);
     const deleted = this.antiPatterns.delete(antiPatternId);
-    if (deleted) {
+    if (deleted && antiPattern) {
+      // Also remove from secondary index
+      if (antiPattern.sourcePatternId) {
+        const indexKey = `${antiPattern.sourcePatternId}:${antiPattern.failureCategory}`;
+        this.antiPatternIndex.delete(indexKey);
+      }
       await this.persist();
       patternsLogger.info('Cleared anti-pattern', { antiPatternId });
     }

@@ -351,26 +351,14 @@ describe('Anti-Pattern Management', () => {
       expect(antiPattern!.domains).toContain('example.com');
     });
 
-    it('should identify dominant failure category', () => {
+    it('should use category from first failure (failures are pre-filtered by caller)', () => {
       const now = Date.now();
       const failures: FailureRecord[] = [];
 
-      // Add 2 auth failures
-      for (let i = 0; i < 2; i++) {
+      // All failures have the same category (pre-filtered by caller)
+      for (let i = 0; i < ANTI_PATTERN_THRESHOLDS.minFailures; i++) {
         failures.push({
           timestamp: now - i * 1000,
-          category: 'auth_required',
-          message: 'Unauthorized',
-          domain: 'example.com',
-          attemptedUrl: '/test',
-          patternId: 'p1',
-        });
-      }
-
-      // Add 3 rate limit failures (dominant)
-      for (let i = 0; i < 3; i++) {
-        failures.push({
-          timestamp: now - (i + 2) * 1000,
           category: 'rate_limited',
           message: 'Too many requests',
           domain: 'example.com',
@@ -381,6 +369,7 @@ describe('Anti-Pattern Management', () => {
 
       const antiPattern = createAntiPattern(failures, 'pattern-123');
       expect(antiPattern).not.toBeNull();
+      // Category is taken from the first failure
       expect(antiPattern!.failureCategory).toBe('rate_limited');
     });
 

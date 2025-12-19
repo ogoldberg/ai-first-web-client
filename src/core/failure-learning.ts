@@ -286,6 +286,9 @@ export function countRecentFailuresByCategory(
 
 /**
  * Create an anti-pattern from repeated failures
+ *
+ * Note: The caller (maybeCreateAntiPattern) pre-filters failures by category,
+ * so all failures will have the same category. We just take from the first.
  */
 export function createAntiPattern(
   failures: FailureRecord[],
@@ -295,23 +298,8 @@ export function createAntiPattern(
     return null;
   }
 
-  // Get the most common failure category
-  const categoryCounts = new Map<FailureCategory, number>();
-  for (const failure of failures) {
-    categoryCounts.set(
-      failure.category,
-      (categoryCounts.get(failure.category) || 0) + 1
-    );
-  }
-
-  let dominantCategory: FailureCategory = 'unknown';
-  let maxCount = 0;
-  for (const [category, count] of categoryCounts) {
-    if (count > maxCount) {
-      maxCount = count;
-      dominantCategory = category;
-    }
-  }
+  // Failures are pre-filtered by category, so we take from the first record
+  const dominantCategory = failures[0].category;
 
   // Get unique domains
   const domains = [...new Set(failures.map(f => f.domain))];
