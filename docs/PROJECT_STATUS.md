@@ -245,17 +245,19 @@ Building a **Generalized API Learning Layer** that shifts from hardcoded site-sp
 
 Building a **Documentation-First Discovery Layer** that leverages existing API documentation. See [API_DOCUMENTATION_DISCOVERY_PLAN.md](API_DOCUMENTATION_DISCOVERY_PLAN.md) for the full plan.
 
-| Phase | Goal | Status |
-|-------|------|--------|
-| D-001 | GraphQL Introspection | Complete |
-| D-002 | API Docs Page Detection | Planned |
-| D-003 | Link Relation Discovery | Planned |
-| D-004 | OpenAPI Enhancement | Planned |
-| D-005 | AsyncAPI Discovery | Planned |
-| D-006 | Alt Spec Formats | Planned |
-| D-007 | Robots/Sitemap Analysis | Planned |
-| D-008 | Discovery Orchestrator | Planned |
-| D-009 | Auth Workflow Helper | Planned |
+Note: "Order" reflects the implementation sequence, optimized for dependencies and impact.
+
+| ID | Order | Goal | Status |
+|----|-------|------|--------|
+| D-001 | 1 | GraphQL Introspection | Complete |
+| D-008 | 2 | Discovery Orchestrator | In Progress |
+| D-004 | 3 | OpenAPI Enhancement | Planned |
+| D-003 | 4 | Link Discovery | Planned |
+| D-002 | 5 | Docs Page Detection | Planned |
+| D-009 | 6 | Auth Workflow Helper | Planned |
+| D-005 | 7 | AsyncAPI Discovery | Planned |
+| D-006 | 8 | Alt Spec Formats | Planned |
+| D-007 | 9 | Robots/Sitemap Analysis | Planned |
 
 ---
 
