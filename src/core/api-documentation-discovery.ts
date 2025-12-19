@@ -306,7 +306,7 @@ async function discoverOpenAPISource(
       metadata.authentication = Object.entries(result.spec.securitySchemes).map(
         ([name, scheme]) => {
           const auth: AuthInfo = {
-            type: mapSecuritySchemeType(scheme.type),
+            type: mapSecuritySchemeType(scheme),
             name: scheme.name || name,
             in: scheme.in as 'header' | 'query' | 'cookie' | undefined,
           };
@@ -384,14 +384,30 @@ async function discoverGraphQLSource(
       };
     }
 
+    // Guard clause: endpoint should be defined at this point
+    if (!result.endpoint) {
+      return {
+        source: 'graphql',
+        confidence: 0,
+        patterns: [],
+        metadata: {},
+        discoveryTime: Date.now() - startTime,
+        found: false,
+        error: 'GraphQL endpoint not found',
+      };
+    }
+
+    // Store endpoint for use in closures (TypeScript narrowing doesn't work in callbacks)
+    const endpoint = result.endpoint;
+
     // Convert GraphQL patterns to LearnedApiPattern format
     const patterns: LearnedApiPattern[] = (result.patterns || []).map(
-      (gqlPattern) => convertGraphQLPattern(gqlPattern, domain, result.endpoint!)
+      (gqlPattern) => convertGraphQLPattern(gqlPattern, domain, endpoint)
     );
 
     // Extract metadata
     const metadata: DiscoveryMetadata = {
-      baseUrl: result.endpoint,
+      baseUrl: endpoint,
       title: `GraphQL API`,
       description: result.schema
         ? `GraphQL API with ${result.schema.entityTypes.length} entity types`
@@ -481,14 +497,17 @@ function escapeRegex(str: string): string {
 /**
  * Map OpenAPI security scheme type to our AuthInfo type
  */
-function mapSecuritySchemeType(schemeType: string): AuthInfo['type'] {
-  switch (schemeType) {
+function mapSecuritySchemeType(scheme: { type: string; scheme?: string }): AuthInfo['type'] {
+  switch (scheme.type) {
     case 'apiKey':
       return 'api_key';
     case 'http':
-      return 'bearer'; // Could also be 'basic' depending on scheme
+      // Check the scheme property to distinguish between basic and bearer
+      if (scheme.scheme === 'basic') {
+        return 'basic';
+      }
+      return 'bearer'; // Default for http
     case 'oauth2':
-      return 'oauth2';
     case 'openIdConnect':
       return 'oauth2';
     default:
@@ -545,9 +564,18 @@ export async function discoverApiDocumentation(
   //   sources.push({ name: 'links', discover: () => discoverLinksSource(domain, options) });
   // }
 
-  // Run all discoveries in parallel
+  // Run all discoveries in parallel, tracking timing for each
+  const timedSources = sources.map((s) => {
+    const sourceStartTime = Date.now();
+    return {
+      name: s.name,
+      startTime: sourceStartTime,
+      promise: s.discover(),
+    };
+  });
+
   const settledResults = await Promise.allSettled(
-    sources.map((s) => s.discover())
+    timedSources.map((s) => s.promise)
   );
 
   // Process results
@@ -557,13 +585,13 @@ export async function discoverApiDocumentation(
     if (settled.status === 'fulfilled') {
       results.push(settled.value);
     } else {
-      // Handle rejected promise
+      // Handle rejected promise with accurate timing
       results.push({
-        source: sources[i].name,
+        source: timedSources[i].name,
         confidence: 0,
         patterns: [],
         metadata: {},
-        discoveryTime: 0,
+        discoveryTime: Date.now() - timedSources[i].startTime,
         found: false,
         error: settled.reason?.message || 'Unknown error',
       });
