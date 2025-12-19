@@ -2,6 +2,9 @@
  * Core types for LLM Browser MCP Server
  */
 
+// Re-export API pattern types
+export * from './api-patterns.js';
+
 export interface NetworkRequest {
   url: string;
   method: string;
