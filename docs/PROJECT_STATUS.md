@@ -4,7 +4,7 @@
 **Version:** 0.5.0
 **Current Phase:** Production Readiness (Phase 2)
 **Total Code:** ~15,000 lines TypeScript
-**Tests:** 473 passing + 25 live tests
+**Tests:** 505 passing + 25 live tests
 
 ---
 
@@ -143,8 +143,10 @@ The LLM Browser MCP Server is an intelligent browser designed specifically for L
 | Logger | 10 | Secret redaction, log levels, component loggers |
 | URL Safety | 56 | SSRF protection, protocol blocking, IP range validation |
 | PersistentStore | 33 | Debounced writes, atomic persistence, statistics |
+| SessionCrypto | 28 | AES-256-GCM encryption, key derivation, migration |
+| SessionManager | 27 | Session health, auto-refresh, encryption support |
 | Site API Live Tests | 25 | Real API requests (Reddit, HN, GitHub, Wikipedia, StackOverflow) |
-| **Total** | **473 + 25 live** | All passing |
+| **Total** | **505 + 25 live** | All passing |
 
 ---
 
@@ -166,13 +168,13 @@ The LLM Browser MCP Server is an intelligent browser designed specifically for L
 
 | Issue | Severity | Notes |
 |-------|----------|-------|
-| Session encryption basic | High | File-based, not keychain (S-003) |
 | Large god files | Low | `src/index.ts` and `content-intelligence.ts` need splitting (D-010) |
 
 ### Resolved Issues
 
 | Issue | Resolution |
 |-------|------------|
+| Session encryption basic | S-003: AES-256-GCM encryption with PBKDF2 key derivation. Set LLM_BROWSER_SESSION_KEY env var. |
 | Dual knowledge stores | A-001: LearningEngine is now the canonical store. KnowledgeBase deprecated with automatic migration. |
 | Legacy tools not marked deprecated | Added deprecation warnings to browse tool with runtime logging in PR #31 |
 | No SSRF protection | URL safety module with comprehensive SSRF protection in PR #30 |
@@ -229,9 +231,7 @@ All P0 tasks complete.
 
 ### High Priority (P1)
 
-| ID | Task | Effort | Notes |
-|----|------|--------|-------|
-| S-003 | Encrypt sessions at rest | M | Pluggable crypto with user-supplied key (IN PROGRESS) |
+All P1 tasks complete.
 
 ### Upcoming (P2)
 
@@ -249,6 +249,10 @@ All P0 tasks complete.
 
 ### v0.5.0 (2025-12-18)
 
+- Added session encryption at rest using AES-256-GCM with PBKDF2 key derivation
+- Set LLM_BROWSER_SESSION_KEY environment variable to enable encryption
+- Automatic migration from unencrypted to encrypted sessions
+- Added SessionCrypto utility with 28 tests
 - Unified learning persistence: LearningEngine is now the canonical store, KnowledgeBase deprecated
 - Added automatic migration from legacy knowledge-base.json to LearningEngine
 - Added KnowledgeBase compatibility methods to LearningEngine (getPatterns, findPattern, learn, etc.)

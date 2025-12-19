@@ -1,7 +1,10 @@
 /**
  * Session Manager - Handles session persistence (cookies, localStorage, etc.)
  *
- * Uses atomic writes (temp file + rename) for session files to prevent corruption.
+ * Features:
+ * - Atomic writes (temp file + rename) for session files to prevent corruption
+ * - Optional encryption at rest using AES-256-GCM (set LLM_BROWSER_SESSION_KEY env var)
+ * - Automatic migration from unencrypted to encrypted sessions
  */
 
 import { BrowserContext } from 'playwright';
@@ -9,6 +12,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import type { SessionStore } from '../types/index.js';
 import { logger } from '../utils/logger.js';
+import { SessionCrypto } from '../utils/session-crypto.js';
 
 /**
  * Session health status
@@ -46,9 +50,12 @@ export class SessionManager {
   private sessionsDir: string;
   private sessions: Map<string, SessionStore> = new Map();
   private refreshCallback?: SessionRefreshCallback;
+  private crypto: SessionCrypto;
 
   constructor(sessionsDir: string = './sessions') {
     this.sessionsDir = sessionsDir;
+    // Create a new SessionCrypto instance to pick up current env config
+    this.crypto = new SessionCrypto();
   }
 
   /**
@@ -509,12 +516,32 @@ export class SessionManager {
   }
 
   /**
+   * Check if session encryption is enabled
+   */
+  isEncryptionEnabled(): boolean {
+    return this.crypto.isEnabled();
+  }
+
+  /**
+   * Get the environment variable name for encryption key
+   */
+  getEncryptionEnvVar(): string {
+    return this.crypto.getEnvVarName();
+  }
+
+  /**
    * Persist session to disk using atomic write (temp file + rename)
+   * Encrypts session data if encryption key is configured
    */
   private async persistSession(sessionKey: string, session: SessionStore): Promise<void> {
     const fileName = `${sessionKey.replace(/[:/]/g, '_')}.json`;
     const filePath = path.join(this.sessionsDir, fileName);
-    const content = JSON.stringify(session, null, 2);
+
+    // Serialize session data
+    const plaintext = JSON.stringify(session, null, 2);
+
+    // Encrypt if enabled (returns plaintext if disabled)
+    const content = this.crypto.encrypt(plaintext);
 
     // Atomic write: write to temp file in same directory, then rename
     const tempPath = path.join(
@@ -538,23 +565,60 @@ export class SessionManager {
 
   /**
    * Load all sessions from disk
+   * Decrypts session data if encrypted
+   * Migrates unencrypted sessions to encrypted if encryption is enabled
    */
   private async loadSessions(): Promise<void> {
+    let migratedCount = 0;
+
     try {
       const files = await fs.readdir(this.sessionsDir);
 
       for (const file of files) {
-        if (file.endsWith('.json')) {
-          const filePath = path.join(this.sessionsDir, file);
+        // Skip temp files
+        if (!file.endsWith('.json') || file.startsWith('.tmp.')) {
+          continue;
+        }
+
+        const filePath = path.join(this.sessionsDir, file);
+
+        try {
           const content = await fs.readFile(filePath, 'utf-8');
-          const session: SessionStore = JSON.parse(content);
+
+          // Decrypt content (returns as-is if not encrypted)
+          const decrypted = this.crypto.decrypt(content);
+          const session: SessionStore = JSON.parse(decrypted);
 
           const sessionKey = file.replace('.json', '').replace(/_/g, ':');
           this.sessions.set(sessionKey, session);
+
+          // Migrate unencrypted session to encrypted if encryption is now enabled
+          if (this.crypto.isEnabled() && !this.crypto.isEncrypted(content)) {
+            await this.persistSession(sessionKey, session);
+            migratedCount++;
+            logger.session.debug('Migrated session to encrypted format', {
+              sessionKey,
+            });
+          }
+        } catch (error) {
+          // Log but continue loading other sessions
+          logger.session.warn('Failed to load session file', {
+            file,
+            error: error instanceof Error ? error.message : String(error),
+          });
         }
       }
 
-      logger.session.info('Loaded saved sessions', { count: this.sessions.size });
+      if (migratedCount > 0) {
+        logger.session.info('Migrated sessions to encrypted format', {
+          count: migratedCount,
+        });
+      }
+
+      logger.session.info('Loaded saved sessions', {
+        count: this.sessions.size,
+        encrypted: this.crypto.isEnabled(),
+      });
     } catch (error) {
       // No sessions directory yet
     }
