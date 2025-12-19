@@ -232,7 +232,7 @@ The next major initiative is building a **Generalized API Learning Layer** that 
 
 | Phase | Goal | Status |
 |-------|------|--------|
-| 1. Pattern Extraction | Extract patterns from 8 existing handlers | Planned |
+| 1. Pattern Extraction | Extract patterns from 8 existing handlers | In Progress |
 | 2. Learning From Success | Auto-learn when API extraction succeeds | Planned |
 | 3. Pattern Application | Apply learned patterns to new sites | Planned |
 | 4. Cross-Site Transfer | Transfer patterns to similar sites | Planned |
