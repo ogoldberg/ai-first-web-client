@@ -7,6 +7,7 @@
 **Related Documents:**
 - [BACKLOG.md](BACKLOG.md) - Task IDs L-001 through L-007 track implementation
 - [PROJECT_STATUS.md](PROJECT_STATUS.md) - Phase 3 roadmap section
+- [API_DOCUMENTATION_DISCOVERY_PLAN.md](API_DOCUMENTATION_DISCOVERY_PLAN.md) - Extended plan for discovering documented APIs
 
 ---
 
@@ -251,6 +252,10 @@ interface ApiPatternTemplate {
 - Learning from transferred pattern success/failure
 
 ### Phase 5: OpenAPI/Swagger Discovery
+
+> **Note:** This phase has been completed. For expanded API documentation discovery
+> (GraphQL, RAML, AsyncAPI, docs pages, link relations, etc.), see
+> [API_DOCUMENTATION_DISCOVERY_PLAN.md](API_DOCUMENTATION_DISCOVERY_PLAN.md).
 
 **Goal:** Automatically discover and use API specifications
 
