@@ -236,7 +236,7 @@ Building a **Generalized API Learning Layer** that shifts from hardcoded site-sp
 | 2. Learning From Success | Auto-learn when API extraction succeeds | Complete |
 | 3. Pattern Application | Apply learned patterns to new sites | Complete |
 | 4. Cross-Site Transfer | Transfer patterns to similar sites | Complete |
-| 5. OpenAPI Discovery | Auto-detect and use API specifications | In Progress |
+| 5. OpenAPI Discovery | Auto-detect and use API specifications | Complete |
 | 6. Failure Learning | Learn from mistakes, build anti-patterns | Planned |
 
 ### Other Upcoming (P2)
@@ -252,6 +252,13 @@ Building a **Generalized API Learning Layer** that shifts from hardcoded site-sp
 
 ### v0.5.0 (2025-12-19)
 
+- Added API Pattern Learning System Phase 5: OpenAPI Discovery (L-006)
+  - Automatic discovery of OpenAPI/Swagger specifications from common locations
+  - Support for OpenAPI 3.x and Swagger 2.x formats
+  - Pattern generation from discovered API endpoints
+  - Integration with ContentIntelligence as 'api:openapi' strategy
+  - Discovery caching to avoid repeated probing
+  - 31 new tests for OpenAPI discovery
 - Added API Pattern Learning System Phase 4: Cross-Site Pattern Transfer (L-005)
   - API domain groups for categorizing similar sites (package_registries, code_hosting, qa_forums, etc.)
   - Site similarity scoring based on URL structure, response format, template type, and domain group

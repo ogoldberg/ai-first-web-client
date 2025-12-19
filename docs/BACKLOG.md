@@ -68,7 +68,7 @@ See [API_LEARNING_PLAN.md](API_LEARNING_PLAN.md) for the full plan and architect
 | L-003 | 2 | Learning From Success | L | DONE | Auto-learn patterns when API extraction succeeds |
 | L-004 | 3 | Pattern Application | L | DONE | Apply learned patterns to new sites (supersedes I-003) |
 | L-005 | 4 | Cross-Site Transfer | M | DONE | Transfer patterns to similar sites (supersedes I-004) |
-| L-006 | 5 | OpenAPI Discovery | L | | Auto-detect and use OpenAPI/Swagger specs (supersedes I-011) |
+| L-006 | 5 | OpenAPI Discovery | L | DONE | Auto-detect and use OpenAPI/Swagger specs (supersedes I-011) |
 | L-007 | 6 | Failure Learning | M | | Learn from mistakes, build anti-patterns |
 
 **Related existing items:** I-003, I-004, I-005, I-011 are superseded by phases above.
