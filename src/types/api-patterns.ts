@@ -363,3 +363,82 @@ export interface ApiExtractionSuccess {
  * Listener for API extraction success events
  */
 export type ApiExtractionListener = (event: ApiExtractionSuccess) => void;
+
+// ============================================
+// CROSS-SITE TRANSFER TYPES (L-005)
+// ============================================
+
+/**
+ * Site similarity score components
+ * Used to determine if a pattern from one site can be transferred to another
+ */
+export interface SiteSimilarityScore {
+  /** Overall similarity score (0-1) */
+  overall: number;
+  /** URL structure similarity (same path patterns) */
+  urlStructure: number;
+  /** Response format similarity (JSON/XML/HTML) */
+  responseFormat: number;
+  /** Template type compatibility */
+  templateType: number;
+  /** Domain group match (if both sites are in the same group) */
+  domainGroup: number;
+  /** Explanation of the similarity calculation */
+  explanation: string;
+}
+
+/**
+ * Result of attempting to transfer a pattern to a new domain
+ */
+export interface PatternTransferResult {
+  /** Whether the transfer was successful */
+  success: boolean;
+  /** The new pattern ID if transfer succeeded */
+  newPatternId?: string;
+  /** The transferred pattern (if successful) */
+  transferredPattern?: LearnedApiPattern;
+  /** Similarity score between source and target sites */
+  similarityScore: SiteSimilarityScore;
+  /** Confidence applied to the transferred pattern (with decay) */
+  transferredConfidence: number;
+  /** Reason for transfer success/failure */
+  reason: string;
+}
+
+/**
+ * Options for pattern transfer
+ */
+export interface PatternTransferOptions {
+  /** Minimum similarity score to allow transfer (default: 0.3) */
+  minSimilarity?: number;
+  /** Confidence decay multiplier (default: 0.5) */
+  confidenceDecay?: number;
+  /** Whether to immediately test the transferred pattern */
+  validateTransfer?: boolean;
+  /** Custom URL to test transfer against (if validateTransfer is true) */
+  testUrl?: string;
+}
+
+/**
+ * Domain group definition for API pattern similarity
+ * Similar to LearningEngine's domain groups but focused on API patterns
+ */
+export interface ApiDomainGroup {
+  /** Unique group identifier */
+  name: string;
+  /** Domains that belong to this group */
+  domains: string[];
+  /** Common API patterns for this group */
+  sharedPatterns: {
+    /** Common endpoint path patterns */
+    pathPatterns?: string[];
+    /** Common response field patterns */
+    responseFields?: string[];
+    /** Common authentication type */
+    authType?: 'none' | 'api_key' | 'bearer' | 'basic';
+  };
+  /** Pattern template types commonly used by this group */
+  commonTemplateTypes?: PatternTemplateType[];
+  /** When this group was last updated */
+  lastUpdated: number;
+}
