@@ -321,6 +321,10 @@ export type PatternLearningEvent =
       type: 'pattern_archived';
       patternId: string;
       reason: 'stale' | 'low_confidence';
+    }
+  | {
+      type: 'anti_pattern_created';
+      antiPattern: AntiPattern;
     };
 
 /**
@@ -592,4 +596,222 @@ export interface OpenAPIPatternGenerationResult {
   }>;
   /** Warnings during generation */
   warnings: string[];
+}
+
+// ============================================
+// FAILURE LEARNING TYPES (L-007)
+// ============================================
+
+/**
+ * Categories of API failures for learning
+ */
+export type FailureCategory =
+  | 'auth_required'      // 401/403: Needs authentication
+  | 'rate_limited'       // 429: Rate limited
+  | 'wrong_endpoint'     // 404: Wrong endpoint structure
+  | 'server_error'       // 5xx: Server issues (retry later)
+  | 'timeout'            // Request timed out
+  | 'parse_error'        // Response format unexpected
+  | 'validation_failed'  // Response missing required fields
+  | 'content_too_short'  // Response content below minimum length
+  | 'network_error'      // Connection/DNS failure
+  | 'unknown';           // Uncategorized failure
+
+/**
+ * Retry strategy based on failure type
+ */
+export type RetryStrategy =
+  | 'none'               // Don't retry (auth required, wrong endpoint)
+  | 'backoff'            // Exponential backoff (rate limited, server error)
+  | 'skip_domain'        // Skip this domain temporarily (repeated failures)
+  | 'try_alternative'    // Try a fallback pattern
+  | 'increase_timeout';  // Retry with longer timeout
+
+/**
+ * Tracking of failures by category
+ */
+export interface FailureCounts {
+  auth_required: number;
+  rate_limited: number;
+  wrong_endpoint: number;
+  server_error: number;
+  timeout: number;
+  parse_error: number;
+  validation_failed: number;
+  content_too_short: number;
+  network_error: number;
+  unknown: number;
+}
+
+/**
+ * Detailed failure record
+ */
+export interface FailureRecord {
+  /** When the failure occurred */
+  timestamp: number;
+  /** Failure category */
+  category: FailureCategory;
+  /** HTTP status code if applicable */
+  statusCode?: number;
+  /** Error message or description */
+  message: string;
+  /** Domain where failure occurred */
+  domain: string;
+  /** URL that was attempted */
+  attemptedUrl: string;
+  /** Pattern ID that failed */
+  patternId: string;
+  /** Response time in ms (if request was made) */
+  responseTime?: number;
+}
+
+/**
+ * An anti-pattern represents something that should NOT be tried
+ * Learned from repeated failures
+ */
+export interface AntiPattern {
+  /** Unique identifier */
+  id: string;
+  /** Pattern ID this is derived from (if applicable) */
+  sourcePatternId?: string;
+  /** Domain(s) this anti-pattern applies to */
+  domains: string[];
+  /** URL patterns that match this anti-pattern */
+  urlPatterns: string[];
+  /** Type of failure this represents */
+  failureCategory: FailureCategory;
+  /** Why this is an anti-pattern */
+  reason: string;
+  /** Recommended action when matched */
+  recommendedAction: RetryStrategy;
+  /** How long to suppress this (0 = forever) */
+  suppressionDurationMs: number;
+  /** When this anti-pattern was created */
+  createdAt: number;
+  /** When this anti-pattern expires (0 = never) */
+  expiresAt: number;
+  /** Number of failures that led to this anti-pattern */
+  failureCount: number;
+  /** Last failure that updated this anti-pattern */
+  lastFailure: number;
+}
+
+/**
+ * Configuration for retry behavior based on failure type
+ */
+export interface RetryConfig {
+  /** Initial delay before first retry (ms) */
+  initialDelayMs: number;
+  /** Maximum delay between retries (ms) */
+  maxDelayMs: number;
+  /** Maximum number of retries */
+  maxRetries: number;
+  /** Backoff multiplier */
+  backoffMultiplier: number;
+}
+
+/**
+ * Retry configurations by failure category
+ */
+export const RETRY_CONFIGS: Record<FailureCategory, { strategy: RetryStrategy; config?: RetryConfig }> = {
+  auth_required: {
+    strategy: 'none',
+  },
+  rate_limited: {
+    strategy: 'backoff',
+    config: {
+      initialDelayMs: 60000, // 1 minute
+      maxDelayMs: 300000,    // 5 minutes
+      maxRetries: 3,
+      backoffMultiplier: 2,
+    },
+  },
+  wrong_endpoint: {
+    strategy: 'none',
+  },
+  server_error: {
+    strategy: 'backoff',
+    config: {
+      initialDelayMs: 5000,  // 5 seconds
+      maxDelayMs: 60000,     // 1 minute
+      maxRetries: 2,
+      backoffMultiplier: 2,
+    },
+  },
+  timeout: {
+    strategy: 'increase_timeout',
+    config: {
+      initialDelayMs: 1000,
+      maxDelayMs: 10000,
+      maxRetries: 2,
+      backoffMultiplier: 1.5,
+    },
+  },
+  parse_error: {
+    strategy: 'try_alternative',
+  },
+  validation_failed: {
+    strategy: 'try_alternative',
+  },
+  content_too_short: {
+    strategy: 'try_alternative',
+  },
+  network_error: {
+    strategy: 'backoff',
+    config: {
+      initialDelayMs: 2000,
+      maxDelayMs: 30000,
+      maxRetries: 3,
+      backoffMultiplier: 2,
+    },
+  },
+  unknown: {
+    strategy: 'try_alternative',
+  },
+};
+
+/**
+ * Thresholds for creating anti-patterns
+ */
+export const ANTI_PATTERN_THRESHOLDS = {
+  /** Minimum failures before creating an anti-pattern */
+  minFailures: 3,
+  /** Time window for counting failures (ms) */
+  timeWindowMs: 24 * 60 * 60 * 1000, // 24 hours
+  /** Default suppression duration for anti-patterns (ms) */
+  defaultSuppressionMs: 6 * 60 * 60 * 1000, // 6 hours
+  /** Permanent suppression for auth_required failures */
+  authSuppressionMs: 0, // Forever (until user provides auth)
+  /** Suppression for rate_limited failures */
+  rateLimitSuppressionMs: 60 * 60 * 1000, // 1 hour
+} as const;
+
+/**
+ * Extended PatternMetrics with failure category tracking
+ */
+export interface ExtendedPatternMetrics extends PatternMetrics {
+  /** Failures by category */
+  failuresByCategory?: FailureCounts;
+  /** Recent failure records (last N failures) */
+  recentFailures?: FailureRecord[];
+  /** Currently active anti-patterns for this pattern */
+  activeAntiPatterns?: string[];
+}
+
+/**
+ * Result of classifying a failure
+ */
+export interface FailureClassification {
+  /** Detected failure category */
+  category: FailureCategory;
+  /** Confidence in classification (0-1) */
+  confidence: number;
+  /** Recommended retry strategy */
+  recommendedStrategy: RetryStrategy;
+  /** Suggested wait time before retry (ms) */
+  suggestedWaitMs?: number;
+  /** Whether to create/update an anti-pattern */
+  shouldCreateAntiPattern: boolean;
+  /** Diagnostic message */
+  message: string;
 }

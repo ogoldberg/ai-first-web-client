@@ -4,7 +4,7 @@
 **Version:** 0.5.0
 **Current Phase:** Production Readiness (Phase 2)
 **Total Code:** ~16,000 lines TypeScript
-**Tests:** 609 passing + 44 live tests
+**Tests:** 746 passing + 44 live tests
 
 ---
 
@@ -145,8 +145,9 @@ The LLM Browser MCP Server is an intelligent browser designed specifically for L
 | PersistentStore | 33 | Debounced writes, atomic persistence, statistics |
 | SessionCrypto | 28 | AES-256-GCM encryption, key derivation, migration |
 | SessionManager | 27 | Session health, auto-refresh, encryption support |
+| Failure Learning | 59 | Failure classification, anti-patterns, retry strategies |
 | Site API Live Tests | 44 | Real API requests (Reddit, HN, GitHub, Wikipedia, StackOverflow, NPM, PyPI, Dev.to) |
-| **Total** | **531 + 44 live** | All passing |
+| **Total** | **746 + 44 live** | All passing |
 
 ---
 
@@ -237,7 +238,7 @@ Building a **Generalized API Learning Layer** that shifts from hardcoded site-sp
 | 3. Pattern Application | Apply learned patterns to new sites | Complete |
 | 4. Cross-Site Transfer | Transfer patterns to similar sites | Complete |
 | 5. OpenAPI Discovery | Auto-detect and use API specifications | Complete |
-| 6. Failure Learning | Learn from mistakes, build anti-patterns | In Progress |
+| 6. Failure Learning | Learn from mistakes, build anti-patterns | Complete |
 
 ### Other Upcoming (P2)
 
@@ -252,6 +253,15 @@ Building a **Generalized API Learning Layer** that shifts from hardcoded site-sp
 
 ### v0.5.0 (2025-12-19)
 
+- Added API Pattern Learning System Phase 6: Failure Learning (L-007)
+  - Failure classification by category (auth, rate limit, timeout, server error, etc.)
+  - Anti-pattern creation from repeated failures to avoid wasting requests
+  - Smart retry strategies based on failure type (backoff, skip_domain, increase_timeout)
+  - Integration with ContentIntelligence pattern application flow
+  - Anti-pattern matching to skip URLs with active anti-patterns
+  - Failure tracking with category counts and recent failure history
+  - Pattern health analysis to determine unhealthy patterns
+  - 59 new tests for failure learning
 - Added API Pattern Learning System Phase 5: OpenAPI Discovery (L-006)
   - Automatic discovery of OpenAPI/Swagger specifications from common locations
   - Support for OpenAPI 3.x and Swagger 2.x formats
