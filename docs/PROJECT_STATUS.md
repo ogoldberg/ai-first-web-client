@@ -4,7 +4,7 @@
 **Version:** 0.5.0
 **Current Phase:** Production Readiness (Phase 2)
 **Total Code:** ~15,000 lines TypeScript
-**Tests:** 523 passing + 39 live tests
+**Tests:** 531 passing + 44 live tests
 
 ---
 
@@ -71,8 +71,8 @@ The LLM Browser MCP Server is an intelligent browser designed specifically for L
 | Timeout Configuration | Complete | Central config (PR #14) |
 | Tier Usage Analytics | Complete | get_tier_usage_by_domain tool (PR #13) |
 | Performance Timing | Complete | PerformanceTracker utility, get_performance_metrics tool |
-| Site-Specific APIs | Complete | Reddit, HN, GitHub, Wikipedia, StackOverflow, NPM, PyPI |
-| Site API Live Tests | Complete | 39 tests against real endpoints (LIVE_TESTS=true) |
+| Site-Specific APIs | Complete | Reddit, HN, GitHub, Wikipedia, StackOverflow, NPM, PyPI, Dev.to |
+| Site API Live Tests | Complete | 44 tests against real endpoints (LIVE_TESTS=true) |
 | URL Safety (SSRF Protection) | Complete | Blocks RFC1918, localhost, metadata endpoints, dangerous protocols |
 
 ---
@@ -133,7 +133,7 @@ The LLM Browser MCP Server is an intelligent browser designed specifically for L
 |----------|-------|-------|
 | Utilities (cache, retry, rate-limiter) | 25+ | Vitest unit tests |
 | Content Extractor | 10+ | Unit tests |
-| Content Intelligence | 49 | Framework extraction, structured data, API handlers |
+| Content Intelligence | 57 | Framework extraction, structured data, API handlers |
 | Lightweight Renderer | 43 | linkedom integration, script execution |
 | Tiered Fetcher | 24 | Tier cascade and fallback |
 | SmartBrowser E2E | 13 | Full browse cycle |
@@ -145,8 +145,8 @@ The LLM Browser MCP Server is an intelligent browser designed specifically for L
 | PersistentStore | 33 | Debounced writes, atomic persistence, statistics |
 | SessionCrypto | 28 | AES-256-GCM encryption, key derivation, migration |
 | SessionManager | 27 | Session health, auto-refresh, encryption support |
-| Site API Live Tests | 39 | Real API requests (Reddit, HN, GitHub, Wikipedia, StackOverflow, NPM, PyPI) |
-| **Total** | **523 + 39 live** | All passing |
+| Site API Live Tests | 44 | Real API requests (Reddit, HN, GitHub, Wikipedia, StackOverflow, NPM, PyPI, Dev.to) |
+| **Total** | **531 + 44 live** | All passing |
 
 ---
 
@@ -232,12 +232,6 @@ All P0 tasks complete.
 ### High Priority (P1)
 
 All P1 tasks complete.
-
-### In Progress
-
-| ID | Task | Effort | Notes |
-|----|------|--------|-------|
-| I-008 | Dev.to API handler | S | Public API for articles |
 
 ### Upcoming (P2)
 
