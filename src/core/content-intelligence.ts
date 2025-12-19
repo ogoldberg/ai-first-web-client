@@ -23,7 +23,14 @@ import TurndownService from 'turndown';
 import { TIMEOUTS } from '../utils/timeouts.js';
 import { logger } from '../utils/logger.js';
 import { createRequire } from 'module';
-import type { ApiExtractionSuccess, ApiExtractionListener } from '../types/api-patterns.js';
+import type {
+  ApiExtractionSuccess,
+  ApiExtractionListener,
+  PatternMatch,
+  LearnedApiPattern,
+  ContentMapping,
+} from '../types/api-patterns.js';
+import { ApiPatternRegistry } from './api-pattern-learner.js';
 
 // Create a require function for ESM compatibility
 const require = createRequire(import.meta.url);
@@ -72,6 +79,7 @@ export type ExtractionStrategy =
   | 'api:npm'
   | 'api:pypi'
   | 'api:devto'
+  | 'api:learned'
   | 'cache:google'
   | 'cache:archive'
   | 'parse:static'
@@ -139,6 +147,8 @@ export class ContentIntelligence {
   private turndown: TurndownService;
   private options: ContentIntelligenceOptions;
   private extractionListeners: Set<ApiExtractionListener> = new Set();
+  private patternRegistry: ApiPatternRegistry;
+  private patternRegistryInitialized = false;
 
   constructor(options: Partial<ContentIntelligenceOptions> = {}) {
     this.options = { ...DEFAULT_OPTIONS, ...options };
@@ -147,11 +157,34 @@ export class ContentIntelligence {
       headingStyle: 'atx',
       codeBlockStyle: 'fenced',
     });
+    this.patternRegistry = new ApiPatternRegistry();
 
     // Add options callback if provided
     if (options.onExtractionSuccess) {
       this.extractionListeners.add(options.onExtractionSuccess);
     }
+
+    // Connect extraction listener to pattern learning
+    this.onExtractionSuccess((event) => {
+      this.patternRegistry.learnFromExtraction(event);
+    });
+  }
+
+  /**
+   * Initialize the pattern registry (lazy initialization)
+   */
+  private async ensurePatternRegistryInitialized(): Promise<void> {
+    if (!this.patternRegistryInitialized) {
+      await this.patternRegistry.initialize();
+      this.patternRegistryInitialized = true;
+    }
+  }
+
+  /**
+   * Get the pattern registry (for testing purposes)
+   */
+  getPatternRegistry(): ApiPatternRegistry {
+    return this.patternRegistry;
   }
 
   /**
@@ -228,6 +261,9 @@ export class ContentIntelligence {
       { name: 'api:npm', fn: () => this.tryNpmAPI(url, opts) },
       { name: 'api:pypi', fn: () => this.tryPyPIAPI(url, opts) },
       { name: 'api:devto', fn: () => this.tryDevToAPI(url, opts) },
+
+      // 1b. Learned API patterns (applied from previous successful extractions)
+      { name: 'api:learned', fn: () => this.tryLearnedPatterns(url, opts) },
 
       // 2. Framework data extraction (instant if __NEXT_DATA__ etc. present)
       { name: 'framework:nextjs', fn: () => this.tryFrameworkExtraction(url, opts) },
@@ -339,6 +375,7 @@ export class ContentIntelligence {
       'api:npm': () => this.tryNpmAPI(url, opts),
       'api:pypi': () => this.tryPyPIAPI(url, opts),
       'api:devto': () => this.tryDevToAPI(url, opts),
+      'api:learned': () => this.tryLearnedPatterns(url, opts),
       'cache:google': () => this.tryGoogleCache(url, opts),
       'cache:archive': () => this.tryArchiveOrg(url, opts),
       'parse:static': () => this.tryStaticParsing(url, opts),
@@ -797,6 +834,361 @@ export class ContentIntelligence {
     const obj = data as Record<string, unknown>;
     return obj.kind === 'Listing' && typeof obj.data === 'object' && obj.data !== null;
   }
+
+  // ============================================
+  // STRATEGY: Learned API Patterns
+  // ============================================
+
+  // Confidence thresholds for pattern application
+  private static readonly MIN_PATTERN_CONFIDENCE = 0.3;
+  private static readonly HIGH_CONFIDENCE_THRESHOLD = 0.8;
+  private static readonly MEDIUM_CONFIDENCE_THRESHOLD = 0.5;
+
+  /**
+   * Try learned API patterns from previous successful extractions
+   * This applies patterns learned from the ApiPatternRegistry
+   */
+  private async tryLearnedPatterns(
+    url: string,
+    opts: ContentIntelligenceOptions
+  ): Promise<ContentResult | null> {
+    // Ensure pattern registry is initialized
+    await this.ensurePatternRegistryInitialized();
+
+    // Find patterns that match this URL
+    const matches = this.patternRegistry.findMatchingPatterns(url);
+
+    if (matches.length === 0) {
+      return null; // No learned patterns match this URL
+    }
+
+    const domain = new URL(url).hostname;
+    logger.intelligence.debug('Found matching learned patterns', {
+      url,
+      patternCount: matches.length,
+      topPattern: matches[0].pattern.id,
+      topConfidence: matches[0].confidence,
+    });
+
+    // Try patterns in confidence order (already sorted)
+    for (const match of matches) {
+      // Skip low-confidence patterns
+      if (match.confidence < ContentIntelligence.MIN_PATTERN_CONFIDENCE) {
+        logger.intelligence.debug('Skipping low-confidence pattern', {
+          patternId: match.pattern.id,
+          confidence: match.confidence,
+        });
+        continue;
+      }
+
+      const result = await this.applyLearnedPattern(match, url, domain, opts);
+      if (result) {
+        return result;
+      }
+    }
+
+    return null; // All attempted patterns failed
+  }
+
+  /**
+   * Apply a learned pattern to extract content
+   */
+  private async applyLearnedPattern(
+    match: PatternMatch,
+    originalUrl: string,
+    domain: string,
+    opts: ContentIntelligenceOptions
+  ): Promise<ContentResult | null> {
+    const pattern = match.pattern;
+    const startTime = Date.now();
+
+    logger.intelligence.debug('Applying learned pattern', {
+      patternId: pattern.id,
+      templateType: pattern.templateType,
+      apiEndpoint: match.apiEndpoint,
+    });
+
+    try {
+      // Step 1: Build and execute request
+      const response = await this.fetchWithCookies(match.apiEndpoint, {
+        ...opts,
+        headers: {
+          ...opts.headers,
+          ...(pattern.headers || {}),
+          Accept: 'application/json',
+        },
+      });
+
+      const responseTime = Date.now() - startTime;
+
+      // Step 2: Validate HTTP response
+      if (!response.ok) {
+        return this.handlePatternFailure(
+          pattern.id,
+          domain,
+          responseTime,
+          `HTTP ${response.status}`,
+          { status: response.status }
+        );
+      }
+
+      // Step 3: Validate content type
+      const contentType = response.headers.get('content-type') || '';
+      if (pattern.responseFormat === 'json' && !contentType.includes('application/json')) {
+        return this.handlePatternFailure(
+          pattern.id,
+          domain,
+          responseTime,
+          'Wrong content type',
+          { contentType }
+        );
+      }
+
+      // Step 4: Parse response
+      let data: unknown;
+      if (pattern.responseFormat === 'json') {
+        data = await response.json();
+      } else {
+        data = await response.text();
+      }
+
+      // Step 5: Validate required fields
+      for (const field of pattern.validation.requiredFields) {
+        if (!this.hasFieldAtPath(data, field)) {
+          return this.handlePatternFailure(
+            pattern.id,
+            domain,
+            responseTime,
+            `Missing required field: ${field}`,
+            { missingField: field }
+          );
+        }
+      }
+
+      // Step 6: Extract content using contentMapping
+      const extractedContent = this.extractContentFromMapping(data, pattern.contentMapping);
+
+      // Step 7: Validate content length
+      if (extractedContent.text.length < pattern.validation.minContentLength) {
+        return this.handlePatternFailure(
+          pattern.id,
+          domain,
+          responseTime,
+          'Content too short',
+          { length: extractedContent.text.length, minRequired: pattern.validation.minContentLength }
+        );
+      }
+
+      // Step 8: Success! Update metrics
+      await this.patternRegistry.updatePatternMetrics(
+        pattern.id,
+        true,
+        domain,
+        responseTime
+      );
+
+      logger.intelligence.info('Learned pattern extraction successful', {
+        patternId: pattern.id,
+        templateType: pattern.templateType,
+        url: originalUrl,
+        apiUrl: match.apiEndpoint,
+        contentLength: extractedContent.text.length,
+        responseTime,
+      });
+
+      // Return the result
+      return {
+        content: {
+          title: extractedContent.title,
+          text: extractedContent.text,
+          markdown: extractedContent.markdown,
+          structured: typeof data === 'object' ? (data as Record<string, unknown>) : undefined,
+        },
+        meta: {
+          url: originalUrl,
+          finalUrl: match.apiEndpoint,
+          strategy: 'api:learned',
+          strategiesAttempted: [],
+          timing: responseTime,
+          confidence: match.confidence > ContentIntelligence.HIGH_CONFIDENCE_THRESHOLD
+            ? 'high'
+            : match.confidence > ContentIntelligence.MEDIUM_CONFIDENCE_THRESHOLD
+              ? 'medium'
+              : 'low',
+        },
+        warnings: [],
+      };
+    } catch (error) {
+      const responseTime = Date.now() - startTime;
+      const failureReason = error instanceof Error ? error.message : 'Unknown error';
+
+      logger.intelligence.debug('Learned pattern failed: error', {
+        patternId: pattern.id,
+        error: failureReason,
+      });
+
+      await this.patternRegistry.updatePatternMetrics(
+        pattern.id,
+        false,
+        domain,
+        responseTime,
+        failureReason
+      );
+
+      return null;
+    }
+  }
+
+  /**
+   * Check if an object has a field at the given path (supports dot notation and array access)
+   */
+  private hasFieldAtPath(obj: unknown, path: string): boolean {
+    const value = this.getValueAtPath(obj, path);
+    return value !== undefined && value !== null;
+  }
+
+  /**
+   * Get a value from an object using dot notation path
+   * Supports array access like "items[0].title"
+   */
+  private getValueAtPath(obj: unknown, path: string): unknown {
+    if (!path || typeof obj !== 'object' || obj === null) {
+      return undefined;
+    }
+
+    // Handle array notation like "items[0]"
+    const parts = path.split(/\.|\[|\]/).filter(Boolean);
+    let current: unknown = obj;
+
+    for (const part of parts) {
+      if (typeof current !== 'object' || current === null) {
+        return undefined;
+      }
+
+      // Handle numeric indices for arrays
+      if (/^\d+$/.test(part) && Array.isArray(current)) {
+        current = current[parseInt(part, 10)];
+      } else {
+        current = (current as Record<string, unknown>)[part];
+      }
+    }
+
+    return current;
+  }
+
+  /**
+   * Extract content from API response using contentMapping
+   * Handles HTML content by converting to plain text and markdown
+   */
+  private extractContentFromMapping(
+    data: unknown,
+    mapping: ContentMapping
+  ): { title: string; text: string; markdown: string } {
+    const rawTitle = this.getStringAtPath(data, mapping.title) || 'Untitled';
+    const rawDescription = mapping.description ? this.getStringAtPath(data, mapping.description) : null;
+    const rawBody = mapping.body ? this.getStringAtPath(data, mapping.body) : null;
+
+    // Prefer body content, fall back to description
+    const mainContent = rawBody || rawDescription || this.extractTextFromStructured(data);
+
+    // Strip HTML for title (titles should be plain text)
+    const title = this.isHtmlContent(rawTitle) ? this.htmlToPlainText(rawTitle) : rawTitle;
+
+    // Convert HTML content to plain text and markdown
+    if (mainContent && this.isHtmlContent(mainContent)) {
+      const text = this.htmlToPlainText(mainContent);
+      const markdown = this.turndown.turndown(mainContent);
+      return { title, text, markdown };
+    }
+
+    // Content is already plain text
+    const text = mainContent || '';
+    const markdown = mainContent || '';
+    return { title, text, markdown };
+  }
+
+  /**
+   * Check if a string contains HTML content
+   */
+  private isHtmlContent(str: string): boolean {
+    // Simple check for HTML tags
+    return /<[a-z][\s\S]*>/i.test(str);
+  }
+
+  /**
+   * Get a string value from an object at the given path
+   */
+  private getStringAtPath(obj: unknown, path: string): string | null {
+    const value = this.getValueAtPath(obj, path);
+
+    if (typeof value === 'string') {
+      return value;
+    }
+
+    if (typeof value === 'number' || typeof value === 'boolean') {
+      return String(value);
+    }
+
+    return null;
+  }
+
+  /**
+   * Extract text content from structured data
+   */
+  private extractTextFromStructured(data: unknown): string {
+    if (typeof data === 'string') {
+      return data;
+    }
+
+    if (typeof data !== 'object' || data === null) {
+      return '';
+    }
+
+    // Look for common content fields
+    const obj = data as Record<string, unknown>;
+    const contentFields = [
+      'text', 'content', 'body', 'description', 'summary', 'selftext',
+      'extract', 'body_markdown', 'readme', 'info.description',
+    ];
+
+    for (const field of contentFields) {
+      const value = this.getValueAtPath(obj, field);
+      if (typeof value === 'string' && value.length > 20) {
+        return value;
+      }
+    }
+
+    return '';
+  }
+
+  /**
+   * Handle pattern failure by logging and updating metrics
+   * Returns null to indicate failure to caller
+   */
+  private async handlePatternFailure(
+    patternId: string,
+    domain: string,
+    responseTime: number,
+    reason: string,
+    logContext: Record<string, unknown>
+  ): Promise<null> {
+    logger.intelligence.debug(`Learned pattern failed: ${reason}`, {
+      patternId,
+      ...logContext,
+    });
+    await this.patternRegistry.updatePatternMetrics(
+      patternId,
+      false,
+      domain,
+      responseTime,
+      reason
+    );
+    return null;
+  }
+
+  // ============================================
+  // STRATEGY: Site-Specific APIs (Reddit)
+  // ============================================
 
   /**
    * Try Reddit's public JSON API
