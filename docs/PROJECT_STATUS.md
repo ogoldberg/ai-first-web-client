@@ -233,11 +233,16 @@ All P0 tasks complete.
 
 All P1 tasks complete.
 
+### In Progress
+
+| ID | Task | Effort | Notes |
+|----|------|--------|-------|
+| I-008 | Dev.to API handler | S | Public API for articles |
+
 ### Upcoming (P2)
 
 | ID | Task | Effort | Notes |
 |----|------|--------|-------|
-| I-007 | PyPI API handler | S | pypi.org |
 | I-011 | OpenAPI spec discovery | L | Auto-detect and use OpenAPI/Swagger |
 | I-012 | GraphQL introspection | L | Auto-discover schema and query |
 | I-013 | Authentication workflow helper | L | Guide users through OAuth, API keys |
