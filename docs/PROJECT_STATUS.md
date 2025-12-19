@@ -1,10 +1,10 @@
 # LLM Browser MCP Server - Project Status
 
-**Last Updated:** 2025-12-18
+**Last Updated:** 2025-12-19
 **Version:** 0.5.0
 **Current Phase:** Production Readiness (Phase 2)
-**Total Code:** ~15,000 lines TypeScript
-**Tests:** 531 passing + 44 live tests
+**Total Code:** ~16,000 lines TypeScript
+**Tests:** 594 passing + 44 live tests
 
 ---
 
@@ -232,8 +232,8 @@ The next major initiative is building a **Generalized API Learning Layer** that 
 
 | Phase | Goal | Status |
 |-------|------|--------|
-| 1. Pattern Extraction | Extract patterns from 8 existing handlers | In Progress |
-| 2. Learning From Success | Auto-learn when API extraction succeeds | Planned |
+| 1. Pattern Extraction | Extract patterns from 8 existing handlers | Complete |
+| 2. Learning From Success | Auto-learn when API extraction succeeds | In Progress |
 | 3. Pattern Application | Apply learned patterns to new sites | Planned |
 | 4. Cross-Site Transfer | Transfer patterns to similar sites | Planned |
 | 5. OpenAPI Discovery | Auto-detect and use API specifications | Planned |
@@ -250,8 +250,13 @@ The next major initiative is building a **Generalized API Learning Layer** that 
 
 ## Changelog
 
-### v0.5.0 (2025-12-18)
+### v0.5.0 (2025-12-19)
 
+- Added API Pattern Learning System Phase 1: Pattern Extraction (L-001/L-002)
+  - 5 pattern template types: json-suffix, registry-lookup, rest-resource, firebase-rest, query-api
+  - 8 bootstrap patterns from existing handlers (Reddit, NPM, PyPI, GitHub, Wikipedia, HackerNews, StackOverflow, Dev.to)
+  - ApiPatternRegistry for storing, matching, and learning patterns with persistence
+  - 63 tests for pattern learning system
 - Added PyPI API handler for pypi.org and pypi.python.org URLs
 - Added NPM registry API handler for npmjs.com and registry.npmjs.org URLs
 - Added session encryption at rest using AES-256-GCM with PBKDF2 key derivation
