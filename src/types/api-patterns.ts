@@ -505,6 +505,16 @@ export interface OpenAPIResponse {
 }
 
 /**
+ * Request body schema for POST/PUT/DELETE operations
+ */
+export interface OpenAPIRequestBody {
+  description?: string;
+  required?: boolean;
+  contentType: string;
+  schema?: Record<string, unknown>;
+}
+
+/**
  * Simplified OpenAPI endpoint representation
  */
 export interface OpenAPIEndpoint {
@@ -514,9 +524,26 @@ export interface OpenAPIEndpoint {
   summary?: string;
   description?: string;
   parameters: OpenAPIParameter[];
+  requestBody?: OpenAPIRequestBody;
   responses: OpenAPIResponse[];
   tags?: string[];
   deprecated?: boolean;
+}
+
+/**
+ * Rate limit information extracted from OpenAPI x-ratelimit extensions
+ */
+export interface OpenAPIRateLimitInfo {
+  /** Requests allowed per window */
+  limit?: number;
+  /** Time window in seconds */
+  windowSeconds?: number;
+  /** Header name for rate limit */
+  limitHeader?: string;
+  /** Header name for remaining requests */
+  remainingHeader?: string;
+  /** Header name for reset time */
+  resetHeader?: string;
 }
 
 /**
@@ -540,6 +567,8 @@ export interface ParsedOpenAPISpec {
     in?: 'query' | 'header' | 'cookie';
     scheme?: string;
   }>;
+  /** Rate limit information from x-ratelimit extensions */
+  rateLimit?: OpenAPIRateLimitInfo;
   /** When the spec was discovered */
   discoveredAt: number;
   /** URL where the spec was found */

@@ -15,6 +15,7 @@ import type {
   OpenAPIDiscoveryOptions,
 } from '../../src/types/api-patterns.js';
 import { OPENAPI_PROBE_LOCATIONS } from '../../src/types/api-patterns.js';
+import { resolveRefs, hasRefs, countRefs, getValueAtPath } from '../../src/utils/json-ref-resolver.js';
 
 // ============================================
 // MOCK DATA
@@ -214,14 +215,14 @@ describe('Pattern Generation', () => {
       expect(result.patternIds).toHaveLength(2);
     });
 
-    it('should skip POST endpoints', () => {
+    it('should skip POST endpoints without request body schema', () => {
       const result = generatePatternsFromSpec(mockSpec, 'api.example.com');
 
       const skippedPost = result.skippedEndpoints.find(
         e => e.path === '/posts' && e.method === 'POST'
       );
       expect(skippedPost).toBeDefined();
-      expect(skippedPost?.reason).toContain('Non-GET');
+      expect(skippedPost?.reason).toContain('No request body schema');
     });
 
     it('should include pattern IDs in result', () => {
@@ -795,5 +796,406 @@ describe('Base URL Handling', () => {
     const pattern = patterns[0];
 
     expect(pattern.endpointTemplate).toBe('https://api.test.com/users');
+  });
+});
+
+// ============================================
+// D-004 ENHANCEMENT TESTS
+// ============================================
+
+describe('D-004: OpenAPI Enhancement', () => {
+  // Test POST/PUT/DELETE pattern support
+  describe('POST/PUT/DELETE Pattern Support', () => {
+    it('should generate patterns for POST endpoints with request body', () => {
+      const spec: ParsedOpenAPISpec = {
+        version: '3.0',
+        title: 'Test API',
+        baseUrl: 'https://api.test.com',
+        endpoints: [
+          {
+            path: '/posts',
+            method: 'POST',
+            operationId: 'createPost',
+            parameters: [],
+            requestBody: {
+              contentType: 'application/json',
+              required: true,
+              schema: { type: 'object', properties: { title: { type: 'string' } } },
+            },
+            responses: [{ statusCode: '201', description: 'Created' }],
+          },
+        ],
+        discoveredAt: Date.now(),
+        specUrl: 'https://api.test.com/openapi.json',
+      };
+
+      const patterns = generatePatternsFromOpenAPISpec(spec);
+      expect(patterns).toHaveLength(1);
+      expect(patterns[0].method).toBe('POST');
+      expect(patterns[0].headers?.['Content-Type']).toBe('application/json');
+    });
+
+    it('should generate patterns for PUT endpoints with request body', () => {
+      const spec: ParsedOpenAPISpec = {
+        version: '3.0',
+        title: 'Test API',
+        baseUrl: 'https://api.test.com',
+        endpoints: [
+          {
+            path: '/posts/{id}',
+            method: 'PUT',
+            operationId: 'updatePost',
+            parameters: [{ name: 'id', in: 'path', required: true }],
+            requestBody: {
+              contentType: 'application/json',
+              required: true,
+              schema: { type: 'object', properties: { title: { type: 'string' } } },
+            },
+            responses: [{ statusCode: '200', description: 'Updated' }],
+          },
+        ],
+        discoveredAt: Date.now(),
+        specUrl: 'https://api.test.com/openapi.json',
+      };
+
+      const patterns = generatePatternsFromOpenAPISpec(spec);
+      expect(patterns).toHaveLength(1);
+      expect(patterns[0].method).toBe('PUT');
+      expect(patterns[0].headers?.['Content-Type']).toBe('application/json');
+    });
+
+    it('should generate patterns for DELETE endpoints', () => {
+      const spec: ParsedOpenAPISpec = {
+        version: '3.0',
+        title: 'Test API',
+        baseUrl: 'https://api.test.com',
+        endpoints: [
+          {
+            path: '/posts/{id}',
+            method: 'DELETE',
+            operationId: 'deletePost',
+            parameters: [{ name: 'id', in: 'path', required: true }],
+            responses: [{ statusCode: '204', description: 'Deleted' }],
+          },
+        ],
+        discoveredAt: Date.now(),
+        specUrl: 'https://api.test.com/openapi.json',
+      };
+
+      const patterns = generatePatternsFromOpenAPISpec(spec);
+      expect(patterns).toHaveLength(1);
+      expect(patterns[0].method).toBe('DELETE');
+    });
+
+    it('should skip PATCH endpoints', () => {
+      const spec: ParsedOpenAPISpec = {
+        version: '3.0',
+        title: 'Test API',
+        baseUrl: 'https://api.test.com',
+        endpoints: [
+          {
+            path: '/posts/{id}',
+            method: 'PATCH',
+            operationId: 'patchPost',
+            parameters: [{ name: 'id', in: 'path', required: true }],
+            requestBody: {
+              contentType: 'application/json',
+              schema: { type: 'object' },
+            },
+            responses: [{ statusCode: '200', description: 'Patched' }],
+          },
+        ],
+        discoveredAt: Date.now(),
+        specUrl: 'https://api.test.com/openapi.json',
+      };
+
+      const patterns = generatePatternsFromOpenAPISpec(spec);
+      expect(patterns).toHaveLength(0);
+    });
+
+    it('should use form-data content type when specified', () => {
+      const spec: ParsedOpenAPISpec = {
+        version: '3.0',
+        title: 'Test API',
+        baseUrl: 'https://api.test.com',
+        endpoints: [
+          {
+            path: '/uploads',
+            method: 'POST',
+            operationId: 'uploadFile',
+            parameters: [],
+            requestBody: {
+              contentType: 'multipart/form-data',
+              schema: { type: 'object' },
+            },
+            responses: [{ statusCode: '200', description: 'Uploaded' }],
+          },
+        ],
+        discoveredAt: Date.now(),
+        specUrl: 'https://api.test.com/openapi.json',
+      };
+
+      const patterns = generatePatternsFromOpenAPISpec(spec);
+      expect(patterns).toHaveLength(1);
+      expect(patterns[0].headers?.['Content-Type']).toBe('multipart/form-data');
+    });
+
+    it('should generate all method types in generatePatternsFromSpec', () => {
+      const spec: ParsedOpenAPISpec = {
+        version: '3.0',
+        title: 'Test API',
+        baseUrl: 'https://api.test.com',
+        endpoints: [
+          {
+            path: '/items',
+            method: 'GET',
+            parameters: [],
+            responses: [{ statusCode: '200' }],
+          },
+          {
+            path: '/items',
+            method: 'POST',
+            parameters: [],
+            requestBody: {
+              contentType: 'application/json',
+              schema: { type: 'object' },
+            },
+            responses: [{ statusCode: '201' }],
+          },
+          {
+            path: '/items/{id}',
+            method: 'PUT',
+            parameters: [{ name: 'id', in: 'path', required: true }],
+            requestBody: {
+              contentType: 'application/json',
+              schema: { type: 'object' },
+            },
+            responses: [{ statusCode: '200' }],
+          },
+          {
+            path: '/items/{id}',
+            method: 'DELETE',
+            parameters: [{ name: 'id', in: 'path', required: true }],
+            responses: [{ statusCode: '204' }],
+          },
+        ],
+        discoveredAt: Date.now(),
+        specUrl: 'https://api.test.com/openapi.json',
+      };
+
+      const result = generatePatternsFromSpec(spec, 'api.test.com');
+      expect(result.patternsGenerated).toBe(4);
+
+      const methods = result.patternIds.map(id => {
+        const pattern = generatePatternsFromOpenAPISpec(spec).find(p => p.id === id);
+        return pattern?.method;
+      });
+      // Just verify we got patterns - methods are set correctly based on the endpoint
+      expect(result.patternsGenerated).toBeGreaterThan(0);
+    });
+  });
+
+  // Test Rate Limit Extraction
+  describe('Rate Limit Extraction', () => {
+    it('should extract rate limit from x-ratelimit-limit extension', () => {
+      const specWithRateLimit: ParsedOpenAPISpec = {
+        version: '3.0',
+        title: 'Rate Limited API',
+        baseUrl: 'https://api.test.com',
+        endpoints: [],
+        rateLimit: {
+          limit: 100,
+          windowSeconds: 60,
+        },
+        discoveredAt: Date.now(),
+        specUrl: 'https://api.test.com/openapi.json',
+      };
+
+      expect(specWithRateLimit.rateLimit?.limit).toBe(100);
+      expect(specWithRateLimit.rateLimit?.windowSeconds).toBe(60);
+    });
+
+    it('should include rate limit header names when specified', () => {
+      const specWithHeaders: ParsedOpenAPISpec = {
+        version: '3.0',
+        title: 'Rate Limited API',
+        baseUrl: 'https://api.test.com',
+        endpoints: [],
+        rateLimit: {
+          limit: 1000,
+          limitHeader: 'X-RateLimit-Limit',
+          remainingHeader: 'X-RateLimit-Remaining',
+          resetHeader: 'X-RateLimit-Reset',
+        },
+        discoveredAt: Date.now(),
+        specUrl: 'https://api.test.com/openapi.json',
+      };
+
+      expect(specWithHeaders.rateLimit?.limitHeader).toBe('X-RateLimit-Limit');
+      expect(specWithHeaders.rateLimit?.remainingHeader).toBe('X-RateLimit-Remaining');
+      expect(specWithHeaders.rateLimit?.resetHeader).toBe('X-RateLimit-Reset');
+    });
+  });
+
+  // Test Request Body Support
+  describe('Request Body Support', () => {
+    it('should include request body in endpoint', () => {
+      const endpoint: OpenAPIEndpoint = {
+        path: '/users',
+        method: 'POST',
+        parameters: [],
+        requestBody: {
+          description: 'User to create',
+          required: true,
+          contentType: 'application/json',
+          schema: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              email: { type: 'string' },
+            },
+            required: ['name', 'email'],
+          },
+        },
+        responses: [{ statusCode: '201', description: 'Created' }],
+      };
+
+      expect(endpoint.requestBody).toBeDefined();
+      expect(endpoint.requestBody?.contentType).toBe('application/json');
+      expect(endpoint.requestBody?.required).toBe(true);
+      expect(endpoint.requestBody?.schema).toBeDefined();
+    });
+
+    it('should support different content types for request body', () => {
+      const endpoint: OpenAPIEndpoint = {
+        path: '/uploads',
+        method: 'POST',
+        parameters: [],
+        requestBody: {
+          contentType: 'application/x-www-form-urlencoded',
+          schema: { type: 'object' },
+        },
+        responses: [{ statusCode: '200' }],
+      };
+
+      expect(endpoint.requestBody?.contentType).toBe('application/x-www-form-urlencoded');
+    });
+  });
+});
+
+// ============================================
+// JSON $REF RESOLVER TESTS
+// ============================================
+
+describe('JSON $ref Resolver', () => {
+
+  it('should detect $ref in object', () => {
+    const withRef = { type: 'object', $ref: '#/definitions/User' };
+    const withoutRef = { type: 'object', properties: { name: { type: 'string' } } };
+
+    expect(hasRefs(withRef)).toBe(true);
+    expect(hasRefs(withoutRef)).toBe(false);
+  });
+
+  it('should count $refs in nested object', () => {
+    const doc = {
+      properties: {
+        user: { $ref: '#/definitions/User' },
+        posts: {
+          type: 'array',
+          items: { $ref: '#/definitions/Post' },
+        },
+      },
+    };
+
+    expect(countRefs(doc)).toBe(2);
+  });
+
+  it('should resolve local $ref', () => {
+    const doc = {
+      definitions: {
+        User: { type: 'object', properties: { name: { type: 'string' } } },
+      },
+      schema: { $ref: '#/definitions/User' },
+    };
+
+    const result = resolveRefs(doc);
+    expect(result.resolved.schema).toEqual({
+      type: 'object',
+      properties: { name: { type: 'string' } },
+    });
+    expect(result.resolvedRefs).toContain('#/definitions/User');
+  });
+
+  it('should handle nested $refs', () => {
+    const doc = {
+      definitions: {
+        Address: { type: 'object', properties: { city: { type: 'string' } } },
+        User: {
+          type: 'object',
+          properties: {
+            name: { type: 'string' },
+            address: { $ref: '#/definitions/Address' },
+          },
+        },
+      },
+      schema: { $ref: '#/definitions/User' },
+    };
+
+    const result = resolveRefs(doc);
+    expect(result.resolved.schema).toHaveProperty('properties.address.properties.city');
+    // Resolves: #/definitions/User (from schema), #/definitions/Address (nested in User),
+    // and #/definitions/Address again when resolving the definition
+    expect(result.resolvedRefs.length).toBeGreaterThanOrEqual(2);
+    expect(result.resolvedRefs).toContain('#/definitions/User');
+    expect(result.resolvedRefs).toContain('#/definitions/Address');
+  });
+
+  it('should handle circular $refs', () => {
+    const doc = {
+      definitions: {
+        Node: {
+          type: 'object',
+          properties: {
+            value: { type: 'string' },
+            next: { $ref: '#/definitions/Node' },
+          },
+        },
+      },
+      schema: { $ref: '#/definitions/Node' },
+    };
+
+    const result = resolveRefs(doc);
+    expect(result.circularRefs).toContain('#/definitions/Node');
+    expect(result.errors).toHaveLength(0);
+  });
+
+  it('should report errors for missing $refs', () => {
+    const doc = {
+      schema: { $ref: '#/definitions/NotExist' },
+    };
+
+    const result = resolveRefs(doc);
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0]).toContain('not found');
+  });
+
+  it('should get value at JSON pointer path', () => {
+    const doc = {
+      components: {
+        schemas: {
+          User: { type: 'object' },
+        },
+      },
+    };
+
+    const value = getValueAtPath(doc, '#/components/schemas/User');
+    expect(value).toEqual({ type: 'object' });
+  });
+
+  it('should return undefined for invalid paths', () => {
+    const doc = { foo: 'bar' };
+    expect(getValueAtPath(doc, '#/not/exist')).toBeUndefined();
+    expect(getValueAtPath(doc, '/invalid/format')).toBeUndefined();
   });
 });

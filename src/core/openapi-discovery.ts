@@ -1,17 +1,21 @@
 /**
- * OpenAPI/Swagger Discovery Module
+ * OpenAPI/Swagger Discovery Module (D-004 Enhanced)
  *
  * Automatically discovers OpenAPI/Swagger specifications for websites
  * and generates LearnedApiPattern objects from them.
  *
  * This module:
  * 1. Probes common OpenAPI/Swagger spec locations
- * 2. Parses OpenAPI 3.x and Swagger 2.x specifications
- * 3. Generates API patterns from discovered endpoints
- * 4. Integrates with ApiPatternRegistry for pattern storage
+ * 2. Parses OpenAPI 3.x and Swagger 2.x specifications with full YAML support
+ * 3. Resolves $ref pointers for complete schema access
+ * 4. Generates API patterns from discovered endpoints (GET, POST, PUT, DELETE)
+ * 5. Extracts rate limit information from x-ratelimit extensions
+ * 6. Integrates with ApiPatternRegistry for pattern storage
  */
 
+import yaml from 'js-yaml';
 import { logger } from '../utils/logger.js';
+import { resolveRefs, hasRefs } from '../utils/json-ref-resolver.js';
 import type {
   ContentMapping,
   LearnedApiPattern,
@@ -20,6 +24,8 @@ import type {
   OpenAPIEndpoint,
   OpenAPIParameter,
   OpenAPIPatternGenerationResult,
+  OpenAPIRateLimitInfo,
+  OpenAPIRequestBody,
   OpenAPIResponse,
   OpenAPIVersion,
   ParsedOpenAPISpec,
@@ -178,9 +184,11 @@ async function parseOpenAPISpec(
     if (options.parseYaml !== false && (
       contentType.includes('yaml') ||
       specUrl.endsWith('.yaml') ||
-      specUrl.endsWith('.yml')
+      specUrl.endsWith('.yml') ||
+      text.trimStart().startsWith('openapi:') ||
+      text.trimStart().startsWith('swagger:')
     )) {
-      spec = parseSimpleYaml(text);
+      spec = parseYaml(text);
     }
   }
 
@@ -191,6 +199,22 @@ async function parseOpenAPISpec(
   // Validate it looks like an OpenAPI spec
   if (!isOpenAPISpec(spec)) {
     return null;
+  }
+
+  // Resolve $ref pointers for complete schema access
+  if (hasRefs(spec)) {
+    discoveryLogger.debug('Resolving $ref pointers', { specUrl });
+    const { resolved, resolvedRefs, circularRefs, errors } = resolveRefs(spec);
+    spec = resolved;
+
+    if (resolvedRefs.length > 0) {
+      discoveryLogger.debug('Resolved references', {
+        specUrl,
+        resolved: resolvedRefs.length,
+        circular: circularRefs.length,
+        errors: errors.length,
+      });
+    }
   }
 
   // Determine version
@@ -204,6 +228,27 @@ async function parseOpenAPISpec(
     return parseSwagger2(spec, specUrl);
   } else {
     return parseOpenAPI3(spec, specUrl, version);
+  }
+}
+
+/**
+ * Parse YAML using js-yaml library
+ * Handles anchors, aliases, multi-line strings, and complex YAML features
+ */
+function parseYaml(text: string): Record<string, unknown> | null {
+  try {
+    const parsed = yaml.load(text, {
+      schema: yaml.JSON_SCHEMA, // Use JSON-compatible schema for OpenAPI
+    });
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>;
+    }
+    return null;
+  } catch (error) {
+    discoveryLogger.debug('YAML parse error', {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return null;
   }
 }
 
@@ -303,6 +348,9 @@ function parseOpenAPI3(
   // Parse endpoints
   const endpoints = parseOpenAPI3Paths(paths);
 
+  // Extract rate limit info from x-ratelimit extensions
+  const rateLimit = extractRateLimitInfo(spec, info);
+
   return {
     version,
     title: (info.title as string) || 'Unknown API',
@@ -310,9 +358,73 @@ function parseOpenAPI3(
     baseUrl,
     endpoints,
     securitySchemes,
+    rateLimit,
     discoveredAt: Date.now(),
     specUrl,
   };
+}
+
+/**
+ * Extract rate limit information from x-ratelimit extensions
+ * Looks in spec root, info object, and components for rate limit headers
+ */
+function extractRateLimitInfo(
+  spec: Record<string, unknown>,
+  info: Record<string, unknown>
+): OpenAPIRateLimitInfo | undefined {
+  const rateLimit: OpenAPIRateLimitInfo = {};
+
+  // Check common x-ratelimit extension locations
+  const sources = [spec, info];
+
+  for (const source of sources) {
+    // x-ratelimit-limit: number of requests allowed
+    if (typeof source['x-ratelimit-limit'] === 'number') {
+      rateLimit.limit = source['x-ratelimit-limit'] as number;
+    } else if (typeof source['x-rate-limit'] === 'number') {
+      rateLimit.limit = source['x-rate-limit'] as number;
+    }
+
+    // x-ratelimit-window: time window in seconds
+    if (typeof source['x-ratelimit-window'] === 'number') {
+      rateLimit.windowSeconds = source['x-ratelimit-window'] as number;
+    } else if (typeof source['x-rate-limit-window'] === 'number') {
+      rateLimit.windowSeconds = source['x-rate-limit-window'] as number;
+    }
+
+    // Header names for rate limiting
+    if (typeof source['x-ratelimit-headers'] === 'object') {
+      const headers = source['x-ratelimit-headers'] as Record<string, string>;
+      rateLimit.limitHeader = headers.limit || headers['x-ratelimit-limit'];
+      rateLimit.remainingHeader = headers.remaining || headers['x-ratelimit-remaining'];
+      rateLimit.resetHeader = headers.reset || headers['x-ratelimit-reset'];
+    }
+  }
+
+  // Check for common rate limit header patterns in spec
+  // Some APIs define these in response headers
+  const components = spec.components as Record<string, unknown> || {};
+  const headersComp = components.headers as Record<string, Record<string, unknown>> || {};
+
+  for (const [name, headerDef] of Object.entries(headersComp)) {
+    const lowerName = name.toLowerCase();
+    if (lowerName.includes('ratelimit') || lowerName.includes('rate-limit')) {
+      if (lowerName.includes('limit') && !lowerName.includes('remaining') && !lowerName.includes('reset')) {
+        rateLimit.limitHeader = name;
+      } else if (lowerName.includes('remaining')) {
+        rateLimit.remainingHeader = name;
+      } else if (lowerName.includes('reset')) {
+        rateLimit.resetHeader = name;
+      }
+    }
+  }
+
+  // Only return if we found any rate limit info
+  if (Object.keys(rateLimit).length === 0) {
+    return undefined;
+  }
+
+  return rateLimit;
 }
 
 /**
@@ -412,6 +524,57 @@ function parseSwagger2Operation(
 }
 
 /**
+ * Parse request body from OpenAPI 3.x operation
+ */
+function parseRequestBody(
+  requestBodyRaw: Record<string, unknown> | undefined
+): OpenAPIRequestBody | undefined {
+  if (!requestBodyRaw) {
+    return undefined;
+  }
+
+  const content = requestBodyRaw.content as Record<string, Record<string, unknown>> || {};
+
+  // Prefer JSON content type
+  const jsonContent = content['application/json'];
+  if (jsonContent) {
+    return {
+      description: requestBodyRaw.description as string,
+      required: Boolean(requestBodyRaw.required),
+      contentType: 'application/json',
+      schema: jsonContent.schema as Record<string, unknown>,
+    };
+  }
+
+  // Fall back to form data
+  const formContent = content['application/x-www-form-urlencoded'] || content['multipart/form-data'];
+  if (formContent) {
+    const contentType = content['application/x-www-form-urlencoded']
+      ? 'application/x-www-form-urlencoded'
+      : 'multipart/form-data';
+    return {
+      description: requestBodyRaw.description as string,
+      required: Boolean(requestBodyRaw.required),
+      contentType,
+      schema: formContent.schema as Record<string, unknown>,
+    };
+  }
+
+  // Return first available content type
+  const firstContentType = Object.keys(content)[0];
+  if (firstContentType && content[firstContentType]) {
+    return {
+      description: requestBodyRaw.description as string,
+      required: Boolean(requestBodyRaw.required),
+      contentType: firstContentType,
+      schema: content[firstContentType].schema as Record<string, unknown>,
+    };
+  }
+
+  return undefined;
+}
+
+/**
  * Parse OpenAPI 3.x operation
  */
 function parseOpenAPI3Operation(
@@ -442,6 +605,9 @@ function parseOpenAPI3Operation(
     })
     .filter(p => p.name && p.in);
 
+  // Parse request body (for POST/PUT/PATCH)
+  const requestBody = parseRequestBody(operation.requestBody as Record<string, unknown> | undefined);
+
   // Parse responses
   const responsesRaw = operation.responses as Record<string, Record<string, unknown>> || {};
   const responses: OpenAPIResponse[] = Object.entries(responsesRaw).map(([code, resp]) => {
@@ -462,6 +628,7 @@ function parseOpenAPI3Operation(
     summary: operation.summary as string,
     description: operation.description as string,
     parameters,
+    requestBody,
     responses,
     tags: operation.tags as string[],
     deprecated: Boolean(operation.deprecated),
@@ -538,61 +705,6 @@ function parseSecuritySchemes3(
   return Object.keys(result).length > 0 ? result : undefined;
 }
 
-/**
- * Simple YAML parser for basic OpenAPI specs
- * Handles simple key-value pairs and basic nesting
- * For complex YAML, a proper library would be needed
- */
-function parseSimpleYaml(text: string): Record<string, unknown> | null {
-  try {
-    // Very basic YAML parsing - handles simple structures
-    const lines = text.split('\n');
-    const result: Record<string, unknown> = {};
-    const stack: Array<{ indent: number; obj: Record<string, unknown> }> = [{ indent: -1, obj: result }];
-
-    for (const line of lines) {
-      // Skip empty lines and comments
-      if (!line.trim() || line.trim().startsWith('#')) continue;
-
-      const indent = line.search(/\S/);
-      const content = line.trim();
-
-      // Pop stack until we find parent with smaller indent
-      while (stack.length > 1 && stack[stack.length - 1].indent >= indent) {
-        stack.pop();
-      }
-
-      const parent = stack[stack.length - 1].obj;
-
-      // Parse key-value
-      const colonIndex = content.indexOf(':');
-      if (colonIndex === -1) continue;
-
-      const key = content.slice(0, colonIndex).trim();
-      let value: string | Record<string, unknown> = content.slice(colonIndex + 1).trim();
-
-      // Remove quotes if present
-      if ((value.startsWith('"') && value.endsWith('"')) ||
-          (value.startsWith("'") && value.endsWith("'"))) {
-        value = value.slice(1, -1);
-      }
-
-      if (value === '' || value === '|' || value === '>') {
-        // Nested object
-        const newObj: Record<string, unknown> = {};
-        parent[key] = newObj;
-        stack.push({ indent, obj: newObj });
-      } else {
-        // Simple value
-        parent[key] = value;
-      }
-    }
-
-    return result;
-  } catch {
-    return null;
-  }
-}
 
 // ============================================
 // PATTERN GENERATION
@@ -627,23 +739,35 @@ export function generatePatternsFromSpec(
       continue;
     }
 
-    // Skip non-GET endpoints for now (most browsing is read-only)
-    if (endpoint.method !== 'GET') {
+    // Skip PATCH endpoints (less commonly used for direct API calls)
+    if (endpoint.method === 'PATCH') {
       skippedEndpoints.push({
         path: endpoint.path,
         method: endpoint.method,
-        reason: 'Non-GET method (only GET endpoints are converted to patterns)',
+        reason: 'PATCH method (use PUT for full updates)',
       });
       continue;
     }
 
-    // Skip endpoints with too many required parameters
-    const requiredParams = endpoint.parameters.filter(p => p.required && p.in !== 'header');
-    if (requiredParams.length > 3) {
+    // Skip endpoints with too many required parameters (for GET/DELETE)
+    if (endpoint.method === 'GET' || endpoint.method === 'DELETE') {
+      const requiredParams = endpoint.parameters.filter(p => p.required && p.in !== 'header');
+      if (requiredParams.length > 3) {
+        skippedEndpoints.push({
+          path: endpoint.path,
+          method: endpoint.method,
+          reason: 'Too many required parameters',
+        });
+        continue;
+      }
+    }
+
+    // For POST/PUT, skip if no request body schema defined
+    if ((endpoint.method === 'POST' || endpoint.method === 'PUT') && !endpoint.requestBody?.schema) {
       skippedEndpoints.push({
         path: endpoint.path,
         method: endpoint.method,
-        reason: 'Too many required parameters',
+        reason: 'No request body schema defined',
       });
       continue;
     }
@@ -703,15 +827,25 @@ function createPatternFromEndpoint(
   // Create validation rules
   const validation = createValidationForEndpoint(endpoint);
 
+  // Build headers based on method and content type
+  const headers: Record<string, string> = { Accept: 'application/json' };
+  if (endpoint.method === 'POST' || endpoint.method === 'PUT') {
+    // Set Content-Type based on request body
+    const contentType = endpoint.requestBody?.contentType || 'application/json';
+    headers['Content-Type'] = contentType;
+  }
+
+  // PATCH is filtered out before calling this function
+  const method = endpoint.method;
+
   return {
     id,
     templateType: 'rest-resource', // OpenAPI typically defines REST resources
     urlPatterns,
     endpointTemplate: endpointUrl,
     extractors,
-    // Cast method since we only generate patterns for GET endpoints anyway
-    method: endpoint.method as 'GET' | 'POST' | 'PUT' | 'DELETE',
-    headers: { Accept: 'application/json' },
+    method: method as 'GET' | 'POST' | 'PUT' | 'DELETE',
+    headers,
     responseFormat: 'json',
     contentMapping,
     validation,
@@ -887,6 +1021,7 @@ export function clearSpecCache(): void {
 /**
  * Get all generated patterns from an OpenAPI spec
  * This is the main entry point for pattern generation
+ * Supports GET, POST, PUT, DELETE methods (PATCH is skipped)
  */
 export function generatePatternsFromOpenAPISpec(
   spec: ParsedOpenAPISpec
@@ -899,12 +1034,19 @@ export function generatePatternsFromOpenAPISpec(
     // Skip deprecated endpoints
     if (endpoint.deprecated) continue;
 
-    // Skip non-GET endpoints
-    if (endpoint.method !== 'GET') continue;
+    // Skip PATCH endpoints
+    if (endpoint.method === 'PATCH') continue;
 
-    // Skip endpoints with too many required parameters
-    const requiredParams = endpoint.parameters.filter(p => p.required && p.in !== 'header');
-    if (requiredParams.length > 3) continue;
+    // Skip endpoints with too many required parameters (for GET/DELETE)
+    if (endpoint.method === 'GET' || endpoint.method === 'DELETE') {
+      const requiredParams = endpoint.parameters.filter(p => p.required && p.in !== 'header');
+      if (requiredParams.length > 3) continue;
+    }
+
+    // For POST/PUT, skip if no request body schema
+    if ((endpoint.method === 'POST' || endpoint.method === 'PUT') && !endpoint.requestBody?.schema) {
+      continue;
+    }
 
     try {
       const pattern = createPatternFromEndpoint(spec, endpoint, domain);
