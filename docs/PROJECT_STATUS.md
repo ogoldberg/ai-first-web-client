@@ -237,7 +237,7 @@ Building a **Generalized API Learning Layer** that shifts from hardcoded site-sp
 | 3. Pattern Application | Apply learned patterns to new sites | Complete |
 | 4. Cross-Site Transfer | Transfer patterns to similar sites | Complete |
 | 5. OpenAPI Discovery | Auto-detect and use API specifications | Complete |
-| 6. Failure Learning | Learn from mistakes, build anti-patterns | Planned |
+| 6. Failure Learning | Learn from mistakes, build anti-patterns | In Progress |
 
 ### Other Upcoming (P2)
 
