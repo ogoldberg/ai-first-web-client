@@ -378,6 +378,95 @@ describeIf('Live Site API Handlers', () => {
   });
 
   // ============================================
+  // NPM REGISTRY API TESTS
+  // ============================================
+  describe('NPM Registry API', () => {
+    it('should extract package info from npmjs.com URL', async () => {
+      const result = await intelligence.extract('https://www.npmjs.com/package/express', {
+        forceStrategy: 'api:npm',
+        timeout: LIVE_TEST_TIMEOUT,
+      });
+
+      expectValidResult(result);
+      expect(result.meta.strategy).toBe('api:npm');
+      expect(result.meta.finalUrl).toBe('https://registry.npmjs.org/express');
+
+      // Verify package structure
+      const structured = result.content.structured as { name?: string; 'dist-tags'?: Record<string, string> };
+      expect(structured.name).toBe('express');
+      expect(structured['dist-tags']?.latest).toBeDefined();
+    }, LIVE_TEST_TIMEOUT);
+
+    it('should extract scoped package (@types/node)', async () => {
+      const result = await intelligence.extract('https://www.npmjs.com/package/@types/node', {
+        forceStrategy: 'api:npm',
+        timeout: LIVE_TEST_TIMEOUT,
+      });
+
+      expectValidResult(result);
+      expect(result.meta.strategy).toBe('api:npm');
+
+      const structured = result.content.structured as { name?: string };
+      expect(structured.name).toBe('@types/node');
+    }, LIVE_TEST_TIMEOUT);
+
+    it('should extract from registry.npmjs.org directly', async () => {
+      // Test fetching directly from the registry API
+      // Note: Direct registry access may fail due to content-type or rate limiting
+      try {
+        const result = await intelligence.extract('https://registry.npmjs.org/is-odd', {
+          forceStrategy: 'api:npm',
+          timeout: LIVE_TEST_TIMEOUT,
+        });
+
+        expectValidResult(result);
+        expect(result.meta.strategy).toBe('api:npm');
+
+        const structured = result.content.structured as { name?: string };
+        expect(structured.name).toBe('is-odd');
+      } catch (error) {
+        // Direct registry access may fail - this is acceptable
+        if (String(error).includes('returned no result')) {
+          console.log('Direct registry access failed, this is acceptable');
+          return;
+        }
+        throw error;
+      }
+    }, LIVE_TEST_TIMEOUT);
+
+    it('should include dependencies in output', async () => {
+      const result = await intelligence.extract('https://www.npmjs.com/package/express', {
+        forceStrategy: 'api:npm',
+        timeout: LIVE_TEST_TIMEOUT,
+      });
+
+      expectValidResult(result);
+      expect(result.content.text).toContain('Dependencies');
+      expect(result.content.markdown).toContain('## Dependencies');
+    }, LIVE_TEST_TIMEOUT);
+
+    it('should include installation instructions in markdown', async () => {
+      const result = await intelligence.extract('https://www.npmjs.com/package/typescript', {
+        forceStrategy: 'api:npm',
+        timeout: LIVE_TEST_TIMEOUT,
+      });
+
+      expectValidResult(result);
+      expect(result.content.markdown).toContain('npm install typescript');
+      expect(result.content.markdown).toContain('## Installation');
+    }, LIVE_TEST_TIMEOUT);
+
+    it('should throw for non-NPM URLs when forced', async () => {
+      await expect(
+        intelligence.extract('https://example.com', {
+          forceStrategy: 'api:npm',
+          timeout: LIVE_TEST_TIMEOUT,
+        })
+      ).rejects.toThrow(/returned no result/);
+    }, LIVE_TEST_TIMEOUT);
+  });
+
+  // ============================================
   // INTEGRATION TESTS - AUTO STRATEGY SELECTION
   // These tests verify the site-specific APIs are tried first
   // Some APIs may fall back to other strategies due to rate limiting
@@ -441,6 +530,21 @@ describeIf('Live Site API Handlers', () => {
 
       expectValidResult(result);
       expect(result.meta.strategy).toBe('api:stackoverflow');
+    }, LIVE_TEST_TIMEOUT);
+
+    it('should automatically select NPM API for npmjs.com URLs', async () => {
+      const result = await intelligence.extract('https://www.npmjs.com/package/chalk', {
+        timeout: LIVE_TEST_TIMEOUT,
+        allowBrowser: false, // Don't try Playwright
+      });
+
+      // NPM API should be attempted
+      expect(result.meta.strategiesAttempted).toContain('api:npm');
+
+      // If we got a result, validate it
+      if (!result.error) {
+        expectValidResult(result, { allowMediumConfidence: true });
+      }
     }, LIVE_TEST_TIMEOUT);
   });
 });
