@@ -4,7 +4,7 @@
 **Version:** 0.5.0
 **Current Phase:** Production Readiness (Phase 2)
 **Total Code:** ~16,000 lines TypeScript
-**Tests:** 852 passing + 44 live tests
+**Tests:** 921 passing + 44 live tests
 
 ---
 
@@ -148,8 +148,9 @@ The LLM Browser MCP Server is an intelligent browser designed specifically for L
 | Failure Learning | 59 | Failure classification, anti-patterns, retry strategies |
 | GraphQL Introspection | 49 | Endpoint detection, schema parsing, pattern generation |
 | Discovery Orchestrator | 39 | Cache, source discovery, aggregation, error handling |
+| Link Discovery | 69 | RFC 8288 headers, HTML links, HATEOAS (HAL, JSON:API, Siren) |
 | Site API Live Tests | 44 | Real API requests (Reddit, HN, GitHub, Wikipedia, StackOverflow, NPM, PyPI, Dev.to) |
-| **Total** | **834 + 44 live** | All passing |
+| **Total** | **921 + 44 live** | All passing |
 
 ---
 
@@ -253,7 +254,7 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 | D-001 | 1 | GraphQL Introspection | Complete |
 | D-008 | 2 | Discovery Orchestrator | Complete |
 | D-004 | 3 | OpenAPI Enhancement | Complete |
-| D-003 | 4 | Link Discovery | Planned |
+| D-003 | 4 | Link Discovery | Complete |
 | D-002 | 5 | Docs Page Detection | Planned |
 | D-009 | 6 | Auth Workflow Helper | Planned |
 | D-005 | 7 | AsyncAPI Discovery | Planned |
@@ -288,6 +289,15 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
   - Rate limit extraction from x-ratelimit extensions
   - Request body content type handling (JSON, form-data, etc.)
   - 18 new tests for OpenAPI enhancements
+- Added API Documentation Discovery Phase 4: Link Discovery (D-003)
+  - RFC 8288 Link header parsing for API and documentation discovery
+  - HTML `<link>` element extraction with type and rel attribute handling
+  - HATEOAS hypermedia format detection (HAL, JSON:API, Siren, Collection+JSON, Hydra)
+  - Link extraction from HAL _links, JSON:API links, Siren links and entities
+  - Pattern generation from discovered API links
+  - Pagination link extraction (next, prev, first, last)
+  - Integration with Discovery Orchestrator as 'links' source
+  - 69 new tests for link discovery
 - Added API Pattern Learning System Phase 6: Failure Learning (L-007)
   - Failure classification by category (auth, rate limit, timeout, server error, etc.)
   - Anti-pattern creation from repeated failures to avoid wasting requests
