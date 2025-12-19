@@ -237,7 +237,7 @@ All P1 tasks complete.
 
 | ID | Task | Effort | Notes |
 |----|------|--------|-------|
-| I-006 | NPM registry API handler | S | registry.npmjs.org |
+| I-006 | NPM registry API handler | S | registry.npmjs.org (IN PROGRESS) |
 | I-007 | PyPI API handler | S | pypi.org |
 | I-011 | OpenAPI spec discovery | L | Auto-detect and use OpenAPI/Swagger |
 | I-012 | GraphQL introspection | L | Auto-discover schema and query |
