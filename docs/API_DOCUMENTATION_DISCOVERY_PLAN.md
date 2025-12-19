@@ -118,7 +118,7 @@ When encountering a new domain, check documentation sources in this order:
    ```graphql
    query IntrospectionQuery {
      __schema {
-       types { name kind fields { name type { name kind } } }
+       types { name kind description fields { name description args { name type { name kind ofType { name kind } } } type { name kind ofType { name kind } } } }
        queryType { name }
        mutationType { name }
        subscriptionType { name }
@@ -188,7 +188,7 @@ When encountering a new domain, check documentation sources in this order:
 **Pattern Extraction from Docs:**
 ```typescript
 interface DocumentedEndpoint {
-  method: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
   path: string;                    // e.g., "/users/{id}"
   parameters: DocumentedParam[];
   exampleRequest?: string;
@@ -428,6 +428,10 @@ class ApiDocumentationDiscovery {
       this.docsPage.discover(domain),
       this.links.discover(domain),
       this.asyncapi.discover(domain),
+      this.raml.discover(domain),
+      this.apiBlueprint.discover(domain),
+      this.wadl.discover(domain),
+      this.robots.discover(domain),
     ]);
 
     // Merge and deduplicate patterns
@@ -481,12 +485,11 @@ class ApiDocumentationDiscovery {
 
 ```typescript
 // Updated extraction strategy order
+// Note: 'api:documented' is the unified entry point that internally orchestrates
+// OpenAPI, GraphQL, link discovery, and other documentation sources
 const EXTRACTION_STRATEGIES = [
   'cache',                    // Check cache first
-  'api:documented',           // NEW: Check for documented APIs
-  'api:openapi',              // OpenAPI specs
-  'api:graphql',              // NEW: GraphQL introspection
-  'api:links',                // NEW: Link discovery
+  'api:documented',           // NEW: Unified entry point for all documented APIs
   'framework:nextjs',         // Existing framework extractors
   'framework:nuxt',
   'api:learned',              // Learned patterns
@@ -581,17 +584,19 @@ Add these to BACKLOG.md under P1.5/P2:
 ```markdown
 ### API Documentation Discovery (New Initiative)
 
-| ID | Phase | Task | Effort | Status | Notes |
+Note: "Order" reflects the implementation sequence from the Implementation Order table above.
+
+| ID | Order | Task | Effort | Status | Notes |
 |----|-------|------|--------|--------|-------|
 | D-001 | 1 | GraphQL Introspection | L | | Auto-discover GraphQL schema |
-| D-002 | 2 | Docs Page Detection | L | | Parse HTML API documentation |
-| D-003 | 3 | Link Discovery | M | | RFC 8288 / HATEOAS |
-| D-004 | 4 | OpenAPI Enhancement | M | | $ref resolution, POST support |
-| D-005 | 5 | AsyncAPI Discovery | M | | Event-driven APIs |
-| D-006 | 6 | Alt Spec Formats | M | | RAML, API Blueprint, WADL |
-| D-007 | 7 | Robots/Sitemap Analysis | S | | Hint extraction |
-| D-008 | 8 | Discovery Orchestrator | L | | Unified pipeline |
-| D-009 | 9 | Auth Workflow Helper | L | | Guided authentication setup |
+| D-008 | 2 | Discovery Orchestrator | L | | Unified pipeline |
+| D-004 | 3 | OpenAPI Enhancement | M | | $ref resolution, POST support |
+| D-003 | 4 | Link Discovery | M | | RFC 8288 / HATEOAS |
+| D-002 | 5 | Docs Page Detection | L | | Parse HTML API documentation |
+| D-009 | 6 | Auth Workflow Helper | L | | Guided authentication setup |
+| D-005 | 7 | AsyncAPI Discovery | M | | Event-driven APIs |
+| D-006 | 8 | Alt Spec Formats | M | | RAML, API Blueprint, WADL |
+| D-007 | 9 | Robots/Sitemap Analysis | S | | Hint extraction |
 ```
 
 ---
@@ -604,7 +609,7 @@ Add these to BACKLOG.md under P1.5/P2:
 
 3. **Documentation Freshness:** How often to re-check for documentation updates?
 
-4. **Spec Conflicts:** What if OpenAPI and GraphQL both exist? Which takes priority?
+4. **Spec Conflicts:** What if OpenAPI and GraphQL both exist? Per the Discovery Priority Order (lines 84-92), OpenAPI takes priority. However, the more nuanced question is how to *merge* data from both specs when they describe different aspects of the same API (e.g., REST endpoints in OpenAPI + GraphQL mutations). Should we combine patterns from both sources?
 
 5. **Rate Limits:** Should we respect rate limit info from specs proactively?
 
