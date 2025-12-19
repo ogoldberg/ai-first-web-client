@@ -3,6 +3,7 @@ import { SessionManager, type SessionHealth } from '../../src/core/session-manag
 import type { BrowserContext } from 'playwright';
 import { promises as fs } from 'fs';
 import path from 'path';
+import { SessionCrypto } from '../../src/utils/session-crypto.js';
 
 // Mock fs module
 vi.mock('fs', async () => {
@@ -433,6 +434,191 @@ describe('SessionManager', () => {
       // These are not auth cookies, so the session should still be considered healthy
       // (even though cookies are expired, they're not auth-related)
       expect(health.status).toBe('healthy');
+    });
+  });
+
+  describe('Encryption Support', () => {
+    const originalEnv = process.env;
+    const testPassword = 'test-secure-password-123';
+
+    beforeEach(() => {
+      process.env = { ...originalEnv };
+    });
+
+    afterEach(() => {
+      process.env = originalEnv;
+    });
+
+    it('should report encryption disabled when no key is set', () => {
+      delete process.env.LLM_BROWSER_SESSION_KEY;
+      const manager = new SessionManager(testSessionsDir);
+
+      expect(manager.isEncryptionEnabled()).toBe(false);
+    });
+
+    it('should report encryption enabled when key is set', () => {
+      process.env.LLM_BROWSER_SESSION_KEY = testPassword;
+      const manager = new SessionManager(testSessionsDir);
+
+      expect(manager.isEncryptionEnabled()).toBe(true);
+    });
+
+    it('should return correct env var name', () => {
+      const manager = new SessionManager(testSessionsDir);
+
+      expect(manager.getEncryptionEnvVar()).toBe('LLM_BROWSER_SESSION_KEY');
+    });
+
+    it('should encrypt session data when persisting with encryption enabled', async () => {
+      process.env.LLM_BROWSER_SESSION_KEY = testPassword;
+
+      // We need to capture what was written to disk
+      let writtenContent = '';
+      vi.mocked(fs.writeFile).mockImplementation(async (path, content) => {
+        writtenContent = content as string;
+      });
+
+      const manager = new SessionManager(testSessionsDir);
+      await manager.initialize();
+
+      // Create a mock session and save it
+      const mockContext = {
+        cookies: vi.fn().mockResolvedValue([
+          { name: 'session_id', value: 'test123', domain: 'example.com', path: '/' },
+        ]),
+        pages: vi.fn().mockReturnValue([]),
+      } as unknown as BrowserContext;
+
+      await manager.saveSession('example.com', mockContext, 'default');
+
+      // Verify the written content is encrypted
+      const crypto = new SessionCrypto();
+      expect(crypto.isEncrypted(writtenContent)).toBe(true);
+    });
+
+    it('should decrypt session data when loading encrypted sessions', async () => {
+      process.env.LLM_BROWSER_SESSION_KEY = testPassword;
+
+      // Prepare encrypted session data
+      const sessionData = {
+        domain: 'example.com',
+        cookies: [{ name: 'session_id', value: 'test123', domain: 'example.com', path: '/' }],
+        localStorage: { key: 'value' },
+        sessionStorage: {},
+        isAuthenticated: true,
+        lastUsed: Date.now(),
+      };
+
+      const crypto = new SessionCrypto();
+      const encryptedData = crypto.encrypt(JSON.stringify(sessionData));
+
+      // Mock fs to return encrypted data
+      vi.mocked(fs.readdir).mockResolvedValue(['example.com_default.json'] as any);
+      vi.mocked(fs.readFile).mockResolvedValue(encryptedData);
+
+      const manager = new SessionManager(testSessionsDir);
+      await manager.initialize();
+
+      // Verify the session was loaded correctly
+      const sessions = manager.listSessions();
+      expect(sessions).toHaveLength(1);
+      expect(sessions[0].domain).toBe('example.com');
+
+      const health = manager.getSessionHealth('example.com');
+      expect(health.isAuthenticated).toBe(true);
+    });
+
+    it('should migrate unencrypted sessions when encryption is enabled', async () => {
+      process.env.LLM_BROWSER_SESSION_KEY = testPassword;
+
+      // Prepare unencrypted session data
+      const sessionData = {
+        domain: 'example.com',
+        cookies: [],
+        localStorage: {},
+        sessionStorage: {},
+        isAuthenticated: false,
+        lastUsed: Date.now(),
+      };
+
+      const plaintextData = JSON.stringify(sessionData);
+
+      // Track what gets written
+      let migratedContent = '';
+      vi.mocked(fs.readdir).mockResolvedValue(['example.com_default.json'] as any);
+      vi.mocked(fs.readFile).mockResolvedValue(plaintextData);
+      vi.mocked(fs.writeFile).mockImplementation(async (path, content) => {
+        migratedContent = content as string;
+      });
+
+      const manager = new SessionManager(testSessionsDir);
+      await manager.initialize();
+
+      // Verify the session was migrated to encrypted format
+      const crypto = new SessionCrypto();
+      expect(crypto.isEncrypted(migratedContent)).toBe(true);
+
+      // Verify we can decrypt it back
+      const decrypted = JSON.parse(crypto.decrypt(migratedContent));
+      expect(decrypted.domain).toBe('example.com');
+    });
+
+    it('should handle loading when encryption key is missing for encrypted data', async () => {
+      // First, encrypt some data with a key
+      process.env.LLM_BROWSER_SESSION_KEY = testPassword;
+      const crypto = new SessionCrypto();
+      const sessionData = {
+        domain: 'example.com',
+        cookies: [],
+        localStorage: {},
+        sessionStorage: {},
+        isAuthenticated: false,
+        lastUsed: Date.now(),
+      };
+      const encryptedData = crypto.encrypt(JSON.stringify(sessionData));
+
+      // Now try to load without the key
+      delete process.env.LLM_BROWSER_SESSION_KEY;
+
+      vi.mocked(fs.readdir).mockResolvedValue(['example.com_default.json'] as any);
+      vi.mocked(fs.readFile).mockResolvedValue(encryptedData);
+
+      const manager = new SessionManager(testSessionsDir);
+
+      // Should not throw during initialization, but should log warning and skip the session
+      await manager.initialize();
+
+      // Session should not be loaded
+      const sessions = manager.listSessions();
+      expect(sessions).toHaveLength(0);
+    });
+
+    it('should skip temp files when loading sessions', async () => {
+      process.env.LLM_BROWSER_SESSION_KEY = testPassword;
+
+      vi.mocked(fs.readdir).mockResolvedValue([
+        'example.com_default.json',
+        '.tmp.12345.json',
+        '.tmp.67890.99999.abc123.json',
+      ] as any);
+
+      // Only example.com should be read
+      vi.mocked(fs.readFile).mockResolvedValue(
+        JSON.stringify({
+          domain: 'example.com',
+          cookies: [],
+          localStorage: {},
+          sessionStorage: {},
+          isAuthenticated: false,
+          lastUsed: Date.now(),
+        })
+      );
+
+      const manager = new SessionManager(testSessionsDir);
+      await manager.initialize();
+
+      // readFile should only be called once (for the real session file)
+      expect(fs.readFile).toHaveBeenCalledTimes(1);
     });
   });
 });
