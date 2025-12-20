@@ -5,18 +5,22 @@
  * Supplements SQLite storage - vectors are linked to SQLite records by ID.
  */
 
+import type {
+  Connection as LanceDBConnection,
+  Table as LanceDBTable,
+} from '@lancedb/lancedb';
 import { logger } from './logger.js';
 
 // Create a logger for vector store operations
 const log = logger.create('VectorStore');
 
-// LanceDB types - using any for dynamic import compatibility
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type LanceDBConnection = any;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type LanceDBTable = any;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type LanceDBQuery = any;
+/**
+ * Escape a string value for use in SQL queries.
+ * Prevents SQL injection by escaping single quotes.
+ */
+function escapeSQL(value: string): string {
+  return value.replace(/'/g, "''");
+}
 
 /**
  * Entity types that can be stored in the vector store
@@ -308,17 +312,18 @@ export class VectorStore {
 
     let query = table.search(queryVector).limit(limit);
 
-    // Build filter expression (LanceDB requires quoted column names for camelCase)
+    // Build filter expression with proper escaping to prevent SQL injection
+    // LanceDB requires quoted column names for camelCase, single quotes for string values
     const conditions: string[] = [];
 
     if (filter.entityType) {
-      conditions.push(`"entityType" = "${filter.entityType}"`);
+      conditions.push(`"entityType" = '${escapeSQL(filter.entityType)}'`);
     }
     if (filter.domain) {
-      conditions.push(`"domain" = "${filter.domain}"`);
+      conditions.push(`"domain" = '${escapeSQL(filter.domain)}'`);
     }
     if (filter.tenantId) {
-      conditions.push(`"tenantId" = "${filter.tenantId}"`);
+      conditions.push(`"tenantId" = '${escapeSQL(filter.tenantId)}'`);
     }
     if (filter.minVersion !== undefined) {
       conditions.push(`"version" >= ${filter.minVersion}`);
@@ -384,7 +389,7 @@ export class VectorStore {
 
     const results = await this.table
       .search(Array(this.dimensions).fill(0))
-      .where(`id = '${id}'`)
+      .where(`id = '${escapeSQL(id)}'`)
       .limit(1)
       .toArray();
 
@@ -406,16 +411,21 @@ export class VectorStore {
 
   /**
    * Delete a record by ID
+   * Returns true if a record was deleted, false otherwise.
    */
   async delete(id: string): Promise<boolean> {
     if (!this.table) return false;
 
-    const exists = await this.get(id);
-    if (!exists) return false;
+    // Count before and after to determine if a record was deleted
+    const beforeCount = await this.table.countRows();
+    await this.table.delete(`id = '${escapeSQL(id)}'`);
+    const afterCount = await this.table.countRows();
 
-    await this.table.delete(`id = '${id}'`);
-    log.debug('Deleted embedding record', { id });
-    return true;
+    const deleted = beforeCount > afterCount;
+    if (deleted) {
+      log.debug('Deleted embedding record', { id });
+    }
+    return deleted;
   }
 
   /**
@@ -424,16 +434,17 @@ export class VectorStore {
   async deleteByFilter(filter: FilterExpression): Promise<number> {
     if (!this.table) return 0;
 
+    // Build filter expression with proper escaping to prevent SQL injection
     const conditions: string[] = [];
 
     if (filter.entityType) {
-      conditions.push(`"entityType" = "${filter.entityType}"`);
+      conditions.push(`"entityType" = '${escapeSQL(filter.entityType)}'`);
     }
     if (filter.domain) {
-      conditions.push(`"domain" = "${filter.domain}"`);
+      conditions.push(`"domain" = '${escapeSQL(filter.domain)}'`);
     }
     if (filter.tenantId) {
-      conditions.push(`"tenantId" = "${filter.tenantId}"`);
+      conditions.push(`"tenantId" = '${escapeSQL(filter.tenantId)}'`);
     }
     if (filter.minVersion !== undefined) {
       conditions.push(`"version" >= ${filter.minVersion}`);
@@ -471,11 +482,14 @@ export class VectorStore {
 
     if (rowCount > 256) {
       // Only index if we have enough data
+      // Cast options to any for LanceDB version compatibility
       await this.table.createIndex('vector', {
-        type: 'IVF_PQ',
-        num_partitions: Math.min(256, Math.floor(Math.sqrt(rowCount))),
-        num_sub_vectors: Math.min(16, Math.floor(this.dimensions / 8)),
-      });
+        config: {
+          type: 'IVF_PQ',
+          num_partitions: Math.min(256, Math.floor(Math.sqrt(rowCount))),
+          num_sub_vectors: Math.min(16, Math.floor(this.dimensions / 8)),
+        },
+      } as Record<string, unknown>);
       log.info('Reindexed vector store', { rowCount });
     }
   }
@@ -500,7 +514,7 @@ export class VectorStore {
 
     const totalRecords = await this.table.countRows();
 
-    // Count by entity type - search with dummy vector and group
+    // Count by entity type using countRows with filter (more efficient and accurate)
     const recordsByType: Record<EntityType, number> = {
       pattern: 0,
       skill: 0,
@@ -508,14 +522,11 @@ export class VectorStore {
       error: 0,
     };
 
-    // Get counts for each type
+    // Get counts for each type using countRows with filter
     for (const entityType of ['pattern', 'skill', 'content', 'error'] as EntityType[]) {
-      const results = await this.table
-        .search(Array(this.dimensions).fill(0))
-        .where(`"entityType" = "${entityType}"`)
-        .limit(100000)
-        .toArray();
-      recordsByType[entityType] = results.length;
+      recordsByType[entityType] = await this.table.countRows(
+        `"entityType" = '${escapeSQL(entityType)}'`
+      );
     }
 
     return {
@@ -533,6 +544,19 @@ export class VectorStore {
   isUsingLanceDB(): boolean {
     return this.initialized && this.db !== null;
   }
+
+  /**
+   * Close the database connection and release resources
+   */
+  async close(): Promise<void> {
+    if (this.db) {
+      // LanceDB connection doesn't have an explicit close, but we clear references
+      this.db = null;
+      this.table = null;
+      this.initialized = false;
+      log.info('Vector store connection closed');
+    }
+  }
 }
 
 /**
@@ -543,12 +567,19 @@ export function createVectorStore(options: VectorStoreOptions): VectorStore {
 }
 
 /**
- * Global vector store instance
+ * Global vector store instance (singleton)
  */
 let globalVectorStore: VectorStore | null = null;
 
 /**
- * Get or create the global vector store
+ * Get or create the global vector store (singleton pattern).
+ *
+ * Note: If the global store already exists, the provided options are ignored
+ * and the existing instance is returned. To use different options, call
+ * closeVectorStore() first, then call getVectorStore() with new options.
+ *
+ * @param options - Configuration options (only used when creating new instance)
+ * @returns The global VectorStore instance, or null if LanceDB is unavailable
  */
 export async function getVectorStore(
   options?: Partial<VectorStoreOptions>
@@ -572,8 +603,12 @@ export async function getVectorStore(
 }
 
 /**
- * Close the global vector store
+ * Close the global vector store and release resources.
+ * After calling this, getVectorStore() will create a new instance.
  */
 export async function closeVectorStore(): Promise<void> {
-  globalVectorStore = null;
+  if (globalVectorStore) {
+    await globalVectorStore.close();
+    globalVectorStore = null;
+  }
 }
