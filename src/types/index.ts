@@ -8,6 +8,9 @@ export * from './api-patterns.js';
 // Re-export field-level confidence types (CX-002)
 export * from './field-confidence.js';
 
+// Re-export decision trace types (CX-003)
+export * from './decision-trace.js';
+
 export interface NetworkRequest {
   url: string;
   method: string;

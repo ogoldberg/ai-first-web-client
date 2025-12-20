@@ -36,6 +36,11 @@ import {
   aggregateConfidence,
   SOURCE_CONFIDENCE_SCORES,
 } from '../types/field-confidence.js';
+import {
+  type DecisionTrace,
+  type TierAttempt,
+  buildDecisionTrace,
+} from '../types/decision-trace.js';
 import { BrowserManager } from './browser-manager.js';
 import { ContentExtractor, type TableAsJSON } from '../utils/content-extractor.js';
 import { ApiAnalyzer } from './api-analyzer.js';
@@ -94,11 +99,17 @@ export interface SmartBrowseOptions extends BrowseOptions {
   useTieredFetching?: boolean; // Use lightweight rendering when possible (default: true)
   forceTier?: RenderTier; // Force a specific rendering tier
   minContentLength?: number; // Minimum content length for tier validation
+
+  // Decision trace (CX-003)
+  includeDecisionTrace?: boolean; // Include detailed decision trace in response (default: false)
 }
 
 export interface SmartBrowseResult extends BrowseResult {
   // Field-level confidence (CX-002)
   fieldConfidence?: BrowseFieldConfidence;
+
+  // Decision trace (CX-003)
+  decisionTrace?: DecisionTrace;
 
   // Learning insights
   learning: {
@@ -630,6 +641,20 @@ export class SmartBrowser {
       learning
     );
 
+    // Build decision trace if requested (CX-003)
+    // For Playwright path, create a single tier attempt showing direct Playwright use
+    const playwrightTierAttempts: TierAttempt[] = [{
+      tier: 'playwright',
+      success: true,
+      durationMs: Date.now() - startTime,
+    }];
+    const decisionTrace = this.buildDecisionTraceIfRequested(
+      options,
+      html,
+      finalUrl,
+      playwrightTierAttempts
+    );
+
     return {
       url,
       title: extractedContent.title,
@@ -651,8 +676,31 @@ export class SmartBrowser {
       },
       learning,
       fieldConfidence,
+      decisionTrace,
       additionalPages,
     };
+  }
+
+  /**
+   * Build decision trace if requested (CX-003)
+   * Extracts selector and title attempts from HTML and combines with tier attempts
+   */
+  private buildDecisionTraceIfRequested(
+    options: SmartBrowseOptions,
+    html: string,
+    finalUrl: string,
+    tierAttempts: TierAttempt[]
+  ): DecisionTrace | undefined {
+    if (!options.includeDecisionTrace) {
+      return undefined;
+    }
+
+    const extractionTrace = this.contentExtractor.extractWithTrace(html, finalUrl);
+    return buildDecisionTrace(
+      tierAttempts,
+      extractionTrace.trace.selectorAttempts,
+      extractionTrace.trace.titleAttempts
+    );
   }
 
   /**
@@ -794,6 +842,14 @@ export class SmartBrowser {
         learning
       );
 
+      // Build decision trace if requested (CX-003)
+      const decisionTrace = this.buildDecisionTraceIfRequested(
+        options,
+        result.html,
+        result.finalUrl,
+        result.tierAttempts
+      );
+
       return {
         url,
         title: result.content.title,
@@ -814,6 +870,7 @@ export class SmartBrowser {
         },
         learning,
         fieldConfidence,
+        decisionTrace,
       };
     } catch (error) {
       logger.smartBrowser.error(`Tiered fetching error: ${error}`);

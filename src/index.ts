@@ -185,6 +185,10 @@ Returns: Content, tables, APIs discovered, and learning insights.`,
               type: 'boolean',
               description: 'Include raw HTML in response (default: false). Can be very large.',
             },
+            includeDecisionTrace: {
+              type: 'boolean',
+              description: 'Include detailed decision trace showing tier attempts, selector attempts, and fallbacks (default: false). Useful for debugging and understanding extraction decisions.',
+            },
           },
           required: ['url'],
         },
@@ -990,6 +994,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           sessionProfile: args.sessionProfile as string,
           validateContent: true,
           enableLearning: true,
+          includeDecisionTrace: args.includeDecisionTrace as boolean,
         });
 
         // Output size control options (with sensible defaults for smaller responses)
@@ -1090,6 +1095,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             url: page.url,
             textLength: page.content.text.length,
           }));
+        }
+
+        // Conditionally include decision trace (CX-003)
+        if (result.decisionTrace) {
+          formattedResult.decisionTrace = result.decisionTrace;
         }
 
         return jsonResponse(formattedResult);

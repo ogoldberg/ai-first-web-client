@@ -31,7 +31,7 @@ import { BrowserManager, type Page } from './browser-manager.js';
 import { ContentExtractor } from '../utils/content-extractor.js';
 import { rateLimiter } from '../utils/rate-limiter.js';
 import { TIMEOUTS } from '../utils/timeouts.js';
-import type { NetworkRequest, ApiPattern } from '../types/index.js';
+import type { NetworkRequest, ApiPattern, TierAttempt, TierValidationDetails } from '../types/index.js';
 import { logger } from '../utils/logger.js';
 import { performanceTracker, type TimingBreakdown } from '../utils/performance-tracker.js';
 import { validateUrlOrThrow } from '../utils/url-safety.js';
@@ -90,8 +90,10 @@ export interface TieredFetchResult {
   finalUrl: string;
   // Whether we had to fall back to a higher tier
   fellBack: boolean;
-  // Tiers that were tried
+  // Tiers that were tried (deprecated, use tierAttempts instead)
   tiersAttempted: RenderTier[];
+  // Detailed tier attempt information (CX-003)
+  tierAttempts: TierAttempt[];
   // Why we used this tier
   tierReason: string;
   // Network requests captured (Playwright only currently)
@@ -205,6 +207,7 @@ export class TieredFetcher {
       perTier: { intelligence: 0, lightweight: 0, playwright: 0 },
     };
     const tiersAttempted: RenderTier[] = [];
+    const tierAttempts: TierAttempt[] = [];
 
     // Normalize tier name (handle 'static' -> 'intelligence' alias)
     if (options.forceTier && TIER_ALIASES[options.forceTier]) {
@@ -230,13 +233,23 @@ export class TieredFetcher {
 
       try {
         const result = await this.executeTier(tier, url, options);
-        timing.perTier[tier] = Date.now() - tierStart;
+        const tierDuration = Date.now() - tierStart;
+        timing.perTier[tier] = tierDuration;
 
         // Validate result
         const validation = this.validateResult(result, options);
 
         if (validation.isValid) {
           timing.total = Date.now() - startTime;
+
+          // Record successful tier attempt (CX-003)
+          tierAttempts.push({
+            tier,
+            success: true,
+            durationMs: tierDuration,
+            extractionStrategy: result.extractionStrategy,
+            validationDetails: validation.details,
+          });
 
           // Learn from success
           if (options.enableLearning !== false) {
@@ -262,6 +275,7 @@ export class TieredFetcher {
             tier,
             fellBack,
             tiersAttempted,
+            tierAttempts,
             tierReason: fellBack
               ? `Fell back from ${tiersAttempted[0]} due to: ${validation.reason || 'incomplete content'}`
               : `${tier} tier successful`,
@@ -282,11 +296,30 @@ export class TieredFetcher {
           };
         }
 
-        // Content validation failed - try next tier
+        // Content validation failed - record attempt and try next tier (CX-003)
+        tierAttempts.push({
+          tier,
+          success: false,
+          durationMs: tierDuration,
+          failureReason: validation.reason || 'Content validation failed',
+          extractionStrategy: result.extractionStrategy,
+          validationDetails: validation.details,
+        });
+
         fellBack = true;
         lastError = new Error(validation.reason || 'Content validation failed');
       } catch (error) {
-        timing.perTier[tier] = Date.now() - tierStart;
+        const tierDuration = Date.now() - tierStart;
+        timing.perTier[tier] = tierDuration;
+
+        // Record failed tier attempt (CX-003)
+        tierAttempts.push({
+          tier,
+          success: false,
+          durationMs: tierDuration,
+          failureReason: error instanceof Error ? error.message : String(error),
+        });
+
         fellBack = true;
         lastError = error instanceof Error ? error : new Error(String(error));
         // Continue to next tier
@@ -322,7 +355,7 @@ export class TieredFetcher {
     tier: RenderTier,
     url: string,
     options: TieredFetchOptions
-  ): Promise<Omit<TieredFetchResult, 'tier' | 'fellBack' | 'tiersAttempted' | 'tierReason' | 'timing' | 'detection'>> {
+  ): Promise<Omit<TieredFetchResult, 'tier' | 'fellBack' | 'tiersAttempted' | 'tierAttempts' | 'tierReason' | 'timing' | 'detection'>> {
     switch (tier) {
       case 'intelligence':
         return this.executeIntelligence(url, options);
@@ -342,7 +375,7 @@ export class TieredFetcher {
   private async executeIntelligence(
     url: string,
     options: TieredFetchOptions
-  ): Promise<Omit<TieredFetchResult, 'tier' | 'fellBack' | 'tiersAttempted' | 'tierReason' | 'timing' | 'detection'>> {
+  ): Promise<Omit<TieredFetchResult, 'tier' | 'fellBack' | 'tiersAttempted' | 'tierAttempts' | 'tierReason' | 'timing' | 'detection'>> {
     const result = await this.contentIntelligence.extract(url, {
       timeout: options.tierTimeout,
       minContentLength: options.minContentLength,
@@ -386,7 +419,7 @@ export class TieredFetcher {
   private async executeLightweight(
     url: string,
     options: TieredFetchOptions
-  ): Promise<Omit<TieredFetchResult, 'tier' | 'fellBack' | 'tiersAttempted' | 'tierReason' | 'timing' | 'detection'>> {
+  ): Promise<Omit<TieredFetchResult, 'tier' | 'fellBack' | 'tiersAttempted' | 'tierAttempts' | 'tierReason' | 'timing' | 'detection'>> {
     const result = await this.lightweightRenderer.render(url, {
       headers: options.headers,
       timeout: options.tierTimeout,
@@ -427,7 +460,7 @@ export class TieredFetcher {
   private async executePlaywright(
     url: string,
     options: TieredFetchOptions
-  ): Promise<Omit<TieredFetchResult, 'tier' | 'fellBack' | 'tiersAttempted' | 'tierReason' | 'timing' | 'detection'>> {
+  ): Promise<Omit<TieredFetchResult, 'tier' | 'fellBack' | 'tiersAttempted' | 'tierAttempts' | 'tierReason' | 'timing' | 'detection'>> {
     const result = await this.browserManager.browse(url, {
       profile: options.sessionProfile,
       waitFor: options.waitFor || 'networkidle',
@@ -518,33 +551,61 @@ export class TieredFetcher {
 
   /**
    * Validate that the result has sufficient content
+   * Returns detailed validation information for CX-003 decision trace
    */
   private validateResult(
-    result: Omit<TieredFetchResult, 'tier' | 'fellBack' | 'tiersAttempted' | 'tierReason' | 'timing' | 'detection'>,
+    result: Omit<TieredFetchResult, 'tier' | 'fellBack' | 'tiersAttempted' | 'tierAttempts' | 'tierReason' | 'timing' | 'detection'>,
     options: TieredFetchOptions
-  ): { isValid: boolean; reason?: string } {
+  ): { isValid: boolean; reason?: string; details?: TierValidationDetails } {
     const { html, content } = result;
     const minLength = options.minContentLength || DEFAULT_FETCH_OPTIONS.minContentLength;
 
-    // Check text length
-    if (content.text.length < minLength) {
-      return { isValid: false, reason: `Content too short: ${content.text.length} < ${minLength}` };
-    }
+    // Check for content markers (semantic HTML elements)
+    const hasSemanticMarkers = CONTENT_MARKERS.some(marker => marker.test(html));
 
     // Check for incomplete markers
+    const incompleteMarkers: string[] = [];
     for (const marker of INCOMPLETE_MARKERS) {
-      if (marker.test(html) && content.text.length < 500) {
-        return { isValid: false, reason: `Found incomplete marker: ${marker.source}` };
+      if (marker.test(html)) {
+        incompleteMarkers.push(marker.source);
       }
     }
 
-    // Check for content markers (at least one should be present for good content)
-    const hasContentMarkers = CONTENT_MARKERS.some(marker => marker.test(html));
-    if (!hasContentMarkers && content.text.length < 1000) {
-      return { isValid: false, reason: 'No content markers found and content is short' };
+    // Build validation details for tracing
+    const details: TierValidationDetails = {
+      contentLength: content.text.length,
+      hasSemanticMarkers,
+      incompleteMarkers: incompleteMarkers.length > 0 ? incompleteMarkers : undefined,
+    };
+
+    // Check text length
+    if (content.text.length < minLength) {
+      return {
+        isValid: false,
+        reason: `Content too short: ${content.text.length} < ${minLength}`,
+        details,
+      };
     }
 
-    return { isValid: true };
+    // Check for incomplete markers (only fail if content is also short)
+    if (incompleteMarkers.length > 0 && content.text.length < 500) {
+      return {
+        isValid: false,
+        reason: `Found incomplete marker: ${incompleteMarkers[0]}`,
+        details,
+      };
+    }
+
+    // Check for content markers (at least one should be present for good content)
+    if (!hasSemanticMarkers && content.text.length < 1000) {
+      return {
+        isValid: false,
+        reason: 'No content markers found and content is short',
+        details,
+      };
+    }
+
+    return { isValid: true, details };
   }
 
   /**

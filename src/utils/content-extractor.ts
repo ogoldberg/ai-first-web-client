@@ -12,6 +12,12 @@ import {
   aggregateConfidence,
   SOURCE_CONFIDENCE_SCORES,
 } from '../types/field-confidence.js';
+import {
+  type SelectorAttempt,
+  type TitleAttempt,
+  type SelectorSource,
+  type TitleSource,
+} from '../types/decision-trace.js';
 
 export interface ExtractedTable {
   headers: string[];
@@ -62,6 +68,16 @@ export interface ExtractionResultWithConfidence {
     titleSource: TitleExtraction['source'];
     contentSource: ContentExtraction['source'];
     contentSelector: string;
+  };
+}
+
+/**
+ * Enhanced extraction result with decision trace (CX-003)
+ */
+export interface ExtractionResultWithTrace extends ExtractionResultWithConfidence {
+  trace: {
+    titleAttempts: TitleAttempt[];
+    selectorAttempts: SelectorAttempt[];
   };
 }
 
@@ -186,6 +202,243 @@ export class ContentExtractor {
         contentSource: contentExtraction.source,
         contentSelector: contentExtraction.selector,
       },
+    };
+  }
+
+  /**
+   * Extract clean content with decision trace (CX-003)
+   * Returns enhanced result with per-field confidence and decision trace
+   */
+  extractWithTrace(html: string, url: string): ExtractionResultWithTrace {
+    const $ = cheerio.load(html);
+
+    // Remove unwanted elements
+    $('script, style, noscript, iframe, svg, nav, footer, aside, .ads, .advertisement, #cookie-banner').remove();
+
+    // Extract title with trace
+    const titleResult = this.extractTitleWithTrace($);
+
+    // Extract content with trace
+    const contentResult = this.extractContentWithTrace($, url);
+
+    // Compute overall confidence
+    const overall = aggregateConfidence(
+      [titleResult.extraction.confidence, contentResult.extraction.confidence],
+      [0.3, 0.7] // Content weighted higher than title
+    );
+
+    return {
+      markdown: contentResult.extraction.markdown,
+      text: contentResult.extraction.text,
+      title: titleResult.extraction.title,
+      confidence: {
+        title: titleResult.extraction.confidence,
+        content: contentResult.extraction.confidence,
+        overall,
+      },
+      metadata: {
+        titleSource: titleResult.extraction.source,
+        contentSource: contentResult.extraction.source,
+        contentSelector: contentResult.extraction.selector,
+      },
+      trace: {
+        titleAttempts: titleResult.attempts,
+        selectorAttempts: contentResult.attempts,
+      },
+    };
+  }
+
+  /**
+   * Extract title with trace of all attempts (CX-003)
+   */
+  private extractTitleWithTrace($: cheerio.CheerioAPI): {
+    extraction: TitleExtraction;
+    attempts: TitleAttempt[];
+  } {
+    const attempts: TitleAttempt[] = [];
+
+    // Define title sources to try in order
+    const titleSources: Array<{
+      source: TitleSource;
+      selector: string;
+      getValue: () => string | undefined;
+      confidenceScore: number;
+    }> = [
+      {
+        source: 'og_title',
+        selector: 'meta[property="og:title"]',
+        getValue: () => $('meta[property="og:title"]').attr('content'),
+        confidenceScore: SOURCE_CONFIDENCE_SCORES.structured_data,
+      },
+      {
+        source: 'title_tag',
+        selector: 'title',
+        getValue: () => $('title').text(),
+        confidenceScore: 0.85,
+      },
+      {
+        source: 'h1',
+        selector: 'h1:first',
+        getValue: () => $('h1').first().text(),
+        confidenceScore: 0.70,
+      },
+    ];
+
+    let selectedExtraction: TitleExtraction | null = null;
+
+    for (const { source, selector, getValue, confidenceScore } of titleSources) {
+      const value = getValue();
+      const found = !!(value && value.trim());
+
+      attempts.push({
+        source,
+        selector,
+        found,
+        value: found ? value!.trim() : undefined,
+        confidenceScore,
+        selected: false, // Will update the selected one below
+      });
+
+      if (found && !selectedExtraction) {
+        selectedExtraction = {
+          title: value!.trim(),
+          source,
+          confidence: createFieldConfidence(
+            confidenceScore,
+            source === 'og_title' ? 'structured_data' : source === 'title_tag' ? 'selector_match' : 'heuristic',
+            `Title from ${selector}`
+          ),
+        };
+        // Mark this attempt as selected
+        attempts[attempts.length - 1].selected = true;
+      }
+    }
+
+    // Fallback if nothing found
+    if (!selectedExtraction) {
+      attempts.push({
+        source: 'unknown',
+        selector: 'none',
+        found: false,
+        confidenceScore: 0,
+        selected: true,
+      });
+
+      selectedExtraction = {
+        title: '',
+        source: 'unknown',
+        confidence: createFieldConfidence(0, 'fallback', 'No title element found'),
+      };
+    }
+
+    return {
+      extraction: selectedExtraction,
+      attempts,
+    };
+  }
+
+  /**
+   * Extract content with trace of all selector attempts (CX-003)
+   */
+  private extractContentWithTrace(
+    $: cheerio.CheerioAPI,
+    url: string
+  ): {
+    extraction: ContentExtraction;
+    attempts: SelectorAttempt[];
+  } {
+    const attempts: SelectorAttempt[] = [];
+
+    // Content selectors in order of preference
+    const contentSelectors: Array<{
+      selector: string;
+      source: SelectorSource;
+      confidenceScore: number;
+      extractionSource: ExtractionSource;
+    }> = [
+      { selector: 'main', source: 'main', confidenceScore: 0.85, extractionSource: 'selector_match' },
+      { selector: 'article', source: 'article', confidenceScore: 0.85, extractionSource: 'selector_match' },
+      { selector: '[role="main"]', source: 'role_main', confidenceScore: 0.80, extractionSource: 'selector_match' },
+      { selector: '.content, #content, .main', source: 'content_class', confidenceScore: 0.70, extractionSource: 'heuristic' },
+    ];
+
+    let selectedExtraction: ContentExtraction | null = null;
+
+    for (const { selector, source, confidenceScore, extractionSource } of contentSelectors) {
+      const element = $(selector).first();
+      const matched = element.length > 0;
+      const elementHtml = matched ? element.html() : null;
+      const contentLength = elementHtml ? elementHtml.length : 0;
+
+      let skipReason: string | undefined;
+      if (!matched) {
+        skipReason = 'No elements found';
+      } else if (contentLength <= 100) {
+        skipReason = `Insufficient content (${contentLength} chars)`;
+      }
+
+      attempts.push({
+        selector,
+        source,
+        matched,
+        contentLength,
+        confidenceScore,
+        selected: false, // Will update the selected one below
+        skipReason,
+      });
+
+      if (matched && contentLength > 100 && !selectedExtraction) {
+        const markdown = this.turndown.turndown(elementHtml!);
+        const text = element.text().replace(/\s+/g, ' ').trim();
+
+        selectedExtraction = {
+          markdown,
+          text,
+          source,
+          selector,
+          confidence: createFieldConfidence(
+            confidenceScore,
+            extractionSource,
+            `Content extracted from ${selector} element`
+          ),
+        };
+        // Mark this attempt as selected
+        attempts[attempts.length - 1].selected = true;
+      }
+    }
+
+    // Fallback to body
+    if (!selectedExtraction) {
+      const bodyHtml = $('body').html() || '';
+      const markdown = this.turndown.turndown(bodyHtml);
+      const text = $('body').text().replace(/\s+/g, ' ').trim();
+
+      attempts.push({
+        selector: 'body',
+        source: 'body_fallback',
+        matched: true,
+        contentLength: bodyHtml.length,
+        confidenceScore: SOURCE_CONFIDENCE_SCORES.fallback,
+        selected: true,
+        skipReason: undefined,
+      });
+
+      selectedExtraction = {
+        markdown,
+        text,
+        source: 'body_fallback',
+        selector: 'body',
+        confidence: createFieldConfidence(
+          SOURCE_CONFIDENCE_SCORES.fallback,
+          'fallback',
+          'Content extracted from body - no semantic container found'
+        ),
+      };
+    }
+
+    return {
+      extraction: selectedExtraction,
+      attempts,
     };
   }
 
