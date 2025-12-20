@@ -1,9 +1,17 @@
 /**
  * Content Extractor - Converts HTML to clean markdown with table support
+ * Enhanced with field-level confidence tracking (CX-002)
  */
 
 import TurndownService from 'turndown';
 import * as cheerio from 'cheerio';
+import {
+  type FieldConfidence,
+  type ExtractionSource,
+  createFieldConfidence,
+  aggregateConfidence,
+  SOURCE_CONFIDENCE_SCORES,
+} from '../types/field-confidence.js';
 
 export interface ExtractedTable {
   headers: string[];
@@ -16,6 +24,45 @@ export interface TableAsJSON {
   data: Record<string, string>[];
   headers: string[];
   caption?: string;
+}
+
+/**
+ * Title extraction metadata for confidence tracking
+ */
+export interface TitleExtraction {
+  title: string;
+  source: 'title_tag' | 'h1' | 'og_title' | 'unknown';
+  confidence: FieldConfidence;
+}
+
+/**
+ * Content extraction metadata for confidence tracking
+ */
+export interface ContentExtraction {
+  markdown: string;
+  text: string;
+  source: 'main' | 'article' | 'role_main' | 'content_class' | 'body_fallback';
+  selector: string;
+  confidence: FieldConfidence;
+}
+
+/**
+ * Enhanced extraction result with confidence tracking (CX-002)
+ */
+export interface ExtractionResultWithConfidence {
+  markdown: string;
+  text: string;
+  title: string;
+  confidence: {
+    title: FieldConfidence;
+    content: FieldConfidence;
+    overall: FieldConfidence;
+  };
+  metadata: {
+    titleSource: TitleExtraction['source'];
+    contentSource: ContentExtraction['source'];
+    contentSelector: string;
+  };
 }
 
 export class ContentExtractor {
@@ -101,6 +148,250 @@ export class ContentExtractor {
       text,
       title: title.trim(),
     };
+  }
+
+  /**
+   * Extract clean content with field-level confidence tracking (CX-002)
+   * Returns enhanced result with per-field confidence scores
+   */
+  extractWithConfidence(html: string, url: string): ExtractionResultWithConfidence {
+    const $ = cheerio.load(html);
+
+    // Remove unwanted elements
+    $('script, style, noscript, iframe, svg, nav, footer, aside, .ads, .advertisement, #cookie-banner').remove();
+
+    // Extract title with confidence tracking
+    const titleExtraction = this.extractTitleWithConfidence($);
+
+    // Extract main content with confidence tracking
+    const contentExtraction = this.extractContentWithConfidence($, url);
+
+    // Compute overall confidence
+    const overall = aggregateConfidence(
+      [titleExtraction.confidence, contentExtraction.confidence],
+      [0.3, 0.7] // Content weighted higher than title
+    );
+
+    return {
+      markdown: contentExtraction.markdown,
+      text: contentExtraction.text,
+      title: titleExtraction.title,
+      confidence: {
+        title: titleExtraction.confidence,
+        content: contentExtraction.confidence,
+        overall,
+      },
+      metadata: {
+        titleSource: titleExtraction.source,
+        contentSource: contentExtraction.source,
+        contentSelector: contentExtraction.selector,
+      },
+    };
+  }
+
+  /**
+   * Extract title with confidence tracking
+   */
+  private extractTitleWithConfidence($: cheerio.CheerioAPI): TitleExtraction {
+    // Try OpenGraph title first (highest confidence for structured data)
+    const ogTitle = $('meta[property="og:title"]').attr('content');
+    if (ogTitle && ogTitle.trim()) {
+      return {
+        title: ogTitle.trim(),
+        source: 'og_title',
+        confidence: createFieldConfidence(
+          SOURCE_CONFIDENCE_SCORES.meta_tags,
+          'meta_tags',
+          'OpenGraph title from meta tag'
+        ),
+      };
+    }
+
+    // Try <title> tag
+    const titleTag = $('title').text();
+    if (titleTag && titleTag.trim()) {
+      return {
+        title: titleTag.trim(),
+        source: 'title_tag',
+        confidence: createFieldConfidence(
+          0.85, // High confidence - standard HTML element
+          'selector_match',
+          'Title from <title> element'
+        ),
+      };
+    }
+
+    // Try first h1
+    const h1 = $('h1').first().text();
+    if (h1 && h1.trim()) {
+      return {
+        title: h1.trim(),
+        source: 'h1',
+        confidence: createFieldConfidence(
+          0.70, // Medium-high - h1 is usually the title
+          'heuristic',
+          'Title inferred from first <h1> element'
+        ),
+      };
+    }
+
+    // Fallback - no title found
+    return {
+      title: '',
+      source: 'unknown',
+      confidence: createFieldConfidence(
+        0.0,
+        'fallback',
+        'No title element found'
+      ),
+    };
+  }
+
+  /**
+   * Extract main content with confidence tracking
+   */
+  private extractContentWithConfidence(
+    $: cheerio.CheerioAPI,
+    url: string
+  ): ContentExtraction {
+    // Content selectors in order of preference with confidence scores
+    const contentSelectors: Array<{
+      selector: string;
+      source: ContentExtraction['source'];
+      confidenceScore: number;
+      extractionSource: ExtractionSource;
+    }> = [
+      { selector: 'main', source: 'main', confidenceScore: 0.85, extractionSource: 'selector_match' },
+      { selector: 'article', source: 'article', confidenceScore: 0.85, extractionSource: 'selector_match' },
+      { selector: '[role="main"]', source: 'role_main', confidenceScore: 0.80, extractionSource: 'selector_match' },
+      { selector: '.content, #content, .main', source: 'content_class', confidenceScore: 0.70, extractionSource: 'heuristic' },
+    ];
+
+    for (const { selector, source, confidenceScore, extractionSource } of contentSelectors) {
+      const element = $(selector).first();
+      if (element.length > 0) {
+        const elementHtml = element.html();
+        if (elementHtml && elementHtml.length > 100) {
+          const markdown = this.turndown.turndown(elementHtml);
+          const text = element.text().replace(/\s+/g, ' ').trim();
+
+          return {
+            markdown,
+            text,
+            source,
+            selector,
+            confidence: createFieldConfidence(
+              confidenceScore,
+              extractionSource,
+              `Content extracted from ${selector} element`
+            ),
+          };
+        }
+      }
+    }
+
+    // Fallback to body
+    const bodyHtml = $('body').html() || '';
+    const markdown = this.turndown.turndown(bodyHtml);
+    const text = $('body').text().replace(/\s+/g, ' ').trim();
+
+    return {
+      markdown,
+      text,
+      source: 'body_fallback',
+      selector: 'body',
+      confidence: createFieldConfidence(
+        SOURCE_CONFIDENCE_SCORES.fallback,
+        'fallback',
+        'Content extracted from body - no semantic container found'
+      ),
+    };
+  }
+
+  /**
+   * Extract tables with confidence tracking (CX-002)
+   */
+  extractTablesWithConfidence(html: string): Array<ExtractedTable & { confidence: FieldConfidence }> {
+    const $ = cheerio.load(html);
+    const tables: Array<ExtractedTable & { confidence: FieldConfidence }> = [];
+
+    $('table').each((index, tableEl) => {
+      const $table = $(tableEl);
+      const headers: string[] = [];
+      const rows: string[][] = [];
+
+      // Get caption if exists
+      const caption = $table.find('caption').text().trim() || undefined;
+      const id = $table.attr('id') || undefined;
+
+      // Extract headers from thead or first row
+      const $headerRow = $table.find('thead tr').first();
+      let headerSource: ExtractionSource = 'selector_match';
+      let headerConfidenceScore = 0.85;
+
+      if ($headerRow.length > 0) {
+        $headerRow.find('th, td').each((_, cell) => {
+          headers.push($(cell).text().trim());
+        });
+        headerSource = 'selector_match';
+        headerConfidenceScore = 0.90; // thead is explicit
+      } else {
+        // Try first row if no thead
+        const $firstRow = $table.find('tr').first();
+        const $headerCells = $firstRow.find('th');
+        if ($headerCells.length > 0) {
+          $headerCells.each((_, cell) => {
+            headers.push($(cell).text().trim());
+          });
+          headerSource = 'heuristic';
+          headerConfidenceScore = 0.75; // Inferred from th elements
+        }
+      }
+
+      // Extract data rows
+      const $bodyRows = $table.find('tbody tr');
+      const rowsToProcess = $bodyRows.length > 0 ? $bodyRows : $table.find('tr').slice(headers.length > 0 ? 1 : 0);
+
+      rowsToProcess.each((_, rowEl) => {
+        const row: string[] = [];
+        $(rowEl).find('td, th').each((_, cell) => {
+          row.push($(cell).text().trim());
+        });
+        if (row.length > 0) {
+          rows.push(row);
+        }
+      });
+
+      // Only include tables with actual content
+      if (rows.length > 0 || headers.length > 0) {
+        // Compute confidence based on table structure quality
+        let confidenceScore = 0.70; // Base score for any table
+        let reason = 'Table structure detected';
+
+        if (headers.length > 0 && rows.length > 0) {
+          confidenceScore = headerConfidenceScore;
+          reason = `Table with ${headers.length} headers and ${rows.length} rows`;
+        } else if (headers.length === 0) {
+          confidenceScore = 0.50;
+          reason = 'Table without clear headers - structure uncertain';
+        }
+
+        if (caption) {
+          confidenceScore = Math.min(1.0, confidenceScore + 0.05);
+          reason += ' (has caption)';
+        }
+
+        tables.push({
+          headers,
+          rows,
+          caption,
+          id,
+          confidence: createFieldConfidence(confidenceScore, headerSource, reason),
+        });
+      }
+    });
+
+    return tables;
   }
 
   /**

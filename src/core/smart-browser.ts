@@ -26,7 +26,16 @@ import type {
   PageContext,
   SkillMatch,
   RenderTier,
+  BrowseFieldConfidence,
+  FieldConfidence,
+  TableConfidence,
+  ApiConfidence,
 } from '../types/index.js';
+import {
+  createFieldConfidence,
+  aggregateConfidence,
+  SOURCE_CONFIDENCE_SCORES,
+} from '../types/field-confidence.js';
 import { BrowserManager } from './browser-manager.js';
 import { ContentExtractor, type TableAsJSON } from '../utils/content-extractor.js';
 import { ApiAnalyzer } from './api-analyzer.js';
@@ -88,6 +97,9 @@ export interface SmartBrowseOptions extends BrowseOptions {
 }
 
 export interface SmartBrowseResult extends BrowseResult {
+  // Field-level confidence (CX-002)
+  fieldConfidence?: BrowseFieldConfidence;
+
   // Learning insights
   learning: {
     selectorsUsed: string[];
@@ -609,6 +621,15 @@ export class SmartBrowser {
       }
     }
 
+    // Compute field-level confidence (CX-002)
+    const fieldConfidence = this.computeFieldConfidence(
+      html,
+      finalUrl,
+      tables,
+      discoveredApis,
+      learning
+    );
+
     return {
       url,
       title: extractedContent.title,
@@ -629,6 +650,7 @@ export class SmartBrowser {
         retryCount: retryCount > 0 ? retryCount : undefined,
       },
       learning,
+      fieldConfidence,
       additionalPages,
     };
   }
@@ -763,6 +785,15 @@ export class SmartBrowser {
         }
       }
 
+      // Compute field-level confidence (CX-002)
+      const fieldConfidence = this.computeFieldConfidence(
+        result.html,
+        result.finalUrl,
+        tables,
+        result.discoveredApis,
+        learning
+      );
+
       return {
         url,
         title: result.content.title,
@@ -782,6 +813,7 @@ export class SmartBrowser {
           language,
         },
         learning,
+        fieldConfidence,
       };
     } catch (error) {
       logger.smartBrowser.error(`Tiered fetching error: ${error}`);
@@ -1404,5 +1436,131 @@ export class SmartBrowser {
       pageType: 'unknown',
     };
     return this.proceduralMemory.retrieveSkills(pageContext, topK);
+  }
+
+  // ============================================
+  // FIELD-LEVEL CONFIDENCE (CX-002)
+  // ============================================
+
+  /**
+   * Compute field-level confidence for browse results
+   * Uses extraction sources and validation results to provide per-field confidence
+   */
+  computeFieldConfidence(
+    html: string,
+    url: string,
+    tables: TableAsJSON[],
+    discoveredApis: Array<{ endpoint: string; method: string; confidence: 'high' | 'medium' | 'low'; canBypass: boolean }>,
+    learning: SmartBrowseResult['learning']
+  ): BrowseFieldConfidence {
+    // Use ContentExtractor's confidence-tracking extraction
+    const extraction = this.contentExtractor.extractWithConfidence(html, url);
+
+    // Adjust content confidence based on learning results
+    let contentConfidence = extraction.confidence.content;
+
+    // Boost if selectors succeeded
+    if (learning.selectorsSucceeded.length > 0) {
+      contentConfidence = {
+        ...contentConfidence,
+        score: Math.min(1.0, contentConfidence.score + 0.1),
+        reason: `${contentConfidence.reason}; validated by ${learning.selectorsSucceeded.length} selector(s)`,
+      };
+    }
+
+    // Reduce if selectors failed
+    if (learning.selectorsFailed.length > learning.selectorsSucceeded.length) {
+      contentConfidence = {
+        ...contentConfidence,
+        score: Math.max(0.1, contentConfidence.score - 0.1),
+        reason: `${contentConfidence.reason}; ${learning.selectorsFailed.length} selector(s) failed`,
+      };
+    }
+
+    // Compute table confidence
+    const tableConfidences: TableConfidence[] = tables.map((table, index) => {
+      const hasHeaders = table.headers.length > 0;
+      const hasData = table.data.length > 0;
+
+      // Header confidence
+      const headerScore = hasHeaders ? 0.85 : 0.30;
+      const headerConfidence = createFieldConfidence(
+        headerScore,
+        hasHeaders ? 'selector_match' : 'fallback',
+        hasHeaders ? `${table.headers.length} headers detected` : 'No headers detected'
+      );
+
+      // Data confidence
+      const dataScore = hasData ? 0.80 : 0.10;
+      const dataConfidence = createFieldConfidence(
+        dataScore,
+        hasData ? 'selector_match' : 'fallback',
+        hasData ? `${table.data.length} rows extracted` : 'No data rows found'
+      );
+
+      // Caption confidence (optional)
+      const captionConfidence = table.caption
+        ? createFieldConfidence(0.90, 'selector_match', 'Caption found')
+        : undefined;
+
+      return {
+        index,
+        headers: headerConfidence,
+        data: dataConfidence,
+        caption: captionConfidence,
+      };
+    });
+
+    // Compute API confidence
+    const apiConfidences: ApiConfidence[] = discoveredApis.map((api) => {
+      // Map string confidence to numeric
+      const confidenceMap = { high: 0.90, medium: 0.70, low: 0.45 };
+      const baseScore = confidenceMap[api.confidence];
+
+      return {
+        endpoint: api.endpoint,
+        endpointConfidence: createFieldConfidence(
+          baseScore,
+          'api_response',
+          `Discovered from network traffic (${api.confidence} confidence)`
+        ),
+        methodConfidence: createFieldConfidence(
+          0.95, // Method detection is very reliable
+          'api_response',
+          `HTTP ${api.method} method detected`
+        ),
+        bypassConfidence: createFieldConfidence(
+          api.canBypass ? 0.85 : 0.40,
+          api.canBypass ? 'api_response' : 'heuristic',
+          api.canBypass ? 'Can likely bypass browser rendering' : 'May require browser for auth/state'
+        ),
+      };
+    });
+
+    // Compute overall confidence
+    const allConfidences: FieldConfidence[] = [
+      extraction.confidence.title,
+      contentConfidence,
+    ];
+
+    // Add table confidences if present
+    for (const tc of tableConfidences) {
+      allConfidences.push(tc.headers, tc.data);
+    }
+
+    // Add API confidences if present
+    for (const ac of apiConfidences) {
+      allConfidences.push(ac.endpointConfidence);
+    }
+
+    const overall = aggregateConfidence(allConfidences);
+
+    return {
+      title: extraction.confidence.title,
+      content: contentConfidence,
+      tables: tableConfidences.length > 0 ? tableConfidences : undefined,
+      discoveredApis: apiConfidences.length > 0 ? apiConfidences : undefined,
+      overall,
+    };
   }
 }

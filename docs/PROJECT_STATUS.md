@@ -4,7 +4,7 @@
 **Version:** 0.5.0
 **Current Phase:** Production Readiness (Phase 2)
 **Total Code:** ~16,000 lines TypeScript
-**Tests:** 1278 passing + 44 live tests
+**Tests:** 1319 passing + 44 live tests
 
 ---
 
@@ -281,9 +281,11 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ## Current Task: CX-002 Field-level Confidence Map
 
-**Status:** In Progress
+**Status:** Complete
 
-Adding per-field confidence scores to MCP tool responses for content, APIs, and tables.
+Added per-field confidence scores to MCP tool responses for content, APIs, and tables.
+
+**Next up:** CX-003 Decision Trace in Responses - Include tier attempts, selectors tried, validators, and fallbacks in responses.
 
 ---
 
@@ -291,6 +293,14 @@ Adding per-field confidence scores to MCP tool responses for content, APIs, and 
 
 ### v0.5.0 (2025-12-20)
 
+- Added CX-002: Field-Level Confidence Map - All smart_browse responses now include per-field confidence
+  - New type definitions in `src/types/field-confidence.ts` for confidence tracking
+  - ContentExtractor enhanced with `extractWithConfidence()` method
+  - SmartBrowser now computes and includes `fieldConfidence` in browse results
+  - Confidence scores for: title, content, tables, and discovered APIs
+  - Extraction source tracking: structured_data, api_response, selector_match, heuristic, fallback
+  - Helper functions: `createFieldConfidence()`, `aggregateConfidence()`, `boostForValidation()`
+  - 40 new tests for field-level confidence
 - Added CX-001: Response Schema Versioning - All MCP tool responses now include schemaVersion field
 - Added API Documentation Discovery Phase 10: Backend Framework Fingerprinting (D-010)
   - New core module `src/core/backend-framework-fingerprinting.ts` for framework detection
