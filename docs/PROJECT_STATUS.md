@@ -279,11 +279,11 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ---
 
-## Current Task: CX-007 Embedded Store Migration
+## Current Task: CX-008 Memory Isolation + Shared Pool
 
-**Status:** In Progress
+**Status:** Not Started
 
-Replace JSON file persistence with SQLite for improved reliability, concurrent access, and query capabilities.
+Add per-tenant store with opt-in shared pool for multi-tenant deployments.
 
 **Previously completed:**
 
@@ -292,6 +292,7 @@ Replace JSON file persistence with SQLite for improved reliability, concurrent a
 - CX-003: Decision Trace in Responses
 - CX-004: Error Taxonomy + Action Hints
 - CX-006: Learning Provenance Metadata
+- CX-007: Embedded Store Migration
 
 ---
 
