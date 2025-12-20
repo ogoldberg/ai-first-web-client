@@ -5,6 +5,9 @@
 // Re-export API pattern types
 export * from './api-patterns.js';
 
+// Re-export field-level confidence types (CX-002)
+export * from './field-confidence.js';
+
 export interface NetworkRequest {
   url: string;
   method: string;

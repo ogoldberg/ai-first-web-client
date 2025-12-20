@@ -44,7 +44,7 @@ Tasks are organized by priority and category. Each task includes:
 | ID | Task | Effort | Category | Notes |
 |----|------|--------|----------|-------|
 | CX-001 | Response schema versioning | M | Features | Add `schemaVersion` to all tool outputs; document compatibility (DONE) |
-| CX-002 | Field-level confidence map | M | Reliability | Per-field confidence for content, APIs, tables |
+| CX-002 | Field-level confidence map | M | Reliability | Per-field confidence for content, APIs, tables (DONE) |
 | CX-003 | Decision trace in responses | M | Reliability | Include tier attempts, selectors tried, validators, fallbacks |
 | CX-004 | Error taxonomy + action hints | M | Reliability | Standardize error codes and `recommendedActions` |
 | CX-006 | Learning provenance metadata | M | Reliability | Pattern source, last verified, decay reason |
