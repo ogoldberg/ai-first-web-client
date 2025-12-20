@@ -7,6 +7,7 @@
  */
 
 import { logger } from './logger.js';
+import type { FeatureExtractionPipeline } from '@xenova/transformers';
 
 // Create a logger for embedding operations
 const log = logger.create('EmbeddingProvider');
@@ -63,7 +64,7 @@ export class EmbeddingProvider {
   private static instance: EmbeddingProvider | null = null;
   private static loadError: Error | null = null;
 
-  private pipeline: unknown = null;
+  private pipeline: FeatureExtractionPipeline | null = null;
   private transformers: typeof import('@xenova/transformers') | null = null;
   private initialized = false;
   private initializing = false;
@@ -234,15 +235,14 @@ export class EmbeddingProvider {
       throw new Error('Cannot generate embedding for empty text');
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const pipelineFn = this.pipeline as any;
-    const output = await pipelineFn(text, {
+    const output = await this.pipeline!(text, {
       pooling: 'mean',
       normalize: true,
     });
 
     // Extract the embedding from the output tensor
-    const embedding = new Float32Array(output.data);
+    // Feature extraction models always output Float32 embeddings
+    const embedding = output.data as Float32Array;
 
     return {
       vector: embedding,
@@ -275,22 +275,18 @@ export class EmbeddingProvider {
     for (let i = 0; i < texts.length; i += batchSize) {
       const batch = texts.slice(i, i + batchSize);
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const pipelineFn = this.pipeline as any;
-      const output = await pipelineFn(batch, {
+      const output = await this.pipeline!(batch, {
         pooling: 'mean',
         normalize: true,
       });
 
       // Extract embeddings for each text in the batch
+      // Feature extraction models always output Float32 embeddings
+      const data = output.data as Float32Array;
       const dimensions = this.getDimensions();
       for (let j = 0; j < batch.length; j++) {
         const start = j * dimensions;
-        const embedding = new Float32Array(dimensions);
-        for (let k = 0; k < dimensions; k++) {
-          embedding[k] = output.data[start + k];
-        }
-        vectors.push(embedding);
+        vectors.push(data.slice(start, start + dimensions));
       }
     }
 

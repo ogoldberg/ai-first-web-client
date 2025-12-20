@@ -165,7 +165,7 @@ export class EmbeddingPipeline {
   async indexPattern(pattern: LearnedPattern): Promise<IndexResult> {
     await this.ensureInitialized();
 
-    const id = pattern.id || `pattern-${Date.now()}`;
+    const id = pattern.id || `pattern-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
     try {
       // Generate embedding text from pattern
@@ -206,7 +206,7 @@ export class EmbeddingPipeline {
   async indexSkill(skill: Skill): Promise<IndexResult> {
     await this.ensureInitialized();
 
-    const id = skill.id || `skill-${Date.now()}`;
+    const id = skill.id || `skill-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
     try {
       // Generate embedding text from skill
@@ -296,118 +296,92 @@ export class EmbeddingPipeline {
   }
 
   /**
-   * Process a batch of patterns
+   * Generic batch processor for patterns and skills
    */
-  private async processBatch(
-    patterns: LearnedPattern[],
-    entityType: EntityType
+  private async _processBatch<T extends { id?: string }>(
+    items: T[],
+    entityType: EntityType,
+    textExtractor: (item: T) => string,
+    domainExtractor: (item: T) => string | undefined
   ): Promise<IndexStats> {
     const stats: IndexStats = { indexed: 0, failed: 0, skipped: 0, totalTimeMs: 0 };
 
-    // Filter out empty patterns and generate texts
-    const validPatterns: Array<{ pattern: LearnedPattern; text: string; id: string }> = [];
+    // Filter out empty items and generate texts
+    const validItems: Array<{ item: T; text: string; id: string }> = [];
 
-    for (const pattern of patterns) {
-      const text = patternToEmbeddingText(pattern);
+    for (const item of items) {
+      const text = textExtractor(item);
       if (!text || text.trim().length === 0) {
         stats.skipped++;
         continue;
       }
-      validPatterns.push({
-        pattern,
+      validItems.push({
+        item,
         text,
-        id: pattern.id || `${entityType}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        id: item.id || `${entityType}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       });
     }
 
-    if (validPatterns.length === 0) {
+    if (validItems.length === 0) {
       return stats;
     }
 
     try {
       // Generate embeddings in batch
-      const texts = validPatterns.map((p) => p.text);
+      const texts = validItems.map((v) => v.text);
       const embeddings = await this.embeddingProvider!.generateBatch(texts);
 
       // Create records
-      const records: EmbeddingRecord[] = validPatterns.map((p, idx) => ({
-        id: p.id,
+      const records: EmbeddingRecord[] = validItems.map((v, idx) => ({
+        id: v.id,
         vector: embeddings.vectors[idx],
         model: embeddings.model,
         version: this.embeddingVersion,
         createdAt: Date.now(),
         entityType,
-        domain: p.pattern.domain || extractDomain(p.pattern.urlPattern),
-        text: p.text,
+        domain: domainExtractor(v.item),
+        text: v.text,
       }));
 
       // Store in vector store
       await this.vectorStore!.addBatch(records);
-      stats.indexed = validPatterns.length;
+      stats.indexed = validItems.length;
     } catch (error) {
       log.error('Batch processing failed', {
         error: error instanceof Error ? error.message : String(error),
+        entityType,
       });
-      stats.failed = validPatterns.length;
+      stats.failed = validItems.length;
     }
 
     return stats;
   }
 
   /**
+   * Process a batch of patterns
+   */
+  private async processBatch(
+    patterns: LearnedPattern[],
+    entityType: EntityType
+  ): Promise<IndexStats> {
+    return this._processBatch(
+      patterns,
+      entityType,
+      patternToEmbeddingText,
+      (p) => p.domain || extractDomain(p.urlPattern)
+    );
+  }
+
+  /**
    * Process a batch of skills
    */
   private async processSkillBatch(skills: Skill[]): Promise<IndexStats> {
-    const stats: IndexStats = { indexed: 0, failed: 0, skipped: 0, totalTimeMs: 0 };
-
-    // Filter out empty skills and generate texts
-    const validSkills: Array<{ skill: Skill; text: string; id: string }> = [];
-
-    for (const skill of skills) {
-      const text = skillToEmbeddingText(skill);
-      if (!text || text.trim().length === 0) {
-        stats.skipped++;
-        continue;
-      }
-      validSkills.push({
-        skill,
-        text,
-        id: skill.id || `skill-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      });
-    }
-
-    if (validSkills.length === 0) {
-      return stats;
-    }
-
-    try {
-      // Generate embeddings in batch
-      const texts = validSkills.map((s) => s.text);
-      const embeddings = await this.embeddingProvider!.generateBatch(texts);
-
-      // Create records
-      const records: EmbeddingRecord[] = validSkills.map((s, idx) => ({
-        id: s.id,
-        vector: embeddings.vectors[idx],
-        model: embeddings.model,
-        version: this.embeddingVersion,
-        createdAt: Date.now(),
-        entityType: 'skill' as EntityType,
-        domain: s.skill.domain,
-        text: s.text,
-      }));
-
-      // Store in vector store
-      await this.vectorStore!.addBatch(records);
-      stats.indexed = validSkills.length;
-    } catch (error) {
-      log.error('Skill batch processing failed', {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      stats.failed = validSkills.length;
-    }
-
-    return stats;
+    return this._processBatch(
+      skills,
+      'skill',
+      skillToEmbeddingText,
+      (s) => s.domain
+    );
   }
 
   /**
