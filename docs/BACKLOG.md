@@ -47,7 +47,7 @@ Tasks are organized by priority and category. Each task includes:
 | CX-002 | Field-level confidence map | M | Reliability | Per-field confidence for content, APIs, tables (DONE) |
 | CX-003 | Decision trace in responses | M | Reliability | Include tier attempts, selectors tried, validators, fallbacks (DONE) |
 | CX-004 | Error taxonomy + action hints | M | Reliability | Standardize error codes and `recommendedActions` (DONE) |
-| CX-006 | Learning provenance metadata | M | Reliability | Pattern source, last verified, decay reason |
+| CX-006 | Learning provenance metadata | M | Reliability | Pattern source, last verified, decay reason (DONE) |
 | CX-007 | Embedded store migration | L | Reliability | Replace JSON persistence with SQLite (or similar) |
 | CX-008 | Memory isolation + shared pool | M | Architecture | Per-tenant store with opt-in shared pool |
 
@@ -223,6 +223,7 @@ Note: "Order" reflects the implementation sequence from the plan document, optim
 
 | ID | Task | Completed | Notes |
 |----|------|-----------|-------|
+| CX-006 | Learning Provenance Metadata | 2025-12-20 | Track pattern origins (bootstrap, api_extraction, openapi_discovery, etc.), last verified timestamps, and confidence decay history. Created provenance.ts with PatternSource, ConfidenceDecayReason types, DecayEvent/ProvenanceMetadata interfaces. Utility functions: createProvenance, recordVerification, recordUsage, recordDecay, isStale, getDaysSinceVerification, getProvenanceSummary. Integrated with LearningEngine and ApiPatternLearner. 25 tests. |
 | CX-001 | Response Schema Versioning | 2025-12-20 | Added schemaVersion field to all MCP tool responses for LLM client compatibility. Created schema-version.ts with helpers (addSchemaVersion, withSchemaVersion, parseSchemaVersion, isSchemaCompatible). Version format: MAJOR.MINOR with backward compatibility rules. Initial version: 1.0. 27 tests. |
 | D-010 | Backend Framework Fingerprinting | 2025-12-20 | Detect Rails, Django, Phoenix, FastAPI, Spring Boot, Laravel, Express, ASP.NET Core from headers/HTML. HTTP header analysis, cookie patterns, HTML CSRF tokens and scripts. Convention-based API pattern generation. Integrated with Discovery Orchestrator. 57 tests. |
 | D-003 | Link Discovery | 2025-12-19 | RFC 8288 Link header parsing, HTML `<link>` extraction, HATEOAS detection (HAL, JSON:API, Siren). Pattern generation, pagination link extraction. Integrated with Discovery Orchestrator. 69 tests. |

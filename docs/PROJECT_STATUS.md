@@ -279,11 +279,11 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ---
 
-## Current Task: CX-006 Learning Provenance Metadata
+## Current Task: CX-007 Embedded Store Migration
 
 **Status:** In Progress
 
-Adding provenance metadata to learned patterns: pattern source, last verified timestamp, decay reason.
+Replace JSON file persistence with SQLite for improved reliability, concurrent access, and query capabilities.
 
 **Previously completed:**
 
@@ -291,6 +291,7 @@ Adding provenance metadata to learned patterns: pattern source, last verified ti
 - CX-002: Field-level Confidence Map
 - CX-003: Decision Trace in Responses
 - CX-004: Error Taxonomy + Action Hints
+- CX-006: Learning Provenance Metadata
 
 ---
 
