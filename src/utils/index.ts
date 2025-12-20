@@ -13,3 +13,4 @@ export * from './sqlite-persistent-store.js';
 export * from './rate-limiter.js';
 export * from './retry.js';
 export * from './url-safety.js';
+export * from './vector-store.js';

@@ -280,11 +280,11 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ---
 
-## Current Task: V-001 (VectorStore Core)
+## Current Task: V-002 (Embedding Pipeline)
 
-**Status:** In progress
+**Status:** Next up
 
-**Goal:** Install LanceDB, create VectorStore class with CRUD operations
+**Goal:** Connect EmbeddingProvider to VectorStore, implement ingestion pipeline
 
 **Previously completed:**
 
@@ -295,8 +295,9 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 - CX-006: Learning Provenance Metadata
 - CX-007: Embedded Store Migration
 - CX-008: Memory Isolation + Shared Pool
+- V-001: VectorStore Core (LanceDB integration)
 
-### Phase 5: Vector Embedding Storage - PLANNED
+### Phase 5: Vector Embedding Storage - IN PROGRESS
 
 See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for full design.
 
@@ -304,7 +305,7 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for ful
 
 | ID | Phase | Task | Status |
 |----|-------|------|--------|
-| V-001 | 1 | VectorStore Core | IN PROGRESS |
+| V-001 | 1 | VectorStore Core | DONE |
 | V-002 | 2 | Embedding Pipeline | TODO |
 | V-003 | 3 | Query Integration | TODO |
 | V-004 | 4 | Extended Features | TODO |
