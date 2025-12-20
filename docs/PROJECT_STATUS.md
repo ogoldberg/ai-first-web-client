@@ -279,13 +279,18 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ---
 
-## Current Task: CX-002 Field-level Confidence Map
+## Current Task: CX-006 Learning Provenance Metadata
 
-**Status:** Complete
+**Status:** In Progress
 
-Added per-field confidence scores to MCP tool responses for content, APIs, and tables.
+Adding provenance metadata to learned patterns: pattern source, last verified timestamp, decay reason.
 
-**Next up:** CX-003 Decision Trace in Responses - Include tier attempts, selectors tried, validators, and fallbacks in responses.
+**Previously completed:**
+
+- CX-001: Response Schema Versioning
+- CX-002: Field-level Confidence Map
+- CX-003: Decision Trace in Responses
+- CX-004: Error Taxonomy + Action Hints
 
 ---
 
