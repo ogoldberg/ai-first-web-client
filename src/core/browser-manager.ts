@@ -3,6 +3,12 @@
  *
  * Playwright is OPTIONAL - the module gracefully degrades if not installed.
  * Check isPlaywrightAvailable() before using browser functionality.
+ *
+ * Supports multiple browser providers:
+ * - Local: Uses installed Playwright (default)
+ * - Browserless.io: Set BROWSERLESS_TOKEN env var
+ * - Bright Data: Set BRIGHTDATA_AUTH env var (best for anti-bot)
+ * - Custom: Set BROWSER_ENDPOINT env var
  */
 
 import type { Browser, BrowserContext, Page } from 'playwright';
@@ -11,6 +17,13 @@ import { TIMEOUTS } from '../utils/timeouts.js';
 import * as fs from 'fs';
 import { logger } from '../utils/logger.js';
 import { createRequire } from 'module';
+import {
+  createProvider,
+  getProviderInfo,
+  type BrowserProvider,
+  type BrowserProviderType,
+  type BrowserProviderConfig,
+} from './browser-providers.js';
 
 // Create a require function for ESM compatibility
 const require = createRequire(import.meta.url);
@@ -50,6 +63,8 @@ export interface BrowserConfig {
   screenshotDir?: string;
   slowMo?: number; // Slow down actions for debugging
   devtools?: boolean;
+  // Provider configuration (auto-detected from env vars if not specified)
+  provider?: Partial<BrowserProviderConfig>;
 }
 
 const DEFAULT_CONFIG: BrowserConfig = {
@@ -63,9 +78,11 @@ export class BrowserManager {
   private browser: Browser | null = null;
   private contexts: Map<string, BrowserContext> = new Map();
   private config: BrowserConfig;
+  private provider: BrowserProvider;
 
   constructor(config: Partial<BrowserConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
+    this.provider = createProvider(this.config.provider);
   }
 
   /**
@@ -135,17 +152,83 @@ export class BrowserManager {
   async initialize(): Promise<void> {
     if (!this.browser) {
       const pw = await this.ensurePlaywright();
-      this.browser = await pw.chromium.launch({
-        headless: this.config.headless,
-        slowMo: this.config.slowMo,
-        devtools: this.config.devtools,
-      });
+
+      // Validate provider configuration
+      const validation = this.provider.validate();
+      if (!validation.valid) {
+        throw new Error(validation.error);
+      }
+
+      const endpoint = this.provider.getEndpoint();
+
+      if (endpoint) {
+        // Remote browser connection
+        const safeEndpoint = endpoint
+          .replace(/token=[^&]+/, 'token=***')
+          .replace(/:[^:@]+@/, ':***@'); // Hide passwords in URLs
+
+        logger.browser.info('Connecting to remote browser', {
+          provider: this.provider.name,
+          type: this.provider.type,
+          endpoint: safeEndpoint,
+          capabilities: this.provider.capabilities,
+        });
+
+        try {
+          const connectionOptions = this.provider.getConnectionOptions();
+          this.browser = await pw.chromium.connect(endpoint, connectionOptions);
+          logger.browser.info('Connected to remote browser successfully', {
+            provider: this.provider.name,
+          });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Unknown error';
+          logger.browser.error('Failed to connect to remote browser', {
+            provider: this.provider.name,
+            error: message,
+          });
+          throw new Error(
+            `Failed to connect to ${this.provider.name}: ${message}\n` +
+            `Provider type: ${this.provider.type}`
+          );
+        }
+      } else {
+        // Local browser launch
+        logger.browser.info('Launching local browser', {
+          headless: this.config.headless,
+        });
+        this.browser = await pw.chromium.launch({
+          headless: this.config.headless,
+          slowMo: this.config.slowMo,
+          devtools: this.config.devtools,
+        });
+      }
 
       // Ensure screenshot directory exists
       if (this.config.screenshotDir) {
         fs.mkdirSync(this.config.screenshotDir, { recursive: true });
       }
     }
+  }
+
+  /**
+   * Check if using a remote browser provider
+   */
+  isUsingRemoteBrowser(): boolean {
+    return this.provider.type !== 'local';
+  }
+
+  /**
+   * Get the current browser provider
+   */
+  getProvider(): BrowserProvider {
+    return this.provider;
+  }
+
+  /**
+   * Get information about all available providers
+   */
+  static getAvailableProviders() {
+    return getProviderInfo();
   }
 
   async getContext(profile: string = 'default'): Promise<BrowserContext> {
