@@ -280,11 +280,11 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ---
 
-## Current Task: Vector Embedding Storage Planning
+## Current Task: V-001 (VectorStore Core)
 
-**Status:** Design complete, ready for implementation
+**Status:** In progress
 
-**Next up:** V-001 (VectorStore Core) - Install LanceDB, create VectorStore class
+**Goal:** Install LanceDB, create VectorStore class with CRUD operations
 
 **Previously completed:**
 
@@ -304,7 +304,7 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for ful
 
 | ID | Phase | Task | Status |
 |----|-------|------|--------|
-| V-001 | 1 | VectorStore Core | TODO |
+| V-001 | 1 | VectorStore Core | IN PROGRESS |
 | V-002 | 2 | Embedding Pipeline | TODO |
 | V-003 | 3 | Query Integration | TODO |
 | V-004 | 4 | Extended Features | TODO |
