@@ -4,7 +4,7 @@
 **Version:** 0.5.0
 **Current Phase:** Production Readiness (Phase 2)
 **Total Code:** ~16,000 lines TypeScript
-**Tests:** 1319 passing + 44 live tests
+**Tests:** 1383 passing + 44 live tests
 
 ---
 
@@ -165,7 +165,8 @@ These items are tracked as CX-001 through CX-012 in `docs/BACKLOG.md` and `docs/
 | Docs Page Discovery | 89 | Framework detection, endpoint extraction, pattern generation |
 | Auth Workflow | 43 | Credential management, OAuth flows, token refresh |
 | Site API Live Tests | 44 | Real API requests (Reddit, HN, GitHub, Wikipedia, StackOverflow, NPM, PyPI, Dev.to) |
-| **Total** | **1072 + 44 live** | All passing |
+| Tenant Store | 64 | Tenant isolation, shared pool, usage tracking, persistence |
+| **Total** | **1136 + 44 live** | All passing |
 
 ---
 
@@ -279,11 +280,9 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ---
 
-## Current Task: CX-008 Memory Isolation + Shared Pool
+## Current Task: None
 
-**Status:** In Progress
-
-Add per-tenant store with opt-in shared pool for multi-tenant deployments.
+**Status:** Awaiting next task
 
 **Previously completed:**
 
@@ -293,6 +292,7 @@ Add per-tenant store with opt-in shared pool for multi-tenant deployments.
 - CX-004: Error Taxonomy + Action Hints
 - CX-006: Learning Provenance Metadata
 - CX-007: Embedded Store Migration
+- CX-008: Memory Isolation + Shared Pool
 
 ---
 
@@ -300,6 +300,16 @@ Add per-tenant store with opt-in shared pool for multi-tenant deployments.
 
 ### v0.5.0 (2025-12-20)
 
+- Added CX-008: Memory Isolation + Shared Pool - Multi-tenant support for deployments
+  - New TenantStore class that wraps EmbeddedStore with tenant-prefixed namespaces
+  - Complete data isolation between tenants via namespace prefixing
+  - SharedPatternPool for opt-in pattern sharing across tenants
+  - MultiTenantStore for tenant lifecycle management (create, get, delete, purge)
+  - Tenant configuration: sharePatterns (opt-in to contribute), consumeShared (opt-in to consume)
+  - Usage tracking and attribution for shared patterns
+  - Statistics: tenant counts, pattern usage, contributor/consumer metrics
+  - LLM_BROWSER_TENANT_ID environment variable for default tenant
+  - 64 new tests for tenant isolation, shared pool, and persistence
 - Added CX-002: Field-Level Confidence Map - All smart_browse responses now include per-field confidence
   - New type definitions in `src/types/field-confidence.ts` for confidence tracking
   - ContentExtractor enhanced with `extractWithConfidence()` method
