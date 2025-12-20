@@ -593,3 +593,194 @@ export interface OpenAPIPatternGenerationResult {
   /** Warnings during generation */
   warnings: string[];
 }
+
+// ============================================
+// GRAPHQL INTROSPECTION TYPES (D-001)
+// ============================================
+
+/**
+ * Common locations to probe for GraphQL endpoints
+ */
+export const GRAPHQL_PROBE_LOCATIONS = [
+  '/graphql',
+  '/api/graphql',
+  '/v1/graphql',
+  '/graphql/v1',
+  '/query',
+  '/gql',
+  '/api/gql',
+  '/graphql/api',
+] as const;
+
+/**
+ * GraphQL scalar types
+ */
+export type GraphQLScalarType = 'String' | 'Int' | 'Float' | 'Boolean' | 'ID';
+
+/**
+ * GraphQL type kinds
+ */
+export type GraphQLTypeKind =
+  | 'SCALAR'
+  | 'OBJECT'
+  | 'INTERFACE'
+  | 'UNION'
+  | 'ENUM'
+  | 'INPUT_OBJECT'
+  | 'LIST'
+  | 'NON_NULL';
+
+/**
+ * GraphQL type reference (simplified)
+ */
+export interface GraphQLTypeRef {
+  kind: GraphQLTypeKind;
+  name?: string;
+  ofType?: GraphQLTypeRef;
+}
+
+/**
+ * GraphQL field argument
+ */
+export interface GraphQLArgument {
+  name: string;
+  description?: string;
+  type: GraphQLTypeRef;
+  defaultValue?: string;
+}
+
+/**
+ * GraphQL field definition
+ */
+export interface GraphQLField {
+  name: string;
+  description?: string;
+  args: GraphQLArgument[];
+  type: GraphQLTypeRef;
+  isDeprecated: boolean;
+  deprecationReason?: string;
+}
+
+/**
+ * GraphQL type definition
+ */
+export interface GraphQLType {
+  kind: GraphQLTypeKind;
+  name: string;
+  description?: string;
+  fields?: GraphQLField[];
+  inputFields?: GraphQLArgument[];
+  interfaces?: GraphQLTypeRef[];
+  enumValues?: Array<{
+    name: string;
+    description?: string;
+    isDeprecated: boolean;
+    deprecationReason?: string;
+  }>;
+  possibleTypes?: GraphQLTypeRef[];
+}
+
+/**
+ * Parsed GraphQL schema from introspection
+ */
+export interface ParsedGraphQLSchema {
+  /** Query type name (usually "Query") */
+  queryType: string;
+  /** Mutation type name (usually "Mutation") */
+  mutationType?: string;
+  /** Subscription type name (usually "Subscription") */
+  subscriptionType?: string;
+  /** All types in the schema */
+  types: GraphQLType[];
+  /** Directives defined in the schema */
+  directives?: Array<{
+    name: string;
+    description?: string;
+    locations: string[];
+  }>;
+  /** When the schema was discovered */
+  discoveredAt: number;
+  /** URL where the GraphQL endpoint was found */
+  endpointUrl: string;
+}
+
+/**
+ * Result of GraphQL introspection attempt
+ */
+export interface GraphQLDiscoveryResult {
+  /** Whether a GraphQL endpoint was found */
+  found: boolean;
+  /** Whether introspection is enabled */
+  introspectionEnabled: boolean;
+  /** The parsed schema if introspection succeeded */
+  schema?: ParsedGraphQLSchema;
+  /** URL of the GraphQL endpoint */
+  endpointUrl?: string;
+  /** Locations that were probed */
+  probedLocations: string[];
+  /** Time taken to discover (ms) */
+  discoveryTime: number;
+  /** Error message if discovery failed */
+  error?: string;
+}
+
+/**
+ * Options for GraphQL discovery
+ */
+export interface GraphQLDiscoveryOptions {
+  /** Maximum time to spend probing (ms) */
+  timeout?: number;
+  /** Only probe these specific locations */
+  probeLocations?: string[];
+  /** Headers to send with probe requests */
+  headers?: Record<string, string>;
+  /** Whether to perform full introspection or just endpoint detection */
+  fullIntrospection?: boolean;
+  /** Maximum depth for type traversal */
+  maxTypeDepth?: number;
+}
+
+/**
+ * A GraphQL query pattern generated from schema
+ */
+export interface GraphQLQueryPattern {
+  /** The query field name (e.g., "user", "posts") */
+  fieldName: string;
+  /** Description from schema */
+  description?: string;
+  /** Required arguments */
+  requiredArgs: GraphQLArgument[];
+  /** Optional arguments */
+  optionalArgs: GraphQLArgument[];
+  /** Return type */
+  returnType: GraphQLTypeRef;
+  /** Generated query template */
+  queryTemplate: string;
+  /** Suggested field selections (based on return type) */
+  suggestedFields: string[];
+  /** Whether this looks like a list query */
+  isList: boolean;
+  /** Whether this looks like pagination (has first/after or limit/offset args) */
+  supportsPagination: boolean;
+  /** Pagination style if detected */
+  paginationStyle?: 'relay' | 'offset' | 'cursor';
+}
+
+/**
+ * Result of generating patterns from GraphQL schema
+ */
+export interface GraphQLPatternGenerationResult {
+  /** Number of patterns generated */
+  patternsGenerated: number;
+  /** IDs of generated patterns */
+  patternIds: string[];
+  /** Query patterns extracted from schema */
+  queryPatterns: GraphQLQueryPattern[];
+  /** Fields that couldn't be converted to patterns */
+  skippedFields: Array<{
+    fieldName: string;
+    reason: string;
+  }>;
+  /** Warnings during generation */
+  warnings: string[];
+}

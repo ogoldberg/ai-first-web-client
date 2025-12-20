@@ -83,7 +83,7 @@ See [API_DOCUMENTATION_DISCOVERY_PLAN.md](API_DOCUMENTATION_DISCOVERY_PLAN.md) f
 
 | ID | Phase | Task | Effort | Status | Notes |
 |----|-------|------|--------|--------|-------|
-| D-001 | 1 | GraphQL Introspection | L | | Auto-discover GraphQL schema via `__schema` query (supersedes I-012) |
+| D-001 | 1 | GraphQL Introspection | L | DONE | Auto-discover GraphQL schema via `__schema` query (supersedes I-012) |
 | D-002 | 2 | API Docs Page Detection | L | | Parse HTML API documentation (/docs, /developers, etc.) |
 | D-003 | 3 | Link Relation Discovery | M | | RFC 8288 Link headers, HTML `<link>` tags, HATEOAS |
 | D-004 | 4 | OpenAPI Enhancement | M | | $ref resolution, POST/PUT/DELETE support, better YAML |

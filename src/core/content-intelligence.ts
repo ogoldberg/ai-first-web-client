@@ -31,6 +31,10 @@ import type {
   ContentMapping,
 } from '../types/api-patterns.js';
 import { ApiPatternRegistry } from './api-pattern-learner.js';
+import {
+  discoverGraphQLCached,
+  generatePatternsFromGraphQLSchema,
+} from './graphql-introspection.js';
 
 // Create a require function for ESM compatibility
 const require = createRequire(import.meta.url);
@@ -81,6 +85,7 @@ export type ExtractionStrategy =
   | 'api:devto'
   | 'api:learned'
   | 'api:openapi'
+  | 'api:graphql'
   | 'cache:google'
   | 'cache:archive'
   | 'parse:static'
@@ -281,6 +286,9 @@ export class ContentIntelligence {
       // 5b. OpenAPI/Swagger discovery (probe for API specs - expensive, try after other methods)
       { name: 'api:openapi', fn: () => this.tryOpenAPIDiscovery(url, opts) },
 
+      // 5c. GraphQL introspection (discover GraphQL APIs - expensive, try after other methods)
+      { name: 'api:graphql', fn: () => this.tryGraphQLIntrospection(url, opts) },
+
       // 6. Google Cache (fallback only - use if direct fetch failed)
       { name: 'cache:google', fn: () => this.tryGoogleCache(url, opts) },
 
@@ -381,6 +389,7 @@ export class ContentIntelligence {
       'api:devto': () => this.tryDevToAPI(url, opts),
       'api:learned': () => this.tryLearnedPatterns(url, opts),
       'api:openapi': () => this.tryOpenAPIDiscovery(url, opts),
+      'api:graphql': () => this.tryGraphQLIntrospection(url, opts),
       'cache:google': () => this.tryGoogleCache(url, opts),
       'cache:archive': () => this.tryArchiveOrg(url, opts),
       'parse:static': () => this.tryStaticParsing(url, opts),
@@ -1107,6 +1116,121 @@ export class ContentIntelligence {
       return null;
     } catch (error) {
       logger.intelligence.debug('OpenAPI discovery failed', {
+        domain,
+        error: error instanceof Error ? error.message : String(error),
+        time: Date.now() - startTime,
+      });
+      return null;
+    }
+  }
+
+  /**
+   * Try to discover GraphQL endpoint via introspection
+   * and generate patterns from the schema
+   */
+  private async tryGraphQLIntrospection(
+    url: string,
+    opts: ContentIntelligenceOptions
+  ): Promise<ContentResult | null> {
+    const domain = new URL(url).hostname;
+
+    // Check if we already have GraphQL patterns for this domain
+    await this.ensurePatternRegistryInitialized();
+    const existingPatterns = this.patternRegistry.findMatchingPatterns(url);
+    const hasGraphQLPatterns = existingPatterns.some(m => m.pattern.id.startsWith('graphql:'));
+
+    if (hasGraphQLPatterns) {
+      // Already have GraphQL patterns - they'll be tried via tryLearnedPatterns
+      logger.intelligence.debug('GraphQL patterns already exist for domain', { domain });
+      return null;
+    }
+
+    // Try to discover GraphQL endpoint
+    const startTime = Date.now();
+    try {
+      const result = await discoverGraphQLCached(domain, {
+        timeout: opts.timeout ? opts.timeout / 2 : 10000,
+        headers: opts.headers,
+        fullIntrospection: true,
+      });
+
+      if (!result.found) {
+        logger.intelligence.debug('No GraphQL endpoint found', {
+          domain,
+          time: Date.now() - startTime,
+        });
+        return null;
+      }
+
+      if (!result.introspectionEnabled || !result.schema) {
+        logger.intelligence.debug('GraphQL endpoint found but introspection disabled', {
+          domain,
+          endpointUrl: result.endpointUrl,
+          time: Date.now() - startTime,
+        });
+        return null;
+      }
+
+      // Generate patterns from the schema
+      const patterns = generatePatternsFromGraphQLSchema(result.schema);
+
+      if (patterns.length === 0) {
+        logger.intelligence.debug('No patterns generated from GraphQL schema', {
+          domain,
+          time: Date.now() - startTime,
+        });
+        return null;
+      }
+
+      // Register the patterns
+      for (const pattern of patterns) {
+        this.patternRegistry.addPattern(pattern);
+      }
+
+      logger.intelligence.info('GraphQL introspection successful', {
+        domain,
+        endpointUrl: result.endpointUrl,
+        patternsGenerated: patterns.length,
+        time: Date.now() - startTime,
+      });
+
+      // Now try to find and apply a matching pattern for this URL
+      const matches = this.patternRegistry.findMatchingPatterns(url);
+      const graphqlMatches = matches.filter(m => m.pattern.id.startsWith('graphql:'));
+
+      if (graphqlMatches.length === 0) {
+        // No patterns match this specific URL, but we discovered the API
+        // Return a result indicating the discovery
+        return {
+          content: {
+            title: `GraphQL API discovered at ${result.endpointUrl}`,
+            text: `GraphQL endpoint discovered with ${patterns.length} query patterns available. Use the GraphQL endpoint directly for queries.`,
+            markdown: `# GraphQL API Discovered\n\n**Endpoint:** ${result.endpointUrl}\n\n**Available Queries:** ${patterns.length}\n\n*Introspection revealed the schema. Query patterns have been registered for future use.*`,
+          },
+          meta: {
+            url,
+            finalUrl: result.endpointUrl || url,
+            strategy: 'api:graphql',
+            strategiesAttempted: ['api:graphql'],
+            timing: Date.now() - startTime,
+            confidence: 'high',
+          },
+          warnings: [],
+        };
+      }
+
+      // Try to apply the first matching pattern
+      for (const match of graphqlMatches) {
+        const contentResult = await this.applyLearnedPattern(match, url, domain, opts);
+        if (contentResult) {
+          contentResult.meta.strategy = 'api:graphql';
+          return contentResult;
+        }
+      }
+
+      return null;
+    } catch (error) {
+      logger.intelligence.debug('GraphQL introspection failed', {
         domain,
         error: error instanceof Error ? error.message : String(error),
         time: Date.now() - startTime,
@@ -3816,6 +3940,7 @@ export class ContentIntelligence {
       { strategy: 'api:predicted', available: true },
       { strategy: 'api:learned', available: true, note: 'Uses learned API patterns from previous extractions' },
       { strategy: 'api:openapi', available: true, note: 'Discovers and uses OpenAPI/Swagger specifications' },
+      { strategy: 'api:graphql', available: true, note: 'Discovers and introspects GraphQL endpoints' },
       { strategy: 'cache:google', available: true, note: 'May be rate-limited' },
       { strategy: 'cache:archive', available: true, note: 'May have stale content' },
       { strategy: 'parse:static', available: true },
