@@ -35,6 +35,7 @@ import type {
   SiteSimilarityScore,
   VariableExtractor,
 } from '../types/api-patterns.js';
+import { createProvenance, recordDecay } from '../types/provenance.js';
 
 // Create a logger for patterns
 const patternsLogger = logger.create('ApiPatternRegistry');
@@ -671,6 +672,7 @@ export class ApiPatternRegistry {
     patternsLogger.info('Bootstrapping pattern registry');
 
     for (const bootstrap of BOOTSTRAP_PATTERNS) {
+      const now = Date.now();
       const pattern: LearnedApiPattern = {
         ...bootstrap.pattern,
         id: `bootstrap:${bootstrap.source}`,
@@ -679,8 +681,15 @@ export class ApiPatternRegistry {
           successCount: bootstrap.initialSuccessCount,
           confidence: bootstrap.initialConfidence,
         },
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
+        createdAt: now,
+        updatedAt: now,
+        // Add provenance metadata (CX-006)
+        provenance: createProvenance('bootstrap', {
+          sourceDomain: bootstrap.pattern.metrics.domains[0],
+          createdBy: 'system',
+          tags: ['bootstrap', bootstrap.source],
+          sourceMetadata: { source: bootstrap.source },
+        }),
       };
 
       this.addToIndexes(pattern);
@@ -1025,7 +1034,8 @@ export class ApiPatternRegistry {
     validation: PatternValidation
   ): Promise<LearnedApiPattern> {
     const domain = new URL(sourceUrl).hostname;
-    const id = `learned:${domain}:${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const now = Date.now();
+    const id = `learned:${domain}:${now}-${Math.random().toString(36).slice(2, 8)}`;
 
     // Infer extractors from the URL and endpoint
     const { extractors, extractedValues } = this.inferExtractors(
@@ -1055,10 +1065,16 @@ export class ApiPatternRegistry {
         failureCount: 0,
         confidence: 0.5, // Start with moderate confidence
         domains: [domain],
-        lastSuccess: Date.now(),
+        lastSuccess: now,
       },
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
+      createdAt: now,
+      updatedAt: now,
+      // Add provenance metadata (CX-006)
+      provenance: createProvenance('api_extraction', {
+        sourceUrl,
+        sourceDomain: domain,
+        tags: ['learned', templateType],
+      }),
     };
 
     this.addToIndexes(pattern);
@@ -1613,9 +1629,10 @@ export class ApiPatternRegistry {
     // Create the transferred pattern with deep copy to prevent mutations to source
     // JSON parse/stringify creates a true deep copy of all nested objects
     const sourceDeepCopy = JSON.parse(JSON.stringify(sourcePattern)) as LearnedApiPattern;
+    const now = Date.now();
     const transferredPattern: LearnedApiPattern = {
       ...sourceDeepCopy,
-      id: `transfer:${sourcePatternId}:${targetDomain}:${Date.now()}`,
+      id: `transfer:${sourcePatternId}:${targetDomain}:${now}`,
       urlPatterns: [targetUrlPattern],
       metrics: {
         ...sourceDeepCopy.metrics,
@@ -1628,8 +1645,18 @@ export class ApiPatternRegistry {
         domains: [targetDomain],
         avgResponseTime: undefined,
       },
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
+      createdAt: now,
+      updatedAt: now,
+      // Add provenance metadata (CX-006)
+      provenance: createProvenance('cross_site_transfer', {
+        sourcePatternId,
+        sourceDomain: sourcePattern.metrics.domains[0],
+        tags: ['transferred', targetDomain],
+        sourceMetadata: {
+          similarity: similarity.overall,
+          explanation: similarity.explanation,
+        },
+      }),
     };
 
     // Add to registry
@@ -1834,9 +1861,20 @@ export class ApiPatternRegistry {
     // Generate patterns from the spec
     const patterns = generatePatternsFromOpenAPISpec(discovery.spec);
 
-    // Add each pattern to the registry
+    // Add each pattern to the registry with provenance (CX-006)
     const patternIds: string[] = [];
     for (const pattern of patterns) {
+      // Add provenance metadata for OpenAPI-discovered patterns
+      pattern.provenance = createProvenance('openapi_discovery', {
+        sourceUrl: discovery.specUrl,
+        sourceDomain: domain,
+        tags: ['openapi', 'spec-derived'],
+        sourceMetadata: {
+          specVersion: discovery.spec.version,
+          specTitle: discovery.spec.title,
+        },
+      });
+
       this.addToIndexes(pattern);
       patternIds.push(pattern.id);
 
