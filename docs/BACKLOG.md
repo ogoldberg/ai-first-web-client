@@ -121,6 +121,16 @@ Note: "Order" reflects the implementation sequence from the plan document, optim
 | O-005 | Add debug/replay trace recording | M | Features | Record tier decisions, selectors tried, validation reasons for failure reproduction |
 | O-006 | Extraction quality benchmarking | L | Testing | Offline corpus + regression suite for content extraction and table parsing |
 
+### Go-To-Market (GTM)
+
+| ID | Task | Effort | Category | Notes |
+|----|------|--------|----------|-------|
+| GTM-001 | Usage metering & tier cost reporting | M | Features | Collect per-request tier usage and cost signals |
+| GTM-002 | Basic analytics dashboard | M | Features | Aggregate latency, tier usage, success rate |
+| GTM-003 | Hosted alpha checklist | S | Documentation | Infra, auth, rate limiting, logging, onboarding |
+| GTM-004 | Pricing & packaging doc | S | Documentation | Public-facing pricing tiers and usage model |
+| GTM-005 | SLA/support policy draft | S | Documentation | Define enterprise support and uptime targets |
+
 ### LLM Customer Experience
 
 | ID | Task | Effort | Category | Notes |
