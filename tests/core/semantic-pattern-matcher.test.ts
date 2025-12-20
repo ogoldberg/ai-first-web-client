@@ -487,6 +487,7 @@ describe('SemanticPatternMatcher', () => {
       expect(result.patterns.length).toBe(2);
       // The high confidence pattern should rank first despite slightly lower vector similarity
       // due to the weighted combination
+      expect(result.patterns[0].embeddingId).toBe('high-conf');
     });
 
     it('should factor in recency', async () => {

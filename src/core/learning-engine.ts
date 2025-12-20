@@ -255,9 +255,16 @@ export class LearningEngine {
     // 1. Try exact/prefix match first (synchronous, fast)
     const syncMatch = this.findPattern(url);
     if (syncMatch) {
+      // Determine if this is an exact or prefix match
+      let isExactMatch = false;
+      try {
+        isExactMatch = new URL(url).pathname === new URL(syncMatch.endpoint).pathname;
+      } catch {
+        // In case of URL parsing errors, default to prefix match as a safe fallback
+      }
       return {
         pattern: syncMatch,
-        matchType: 'exact', // findPattern returns exact or prefix match
+        matchType: isExactMatch ? 'exact' : 'prefix',
       };
     }
 

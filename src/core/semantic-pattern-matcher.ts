@@ -531,12 +531,12 @@ export class SemanticPatternMatcher {
     const vectorScore = searchResult.score;
 
     // Pattern confidence (normalize to 0-1)
-    const confidence = pattern.confidence || 0.5;
+    const confidence = pattern.confidence ?? 0.5;
     const confidenceScore = typeof confidence === 'number' ? confidence : 0.5;
 
     // Recency score (exponential decay over 30 days)
     const now = Date.now();
-    const lastUsed = pattern.lastUsed || searchResult.metadata.createdAt;
+    const lastUsed = pattern.lastUsed ?? searchResult.metadata.createdAt;
     const daysSinceUse = (now - lastUsed) / (1000 * 60 * 60 * 24);
     const recencyScore = Math.exp(-daysSinceUse / 30);
 
