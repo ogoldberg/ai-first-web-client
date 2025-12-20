@@ -281,7 +281,7 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ## Current Task: CX-008 Memory Isolation + Shared Pool
 
-**Status:** Not Started
+**Status:** In Progress
 
 Add per-tenant store with opt-in shared pool for multi-tenant deployments.
 
