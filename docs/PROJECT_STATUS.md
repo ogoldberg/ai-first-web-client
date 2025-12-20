@@ -280,9 +280,11 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ---
 
-## Current Task: None
+## Current Task: Vector Embedding Storage Planning
 
-**Status:** Awaiting next task
+**Status:** Design complete, ready for implementation
+
+**Next up:** V-001 (VectorStore Core) - Install LanceDB, create VectorStore class
 
 **Previously completed:**
 
@@ -293,6 +295,19 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 - CX-006: Learning Provenance Metadata
 - CX-007: Embedded Store Migration
 - CX-008: Memory Isolation + Shared Pool
+
+### Phase 5: Vector Embedding Storage - PLANNED
+
+See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for full design.
+
+**Goal:** Add semantic similarity search using LanceDB as a complementary vector database to SQLite.
+
+| ID | Phase | Task | Status |
+|----|-------|------|--------|
+| V-001 | 1 | VectorStore Core | TODO |
+| V-002 | 2 | Embedding Pipeline | TODO |
+| V-003 | 3 | Query Integration | TODO |
+| V-004 | 4 | Extended Features | TODO |
 
 ---
 

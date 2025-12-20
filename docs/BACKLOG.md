@@ -112,6 +112,29 @@ Note: "Order" reflects the implementation sequence from the plan document, optim
 
 ---
 
+## P1.5: Vector Embedding Storage (New Initiative)
+
+See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the full design.
+
+**Goal:** Add semantic similarity search for patterns, skills, and content using LanceDB as a complementary vector database to SQLite, enabling "find similar patterns" instead of just exact/template matching.
+
+**Architecture:** SQLite (structured data, ACID) + LanceDB (vector search, KNN) linked by ID. Embeddings generated via `@xenova/transformers` (already in project).
+
+| ID | Phase | Task | Effort | Status | Notes |
+|----|-------|------|--------|--------|-------|
+| V-001 | 1 | VectorStore Core | L | TODO | Install LanceDB, create VectorStore class with CRUD ops, unit tests |
+| V-002 | 2 | Embedding Pipeline | L | TODO | Connect EmbeddingProvider to VectorStore, ingestion pipeline, auto-index patterns, migration utility |
+| V-003 | 3 | Query Integration | M | TODO | SemanticPatternMatcher, LearningEngine integration, fallback logic, performance tuning |
+| V-004 | 4 | Extended Features | M | TODO | Skill similarity, error pattern matching, content dedup, analytics |
+
+**Benefits:**
+- Find semantically similar patterns even with different text
+- Cross-domain pattern transfer based on meaning, not just URL structure
+- Better error matching for known issues
+- Foundation for future LLM-assisted learning
+
+---
+
 ## P2: Medium Priority (Plan For)
 
 ### Debugging & Observability
