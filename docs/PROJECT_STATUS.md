@@ -280,11 +280,11 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ---
 
-## Current Task: V-004 (Extended Features)
+## Current Task: Next from backlog
 
-**Status:** In Progress
+**Status:** Complete
 
-**Goal:** Skill similarity search, error pattern matching, content dedup, analytics
+**Previously V-004:** Skill similarity search, error pattern matching, content dedup, analytics - DONE
 
 **Previously completed:**
 
@@ -310,7 +310,7 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for ful
 | V-001 | 1 | VectorStore Core | DONE |
 | V-002 | 2 | Embedding Pipeline | DONE |
 | V-003 | 3 | Query Integration | DONE |
-| V-004 | 4 | Extended Features | IN PROGRESS |
+| V-004 | 4 | Extended Features | DONE |
 
 ---
 
@@ -318,6 +318,15 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for ful
 
 ### v0.5.0 (2025-12-20)
 
+- Added V-004: Extended Features - Skill similarity, error matching, content dedup, analytics
+  - New SemanticSearchExtended class for extended semantic search capabilities
+  - Skill similarity search: find skills by query, action type, or domain
+  - Error pattern matching: find similar errors and suggest retry strategies
+  - Content deduplication: detect duplicate content and find near-duplicates
+  - Content fingerprinting for quick similarity comparison
+  - Analytics and reporting: embedding counts, search metrics, coverage reports
+  - Similarity distribution tracking across search buckets
+  - 45 new tests for extended semantic search
 - Added V-003: Query Integration - Semantic pattern matching for LearningEngine
   - New SemanticPatternMatcher class for similarity-based pattern search
   - Converts URLs and content to embeddings for semantic matching
