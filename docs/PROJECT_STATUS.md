@@ -259,7 +259,7 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 | D-003 | 4 | Link Discovery | Complete |
 | D-002 | 5 | Docs Page Detection | Complete |
 | D-009 | 6 | Auth Workflow Helper | Complete |
-| D-005 | 7 | AsyncAPI Discovery | Planned |
+| D-005 | 7 | AsyncAPI Discovery | In Progress |
 | D-006 | 8 | Alt Spec Formats | Planned |
 | D-007 | 9 | Robots/Sitemap Analysis | Planned |
 | D-010 | 10 | Backend Framework Fingerprinting | Planned |
