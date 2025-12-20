@@ -279,6 +279,12 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ---
 
+## Current Task: CX-001 Response Schema Versioning
+
+**Status:** In Progress
+
+---
+
 ## Changelog
 
 ### v0.5.0 (2025-12-20)
