@@ -4,7 +4,7 @@
 **Version:** 0.5.0
 **Current Phase:** Production Readiness (Phase 2)
 **Total Code:** ~16,000 lines TypeScript
-**Tests:** 921 passing + 44 live tests
+**Tests:** 939 passing + 44 live tests
 
 ---
 
@@ -148,9 +148,9 @@ The LLM Browser MCP Server is an intelligent browser designed specifically for L
 | Failure Learning | 59 | Failure classification, anti-patterns, retry strategies |
 | GraphQL Introspection | 49 | Endpoint detection, schema parsing, pattern generation |
 | Discovery Orchestrator | 39 | Cache, source discovery, aggregation, error handling |
-| Link Discovery | 69 | RFC 8288 headers, HTML links, HATEOAS (HAL, JSON:API, Siren) |
+| Link Discovery | 87 | RFC 8288 headers, HTML links, HATEOAS (HAL, JSON:API, Siren, Collection+JSON, Hydra) |
 | Site API Live Tests | 44 | Real API requests (Reddit, HN, GitHub, Wikipedia, StackOverflow, NPM, PyPI, Dev.to) |
-| **Total** | **921 + 44 live** | All passing |
+| **Total** | **939 + 44 live** | All passing |
 
 ---
 

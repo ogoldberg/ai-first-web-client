@@ -13,6 +13,8 @@ import {
   extractHalLinks,
   extractJsonApiLinks,
   extractSirenLinks,
+  extractCollectionJsonLinks,
+  extractHydraLinks,
   extractHateoasLinks,
   discoverLinks,
   generatePatternsFromLinks,
@@ -109,6 +111,26 @@ describe('parseLinkHeader', () => {
 
     expect(links).toHaveLength(1);
     expect(links[0].href).toBe('/api?a=1,b=2');
+  });
+
+  it('should handle escaped quotes in title', () => {
+    // Single backslash before quote - quote is escaped
+    const header = '</api>; rel="self"; title="foo\\"bar"';
+    const links = parseLinkHeader(header);
+
+    expect(links).toHaveLength(1);
+    // The title parsing extracts the value between quotes
+  });
+
+  it('should handle escaped backslashes before quotes', () => {
+    // Two backslashes before quote - backslash is escaped, quote is not
+    // title="foo\\" means the value ends at the second backslash, then "bar" is another link
+    const header = '</api>; rel="self"; title="test", </api2>; rel="next"';
+    const links = parseLinkHeader(header);
+
+    expect(links).toHaveLength(2);
+    expect(links[0].href).toBe('/api');
+    expect(links[1].href).toBe('/api2');
   });
 
   it('should handle hreflang attribute', () => {
@@ -534,6 +556,208 @@ describe('extractSirenLinks', () => {
 });
 
 // ============================================
+// COLLECTION+JSON LINK EXTRACTION
+// ============================================
+
+describe('extractCollectionJsonLinks', () => {
+  it('should extract collection href as self link', () => {
+    const json = {
+      collection: {
+        version: '1.0',
+        href: 'https://api.example.com/friends/',
+      },
+    };
+
+    const links = extractCollectionJsonLinks(json);
+
+    expect(links).toHaveLength(1);
+    expect(links[0].rel).toBe('self');
+    expect(links[0].href).toBe('https://api.example.com/friends/');
+  });
+
+  it('should extract collection-level links', () => {
+    const json = {
+      collection: {
+        href: '/friends/',
+        links: [
+          { rel: 'feed', href: '/friends/rss', prompt: 'RSS Feed' },
+          { rel: 'queries', href: '/friends/search' },
+        ],
+      },
+    };
+
+    const links = extractCollectionJsonLinks(json);
+
+    expect(links).toHaveLength(3); // self + 2 links
+    expect(links[1].rel).toBe('feed');
+    expect(links[1].href).toBe('/friends/rss');
+    expect(links[1].title).toBe('RSS Feed');
+    expect(links[2].rel).toBe('queries');
+  });
+
+  it('should extract links from items', () => {
+    const json = {
+      collection: {
+        href: '/friends/',
+        items: [
+          { href: '/friends/jdoe' },
+          {
+            href: '/friends/msmith',
+            links: [{ rel: 'blog', href: '/friends/msmith/blog' }],
+          },
+        ],
+      },
+    };
+
+    const links = extractCollectionJsonLinks(json);
+
+    // self, item, item, blog link
+    expect(links).toHaveLength(4);
+    expect(links.filter(l => l.rel === 'item')).toHaveLength(2);
+    expect(links.find(l => l.rel === 'blog')?.href).toBe('/friends/msmith/blog');
+  });
+
+  it('should resolve relative URLs', () => {
+    const json = {
+      collection: {
+        href: '/friends/',
+        links: [{ rel: 'feed', href: '/friends/rss' }],
+      },
+    };
+
+    const links = extractCollectionJsonLinks(json, 'https://api.example.com');
+
+    expect(links[0].href).toBe('https://api.example.com/friends/');
+    expect(links[1].href).toBe('https://api.example.com/friends/rss');
+  });
+
+  it('should set hypermediaFormat to collection+json', () => {
+    const json = {
+      collection: {
+        href: '/friends/',
+      },
+    };
+
+    const links = extractCollectionJsonLinks(json);
+
+    expect(links[0].hypermediaFormat).toBe('collection+json');
+  });
+
+  it('should return empty array for non-collection+json', () => {
+    expect(extractCollectionJsonLinks({})).toHaveLength(0);
+    expect(extractCollectionJsonLinks({ data: [] })).toHaveLength(0);
+    expect(extractCollectionJsonLinks(null)).toHaveLength(0);
+  });
+});
+
+// ============================================
+// HYDRA LINK EXTRACTION
+// ============================================
+
+describe('extractHydraLinks', () => {
+  it('should extract @id as self link', () => {
+    const json = {
+      '@context': 'http://www.w3.org/ns/hydra/context.jsonld',
+      '@id': '/api/users',
+    };
+
+    const links = extractHydraLinks(json);
+
+    expect(links).toHaveLength(1);
+    expect(links[0].rel).toBe('self');
+    expect(links[0].href).toBe('/api/users');
+  });
+
+  it('should extract pagination links from hydra:view', () => {
+    const json = {
+      '@context': 'http://www.w3.org/ns/hydra/context.jsonld',
+      '@id': '/api/users',
+      'hydra:view': {
+        '@id': '/api/users?page=2',
+        'hydra:first': '/api/users?page=1',
+        'hydra:last': '/api/users?page=5',
+        'hydra:next': '/api/users?page=3',
+        'hydra:previous': '/api/users?page=1',
+      },
+    };
+
+    const links = extractHydraLinks(json);
+
+    expect(links.find(l => l.rel === 'first')?.href).toBe('/api/users?page=1');
+    expect(links.find(l => l.rel === 'last')?.href).toBe('/api/users?page=5');
+    expect(links.find(l => l.rel === 'next')?.href).toBe('/api/users?page=3');
+    expect(links.find(l => l.rel === 'prev')?.href).toBe('/api/users?page=1');
+  });
+
+  it('should extract operations', () => {
+    const json = {
+      '@context': 'http://www.w3.org/ns/hydra/context.jsonld',
+      '@id': '/api/users/123',
+      'hydra:operation': [
+        { 'hydra:method': 'GET', 'hydra:title': 'Get user' },
+        { 'hydra:method': 'PUT', 'hydra:title': 'Update user' },
+        { 'hydra:method': 'DELETE', 'hydra:title': 'Delete user' },
+      ],
+    };
+
+    const links = extractHydraLinks(json);
+
+    expect(links.filter(l => l.rel.startsWith('operation:'))).toHaveLength(3);
+    expect(links.find(l => l.rel === 'operation:get')?.title).toBe('Get user');
+    expect(links.find(l => l.rel === 'operation:put')?.title).toBe('Update user');
+    expect(links.find(l => l.rel === 'operation:delete')?.title).toBe('Delete user');
+  });
+
+  it('should extract links from hydra:member', () => {
+    const json = {
+      '@context': 'http://www.w3.org/ns/hydra/context.jsonld',
+      '@id': '/api/users',
+      'hydra:member': [
+        { '@id': '/api/users/1' },
+        { '@id': '/api/users/2' },
+        { '@id': '/api/users/3' },
+      ],
+    };
+
+    const links = extractHydraLinks(json);
+
+    expect(links.filter(l => l.rel === 'item')).toHaveLength(3);
+  });
+
+  it('should resolve relative URLs', () => {
+    const json = {
+      '@context': 'http://www.w3.org/ns/hydra/context.jsonld',
+      '@id': '/api/users',
+      'hydra:view': {
+        'hydra:next': '/api/users?page=2',
+      },
+    };
+
+    const links = extractHydraLinks(json, 'https://api.example.com');
+
+    expect(links[0].href).toBe('https://api.example.com/api/users');
+    expect(links.find(l => l.rel === 'next')?.href).toBe('https://api.example.com/api/users?page=2');
+  });
+
+  it('should set hypermediaFormat to hydra', () => {
+    const json = {
+      '@context': 'http://www.w3.org/ns/hydra/context.jsonld',
+      '@id': '/api/users',
+    };
+
+    const links = extractHydraLinks(json);
+
+    expect(links[0].hypermediaFormat).toBe('hydra');
+  });
+
+  it('should return empty array for non-hydra', () => {
+    expect(extractHydraLinks({})).toHaveLength(0);
+    expect(extractHydraLinks({ _links: {} })).toHaveLength(0);
+    expect(extractHydraLinks(null)).toHaveLength(0);
+  });
+});
+
+// ============================================
 // COMBINED HATEOAS EXTRACTION
 // ============================================
 
@@ -571,6 +795,30 @@ describe('extractHateoasLinks', () => {
     const links = extractHateoasLinks(json);
 
     expect(links[0].hypermediaFormat).toBe('siren');
+  });
+
+  it('should auto-detect and extract Collection+JSON links', () => {
+    const json = {
+      collection: {
+        href: '/friends/',
+        items: [{ href: '/friends/jdoe' }],
+      },
+    };
+
+    const links = extractHateoasLinks(json);
+
+    expect(links[0].hypermediaFormat).toBe('collection+json');
+  });
+
+  it('should auto-detect and extract Hydra links', () => {
+    const json = {
+      '@context': 'http://www.w3.org/ns/hydra/context.jsonld',
+      '@id': '/api/users',
+    };
+
+    const links = extractHateoasLinks(json);
+
+    expect(links[0].hypermediaFormat).toBe('hydra');
   });
 
   it('should return empty array for non-hypermedia JSON', () => {
@@ -697,6 +945,23 @@ describe('generatePatternsFromLinks', () => {
     const patterns = generatePatternsFromLinks(links, 'example.com');
 
     expect(patterns[0].headers?.Accept).toBe('application/hal+json');
+  });
+
+  it('should escape asterisks as literals in URL pattern', () => {
+    // URLs with asterisks should be escaped, not treated as wildcards
+    const links: DiscoveredLink[] = [
+      { href: 'https://example.com/files?token=*', rel: 'service', source: 'header', isApiLink: true, confidence: 0.85 },
+    ];
+
+    const patterns = generatePatternsFromLinks(links, 'example.com');
+
+    expect(patterns).toHaveLength(1);
+    // urlPatterns is an array
+    expect(patterns[0].urlPatterns).toHaveLength(1);
+    // The pattern should escape * to \* for a literal match
+    expect(patterns[0].urlPatterns[0]).toContain('\\*');
+    // It should NOT contain .* which would be a wildcard
+    expect(patterns[0].urlPatterns[0]).not.toContain('.*');
   });
 });
 

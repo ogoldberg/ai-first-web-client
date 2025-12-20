@@ -218,6 +218,19 @@ export function parseLinkHeader(headerValue: string, baseUrl?: string): Discover
 }
 
 /**
+ * Count consecutive backslashes before position i
+ */
+function countPrecedingBackslashes(str: string, i: number): number {
+  let count = 0;
+  let pos = i - 1;
+  while (pos >= 0 && str[pos] === '\\') {
+    count++;
+    pos--;
+  }
+  return count;
+}
+
+/**
  * Split Link header value respecting angle brackets
  */
 function splitLinkHeader(value: string): string[] {
@@ -233,8 +246,13 @@ function splitLinkHeader(value: string): string[] {
       inAngleBrackets = true;
     } else if (char === '>' && !inQuotes) {
       inAngleBrackets = false;
-    } else if (char === '"' && value[i - 1] !== '\\') {
-      inQuotes = !inQuotes;
+    } else if (char === '"') {
+      // A quote is escaped if preceded by an odd number of backslashes
+      // e.g., \" = escaped (1 backslash), \\" = not escaped (2 backslashes)
+      const backslashCount = countPrecedingBackslashes(value, i);
+      if (backslashCount % 2 === 0) {
+        inQuotes = !inQuotes;
+      }
     } else if (char === ',' && !inAngleBrackets && !inQuotes) {
       if (current.trim()) {
         parts.push(current.trim());
@@ -686,6 +704,197 @@ export function extractSirenLinks(json: unknown, baseUrl?: string): DiscoveredLi
 }
 
 /**
+ * Extract links from Collection+JSON response (RFC 6573)
+ */
+export function extractCollectionJsonLinks(json: unknown, baseUrl?: string): DiscoveredLink[] {
+  const links: DiscoveredLink[] = [];
+
+  if (!json || typeof json !== 'object') {
+    return links;
+  }
+
+  const obj = json as Record<string, unknown>;
+
+  // Collection+JSON wraps everything in a 'collection' object
+  if (!('collection' in obj) || typeof obj.collection !== 'object' || !obj.collection) {
+    return links;
+  }
+
+  const collection = obj.collection as Record<string, unknown>;
+
+  // Helper to resolve and add a link
+  const addLink = (href: string, rel: string, title?: string) => {
+    let resolvedHref = href;
+    if (baseUrl && !href.startsWith('http://') && !href.startsWith('https://')) {
+      try {
+        resolvedHref = new URL(href, baseUrl).href;
+      } catch {
+        // Keep original
+      }
+    }
+    links.push({
+      href: resolvedHref,
+      rel,
+      title,
+      source: 'hateoas',
+      hypermediaFormat: 'collection+json',
+      isApiLink: isApiRelatedLink(rel),
+      confidence: LINK_CONFIDENCE.hateoas,
+    });
+  };
+
+  // Collection href (self link)
+  if (typeof collection.href === 'string') {
+    addLink(collection.href, 'self');
+  }
+
+  // Collection-level links
+  if (Array.isArray(collection.links)) {
+    for (const link of collection.links) {
+      if (link && typeof link === 'object') {
+        const linkObj = link as Record<string, unknown>;
+        if (typeof linkObj.href === 'string' && typeof linkObj.rel === 'string') {
+          addLink(
+            linkObj.href,
+            linkObj.rel,
+            typeof linkObj.prompt === 'string' ? linkObj.prompt : undefined
+          );
+        }
+      }
+    }
+  }
+
+  // Links from individual items
+  if (Array.isArray(collection.items)) {
+    for (const item of collection.items) {
+      if (item && typeof item === 'object') {
+        const itemObj = item as Record<string, unknown>;
+        // Item href
+        if (typeof itemObj.href === 'string') {
+          addLink(itemObj.href, 'item');
+        }
+        // Item-level links
+        if (Array.isArray(itemObj.links)) {
+          for (const link of itemObj.links) {
+            if (link && typeof link === 'object') {
+              const linkObj = link as Record<string, unknown>;
+              if (typeof linkObj.href === 'string' && typeof linkObj.rel === 'string') {
+                addLink(
+                  linkObj.href,
+                  linkObj.rel,
+                  typeof linkObj.prompt === 'string' ? linkObj.prompt : undefined
+                );
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return links;
+}
+
+/**
+ * Extract links from Hydra (JSON-LD) response
+ */
+export function extractHydraLinks(json: unknown, baseUrl?: string): DiscoveredLink[] {
+  const links: DiscoveredLink[] = [];
+
+  if (!json || typeof json !== 'object') {
+    return links;
+  }
+
+  const obj = json as Record<string, unknown>;
+
+  // Helper to resolve and add a link
+  const addLink = (href: string, rel: string, title?: string) => {
+    let resolvedHref = href;
+    if (baseUrl && !href.startsWith('http://') && !href.startsWith('https://')) {
+      try {
+        resolvedHref = new URL(href, baseUrl).href;
+      } catch {
+        // Keep original
+      }
+    }
+    links.push({
+      href: resolvedHref,
+      rel,
+      title,
+      source: 'hateoas',
+      hypermediaFormat: 'hydra',
+      isApiLink: isApiRelatedLink(rel),
+      confidence: LINK_CONFIDENCE.hateoas,
+    });
+  };
+
+  // @id is the self link
+  if (typeof obj['@id'] === 'string') {
+    addLink(obj['@id'], 'self');
+  }
+
+  // hydra:view contains pagination links
+  if (obj['hydra:view'] && typeof obj['hydra:view'] === 'object') {
+    const view = obj['hydra:view'] as Record<string, unknown>;
+    if (typeof view['@id'] === 'string') {
+      addLink(view['@id'], 'self');
+    }
+    if (typeof view['hydra:first'] === 'string') {
+      addLink(view['hydra:first'], 'first');
+    }
+    if (typeof view['hydra:last'] === 'string') {
+      addLink(view['hydra:last'], 'last');
+    }
+    if (typeof view['hydra:next'] === 'string') {
+      addLink(view['hydra:next'], 'next');
+    }
+    if (typeof view['hydra:previous'] === 'string') {
+      addLink(view['hydra:previous'], 'prev');
+    }
+  }
+
+  // hydra:operation defines available operations
+  if (Array.isArray(obj['hydra:operation'])) {
+    for (const op of obj['hydra:operation']) {
+      if (op && typeof op === 'object') {
+        const opObj = op as Record<string, unknown>;
+        // Operations typically reference the current resource
+        if (typeof opObj['hydra:method'] === 'string') {
+          const method = opObj['hydra:method'] as string;
+          const title = typeof opObj['hydra:title'] === 'string' ? opObj['hydra:title'] : undefined;
+          // Use the current @id as href for operations
+          if (typeof obj['@id'] === 'string') {
+            links.push({
+              href: obj['@id'],
+              rel: `operation:${method.toLowerCase()}`,
+              title,
+              source: 'hateoas',
+              hypermediaFormat: 'hydra',
+              isApiLink: true,
+              confidence: LINK_CONFIDENCE.hateoas,
+            });
+          }
+        }
+      }
+    }
+  }
+
+  // Extract links from hydra:member items (embedded resources)
+  if (Array.isArray(obj['hydra:member'])) {
+    for (const member of obj['hydra:member']) {
+      if (member && typeof member === 'object') {
+        const memberObj = member as Record<string, unknown>;
+        if (typeof memberObj['@id'] === 'string') {
+          addLink(memberObj['@id'], 'item');
+        }
+      }
+    }
+  }
+
+  return links;
+}
+
+/**
  * Extract links from any detected hypermedia format
  */
 export function extractHateoasLinks(json: unknown, baseUrl?: string): DiscoveredLink[] {
@@ -702,6 +911,10 @@ export function extractHateoasLinks(json: unknown, baseUrl?: string): Discovered
       return extractJsonApiLinks(json, baseUrl);
     case 'siren':
       return extractSirenLinks(json, baseUrl);
+    case 'collection+json':
+      return extractCollectionJsonLinks(json, baseUrl);
+    case 'hydra':
+      return extractHydraLinks(json, baseUrl);
     default:
       return [];
   }
@@ -1003,6 +1216,6 @@ export function generatePatternsFromLinks(
  * Escape special regex characters to create a literal match pattern
  */
 function escapeRegexPattern(str: string): string {
-  // Escape regex special characters: . * + ? ^ $ { } ( ) | [ ] \
-  return '^' + str.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$';
+  // Escape all regex special characters including * for a literal match
+  return '^' + str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$';
 }
