@@ -213,29 +213,34 @@ export function getDaysSinceVerification(provenance: ProvenanceMetadata): number
 }
 
 /**
+ * Human-readable descriptions for pattern sources
+ * (defined at module level for performance)
+ */
+const SOURCE_DESCRIPTIONS: Record<PatternSource, string> = {
+  bootstrap: 'pre-seeded pattern',
+  api_extraction: 'learned from successful extraction',
+  openapi_discovery: 'discovered from OpenAPI spec',
+  graphql_introspection: 'discovered via GraphQL introspection',
+  asyncapi_discovery: 'discovered from AsyncAPI spec',
+  alt_spec_discovery: 'discovered from API spec (RAML/Blueprint/WADL)',
+  docs_page_detection: 'extracted from documentation page',
+  link_discovery: 'discovered from API links',
+  robots_sitemap: 'discovered from robots.txt/sitemap',
+  backend_fingerprinting: 'inferred from backend framework',
+  cross_site_transfer: 'transferred from similar site',
+  user_feedback: 'provided by user',
+  manual: 'manually configured',
+  unknown: 'unknown source',
+};
+
+/**
  * Get human-readable provenance summary
  */
 export function getProvenanceSummary(provenance: ProvenanceMetadata): string {
   const parts: string[] = [];
 
   // Source description
-  const sourceDescriptions: Record<PatternSource, string> = {
-    bootstrap: 'pre-seeded pattern',
-    api_extraction: 'learned from successful extraction',
-    openapi_discovery: 'discovered from OpenAPI spec',
-    graphql_introspection: 'discovered via GraphQL introspection',
-    asyncapi_discovery: 'discovered from AsyncAPI spec',
-    alt_spec_discovery: 'discovered from API spec (RAML/Blueprint/WADL)',
-    docs_page_detection: 'extracted from documentation page',
-    link_discovery: 'discovered from API links',
-    robots_sitemap: 'discovered from robots.txt/sitemap',
-    backend_fingerprinting: 'inferred from backend framework',
-    cross_site_transfer: 'transferred from similar site',
-    user_feedback: 'provided by user',
-    manual: 'manually configured',
-    unknown: 'unknown source',
-  };
-  parts.push(sourceDescriptions[provenance.source] || provenance.source);
+  parts.push(SOURCE_DESCRIPTIONS[provenance.source] || provenance.source);
 
   // Source URL
   if (provenance.sourceUrl) {
