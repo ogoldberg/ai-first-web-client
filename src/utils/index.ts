@@ -14,3 +14,5 @@ export * from './rate-limiter.js';
 export * from './retry.js';
 export * from './url-safety.js';
 export * from './vector-store.js';
+export * from './embedding-provider.js';
+export * from './embedding-pipeline.js';

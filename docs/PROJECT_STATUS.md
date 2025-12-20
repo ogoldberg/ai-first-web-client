@@ -4,7 +4,7 @@
 **Version:** 0.5.0
 **Current Phase:** Production Readiness (Phase 2)
 **Total Code:** ~16,000 lines TypeScript
-**Tests:** 1383 passing + 44 live tests
+**Tests:** 1657 passing + 44 live tests
 
 ---
 
@@ -280,11 +280,11 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ---
 
-## Current Task: V-002 (Embedding Pipeline)
+## Current Task: V-003 (Query Integration)
 
 **Status:** Next up
 
-**Goal:** Connect EmbeddingProvider to VectorStore, implement ingestion pipeline
+**Goal:** Create SemanticPatternMatcher, integrate with LearningEngine for semantic pattern search
 
 **Previously completed:**
 
@@ -296,6 +296,7 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 - CX-007: Embedded Store Migration
 - CX-008: Memory Isolation + Shared Pool
 - V-001: VectorStore Core (LanceDB integration)
+- V-002: Embedding Pipeline (EmbeddingProvider + ingestion + migration)
 
 ### Phase 5: Vector Embedding Storage - IN PROGRESS
 
@@ -306,7 +307,7 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for ful
 | ID | Phase | Task | Status |
 |----|-------|------|--------|
 | V-001 | 1 | VectorStore Core | DONE |
-| V-002 | 2 | Embedding Pipeline | TODO |
+| V-002 | 2 | Embedding Pipeline | DONE |
 | V-003 | 3 | Query Integration | TODO |
 | V-004 | 4 | Extended Features | TODO |
 
