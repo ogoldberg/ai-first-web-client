@@ -89,11 +89,12 @@ Note: "Order" reflects the implementation sequence from the plan document, optim
 | D-008 | 2 | Discovery Orchestrator | L | DONE | Unified pipeline with caching and prioritization |
 | D-004 | 3 | OpenAPI Enhancement | M | DONE | $ref resolution, POST/PUT/DELETE support, better YAML |
 | D-003 | 4 | Link Discovery | M | DONE | RFC 8288 Link headers, HTML `<link>` tags, HATEOAS |
-| D-002 | 5 | Docs Page Detection | L | | Parse HTML API documentation (/docs, /developers, etc.) |
+| D-002 | 5 | Docs Page Detection | L | DONE | Parse HTML API documentation (/docs, /developers, etc.) |
 | D-009 | 6 | Auth Workflow Helper | L | | Guided authentication setup for discovered APIs |
 | D-005 | 7 | AsyncAPI Discovery | M | | WebSocket, MQTT, Kafka event-driven APIs |
 | D-006 | 8 | Alt Spec Formats | M | | RAML, API Blueprint, WADL parsing |
 | D-007 | 9 | Robots/Sitemap Analysis | S | | Extract API hints from robots.txt/sitemap.xml |
+| D-010 | 10 | Backend Framework Fingerprinting | M | | Detect Rails, Django, Phoenix, FastAPI, Spring Boot, Laravel, Express from headers/HTML and apply convention-based API patterns |
 
 **Supersedes:** I-012 (GraphQL introspection), I-013 (Authentication workflow helper)
 

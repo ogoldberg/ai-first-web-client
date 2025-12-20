@@ -24,6 +24,11 @@ import {
   type LinkDiscoveryResult,
   type DiscoveredLink,
 } from './link-discovery.js';
+import {
+  discoverDocs,
+  generatePatternsFromDocs,
+  type DocsDiscoveryResult,
+} from './docs-page-discovery.js';
 import type { LearnedApiPattern, ParsedOpenAPISpec, OpenAPIDiscoveryOptions } from '../types/api-patterns.js';
 
 // ============================================
@@ -118,6 +123,7 @@ export interface DiscoveryResult {
     openapi?: ParsedOpenAPISpec;
     graphql?: GraphQLDiscoveryResult;
     links?: LinkDiscoveryResult;
+    docs?: DocsDiscoveryResult;
   };
 }
 
@@ -602,6 +608,82 @@ async function discoverLinksSource(
   }
 }
 
+/**
+ * Discover API documentation pages (HTML docs at /docs, /developers, etc.)
+ */
+async function discoverDocsSource(
+  domain: string,
+  options: DiscoveryOptions
+): Promise<DiscoveryResult> {
+  const startTime = Date.now();
+
+  try {
+    const result = await discoverDocs(domain, {
+      headers: options.headers,
+      fetchFn: options.fetchFn,
+      timeout: options.timeout || DEFAULT_SOURCE_TIMEOUT_MS,
+      maxProbes: 10,
+      followNavigation: true,
+    });
+
+    if (!result.found || result.endpoints.length === 0) {
+      return {
+        source: 'docs-page',
+        confidence: 0,
+        patterns: [],
+        metadata: {},
+        discoveryTime: Date.now() - startTime,
+        found: false,
+        error: result.error,
+      };
+    }
+
+    // Generate patterns from discovered endpoints
+    const patterns = generatePatternsFromDocs(result, domain);
+
+    // Extract metadata
+    const metadata: DiscoveryMetadata = {};
+    if (result.title) {
+      metadata.title = result.title;
+    }
+    if (result.apiBaseUrl) {
+      metadata.baseUrl = result.apiBaseUrl;
+    }
+    if (result.authInstructions) {
+      metadata.description = result.authInstructions;
+    }
+
+    discoveryLogger.info('Docs page discovery successful', {
+      domain,
+      docsUrl: result.docsUrl,
+      framework: result.framework,
+      endpoints: result.endpoints.length,
+      patterns: patterns.length,
+    });
+
+    return {
+      source: 'docs-page',
+      confidence: SOURCE_CONFIDENCE['docs-page'],
+      patterns,
+      metadata,
+      discoveryTime: Date.now() - startTime,
+      found: true,
+      rawData: { docs: result },
+    };
+  } catch (error) {
+    discoveryLogger.error('Docs page discovery failed', { domain, error });
+    return {
+      source: 'docs-page',
+      confidence: 0,
+      patterns: [],
+      metadata: {},
+      discoveryTime: Date.now() - startTime,
+      found: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
 // ============================================
 // ORCHESTRATION
 // ============================================
@@ -650,6 +732,13 @@ export async function discoverApiDocumentation(
     sources.push({
       name: 'links',
       discover: () => discoverLinksSource(domain, options),
+    });
+  }
+
+  if (!skipSources.has('docs-page')) {
+    sources.push({
+      name: 'docs-page',
+      discover: () => discoverDocsSource(domain, options),
     });
   }
 
@@ -784,11 +873,18 @@ export {
   discoverOpenAPISource,
   discoverGraphQLSource,
   discoverLinksSource,
+  discoverDocsSource,
   convertGraphQLPattern,
 };
 
-// Re-export link discovery types for convenience
+// Re-export discovery types for convenience
 export type {
   LinkDiscoveryResult,
   DiscoveredLink,
 } from './link-discovery.js';
+
+export type {
+  DocsDiscoveryResult,
+  DocumentedEndpoint,
+  DocFramework,
+} from './docs-page-discovery.js';

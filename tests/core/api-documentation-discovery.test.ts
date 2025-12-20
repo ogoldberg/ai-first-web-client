@@ -43,15 +43,23 @@ vi.mock('../../src/core/link-discovery.js', () => ({
   generatePatternsFromLinks: vi.fn(),
 }));
 
+vi.mock('../../src/core/docs-page-discovery.js', () => ({
+  discoverDocs: vi.fn(),
+  generatePatternsFromDocs: vi.fn(),
+}));
+
 import { discoverOpenAPICached, generatePatternsFromOpenAPISpec } from '../../src/core/openapi-discovery.js';
 import { discoverGraphQL } from '../../src/core/graphql-introspection.js';
 import { discoverLinks, generatePatternsFromLinks } from '../../src/core/link-discovery.js';
+import { discoverDocs, generatePatternsFromDocs } from '../../src/core/docs-page-discovery.js';
 
 const mockDiscoverOpenAPI = vi.mocked(discoverOpenAPICached);
 const mockGeneratePatterns = vi.mocked(generatePatternsFromOpenAPISpec);
 const mockDiscoverGraphQL = vi.mocked(discoverGraphQL);
 const mockDiscoverLinks = vi.mocked(discoverLinks);
 const mockGeneratePatternsFromLinks = vi.mocked(generatePatternsFromLinks);
+const mockDiscoverDocs = vi.mocked(discoverDocs);
+const mockGeneratePatternsFromDocs = vi.mocked(generatePatternsFromDocs);
 
 // ============================================
 // TEST UTILITIES
@@ -158,6 +166,14 @@ beforeEach(() => {
   // Default mock for link discovery (usually returns nothing found)
   mockDiscoverLinks.mockResolvedValue(createMockLinkDiscoveryResult(false));
   mockGeneratePatternsFromLinks.mockReturnValue([]);
+  // Default mock for docs-page discovery (usually returns nothing found)
+  mockDiscoverDocs.mockResolvedValue({
+    found: false,
+    endpoints: [],
+    navigationLinks: [],
+    discoveryTime: 50,
+  });
+  mockGeneratePatternsFromDocs.mockReturnValue([]);
 });
 
 afterEach(() => {
@@ -546,11 +562,14 @@ describe('Discovery Orchestration', () => {
       const result = await discoverApiDocumentation('example.com');
 
       expect(result.found).toBe(true);
-      expect(result.results).toHaveLength(3); // openapi, graphql, links
+      expect(result.results).toHaveLength(4); // openapi, graphql, links, docs-page
       // OpenAPI should be first (higher priority)
       expect(result.results[0].source).toBe('openapi');
       expect(result.results[1].source).toBe('graphql');
-      expect(result.results[2].source).toBe('links');
+      // links and docs-page order may vary
+      const sources = result.results.map(r => r.source);
+      expect(sources).toContain('links');
+      expect(sources).toContain('docs-page');
     });
 
     it('should deduplicate patterns by ID', async () => {
@@ -770,12 +789,13 @@ describe('Error Handling', () => {
     mockDiscoverOpenAPI.mockRejectedValue(new Error('OpenAPI error'));
     mockDiscoverGraphQL.mockRejectedValue(new Error('GraphQL error'));
     mockDiscoverLinks.mockRejectedValue(new Error('Links error'));
+    mockDiscoverDocs.mockRejectedValue(new Error('Docs error'));
 
     const result = await discoverApiDocumentation('example.com');
 
     expect(result.found).toBe(false);
     expect(result.allPatterns).toHaveLength(0);
-    expect(result.results).toHaveLength(3); // openapi, graphql, links
+    expect(result.results).toHaveLength(4); // openapi, graphql, links, docs-page
     expect(result.results.every((r) => r.error)).toBe(true);
   });
 

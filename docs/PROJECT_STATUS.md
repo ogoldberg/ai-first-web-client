@@ -4,7 +4,7 @@
 **Version:** 0.5.0
 **Current Phase:** Production Readiness (Phase 2)
 **Total Code:** ~16,000 lines TypeScript
-**Tests:** 939 passing + 44 live tests
+**Tests:** 1028 passing + 44 live tests
 
 ---
 
@@ -149,8 +149,9 @@ The LLM Browser MCP Server is an intelligent browser designed specifically for L
 | GraphQL Introspection | 49 | Endpoint detection, schema parsing, pattern generation |
 | Discovery Orchestrator | 39 | Cache, source discovery, aggregation, error handling |
 | Link Discovery | 87 | RFC 8288 headers, HTML links, HATEOAS (HAL, JSON:API, Siren, Collection+JSON, Hydra) |
+| Docs Page Discovery | 89 | Framework detection, endpoint extraction, pattern generation |
 | Site API Live Tests | 44 | Real API requests (Reddit, HN, GitHub, Wikipedia, StackOverflow, NPM, PyPI, Dev.to) |
-| **Total** | **939 + 44 live** | All passing |
+| **Total** | **1028 + 44 live** | All passing |
 
 ---
 
@@ -255,11 +256,12 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 | D-008 | 2 | Discovery Orchestrator | Complete |
 | D-004 | 3 | OpenAPI Enhancement | Complete |
 | D-003 | 4 | Link Discovery | Complete |
-| D-002 | 5 | Docs Page Detection | Planned |
+| D-002 | 5 | Docs Page Detection | Complete |
 | D-009 | 6 | Auth Workflow Helper | Planned |
 | D-005 | 7 | AsyncAPI Discovery | Planned |
 | D-006 | 8 | Alt Spec Formats | Planned |
 | D-007 | 9 | Robots/Sitemap Analysis | Planned |
+| D-010 | 10 | Backend Framework Fingerprinting | Planned |
 
 ---
 
@@ -267,6 +269,15 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ### v0.5.0 (2025-12-19)
 
+- Added API Documentation Discovery Phase 5: Docs Page Detection (D-002)
+  - Documentation URL probing at common locations (/docs, /api-docs, /developers, etc.)
+  - Framework detection for Swagger UI, Redoc, ReadMe, Slate, Docusaurus, GitBook, Mintlify, Stoplight
+  - Endpoint extraction from HTML tables, code blocks (curl, HTTP examples, fetch/axios), and headings
+  - Navigation link extraction for API documentation discovery
+  - API base URL and authentication instructions extraction
+  - Pattern generation from documented endpoints
+  - Integration with Discovery Orchestrator as 'docs-page' source
+  - 89 new tests for docs page discovery
 - Added API Documentation Discovery Phase 1: GraphQL Introspection (D-001)
   - Automatic GraphQL endpoint detection (probes /graphql, /api/graphql, etc.)
   - Full introspection query to discover schema types, queries, mutations
