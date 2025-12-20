@@ -47,6 +47,12 @@ import {
   type RobotsSitemapDiscoveryResult,
   type ApiHint,
 } from './robots-sitemap-discovery.js';
+import {
+  discoverBackendFrameworkCached,
+  type BackendFrameworkDiscoveryResult,
+  type BackendFramework,
+  type FrameworkFingerprintResult,
+} from './backend-framework-fingerprinting.js';
 import type { LearnedApiPattern, ParsedOpenAPISpec, OpenAPIDiscoveryOptions } from '../types/api-patterns.js';
 
 // ============================================
@@ -59,13 +65,14 @@ import type { LearnedApiPattern, ParsedOpenAPISpec, OpenAPIDiscoveryOptions } fr
 export type DiscoverySource =
   | 'openapi'
   | 'graphql'
-  | 'docs-page'        // HTML documentation pages
-  | 'links'            // RFC 8288 link relations
-  | 'asyncapi'         // AsyncAPI specs
-  | 'alt-spec'         // RAML, API Blueprint, WADL specs
-  | 'robots-sitemap'   // robots.txt and sitemap.xml hints
-  | 'raml'             // Legacy: use 'alt-spec' instead
-  | 'observed';        // Patterns learned from observation
+  | 'docs-page'           // HTML documentation pages
+  | 'links'               // RFC 8288 link relations
+  | 'asyncapi'            // AsyncAPI specs
+  | 'alt-spec'            // RAML, API Blueprint, WADL specs
+  | 'robots-sitemap'      // robots.txt and sitemap.xml hints
+  | 'backend-framework'   // Framework fingerprinting (Rails, Django, etc.)
+  | 'raml'                // Legacy: use 'alt-spec' instead
+  | 'observed';           // Patterns learned from observation
 
 /**
  * Rate limit information extracted from API documentation
@@ -147,6 +154,7 @@ export interface DiscoveryResult {
     asyncapi?: AsyncAPIDiscoveryResult;
     altSpec?: AltSpecDiscoveryResult;
     robotsSitemap?: RobotsSitemapDiscoveryResult;
+    backendFramework?: BackendFrameworkDiscoveryResult;
   };
 }
 
@@ -200,15 +208,16 @@ export const DEFAULT_SOURCE_TIMEOUT_MS = 30_000;
 
 /** Confidence scores for different sources */
 export const SOURCE_CONFIDENCE: Record<DiscoverySource, number> = {
-  openapi: 0.95,          // OpenAPI specs are highly reliable
-  graphql: 0.90,          // GraphQL introspection is reliable
-  asyncapi: 0.85,         // AsyncAPI is reliable but less common
-  'alt-spec': 0.80,       // RAML/API Blueprint/WADL are reliable but older
-  raml: 0.80,             // Legacy: same as alt-spec
-  links: 0.70,            // Link relations need validation
-  'docs-page': 0.60,      // Parsed docs need more validation
-  observed: 0.50,         // Learned patterns need validation
-  'robots-sitemap': 0.40, // Hints only, lowest confidence
+  openapi: 0.95,              // OpenAPI specs are highly reliable
+  graphql: 0.90,              // GraphQL introspection is reliable
+  asyncapi: 0.85,             // AsyncAPI is reliable but less common
+  'alt-spec': 0.80,           // RAML/API Blueprint/WADL are reliable but older
+  raml: 0.80,                 // Legacy: same as alt-spec
+  links: 0.70,                // Link relations need validation
+  'docs-page': 0.60,          // Parsed docs need more validation
+  observed: 0.50,             // Learned patterns need validation
+  'backend-framework': 0.45,  // Convention-based, needs validation
+  'robots-sitemap': 0.40,     // Hints only, lowest confidence
 };
 
 /** Priority order for sources (higher = tried first, results prioritized) */
@@ -216,12 +225,13 @@ export const SOURCE_PRIORITY: Record<DiscoverySource, number> = {
   openapi: 100,
   graphql: 90,
   asyncapi: 80,
-  'alt-spec': 75,       // RAML/API Blueprint/WADL
-  raml: 70,             // Legacy: use alt-spec instead
+  'alt-spec': 75,           // RAML/API Blueprint/WADL
+  raml: 70,                 // Legacy: use alt-spec instead
   links: 60,
   'docs-page': 50,
   observed: 40,
-  'robots-sitemap': 30, // Low priority, hints only
+  'backend-framework': 35,  // Low priority, convention-based patterns
+  'robots-sitemap': 30,     // Low priority, hints only
 };
 
 // ============================================
@@ -990,6 +1000,75 @@ async function discoverRobotsSitemapSource(
   }
 }
 
+/**
+ * Discover API patterns from backend framework fingerprinting
+ *
+ * This source detects backend frameworks (Rails, Django, Phoenix, FastAPI,
+ * Spring Boot, Laravel, Express, ASP.NET Core) and suggests convention-based
+ * API patterns for each framework.
+ */
+async function discoverBackendFrameworkSource(
+  domain: string,
+  options: DiscoveryOptions
+): Promise<DiscoveryResult> {
+  const startTime = Date.now();
+
+  try {
+    const result = await discoverBackendFrameworkCached(domain, {
+      headers: options.headers,
+      fetchFn: options.fetchFn,
+      timeout: options.timeout || DEFAULT_SOURCE_TIMEOUT_MS,
+    });
+
+    if (!result.found || !result.result) {
+      return {
+        source: 'backend-framework',
+        confidence: 0,
+        patterns: [],
+        metadata: {},
+        discoveryTime: Date.now() - startTime,
+        found: false,
+        error: result.error,
+      };
+    }
+
+    // Extract metadata from framework detection
+    const metadata: DiscoveryMetadata = {
+      title: `${result.result.framework} API`,
+      description: `Detected ${result.result.framework} framework with ${result.result.evidence.length} indicators`,
+      specVersion: result.result.version,
+    };
+
+    discoveryLogger.info('Backend framework discovery successful', {
+      domain,
+      framework: result.result.framework,
+      confidence: result.result.confidence,
+      patterns: result.patterns.length,
+    });
+
+    return {
+      source: 'backend-framework',
+      confidence: SOURCE_CONFIDENCE['backend-framework'] * result.result.confidence,
+      patterns: result.patterns,
+      metadata,
+      discoveryTime: Date.now() - startTime,
+      found: true,
+      rawData: { backendFramework: result },
+    };
+  } catch (error) {
+    discoveryLogger.error('Backend framework discovery failed', { domain, error });
+    return {
+      source: 'backend-framework',
+      confidence: 0,
+      patterns: [],
+      metadata: {},
+      discoveryTime: Date.now() - startTime,
+      found: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
 // ============================================
 // ORCHESTRATION
 // ============================================
@@ -1066,6 +1145,13 @@ export async function discoverApiDocumentation(
     sources.push({
       name: 'robots-sitemap',
       discover: () => discoverRobotsSitemapSource(domain, options),
+    });
+  }
+
+  if (!skipSources.has('backend-framework')) {
+    sources.push({
+      name: 'backend-framework',
+      discover: () => discoverBackendFrameworkSource(domain, options),
     });
   }
 
@@ -1199,6 +1285,7 @@ export {
   discoverAsyncAPISource,
   discoverAltSpecSource,
   discoverRobotsSitemapSource,
+  discoverBackendFrameworkSource,
   convertGraphQLPattern,
 };
 
@@ -1239,3 +1326,12 @@ export type {
   SitemapEntry,
   RobotsSitemapDiscoveryOptions,
 } from './robots-sitemap-discovery.js';
+
+export type {
+  BackendFrameworkDiscoveryResult,
+  BackendFramework,
+  FrameworkFingerprintResult,
+  FrameworkEvidence,
+  FrameworkApiPattern,
+  FingerprintOptions,
+} from './backend-framework-fingerprinting.js';

@@ -106,7 +106,7 @@ Note: "Order" reflects the implementation sequence from the plan document, optim
 | D-005 | 7 | AsyncAPI Discovery | M | DONE | WebSocket, MQTT, Kafka event-driven APIs |
 | D-006 | 8 | Alt Spec Formats | M | DONE | RAML, API Blueprint, WADL parsing |
 | D-007 | 9 | Robots/Sitemap Analysis | S | DONE | Extract API hints from robots.txt/sitemap.xml |
-| D-010 | 10 | Backend Framework Fingerprinting | M | In Progress | Detect Rails, Django, Phoenix, FastAPI, Spring Boot, Laravel, Express from headers/HTML and apply convention-based API patterns |
+| D-010 | 10 | Backend Framework Fingerprinting | M | DONE | Detect Rails, Django, Phoenix, FastAPI, Spring Boot, Laravel, Express, ASP.NET Core from headers/HTML and apply convention-based API patterns |
 
 **Supersedes:** I-012 (GraphQL introspection), I-013 (Authentication workflow helper)
 
@@ -213,6 +213,7 @@ Note: "Order" reflects the implementation sequence from the plan document, optim
 
 | ID | Task | Completed | Notes |
 |----|------|-----------|-------|
+| D-010 | Backend Framework Fingerprinting | 2025-12-20 | Detect Rails, Django, Phoenix, FastAPI, Spring Boot, Laravel, Express, ASP.NET Core from headers/HTML. HTTP header analysis, cookie patterns, HTML CSRF tokens and scripts. Convention-based API pattern generation. Integrated with Discovery Orchestrator. 57 tests. |
 | D-003 | Link Discovery | 2025-12-19 | RFC 8288 Link header parsing, HTML `<link>` extraction, HATEOAS detection (HAL, JSON:API, Siren). Pattern generation, pagination link extraction. Integrated with Discovery Orchestrator. 69 tests. |
 | D-001 | GraphQL Introspection | 2025-12-19 | Auto-discover GraphQL APIs via introspection. Endpoint detection, schema parsing, pagination pattern detection, query/mutation pattern generation, ContentIntelligence integration. 49 tests. |
 | L-007 | Failure Learning | 2025-12-19 | Learn from mistakes, build anti-patterns. Failure classification by category, anti-pattern creation, smart retry strategies, integration with pattern application. 59 tests. |

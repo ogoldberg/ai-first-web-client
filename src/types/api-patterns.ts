@@ -119,7 +119,7 @@ export interface LearnedApiPattern {
   extractors: VariableExtractor[];
 
   /** HTTP method */
-  method: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
   /** Default headers to send */
   headers?: Record<string, string>;
