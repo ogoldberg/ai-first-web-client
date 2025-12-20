@@ -233,6 +233,13 @@ export function classifyError(
 
   // Pattern matching for error messages
 
+  // HTTP status in message (check first for more specific classification)
+  const statusMatch = message.match(/\b(4\d{2}|5\d{2})\b/);
+  if (statusMatch) {
+    const status = parseInt(statusMatch[1]);
+    return classifyHttpStatus(status);
+  }
+
   // Network errors
   if ((message.includes('timeout') || message.includes('timed out')) && !message.includes('gateway')) {
     return { category: 'network', code: 'NETWORK_TIMEOUT' };
@@ -248,13 +255,6 @@ export function classifyError(
   }
   if (message.includes('net::')) {
     return { category: 'network', code: 'NETWORK_UNREACHABLE' };
-  }
-
-  // HTTP status in message
-  const statusMatch = message.match(/\b(4\d{2}|5\d{2})\b/);
-  if (statusMatch) {
-    const status = parseInt(statusMatch[1]);
-    return classifyHttpStatus(status);
   }
 
   // Security errors
@@ -447,20 +447,8 @@ export function getRecommendedActions(
       break;
 
     case 'auth':
-      actions.push({
-        action: 'refresh_session',
-        description: 'Refresh or re-establish the session',
-        toolToUse: 'save_session',
-        priority: 1,
-      });
-      actions.push({
-        action: 'check_session_health',
-        description: 'Check the health status of saved sessions',
-        toolToUse: 'get_session_health',
-        parameters: context?.domain ? { domain: context.domain } : undefined,
-        priority: 2,
-      });
       if (code === 'AUTH_CREDENTIALS_MISSING') {
+        // For missing credentials, configure auth is the primary action
         actions.push({
           action: 'configure_auth',
           description: 'Configure API authentication credentials',
@@ -468,7 +456,22 @@ export function getRecommendedActions(
           parameters: context?.domain ? { domain: context.domain } : undefined,
           priority: 1,
         });
+      } else {
+        // For other auth errors (session expired, invalid token, etc.)
+        actions.push({
+          action: 'refresh_session',
+          description: 'Refresh or re-establish the session',
+          toolToUse: 'save_session',
+          priority: 1,
+        });
       }
+      actions.push({
+        action: 'check_session_health',
+        description: 'Check the health status of saved sessions',
+        toolToUse: 'get_session_health',
+        parameters: context?.domain ? { domain: context.domain } : undefined,
+        priority: 2,
+      });
       break;
 
     case 'rate_limit':
