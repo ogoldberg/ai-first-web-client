@@ -4,7 +4,7 @@
 **Version:** 0.5.0
 **Current Phase:** Production Readiness (Phase 2)
 **Total Code:** ~16,000 lines TypeScript
-**Tests:** 1113 passing + 44 live tests
+**Tests:** 1150 passing + 44 live tests
 
 ---
 
@@ -274,7 +274,7 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 | D-009 | 6 | Auth Workflow Helper | Complete |
 | D-005 | 7 | AsyncAPI Discovery | Complete |
 | D-006 | 8 | Alt Spec Formats | Complete |
-| D-007 | 9 | Robots/Sitemap Analysis | In Progress |
+| D-007 | 9 | Robots/Sitemap Analysis | Complete |
 | D-010 | 10 | Backend Framework Fingerprinting | Planned |
 
 ---
@@ -283,6 +283,14 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ### v0.5.0 (2025-12-20)
 
+- Added API Documentation Discovery Phase 9: Robots/Sitemap Analysis (D-007)
+  - New core module `src/core/robots-sitemap-discovery.ts` for API hint extraction
+  - robots.txt parsing with Disallow/Allow directive analysis
+  - sitemap.xml parsing with URL pattern detection
+  - API path hints extraction (api-path, graphql, spec-file, documentation, developer-portal)
+  - Integration with Discovery Orchestrator as 'robots-sitemap' source
+  - Caching support with configurable TTL
+  - 45 new tests for robots/sitemap discovery
 - Added API Documentation Discovery Phase 8: Alt Spec Formats (D-006)
   - New core module `src/core/alt-spec-discovery.ts` for alternative API specification discovery
   - RAML (RESTful API Modeling Language) parsing with YAML support

@@ -42,6 +42,11 @@ import {
   type ParsedAltSpec,
   type AltSpecFormat,
 } from './alt-spec-discovery.js';
+import {
+  discoverRobotsSitemapCached,
+  type RobotsSitemapDiscoveryResult,
+  type ApiHint,
+} from './robots-sitemap-discovery.js';
 import type { LearnedApiPattern, ParsedOpenAPISpec, OpenAPIDiscoveryOptions } from '../types/api-patterns.js';
 
 // ============================================
@@ -54,12 +59,13 @@ import type { LearnedApiPattern, ParsedOpenAPISpec, OpenAPIDiscoveryOptions } fr
 export type DiscoverySource =
   | 'openapi'
   | 'graphql'
-  | 'docs-page'     // HTML documentation pages
-  | 'links'         // RFC 8288 link relations
-  | 'asyncapi'      // AsyncAPI specs
-  | 'alt-spec'      // RAML, API Blueprint, WADL specs
-  | 'raml'          // Legacy: use 'alt-spec' instead
-  | 'observed';     // Patterns learned from observation
+  | 'docs-page'        // HTML documentation pages
+  | 'links'            // RFC 8288 link relations
+  | 'asyncapi'         // AsyncAPI specs
+  | 'alt-spec'         // RAML, API Blueprint, WADL specs
+  | 'robots-sitemap'   // robots.txt and sitemap.xml hints
+  | 'raml'             // Legacy: use 'alt-spec' instead
+  | 'observed';        // Patterns learned from observation
 
 /**
  * Rate limit information extracted from API documentation
@@ -140,6 +146,7 @@ export interface DiscoveryResult {
     docs?: DocsDiscoveryResult;
     asyncapi?: AsyncAPIDiscoveryResult;
     altSpec?: AltSpecDiscoveryResult;
+    robotsSitemap?: RobotsSitemapDiscoveryResult;
   };
 }
 
@@ -193,14 +200,15 @@ export const DEFAULT_SOURCE_TIMEOUT_MS = 30_000;
 
 /** Confidence scores for different sources */
 export const SOURCE_CONFIDENCE: Record<DiscoverySource, number> = {
-  openapi: 0.95,     // OpenAPI specs are highly reliable
-  graphql: 0.90,     // GraphQL introspection is reliable
-  asyncapi: 0.85,    // AsyncAPI is reliable but less common
-  'alt-spec': 0.80,  // RAML/API Blueprint/WADL are reliable but older
-  raml: 0.80,        // Legacy: same as alt-spec
-  links: 0.70,       // Link relations need validation
-  'docs-page': 0.60, // Parsed docs need more validation
-  observed: 0.50,    // Learned patterns need validation
+  openapi: 0.95,          // OpenAPI specs are highly reliable
+  graphql: 0.90,          // GraphQL introspection is reliable
+  asyncapi: 0.85,         // AsyncAPI is reliable but less common
+  'alt-spec': 0.80,       // RAML/API Blueprint/WADL are reliable but older
+  raml: 0.80,             // Legacy: same as alt-spec
+  links: 0.70,            // Link relations need validation
+  'docs-page': 0.60,      // Parsed docs need more validation
+  observed: 0.50,         // Learned patterns need validation
+  'robots-sitemap': 0.40, // Hints only, lowest confidence
 };
 
 /** Priority order for sources (higher = tried first, results prioritized) */
@@ -208,11 +216,12 @@ export const SOURCE_PRIORITY: Record<DiscoverySource, number> = {
   openapi: 100,
   graphql: 90,
   asyncapi: 80,
-  'alt-spec': 75,   // RAML/API Blueprint/WADL
-  raml: 70,         // Legacy: use alt-spec instead
+  'alt-spec': 75,       // RAML/API Blueprint/WADL
+  raml: 70,             // Legacy: use alt-spec instead
   links: 60,
   'docs-page': 50,
   observed: 40,
+  'robots-sitemap': 30, // Low priority, hints only
 };
 
 // ============================================
@@ -905,6 +914,82 @@ async function discoverAltSpecSource(
   }
 }
 
+/**
+ * Discover API hints from robots.txt and sitemap.xml
+ *
+ * This source provides low-confidence hints about potential API paths
+ * rather than definitive patterns. Hints can guide further discovery.
+ */
+async function discoverRobotsSitemapSource(
+  domain: string,
+  options: DiscoveryOptions
+): Promise<DiscoveryResult> {
+  const startTime = Date.now();
+
+  try {
+    const result = await discoverRobotsSitemapCached(domain, {
+      headers: options.headers,
+      fetchFn: options.fetchFn,
+      timeout: options.timeout || DEFAULT_SOURCE_TIMEOUT_MS,
+    });
+
+    if (!result.found || result.hints.length === 0) {
+      return {
+        source: 'robots-sitemap',
+        confidence: 0,
+        patterns: [],
+        metadata: {},
+        discoveryTime: Date.now() - startTime,
+        found: false,
+        error: result.error,
+      };
+    }
+
+    // robots-sitemap doesn't generate patterns directly
+    // It provides hints that can be used to guide other discovery
+    // For now, we just report the hints in metadata
+    const metadata: DiscoveryMetadata = {
+      description: `Found ${result.hints.length} API hints from robots.txt/sitemap.xml`,
+    };
+
+    // Extract any spec file hints as potential base URLs
+    const specHints = result.hints.filter(h => h.type === 'spec-file');
+    if (specHints.length > 0) {
+      // Use the highest confidence spec hint as potential API docs location
+      const bestSpec = specHints.sort((a, b) => b.confidence - a.confidence)[0];
+      metadata.description += `. Spec file hint: ${bestSpec.path}`;
+    }
+
+    discoveryLogger.info('Robots/sitemap discovery successful', {
+      domain,
+      hints: result.hints.length,
+      robotsTxtFound: !!result.robotsTxt,
+      sitemapFound: !!result.sitemap,
+    });
+
+    return {
+      source: 'robots-sitemap',
+      confidence: SOURCE_CONFIDENCE['robots-sitemap'],
+      patterns: [], // Hints don't generate patterns directly
+      metadata,
+      discoveryTime: Date.now() - startTime,
+      found: true,
+      rawData: { robotsSitemap: result },
+    };
+  } catch (error) {
+    discoveryLogger.error('Robots/sitemap discovery failed', { domain, error });
+    return {
+      source: 'robots-sitemap',
+      confidence: 0,
+      patterns: [],
+      metadata: {},
+      discoveryTime: Date.now() - startTime,
+      found: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
 // ============================================
 // ORCHESTRATION
 // ============================================
@@ -974,6 +1059,13 @@ export async function discoverApiDocumentation(
     sources.push({
       name: 'alt-spec',
       discover: () => discoverAltSpecSource(domain, options),
+    });
+  }
+
+  if (!skipSources.has('robots-sitemap')) {
+    sources.push({
+      name: 'robots-sitemap',
+      discover: () => discoverRobotsSitemapSource(domain, options),
     });
   }
 
@@ -1106,6 +1198,7 @@ export {
   discoverDocsSource,
   discoverAsyncAPISource,
   discoverAltSpecSource,
+  discoverRobotsSitemapSource,
   convertGraphQLPattern,
 };
 
@@ -1137,3 +1230,12 @@ export type {
   AltSpecEndpoint,
   AltSpecDiscoveryOptions,
 } from './alt-spec-discovery.js';
+
+export type {
+  RobotsSitemapDiscoveryResult,
+  ApiHint,
+  ParsedRobotsTxt,
+  ParsedSitemap,
+  SitemapEntry,
+  RobotsSitemapDiscoveryOptions,
+} from './robots-sitemap-discovery.js';
