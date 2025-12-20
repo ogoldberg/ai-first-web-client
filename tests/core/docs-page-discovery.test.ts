@@ -422,6 +422,26 @@ describe('extractEndpointsFromCodeBlocks', () => {
     const endpoints = extractEndpointsFromCodeBlocks(html);
     expect(endpoints[0].exampleRequest).toContain('curl');
   });
+
+  it('should correctly detect method for each axios call independently', () => {
+    // Regression test: method detection should be per-call, not from the entire code block
+    const html = `
+      <pre><code>
+        // First call is POST
+        axios.post("/api/users", { name: "test" });
+
+        // Second call should be GET, not POST
+        fetch("/api/products");
+      </code></pre>
+    `;
+    const endpoints = extractEndpointsFromCodeBlocks(html);
+
+    const usersEndpoint = endpoints.find(e => e.path === '/api/users');
+    const productsEndpoint = endpoints.find(e => e.path === '/api/products');
+
+    expect(usersEndpoint?.method).toBe('POST');
+    expect(productsEndpoint?.method).toBe('GET'); // Should be GET, not POST
+  });
 });
 
 // ============================================

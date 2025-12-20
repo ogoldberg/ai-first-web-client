@@ -565,8 +565,9 @@ function parseEndpointsFromCode(code: string): DocumentedEndpoint[] {
   let fetchMatch;
   while ((fetchMatch = fetchPattern.exec(code)) !== null) {
     const url = fetchMatch[1];
-    // Determine method from axios call or default to GET for fetch
-    const methodMatch = code.match(/axios\.(get|post|put|delete)/i);
+    // Determine method from the matched call signature, not the entire code block
+    const callSignature = fetchMatch[0];
+    const methodMatch = callSignature.match(/axios\.(get|post|put|delete)/i);
     const method = methodMatch
       ? (methodMatch[1].toUpperCase() as DocumentedEndpoint['method'])
       : 'GET';
@@ -779,6 +780,21 @@ export function parseDocsPage(
 }
 
 /**
+ * Calculate a score for a parsed documentation page
+ * Used to compare and select the best documentation page found
+ */
+function calculateDocsPageScore(
+  parsed: Omit<DocsDiscoveryResult, 'found' | 'discoveryTime' | 'docsUrl'>
+): number {
+  return (
+    parsed.endpoints.length * 10 +
+    (parsed.framework !== 'unknown' ? 20 : 0) +
+    (parsed.apiBaseUrl ? 10 : 0) +
+    (parsed.authInstructions ? 5 : 0)
+  );
+}
+
+/**
  * Discover API documentation for a domain
  */
 export async function discoverDocs(
@@ -808,29 +824,17 @@ export async function discoverDocs(
 
     const parsed = parseDocsPage(probe.html, url);
 
-    // Score this result
-    const score =
-      parsed.endpoints.length * 10 +
-      (parsed.framework !== 'unknown' ? 20 : 0) +
-      (parsed.apiBaseUrl ? 10 : 0) +
-      (parsed.authInstructions ? 5 : 0);
+    // Score this result using the helper function
+    const score = calculateDocsPageScore(parsed);
+    const currentScore = bestResult ? calculateDocsPageScore(bestResult) : -1;
 
-    if (!bestResult || score > 0) {
-      const currentScore = bestResult
-        ? bestResult.endpoints.length * 10 +
-          (bestResult.framework !== 'unknown' ? 20 : 0) +
-          (bestResult.apiBaseUrl ? 10 : 0) +
-          (bestResult.authInstructions ? 5 : 0)
-        : -1;
-
-      if (score > currentScore) {
-        bestResult = {
-          found: true,
-          docsUrl: url,
-          ...parsed,
-          discoveryTime: Date.now() - startTime,
-        };
-      }
+    if (score > 0 && score > currentScore) {
+      bestResult = {
+        found: true,
+        docsUrl: url,
+        ...parsed,
+        discoveryTime: Date.now() - startTime,
+      };
     }
 
     // Follow navigation links if enabled and we haven't found much yet
@@ -844,11 +848,10 @@ export async function discoverDocs(
         if (!navProbe) continue;
 
         const navParsed = parseDocsPage(navProbe.html, navLink);
-        const navScore =
-          navParsed.endpoints.length * 10 +
-          (navParsed.framework !== 'unknown' ? 20 : 0);
+        const navScore = calculateDocsPageScore(navParsed);
+        const currentBestScore = bestResult ? calculateDocsPageScore(bestResult) : -1;
 
-        if (navScore > (bestResult?.endpoints.length || 0) * 10) {
+        if (navScore > currentBestScore) {
           bestResult = {
             found: true,
             docsUrl: navLink,
@@ -877,7 +880,8 @@ export async function discoverDocs(
           if (!navProbe) continue;
 
           const navParsed = parseDocsPage(navProbe.html, navLink);
-          if (navParsed.endpoints.length > 0 || navParsed.framework !== 'unknown') {
+          const navScore = calculateDocsPageScore(navParsed);
+          if (navScore > 0) {
             bestResult = {
               found: true,
               docsUrl: navLink,
