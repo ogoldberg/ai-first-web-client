@@ -62,6 +62,10 @@ vi.mock('../../src/core/robots-sitemap-discovery.js', () => ({
   discoverRobotsSitemapCached: vi.fn(),
 }));
 
+vi.mock('../../src/core/backend-framework-fingerprinting.js', () => ({
+  discoverBackendFrameworkCached: vi.fn(),
+}));
+
 import { discoverOpenAPICached, generatePatternsFromOpenAPISpec } from '../../src/core/openapi-discovery.js';
 import { discoverGraphQL } from '../../src/core/graphql-introspection.js';
 import { discoverLinks, generatePatternsFromLinks } from '../../src/core/link-discovery.js';
@@ -69,6 +73,7 @@ import { discoverDocs, generatePatternsFromDocs } from '../../src/core/docs-page
 import { discoverAsyncAPICached, generatePatternsFromAsyncAPI } from '../../src/core/asyncapi-discovery.js';
 import { discoverAltSpecsCached, generatePatternsFromAltSpec } from '../../src/core/alt-spec-discovery.js';
 import { discoverRobotsSitemapCached } from '../../src/core/robots-sitemap-discovery.js';
+import { discoverBackendFrameworkCached } from '../../src/core/backend-framework-fingerprinting.js';
 
 const mockDiscoverOpenAPI = vi.mocked(discoverOpenAPICached);
 const mockGeneratePatterns = vi.mocked(generatePatternsFromOpenAPISpec);
@@ -82,6 +87,7 @@ const mockGeneratePatternsFromAsyncAPI = vi.mocked(generatePatternsFromAsyncAPI)
 const mockDiscoverAltSpecs = vi.mocked(discoverAltSpecsCached);
 const mockGeneratePatternsFromAltSpec = vi.mocked(generatePatternsFromAltSpec);
 const mockDiscoverRobotsSitemap = vi.mocked(discoverRobotsSitemapCached);
+const mockDiscoverBackendFramework = vi.mocked(discoverBackendFrameworkCached);
 
 // ============================================
 // TEST UTILITIES
@@ -216,6 +222,11 @@ beforeEach(() => {
     hints: [],
     probedLocations: [],
     discoveryTime: 50,
+  });
+  // Default mock for backend-framework discovery (usually returns nothing found)
+  mockDiscoverBackendFramework.mockResolvedValue({
+    found: false,
+    patterns: [],
   });
 });
 
@@ -606,17 +617,18 @@ describe('Discovery Orchestration', () => {
       const result = await discoverApiDocumentation('example.com');
 
       expect(result.found).toBe(true);
-      expect(result.results).toHaveLength(7); // openapi, graphql, asyncapi, alt-spec, links, docs-page, robots-sitemap
+      expect(result.results).toHaveLength(8); // openapi, graphql, asyncapi, alt-spec, links, docs-page, robots-sitemap, backend-framework
       // OpenAPI should be first (higher priority)
       expect(result.results[0].source).toBe('openapi');
       expect(result.results[1].source).toBe('graphql');
-      // asyncapi, alt-spec, links, docs-page and robots-sitemap order may vary
+      // asyncapi, alt-spec, links, docs-page, robots-sitemap, backend-framework order may vary
       const sources = result.results.map(r => r.source);
       expect(sources).toContain('asyncapi');
       expect(sources).toContain('alt-spec');
       expect(sources).toContain('links');
       expect(sources).toContain('docs-page');
       expect(sources).toContain('robots-sitemap');
+      expect(sources).toContain('backend-framework');
     });
 
     it('should deduplicate patterns by ID', async () => {
@@ -840,12 +852,13 @@ describe('Error Handling', () => {
     mockDiscoverAsyncAPI.mockRejectedValue(new Error('AsyncAPI error'));
     mockDiscoverAltSpecs.mockRejectedValue(new Error('AltSpec error'));
     mockDiscoverRobotsSitemap.mockRejectedValue(new Error('RobotsSitemap error'));
+    mockDiscoverBackendFramework.mockRejectedValue(new Error('BackendFramework error'));
 
     const result = await discoverApiDocumentation('example.com');
 
     expect(result.found).toBe(false);
     expect(result.allPatterns).toHaveLength(0);
-    expect(result.results).toHaveLength(7); // openapi, graphql, asyncapi, alt-spec, links, docs-page, robots-sitemap
+    expect(result.results).toHaveLength(8); // openapi, graphql, asyncapi, alt-spec, links, docs-page, robots-sitemap, backend-framework
     expect(result.results.every((r) => r.error)).toBe(true);
   });
 
