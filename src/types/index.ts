@@ -11,6 +11,9 @@ export * from './field-confidence.js';
 // Re-export decision trace types (CX-003)
 export * from './decision-trace.js';
 
+// Re-export error taxonomy types (CX-004)
+export * from './errors.js';
+
 export interface NetworkRequest {
   url: string;
   method: string;

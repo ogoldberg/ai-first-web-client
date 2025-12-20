@@ -33,6 +33,12 @@ import { ApiCallTool } from './tools/api-call-tool.js';
 import { AuthWorkflow } from './core/auth-workflow.js';
 import { logger } from './utils/logger.js';
 import { addSchemaVersion } from './types/schema-version.js';
+import {
+  buildStructuredError,
+  type ErrorContext,
+  type ClassificationContext,
+} from './types/errors.js';
+import { UrlSafetyError } from './utils/url-safety.js';
 
 /**
  * Create a versioned JSON response for MCP tools
@@ -45,11 +51,36 @@ function jsonResponse(data: object, indent: number = 2): { content: Array<{ type
 }
 
 /**
- * Create an error response (errors don't include schema version)
+ * Create a structured error response for MCP tools (CX-004)
+ *
+ * Returns a structured error with:
+ * - category: High-level error category (network, auth, content, etc.)
+ * - code: Specific error code for programmatic handling
+ * - retryable: Whether the error is likely to succeed on retry
+ * - recommendedActions: Suggested actions for LLM recovery
+ * - context: Additional context about the error
+ *
+ * Note: Errors don't include schema version for backward compatibility
  */
-function errorResponse(error: string): { content: Array<{ type: 'text'; text: string }>; isError: true } {
+function errorResponse(
+  error: Error | string,
+  classificationContext?: ClassificationContext,
+  errorContext?: ErrorContext
+): { content: Array<{ type: 'text'; text: string }>; isError: true } {
+  // Extract security category from UrlSafetyError if applicable
+  const securityCategory = error instanceof UrlSafetyError ? error.category : undefined;
+
+  // Build classification context with security category
+  const fullClassificationContext: ClassificationContext = {
+    ...classificationContext,
+    securityCategory: securityCategory || classificationContext?.securityCategory,
+  };
+
+  // Build structured error
+  const structuredError = buildStructuredError(error, fullClassificationContext, errorContext);
+
   return {
-    content: [{ type: 'text', text: JSON.stringify({ error }) }],
+    content: [{ type: 'text', text: JSON.stringify(structuredError) }],
     isError: true,
   };
 }
@@ -2027,18 +2058,23 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         throw new Error(`Unknown tool: ${name}`);
     }
   } catch (error) {
-    return {
-      content: [
-        {
-          type: 'text',
-          text: JSON.stringify({
-            error: error instanceof Error ? error.message : String(error),
-            tip: 'If this is a recurring error, the browser may need a session refresh or the site may be blocking requests.',
-          }),
-        },
-      ],
-      isError: true,
-    };
+    // Extract URL and domain from request args for error context
+    const url = typeof args?.url === 'string' ? args.url : undefined;
+    let domain: string | undefined;
+    if (url) {
+      try {
+        domain = new URL(url).hostname;
+      } catch {
+        // Invalid URL, leave domain undefined
+      }
+    }
+
+    // Use structured error response with context
+    return errorResponse(
+      error instanceof Error ? error : new Error(String(error)),
+      undefined,
+      { url, domain }
+    );
   }
 });
 
