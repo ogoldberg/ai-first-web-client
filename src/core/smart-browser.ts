@@ -642,25 +642,18 @@ export class SmartBrowser {
     );
 
     // Build decision trace if requested (CX-003)
-    // For Playwright path, we have no tier attempts (it's direct Playwright)
-    let decisionTrace: DecisionTrace | undefined;
-    if (options.includeDecisionTrace) {
-      // Get extraction trace for selectors/title attempts
-      const extractionTrace = this.contentExtractor.extractWithTrace(html, finalUrl);
-
-      // For Playwright path, create a single tier attempt showing direct Playwright use
-      const playwrightAttempt: TierAttempt = {
-        tier: 'playwright',
-        success: true,
-        durationMs: Date.now() - startTime,
-      };
-
-      decisionTrace = buildDecisionTrace(
-        [playwrightAttempt],
-        extractionTrace.trace.selectorAttempts,
-        extractionTrace.trace.titleAttempts
-      );
-    }
+    // For Playwright path, create a single tier attempt showing direct Playwright use
+    const playwrightTierAttempts: TierAttempt[] = [{
+      tier: 'playwright',
+      success: true,
+      durationMs: Date.now() - startTime,
+    }];
+    const decisionTrace = this.buildDecisionTraceIfRequested(
+      options,
+      html,
+      finalUrl,
+      playwrightTierAttempts
+    );
 
     return {
       url,
@@ -686,6 +679,28 @@ export class SmartBrowser {
       decisionTrace,
       additionalPages,
     };
+  }
+
+  /**
+   * Build decision trace if requested (CX-003)
+   * Extracts selector and title attempts from HTML and combines with tier attempts
+   */
+  private buildDecisionTraceIfRequested(
+    options: SmartBrowseOptions,
+    html: string,
+    finalUrl: string,
+    tierAttempts: TierAttempt[]
+  ): DecisionTrace | undefined {
+    if (!options.includeDecisionTrace) {
+      return undefined;
+    }
+
+    const extractionTrace = this.contentExtractor.extractWithTrace(html, finalUrl);
+    return buildDecisionTrace(
+      tierAttempts,
+      extractionTrace.trace.selectorAttempts,
+      extractionTrace.trace.titleAttempts
+    );
   }
 
   /**
@@ -828,17 +843,12 @@ export class SmartBrowser {
       );
 
       // Build decision trace if requested (CX-003)
-      let decisionTrace: DecisionTrace | undefined;
-      if (options.includeDecisionTrace) {
-        // Get extraction trace for selectors/title attempts
-        const extractionTrace = this.contentExtractor.extractWithTrace(result.html, result.finalUrl);
-
-        decisionTrace = buildDecisionTrace(
-          result.tierAttempts,
-          extractionTrace.trace.selectorAttempts,
-          extractionTrace.trace.titleAttempts
-        );
-      }
+      const decisionTrace = this.buildDecisionTraceIfRequested(
+        options,
+        result.html,
+        result.finalUrl,
+        result.tierAttempts
+      );
 
       return {
         url,
