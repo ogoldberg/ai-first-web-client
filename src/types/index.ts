@@ -14,6 +14,9 @@ export * from './decision-trace.js';
 // Re-export error taxonomy types (CX-004)
 export * from './errors.js';
 
+// Re-export provenance types (CX-006)
+export * from './provenance.js';
+
 export interface NetworkRequest {
   url: string;
   method: string;
@@ -125,7 +128,7 @@ export interface ApiCallOptions {
 // ============================================
 
 /**
- * Enhanced API pattern with temporal tracking
+ * Enhanced API pattern with temporal tracking and provenance
  */
 export interface EnhancedApiPattern extends ApiPattern {
   createdAt: number;
@@ -133,6 +136,8 @@ export interface EnhancedApiPattern extends ApiPattern {
   verificationCount: number;
   failureCount: number;
   lastFailure?: FailureContext;
+  /** Provenance metadata for tracking pattern origin and history (CX-006) */
+  provenance?: import('./provenance.js').ProvenanceMetadata;
 }
 
 /**

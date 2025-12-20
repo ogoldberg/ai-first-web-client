@@ -144,6 +144,9 @@ export interface LearnedApiPattern {
 
   /** When this pattern was last updated */
   updatedAt: number;
+
+  /** Provenance metadata for tracking pattern origin and history (CX-006) */
+  provenance?: import('./provenance.js').ProvenanceMetadata;
 }
 
 /**

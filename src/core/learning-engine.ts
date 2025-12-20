@@ -32,7 +32,14 @@ import type {
   ConfidenceDecayConfig,
   ApiPattern,
   SuccessProfile,
+  PatternSource,
+  ProvenanceMetadata,
 } from '../types/index.js';
+import {
+  createProvenance,
+  recordVerification,
+  recordDecay,
+} from '../types/provenance.js';
 import { logger } from '../utils/logger.js';
 
 // Default confidence decay configuration
@@ -152,6 +159,20 @@ interface LearningEngineData {
   lastSaved: number;
 }
 
+/**
+ * Options for learning an API pattern (CX-006)
+ */
+export interface LearnApiPatternOptions {
+  /** How this pattern was learned */
+  source?: PatternSource;
+  /** URL where the pattern was discovered (e.g., OpenAPI spec URL) */
+  sourceUrl?: string;
+  /** ID of the source pattern (for transferred patterns) */
+  sourcePatternId?: string;
+  /** Additional metadata about the source */
+  sourceMetadata?: Record<string, unknown>;
+}
+
 export class LearningEngine {
   private entries: Map<string, EnhancedKnowledgeBaseEntry> = new Map();
   private domainGroups: Map<string, DomainGroup> = new Map();
@@ -218,18 +239,32 @@ export class LearningEngine {
         const newConfidenceLevel = this.numberToConfidence(newConfidence);
 
         if (pattern.confidence !== newConfidenceLevel) {
+          const oldConfidenceLevel = pattern.confidence;
           pattern.confidence = newConfidenceLevel;
           pattern.canBypass = newConfidenceLevel === 'high';
           updated = true;
+
+          const daysSinceVerified = Math.floor(timeSinceVerified / (24 * 60 * 60 * 1000));
+
+          // Record decay in provenance (CX-006)
+          if (pattern.provenance) {
+            pattern.provenance = recordDecay(
+              pattern.provenance,
+              'time_decay',
+              oldConfidenceLevel,
+              newConfidenceLevel,
+              `Not verified for ${daysSinceVerified} days`
+            );
+          }
 
           this.recordLearningEvent({
             type: 'confidence_decayed',
             domain,
             details: {
               endpoint: pattern.endpoint,
-              oldConfidence: pattern.confidence,
+              oldConfidence: oldConfidenceLevel,
               newConfidence: newConfidenceLevel,
-              daysSinceVerified: Math.floor(timeSinceVerified / (24 * 60 * 60 * 1000)),
+              daysSinceVerified,
             },
             timestamp: now,
           });
@@ -1192,9 +1227,13 @@ export class LearningEngine {
   // ============================================
 
   /**
-   * Learn or update an API pattern with enhanced tracking
+   * Learn or update an API pattern with enhanced tracking and provenance (CX-006)
    */
-  learnApiPattern(domain: string, pattern: ApiPattern): void {
+  learnApiPattern(
+    domain: string,
+    pattern: ApiPattern,
+    options?: LearnApiPatternOptions
+  ): void {
     const entry = this.getOrCreateEntry(domain);
     const now = Date.now();
 
@@ -1204,20 +1243,33 @@ export class LearningEngine {
     );
 
     if (existingIndex >= 0) {
-      // Update existing
+      // Update existing pattern
       const existing = entry.apiPatterns[existingIndex];
       existing.lastVerified = now;
       existing.verificationCount++;
       existing.confidence = pattern.confidence;
       existing.canBypass = pattern.canBypass;
+
+      // Update provenance if it exists (CX-006)
+      if (existing.provenance) {
+        existing.provenance = recordVerification(existing.provenance);
+      }
     } else {
-      // Create new enhanced pattern
+      // Create new enhanced pattern with provenance (CX-006)
+      const provenance = createProvenance(options?.source || 'unknown', {
+        sourceUrl: options?.sourceUrl,
+        sourcePatternId: options?.sourcePatternId,
+        sourceDomain: domain,
+        sourceMetadata: options?.sourceMetadata,
+      });
+
       const enhanced: EnhancedApiPattern = {
         ...pattern,
         createdAt: now,
         lastVerified: now,
         verificationCount: 1,
         failureCount: 0,
+        provenance,
       };
       entry.apiPatterns.push(enhanced);
     }
@@ -1230,7 +1282,11 @@ export class LearningEngine {
     this.recordLearningEvent({
       type: 'api_discovered',
       domain,
-      details: { endpoint: pattern.endpoint, method: pattern.method },
+      details: {
+        endpoint: pattern.endpoint,
+        method: pattern.method,
+        source: options?.source || 'unknown',
+      },
       timestamp: now,
     });
   }
@@ -1247,15 +1303,21 @@ export class LearningEngine {
     );
 
     if (pattern) {
-      pattern.lastVerified = Date.now();
+      const now = Date.now();
+      pattern.lastVerified = now;
       pattern.verificationCount++;
       entry.overallSuccessRate = Math.min(1, entry.overallSuccessRate + 0.02);
+
+      // Update provenance with verification (CX-006)
+      if (pattern.provenance) {
+        pattern.provenance = recordVerification(pattern.provenance);
+      }
 
       this.recordLearningEvent({
         type: 'pattern_verified',
         domain,
         details: { endpoint, method },
-        timestamp: Date.now(),
+        timestamp: now,
       });
 
       this.save();
@@ -1282,12 +1344,28 @@ export class LearningEngine {
       pattern.failureCount++;
       pattern.lastFailure = { ...failure, timestamp: Date.now() };
 
-      // Downgrade confidence after multiple failures
+      // Downgrade confidence after multiple failures and record decay in provenance (CX-006)
+      const oldConfidence = pattern.confidence;
+      let decayed = false;
+
       if (pattern.failureCount >= 3 && pattern.confidence === 'high') {
         pattern.confidence = 'medium';
         pattern.canBypass = false;
+        decayed = true;
       } else if (pattern.failureCount >= 5 && pattern.confidence === 'medium') {
         pattern.confidence = 'low';
+        decayed = true;
+      }
+
+      // Record decay event in provenance (CX-006)
+      if (decayed && pattern.provenance) {
+        pattern.provenance = recordDecay(
+          pattern.provenance,
+          'repeated_failures',
+          oldConfidence,
+          pattern.confidence,
+          `Failed ${pattern.failureCount} times, last error: ${failure.errorMessage || failure.type}`
+        );
       }
 
       this.save();
