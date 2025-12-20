@@ -698,6 +698,32 @@ Can check a specific domain or all sessions.`,
       },
 
       // ============================================
+      // BROWSER PROVIDERS
+      // ============================================
+      {
+        name: 'get_browser_providers',
+        description: `Get information about available browser providers.
+
+Shows which remote browser services are configured and available:
+- Local: Uses installed Playwright (default)
+- Browserless.io: Standard CDP endpoint (BROWSERLESS_TOKEN)
+- Bright Data: Anti-bot focused with CAPTCHA solving (BRIGHTDATA_AUTH)
+- Custom: Any CDP-compatible endpoint (BROWSER_ENDPOINT)
+
+Each provider has different capabilities:
+- antiBot: Handles CAPTCHAs, Cloudflare, etc.
+- geoTargeting: Can target specific countries
+- residential: Uses residential IPs
+- sessionPersistence: Maintains browser sessions
+
+Use this to understand your browser infrastructure options.`,
+        inputSchema: {
+          type: 'object',
+          properties: {},
+        },
+      },
+
+      // ============================================
       // TIERED RENDERING
       // ============================================
       {
@@ -1650,6 +1676,34 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'get_learned_patterns': {
         const patterns = learningEngine.getPatterns(args.domain as string);
         return jsonResponse({ domain: args.domain, patterns });
+      }
+
+      // ============================================
+      // BROWSER PROVIDERS
+      // ============================================
+      case 'get_browser_providers': {
+        const providers = BrowserManager.getAvailableProviders();
+        const currentProvider = browserManager.getProvider();
+
+        return jsonResponse({
+          current: {
+            type: currentProvider.type,
+            name: currentProvider.name,
+            capabilities: currentProvider.capabilities,
+          },
+          available: providers.map(p => ({
+            type: p.type,
+            name: p.name,
+            configured: p.configured,
+            capabilities: p.capabilities,
+            envVars: p.envVars,
+          })),
+          recommendations: {
+            antiBot: 'Use Bright Data (BRIGHTDATA_AUTH) for sites with Cloudflare, CAPTCHAs, or aggressive anti-bot',
+            costEffective: 'Use Browserless.io (BROWSERLESS_TOKEN) for standard hosted browser needs',
+            noRemote: 'Use Local Playwright for development or when data privacy is critical',
+          },
+        });
       }
 
       // ============================================
