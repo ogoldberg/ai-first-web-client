@@ -64,15 +64,17 @@ export interface BrowserProvider {
  * Local browser - uses installed Playwright
  */
 class LocalProvider implements BrowserProvider {
-  readonly name = 'Local Playwright';
-  readonly type: BrowserProviderType = 'local';
-  readonly capabilities: ProviderCapabilities = {
+  static readonly capabilities: ProviderCapabilities = {
     antiBot: false,
     geoTargeting: false,
     sessionPersistence: true,
     residential: false,
     unlimitedBandwidth: true,
   };
+
+  readonly name = 'Local Playwright';
+  readonly type: BrowserProviderType = 'local';
+  readonly capabilities = LocalProvider.capabilities;
 
   getEndpoint(): string {
     return ''; // Empty means local launch
@@ -92,15 +94,17 @@ class LocalProvider implements BrowserProvider {
  * https://browserless.io
  */
 class BrowserlessProvider implements BrowserProvider {
-  readonly name = 'Browserless.io';
-  readonly type: BrowserProviderType = 'browserless';
-  readonly capabilities: ProviderCapabilities = {
+  static readonly capabilities: ProviderCapabilities = {
     antiBot: false, // Basic, no special anti-bot handling
     geoTargeting: false,
     sessionPersistence: false,
     residential: false,
     unlimitedBandwidth: false, // Metered
   };
+
+  readonly name = 'Browserless.io';
+  readonly type: BrowserProviderType = 'browserless';
+  readonly capabilities = BrowserlessProvider.capabilities;
 
   private token: string;
   private baseUrl: string;
@@ -148,15 +152,17 @@ class BrowserlessProvider implements BrowserProvider {
  * - Geo-targeting
  */
 class BrightDataProvider implements BrowserProvider {
-  readonly name = 'Bright Data Scraping Browser';
-  readonly type: BrowserProviderType = 'brightdata';
-  readonly capabilities: ProviderCapabilities = {
+  static readonly capabilities: ProviderCapabilities = {
     antiBot: true, // Full anti-bot with CAPTCHA solving
     geoTargeting: true, // Can target specific countries
     sessionPersistence: true, // Supports sticky sessions
     residential: true, // Uses residential IPs
     unlimitedBandwidth: false, // Pay per GB
   };
+
+  readonly name = 'Bright Data Scraping Browser';
+  readonly type: BrowserProviderType = 'brightdata';
+  readonly capabilities = BrightDataProvider.capabilities;
 
   private auth: string;
   private zone: string;
@@ -200,7 +206,7 @@ class BrightDataProvider implements BrowserProvider {
     }
 
     const parts = this.auth.split(':');
-    if (parts.length !== 2) {
+    if (parts.length !== 2 || !parts[0] || !parts[1]) {
       return {
         valid: false,
         error: 'Invalid BRIGHTDATA_AUTH format. Expected: customer_id:password',
@@ -219,15 +225,17 @@ class BrightDataProvider implements BrowserProvider {
  * Custom provider - any CDP-compatible WebSocket endpoint
  */
 class CustomProvider implements BrowserProvider {
-  readonly name = 'Custom Endpoint';
-  readonly type: BrowserProviderType = 'custom';
-  readonly capabilities: ProviderCapabilities = {
+  static readonly capabilities: ProviderCapabilities = {
     antiBot: false, // Unknown
     geoTargeting: false,
     sessionPersistence: false,
     residential: false,
     unlimitedBandwidth: true,
   };
+
+  readonly name = 'Custom Endpoint';
+  readonly type: BrowserProviderType = 'custom';
+  readonly capabilities = CustomProvider.capabilities;
 
   private endpoint: string;
   private timeout: number;
@@ -325,28 +333,28 @@ export function getProviderInfo(): Array<{
       type: 'local',
       name: 'Local Playwright',
       configured: true, // Always available if Playwright is installed
-      capabilities: new LocalProvider().capabilities,
+      capabilities: LocalProvider.capabilities,
       envVars: [],
     },
     {
       type: 'browserless',
       name: 'Browserless.io',
       configured: !!(process.env.BROWSERLESS_TOKEN || process.env.BROWSERLESS_URL),
-      capabilities: new BrowserlessProvider({} as BrowserProviderConfig).capabilities,
+      capabilities: BrowserlessProvider.capabilities,
       envVars: ['BROWSERLESS_TOKEN', 'BROWSERLESS_URL'],
     },
     {
       type: 'brightdata',
       name: 'Bright Data Scraping Browser',
       configured: !!process.env.BRIGHTDATA_AUTH,
-      capabilities: new BrightDataProvider({} as BrowserProviderConfig).capabilities,
+      capabilities: BrightDataProvider.capabilities,
       envVars: ['BRIGHTDATA_AUTH', 'BRIGHTDATA_ZONE', 'BRIGHTDATA_COUNTRY'],
     },
     {
       type: 'custom',
       name: 'Custom Endpoint',
       configured: !!process.env.BROWSER_ENDPOINT,
-      capabilities: new CustomProvider({} as BrowserProviderConfig).capabilities,
+      capabilities: CustomProvider.capabilities,
       envVars: ['BROWSER_ENDPOINT'],
     },
   ];

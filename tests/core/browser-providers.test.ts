@@ -152,6 +152,28 @@ describe('Browser Providers', () => {
         expect(validation.valid).toBe(false);
         expect(validation.error).toContain('customer_id:password');
       });
+
+      it('should fail validation with empty username', () => {
+        const provider = createProvider({
+          type: 'brightdata',
+          brightdataAuth: ':password',
+        });
+
+        const validation = provider.validate();
+        expect(validation.valid).toBe(false);
+        expect(validation.error).toContain('customer_id:password');
+      });
+
+      it('should fail validation with empty password', () => {
+        const provider = createProvider({
+          type: 'brightdata',
+          brightdataAuth: 'customer:',
+        });
+
+        const validation = provider.validate();
+        expect(validation.valid).toBe(false);
+        expect(validation.error).toContain('customer_id:password');
+      });
     });
 
     describe('Custom Provider', () => {
