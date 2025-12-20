@@ -49,7 +49,7 @@ Tasks are organized by priority and category. Each task includes:
 | CX-004 | Error taxonomy + action hints | M | Reliability | Standardize error codes and `recommendedActions` (DONE) |
 | CX-006 | Learning provenance metadata | M | Reliability | Pattern source, last verified, decay reason (DONE) |
 | CX-007 | Embedded store migration | L | Reliability | Replace JSON persistence with SQLite (or similar) (DONE) |
-| CX-008 | Memory isolation + shared pool | M | Architecture | Per-tenant store with opt-in shared pool |
+| CX-008 | Memory isolation + shared pool | M | Architecture | Per-tenant store with opt-in shared pool (DONE) |
 
 ### Security (Continued)
 
@@ -223,6 +223,7 @@ Note: "Order" reflects the implementation sequence from the plan document, optim
 
 | ID | Task | Completed | Notes |
 |----|------|-----------|-------|
+| CX-008 | Memory Isolation + Shared Pool | 2025-12-20 | Multi-tenant support with TenantStore (namespace-prefixed isolation), SharedPatternPool (opt-in pattern sharing), and MultiTenantStore (tenant lifecycle). Tenant config: sharePatterns, consumeShared. Usage tracking, attribution, statistics. LLM_BROWSER_TENANT_ID env var. 64 tests. |
 | CX-007 | Embedded Store Migration | 2025-12-20 | SQLite-based persistence layer with EmbeddedStore class. ACID transactions, concurrent reads (WAL mode), namespaced storage, JSON fallback. SqlitePersistentStore adapter for gradual migration from PersistentStore. Auto-migration from JSON files. 66 tests. |
 | CX-006 | Learning Provenance Metadata | 2025-12-20 | Track pattern origins (bootstrap, api_extraction, openapi_discovery, etc.), last verified timestamps, and confidence decay history. Created provenance.ts with PatternSource, ConfidenceDecayReason types, DecayEvent/ProvenanceMetadata interfaces. Utility functions: createProvenance, recordVerification, recordUsage, recordDecay, isStale, getDaysSinceVerification, getProvenanceSummary. Integrated with LearningEngine and ApiPatternLearner. 25 tests. |
 | CX-001 | Response Schema Versioning | 2025-12-20 | Added schemaVersion field to all MCP tool responses for LLM client compatibility. Created schema-version.ts with helpers (addSchemaVersion, withSchemaVersion, parseSchemaVersion, isSchemaCompatible). Version format: MAJOR.MINOR with backward compatibility rules. Initial version: 1.0. 27 tests. |
