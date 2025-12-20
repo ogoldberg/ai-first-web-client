@@ -41,6 +41,13 @@ import {
   recordDecay,
 } from '../types/provenance.js';
 import { logger } from '../utils/logger.js';
+import type {
+  SemanticPatternMatcher,
+  SimilarPattern,
+} from './semantic-pattern-matcher.js';
+
+// Create a logger for learning engine operations
+const log = logger.create('LearningEngine');
 
 // Default confidence decay configuration
 const DEFAULT_DECAY_CONFIG: ConfidenceDecayConfig = {
@@ -179,6 +186,7 @@ export class LearningEngine {
   private learningEvents: LearningEvent[] = [];
   private store: PersistentStore<LearningEngineData>;
   private decayConfig: ConfidenceDecayConfig;
+  private semanticMatcher: SemanticPatternMatcher | null = null;
 
   constructor(
     filePath: string = './enhanced-knowledge-base.json',
@@ -200,6 +208,171 @@ export class LearningEngine {
     await this.load();
     // Apply confidence decay on startup
     this.applyConfidenceDecay();
+  }
+
+  // ============================================
+  // SEMANTIC PATTERN MATCHING (V-003)
+  // ============================================
+
+  /**
+   * Set the semantic pattern matcher for similarity-based search
+   * This enables findPatternAsync to use semantic search as a fallback
+   */
+  setSemanticMatcher(matcher: SemanticPatternMatcher | null): void {
+    this.semanticMatcher = matcher;
+    log.info('Semantic matcher configured', {
+      available: matcher !== null,
+    });
+  }
+
+  /**
+   * Check if semantic matching is available
+   */
+  hasSemanticMatcher(): boolean {
+    return this.semanticMatcher !== null && this.semanticMatcher.isAvailable();
+  }
+
+  /**
+   * Find a pattern matching a URL with semantic fallback
+   *
+   * Search order:
+   * 1. Exact match (fastest) - same pathname
+   * 2. Prefix match - pathname starts with pattern
+   * 3. Semantic match (if matcher available) - similar patterns by embedding
+   *
+   * @param url The URL to find a pattern for
+   * @param options Options for semantic matching
+   * @returns The best matching pattern or null
+   */
+  async findPatternAsync(
+    url: string,
+    options?: { minSimilarity?: number }
+  ): Promise<{
+    pattern: EnhancedApiPattern | null;
+    matchType: 'exact' | 'prefix' | 'semantic' | 'none';
+    similarity?: number;
+  }> {
+    // 1. Try exact/prefix match first (synchronous, fast)
+    const syncMatch = this.findPattern(url);
+    if (syncMatch) {
+      // Determine if this is an exact or prefix match
+      let isExactMatch = false;
+      try {
+        isExactMatch = new URL(url).pathname === new URL(syncMatch.endpoint).pathname;
+      } catch {
+        // In case of URL parsing errors, default to prefix match as a safe fallback
+      }
+      return {
+        pattern: syncMatch,
+        matchType: isExactMatch ? 'exact' : 'prefix',
+      };
+    }
+
+    // 2. Try semantic match if available
+    if (this.semanticMatcher && this.semanticMatcher.isAvailable()) {
+      try {
+        const minSimilarity = options?.minSimilarity ?? 0.75;
+        const semanticResult = await this.semanticMatcher.findBestMatch(
+          url,
+          minSimilarity
+        );
+
+        if (semanticResult) {
+          // Convert LearnedPattern to EnhancedApiPattern
+          const enhancedPattern = this.convertToEnhancedPattern(
+            semanticResult.pattern,
+            semanticResult.similarity
+          );
+
+          log.debug('Semantic match found', {
+            url,
+            patternId: semanticResult.embeddingId,
+            similarity: semanticResult.similarity,
+          });
+
+          return {
+            pattern: enhancedPattern,
+            matchType: 'semantic',
+            similarity: semanticResult.similarity,
+          };
+        }
+      } catch (error) {
+        log.warn('Semantic search failed, returning no match', {
+          url,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
+    return { pattern: null, matchType: 'none' };
+  }
+
+  /**
+   * Find similar patterns using semantic search
+   *
+   * @param url The URL to find similar patterns for
+   * @param limit Maximum number of results
+   * @param minSimilarity Minimum similarity threshold (0-1)
+   * @returns Array of similar patterns with scores
+   */
+  async findSimilarPatterns(
+    url: string,
+    limit = 5,
+    minSimilarity = 0.6
+  ): Promise<SimilarPattern[]> {
+    if (!this.semanticMatcher || !this.semanticMatcher.isAvailable()) {
+      return [];
+    }
+
+    try {
+      const result = await this.semanticMatcher.findSimilarByUrl(url, {
+        limit,
+        minSimilarity,
+      });
+      return result.patterns;
+    } catch (error) {
+      log.warn('Failed to find similar patterns', {
+        url,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return [];
+    }
+  }
+
+  /**
+   * Convert a LearnedPattern to EnhancedApiPattern format
+   */
+  private convertToEnhancedPattern(
+    learned: { urlPattern: string; method?: string; description?: string; confidence?: number; domain?: string; lastUsed?: number; successCount?: number; failureCount?: number },
+    similarity: number
+  ): EnhancedApiPattern {
+    // Map confidence from number or string
+    let confidence: 'high' | 'medium' | 'low' = 'medium';
+    if (typeof learned.confidence === 'number') {
+      if (learned.confidence >= 0.8) confidence = 'high';
+      else if (learned.confidence >= 0.5) confidence = 'medium';
+      else confidence = 'low';
+    }
+
+    // Adjust confidence based on similarity
+    if (similarity < 0.7) {
+      confidence = 'low';
+    } else if (similarity < 0.85 && confidence === 'high') {
+      confidence = 'medium';
+    }
+
+    const now = Date.now();
+    return {
+      endpoint: learned.urlPattern,
+      method: learned.method || 'GET',
+      confidence,
+      canBypass: true,
+      reason: `Semantic match (similarity: ${(similarity * 100).toFixed(1)}%)`,
+      createdAt: now,
+      lastVerified: learned.lastUsed || now,
+      verificationCount: learned.successCount || 0,
+      failureCount: learned.failureCount || 0,
+    };
   }
 
   // ============================================
