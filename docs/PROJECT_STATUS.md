@@ -279,9 +279,11 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ---
 
-## Current Task: None
+## Current Task: CX-002 Field-level Confidence Map
 
-Looking for next task from backlog...
+**Status:** In Progress
+
+Adding per-field confidence scores to MCP tool responses for content, APIs, and tables.
 
 ---
 
