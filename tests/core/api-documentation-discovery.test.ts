@@ -53,11 +53,17 @@ vi.mock('../../src/core/asyncapi-discovery.js', () => ({
   generatePatternsFromAsyncAPI: vi.fn(),
 }));
 
+vi.mock('../../src/core/alt-spec-discovery.js', () => ({
+  discoverAltSpecsCached: vi.fn(),
+  generatePatternsFromAltSpec: vi.fn(),
+}));
+
 import { discoverOpenAPICached, generatePatternsFromOpenAPISpec } from '../../src/core/openapi-discovery.js';
 import { discoverGraphQL } from '../../src/core/graphql-introspection.js';
 import { discoverLinks, generatePatternsFromLinks } from '../../src/core/link-discovery.js';
 import { discoverDocs, generatePatternsFromDocs } from '../../src/core/docs-page-discovery.js';
 import { discoverAsyncAPICached, generatePatternsFromAsyncAPI } from '../../src/core/asyncapi-discovery.js';
+import { discoverAltSpecsCached, generatePatternsFromAltSpec } from '../../src/core/alt-spec-discovery.js';
 
 const mockDiscoverOpenAPI = vi.mocked(discoverOpenAPICached);
 const mockGeneratePatterns = vi.mocked(generatePatternsFromOpenAPISpec);
@@ -68,6 +74,8 @@ const mockDiscoverDocs = vi.mocked(discoverDocs);
 const mockGeneratePatternsFromDocs = vi.mocked(generatePatternsFromDocs);
 const mockDiscoverAsyncAPI = vi.mocked(discoverAsyncAPICached);
 const mockGeneratePatternsFromAsyncAPI = vi.mocked(generatePatternsFromAsyncAPI);
+const mockDiscoverAltSpecs = vi.mocked(discoverAltSpecsCached);
+const mockGeneratePatternsFromAltSpec = vi.mocked(generatePatternsFromAltSpec);
 
 // ============================================
 // TEST UTILITIES
@@ -189,6 +197,13 @@ beforeEach(() => {
     discoveryTime: 50,
   });
   mockGeneratePatternsFromAsyncAPI.mockReturnValue([]);
+  // Default mock for alt-spec discovery (usually returns nothing found)
+  mockDiscoverAltSpecs.mockResolvedValue({
+    found: false,
+    probedLocations: [],
+    discoveryTime: 50,
+  });
+  mockGeneratePatternsFromAltSpec.mockReturnValue([]);
 });
 
 afterEach(() => {
@@ -326,6 +341,7 @@ describe('Discovery Constants', () => {
     expect(SOURCE_CONFIDENCE.openapi).toBe(0.95);
     expect(SOURCE_CONFIDENCE.graphql).toBe(0.90);
     expect(SOURCE_CONFIDENCE.asyncapi).toBe(0.85);
+    expect(SOURCE_CONFIDENCE['alt-spec']).toBe(0.80);
   });
 
   it('should have priority scores for all sources', () => {
@@ -577,13 +593,14 @@ describe('Discovery Orchestration', () => {
       const result = await discoverApiDocumentation('example.com');
 
       expect(result.found).toBe(true);
-      expect(result.results).toHaveLength(5); // openapi, graphql, asyncapi, links, docs-page
+      expect(result.results).toHaveLength(6); // openapi, graphql, asyncapi, alt-spec, links, docs-page
       // OpenAPI should be first (higher priority)
       expect(result.results[0].source).toBe('openapi');
       expect(result.results[1].source).toBe('graphql');
-      // asyncapi, links and docs-page order may vary
+      // asyncapi, alt-spec, links and docs-page order may vary
       const sources = result.results.map(r => r.source);
       expect(sources).toContain('asyncapi');
+      expect(sources).toContain('alt-spec');
       expect(sources).toContain('links');
       expect(sources).toContain('docs-page');
     });
@@ -788,9 +805,9 @@ describe('Discovery Orchestration', () => {
       });
       mockDiscoverGraphQL.mockResolvedValue(createMockGraphQLResult(false));
 
-      const result = await getDiscoveryBySource('example.com', 'raml');
+      const result = await getDiscoveryBySource('example.com', 'observed');
 
-      // raml source is not implemented yet
+      // observed source is not implemented as a discovery source
       expect(result).toBeNull();
     });
   });
@@ -807,12 +824,13 @@ describe('Error Handling', () => {
     mockDiscoverLinks.mockRejectedValue(new Error('Links error'));
     mockDiscoverDocs.mockRejectedValue(new Error('Docs error'));
     mockDiscoverAsyncAPI.mockRejectedValue(new Error('AsyncAPI error'));
+    mockDiscoverAltSpecs.mockRejectedValue(new Error('AltSpec error'));
 
     const result = await discoverApiDocumentation('example.com');
 
     expect(result.found).toBe(false);
     expect(result.allPatterns).toHaveLength(0);
-    expect(result.results).toHaveLength(5); // openapi, graphql, asyncapi, links, docs-page
+    expect(result.results).toHaveLength(6); // openapi, graphql, asyncapi, alt-spec, links, docs-page
     expect(result.results.every((r) => r.error)).toBe(true);
   });
 

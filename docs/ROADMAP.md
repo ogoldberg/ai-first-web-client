@@ -27,6 +27,54 @@
 
 ---
 
+## New Initiative: LLM Customer Experience (CX)
+
+**Goal**: Make the system predictable and trustworthy for LLMs as primary users.
+
+### CX Sprint A: Response Contract & Trust (2 weeks)
+
+| Task | Priority | Effort | Status |
+|------|----------|--------|--------|
+| CX-001 Response schema versioning | High | 2 days | Not Started |
+| CX-002 Field-level confidence map | High | 2 days | Not Started |
+| CX-003 Decision trace in responses | High | 2 days | Not Started |
+| CX-004 Error taxonomy + action hints | High | 2 days | Not Started |
+
+**Success Criteria**:
+- All responses include `schemaVersion`
+- Confidence and decision trace are consistently present
+- Failures include actionable recommendations
+
+### CX Sprint B: Learning Integrity & Isolation (2 weeks)
+
+| Task | Priority | Effort | Status |
+|------|----------|--------|--------|
+| CX-006 Learning provenance metadata | High | 2 days | Not Started |
+| CX-007 Embedded store migration | High | 4 days | Not Started |
+| CX-008 Memory isolation + shared pool | Medium | 2 days | Not Started |
+
+**Success Criteria**:
+- Patterns carry provenance and verification metadata
+- Storage supports concurrent access safely
+- Multi-tenant learning is supported without cross-contamination
+
+### CX Sprint C: LLM Control Knobs (1 week)
+
+| Task | Priority | Effort | Status |
+|------|----------|--------|--------|
+| CX-005 Budget knobs | Medium | 2 days | Not Started |
+| CX-009 Tier parity learning | Medium | 2 days | Not Started |
+| CX-010 Config-driven heuristics | Medium | 1 day | Not Started |
+| CX-011 Domain capability summary | Medium | 1 day | Not Started |
+| CX-012 LLM onboarding spec | Low | 1 day | Not Started |
+
+**Success Criteria**:
+- LLMs can express cost/latency preferences
+- Tier 1/2 learn patterns where possible
+- Domain capabilities are discoverable before browsing
+
+---
+
 ## Phase 2: Production Readiness (Current)
 
 **Goal**: Make the system reliable enough for daily use

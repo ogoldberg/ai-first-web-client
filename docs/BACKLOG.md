@@ -39,6 +39,18 @@ Tasks are organized by priority and category. Each task includes:
 | A-003 | Add output size controls | M | Features | Add `maxChars`, `includeTables`, `includeNetwork`, `includeConsole` flags; smaller defaults (DONE) |
 | A-004 | Deprecate legacy tools | S | Debt | Mark legacy browsing tools as deprecated; funnel users to `smart_browse` (DONE) |
 
+### LLM Customer Experience
+
+| ID | Task | Effort | Category | Notes |
+|----|------|--------|----------|-------|
+| CX-001 | Response schema versioning | M | Features | Add `schemaVersion` to all tool outputs; document compatibility |
+| CX-002 | Field-level confidence map | M | Reliability | Per-field confidence for content, APIs, tables |
+| CX-003 | Decision trace in responses | M | Reliability | Include tier attempts, selectors tried, validators, fallbacks |
+| CX-004 | Error taxonomy + action hints | M | Reliability | Standardize error codes and `recommendedActions` |
+| CX-006 | Learning provenance metadata | M | Reliability | Pattern source, last verified, decay reason |
+| CX-007 | Embedded store migration | L | Reliability | Replace JSON persistence with SQLite (or similar) |
+| CX-008 | Memory isolation + shared pool | M | Architecture | Per-tenant store with opt-in shared pool |
+
 ### Security (Continued)
 
 | ID | Task | Effort | Category | Notes |
@@ -92,7 +104,7 @@ Note: "Order" reflects the implementation sequence from the plan document, optim
 | D-002 | 5 | Docs Page Detection | L | DONE | Parse HTML API documentation (/docs, /developers, etc.) |
 | D-009 | 6 | Auth Workflow Helper | L | DONE | Guided authentication setup for discovered APIs |
 | D-005 | 7 | AsyncAPI Discovery | M | DONE | WebSocket, MQTT, Kafka event-driven APIs |
-| D-006 | 8 | Alt Spec Formats | M | | RAML, API Blueprint, WADL parsing |
+| D-006 | 8 | Alt Spec Formats | M | DONE | RAML, API Blueprint, WADL parsing |
 | D-007 | 9 | Robots/Sitemap Analysis | S | | Extract API hints from robots.txt/sitemap.xml |
 | D-010 | 10 | Backend Framework Fingerprinting | M | | Detect Rails, Django, Phoenix, FastAPI, Spring Boot, Laravel, Express from headers/HTML and apply convention-based API patterns |
 
@@ -108,6 +120,16 @@ Note: "Order" reflects the implementation sequence from the plan document, optim
 |----|------|--------|----------|-------|
 | O-005 | Add debug/replay trace recording | M | Features | Record tier decisions, selectors tried, validation reasons for failure reproduction |
 | O-006 | Extraction quality benchmarking | L | Testing | Offline corpus + regression suite for content extraction and table parsing |
+
+### LLM Customer Experience
+
+| ID | Task | Effort | Category | Notes |
+|----|------|--------|----------|-------|
+| CX-005 | Budget knobs | M | Features | Add `maxLatencyMs`, `maxCostTier`, `freshness` parameters |
+| CX-009 | Tier parity learning | M | Features | Learn APIs/structure from intelligence/lightweight tiers |
+| CX-010 | Config-driven heuristics | S | Debt | Domain groups/tier rules loaded from config |
+| CX-011 | Domain capability summary | S | Features | Tool or response section summarizing capabilities |
+| CX-012 | LLM onboarding spec | S | Documentation | Explain confidence, error taxonomy, trust contract |
 
 ### Features
 

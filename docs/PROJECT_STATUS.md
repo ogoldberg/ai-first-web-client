@@ -16,6 +16,19 @@ The LLM Browser MCP Server is an intelligent browser designed specifically for L
 
 ---
 
+## LLM Customer Journey Review
+
+**New doc:** `docs/LLM_CUSTOMER_JOURNEY_REVIEW.md`
+
+Key themes:
+- Add a response contract (schema versioning, field-level confidence, decision trace)
+- Improve learning integrity (provenance, isolation, embedded store)
+- Provide LLM control knobs (latency/cost/freshness) and domain capability summaries
+
+These items are tracked as CX-001 through CX-012 in `docs/BACKLOG.md` and `docs/ROADMAP.md`.
+
+---
+
 ## Current Implementation Status
 
 ### Phase 1: Core MVP - COMPLETE
@@ -260,7 +273,7 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 | D-002 | 5 | Docs Page Detection | Complete |
 | D-009 | 6 | Auth Workflow Helper | Complete |
 | D-005 | 7 | AsyncAPI Discovery | Complete |
-| D-006 | 8 | Alt Spec Formats | In Progress |
+| D-006 | 8 | Alt Spec Formats | Complete |
 | D-007 | 9 | Robots/Sitemap Analysis | Planned |
 | D-010 | 10 | Backend Framework Fingerprinting | Planned |
 
@@ -270,6 +283,17 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ### v0.5.0 (2025-12-20)
 
+- Added API Documentation Discovery Phase 8: Alt Spec Formats (D-006)
+  - New core module `src/core/alt-spec-discovery.ts` for alternative API specification discovery
+  - RAML (RESTful API Modeling Language) parsing with YAML support
+  - API Blueprint (Markdown-based) parsing with regex extraction
+  - WADL (Web Application Description Language/XML) parsing
+  - Discovery at common locations (/api.raml, /api.apib, /application.wadl, etc.)
+  - Endpoint extraction with path parameters, query parameters, and descriptions
+  - Security scheme parsing for all formats
+  - Pattern generation for use with Learning Engine
+  - Integration with Discovery Orchestrator as 'alt-spec' source
+  - 39 new tests for alt-spec discovery
 - Added API Documentation Discovery Phase 7: AsyncAPI Discovery (D-005)
   - New core module `src/core/asyncapi-discovery.ts` for event-driven API discovery
   - Support for AsyncAPI 2.x and 3.x specifications
