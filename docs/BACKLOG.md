@@ -122,7 +122,7 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 
 | ID | Phase | Task | Effort | Status | Notes |
 |----|-------|------|--------|--------|-------|
-| V-001 | 1 | VectorStore Core | L | TODO | Install LanceDB, create VectorStore class with CRUD ops, unit tests |
+| V-001 | 1 | VectorStore Core | L | DONE | Install LanceDB, create VectorStore class with CRUD ops, unit tests |
 | V-002 | 2 | Embedding Pipeline | L | TODO | Connect EmbeddingProvider to VectorStore, ingestion pipeline, auto-index patterns, migration utility |
 | V-003 | 3 | Query Integration | M | TODO | SemanticPatternMatcher, LearningEngine integration, fallback logic, performance tuning |
 | V-004 | 4 | Extended Features | M | TODO | Skill similarity, error pattern matching, content dedup, analytics |
