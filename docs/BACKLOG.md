@@ -43,7 +43,7 @@ Tasks are organized by priority and category. Each task includes:
 
 | ID | Task | Effort | Category | Notes |
 |----|------|--------|----------|-------|
-| CX-001 | Response schema versioning | M | Features | Add `schemaVersion` to all tool outputs; document compatibility |
+| CX-001 | Response schema versioning | M | Features | Add `schemaVersion` to all tool outputs; document compatibility (DONE) |
 | CX-002 | Field-level confidence map | M | Reliability | Per-field confidence for content, APIs, tables |
 | CX-003 | Decision trace in responses | M | Reliability | Include tier attempts, selectors tried, validators, fallbacks |
 | CX-004 | Error taxonomy + action hints | M | Reliability | Standardize error codes and `recommendedActions` |
@@ -120,6 +120,16 @@ Note: "Order" reflects the implementation sequence from the plan document, optim
 |----|------|--------|----------|-------|
 | O-005 | Add debug/replay trace recording | M | Features | Record tier decisions, selectors tried, validation reasons for failure reproduction |
 | O-006 | Extraction quality benchmarking | L | Testing | Offline corpus + regression suite for content extraction and table parsing |
+
+### Go-To-Market (GTM)
+
+| ID | Task | Effort | Category | Notes |
+|----|------|--------|----------|-------|
+| GTM-001 | Usage metering & tier cost reporting | M | Features | Collect per-request tier usage and cost signals |
+| GTM-002 | Basic analytics dashboard | M | Features | Aggregate latency, tier usage, success rate |
+| GTM-003 | Hosted alpha checklist | S | Documentation | Infra, auth, rate limiting, logging, onboarding |
+| GTM-004 | Pricing & packaging doc | S | Documentation | Public-facing pricing tiers and usage model |
+| GTM-005 | SLA/support policy draft | S | Documentation | Define enterprise support and uptime targets |
 
 ### LLM Customer Experience
 
@@ -213,6 +223,7 @@ Note: "Order" reflects the implementation sequence from the plan document, optim
 
 | ID | Task | Completed | Notes |
 |----|------|-----------|-------|
+| CX-001 | Response Schema Versioning | 2025-12-20 | Added schemaVersion field to all MCP tool responses for LLM client compatibility. Created schema-version.ts with helpers (addSchemaVersion, withSchemaVersion, parseSchemaVersion, isSchemaCompatible). Version format: MAJOR.MINOR with backward compatibility rules. Initial version: 1.0. 27 tests. |
 | D-010 | Backend Framework Fingerprinting | 2025-12-20 | Detect Rails, Django, Phoenix, FastAPI, Spring Boot, Laravel, Express, ASP.NET Core from headers/HTML. HTTP header analysis, cookie patterns, HTML CSRF tokens and scripts. Convention-based API pattern generation. Integrated with Discovery Orchestrator. 57 tests. |
 | D-003 | Link Discovery | 2025-12-19 | RFC 8288 Link header parsing, HTML `<link>` extraction, HATEOAS detection (HAL, JSON:API, Siren). Pattern generation, pagination link extraction. Integrated with Discovery Orchestrator. 69 tests. |
 | D-001 | GraphQL Introspection | 2025-12-19 | Auto-discover GraphQL APIs via introspection. Endpoint detection, schema parsing, pagination pattern detection, query/mutation pattern generation, ContentIntelligence integration. 49 tests. |

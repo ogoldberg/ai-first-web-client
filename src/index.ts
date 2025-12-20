@@ -32,6 +32,27 @@ import { BrowseTool } from './tools/browse-tool.js';
 import { ApiCallTool } from './tools/api-call-tool.js';
 import { AuthWorkflow } from './core/auth-workflow.js';
 import { logger } from './utils/logger.js';
+import { addSchemaVersion } from './types/schema-version.js';
+
+/**
+ * Create a versioned JSON response for MCP tools
+ * All successful responses include schemaVersion for client compatibility
+ */
+function jsonResponse(data: object, indent: number = 2): { content: Array<{ type: 'text'; text: string }> } {
+  return {
+    content: [{ type: 'text', text: JSON.stringify(addSchemaVersion(data), null, indent) }],
+  };
+}
+
+/**
+ * Create an error response (errors don't include schema version)
+ */
+function errorResponse(error: string): { content: Array<{ type: 'text'; text: string }>; isError: true } {
+  return {
+    content: [{ type: 'text', text: JSON.stringify({ error }) }],
+    isError: true,
+  };
+}
 
 // Initialize core components
 const browserManager = new BrowserManager();
@@ -1071,14 +1092,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }));
         }
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(formattedResult, null, 2),
-            },
-          ],
-        };
+        return jsonResponse(formattedResult);
       }
 
       // ============================================
@@ -1087,18 +1101,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'get_domain_intelligence': {
         const intelligence = await smartBrowser.getDomainIntelligence(args.domain as string);
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                domain: args.domain,
-                ...intelligence,
-                recommendations: getRecommendations(intelligence),
-              }, null, 2),
-            },
-          ],
-        };
+        return jsonResponse({
+          domain: args.domain,
+          ...intelligence,
+          recommendations: getRecommendations(intelligence),
+        });
       }
 
       // ============================================
@@ -1108,28 +1115,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const learningEngine = smartBrowser.getLearningEngine();
         const stats = learningEngine.getStats();
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                summary: {
-                  totalDomains: stats.totalDomains,
-                  totalApiPatterns: stats.totalApiPatterns,
-                  bypassablePatterns: stats.bypassablePatterns,
-                  totalSelectors: stats.totalSelectors,
-                  totalValidators: stats.totalValidators,
-                  domainGroups: stats.domainGroups,
-                },
-                recentLearning: stats.recentLearningEvents.slice(-5).map(e => ({
-                  type: e.type,
-                  domain: e.domain,
-                  timestamp: new Date(e.timestamp).toISOString(),
-                })),
-              }, null, 2),
-            },
-          ],
-        };
+        return jsonResponse({
+          summary: {
+            totalDomains: stats.totalDomains,
+            totalApiPatterns: stats.totalApiPatterns,
+            bypassablePatterns: stats.bypassablePatterns,
+            totalSelectors: stats.totalSelectors,
+            totalValidators: stats.totalValidators,
+            domainGroups: stats.domainGroups,
+          },
+          recentLearning: stats.recentLearningEvents.slice(-5).map(e => ({
+            type: e.type,
+            domain: e.domain,
+            timestamp: new Date(e.timestamp).toISOString(),
+          })),
+        });
       }
 
       // ============================================
@@ -1138,22 +1138,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'get_procedural_memory_stats': {
         const proceduralStats = smartBrowser.getProceduralMemoryStats();
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                summary: {
-                  totalSkills: proceduralStats.totalSkills,
-                  totalTrajectories: proceduralStats.totalTrajectories,
-                  avgSuccessRate: Math.round(proceduralStats.avgSuccessRate * 100) + '%',
-                },
-                skillsByDomain: proceduralStats.skillsByDomain,
-                mostUsedSkills: proceduralStats.mostUsedSkills.slice(0, 5),
-              }, null, 2),
-            },
-          ],
-        };
+        return jsonResponse({
+          summary: {
+            totalSkills: proceduralStats.totalSkills,
+            totalTrajectories: proceduralStats.totalTrajectories,
+            avgSuccessRate: Math.round(proceduralStats.avgSuccessRate * 100) + '%',
+          },
+          skillsByDomain: proceduralStats.skillsByDomain,
+          mostUsedSkills: proceduralStats.mostUsedSkills.slice(0, 5),
+        });
       }
 
       case 'get_learning_progress': {
@@ -1163,58 +1156,51 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const progress = proceduralMemory.getLearningProgress();
         const learningStats = learningEngine.getStats();
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                summary: {
-                  totalSkills: progress.skills.total,
-                  totalAntiPatterns: progress.antiPatterns.total,
-                  totalApiPatterns: learningStats.totalApiPatterns,
-                  coveredDomains: progress.coverage.coveredDomains,
-                  trajectorySuccessRate: progress.trajectories.total > 0
-                    ? Math.round((progress.trajectories.successful / progress.trajectories.total) * 100) + '%'
-                    : 'N/A',
-                },
-                skills: {
-                  byDomain: progress.skills.byDomain,
-                  avgSuccessRate: Math.round(progress.skills.avgSuccessRate * 100) + '%',
-                  topPerformers: progress.skills.topPerformers.map(s => ({
-                    name: s.name,
-                    successRate: Math.round(s.successRate * 100) + '%',
-                    uses: s.uses,
-                  })),
-                  recentlyCreated: progress.skills.recentlyCreated.map(s => ({
-                    name: s.name,
-                    domain: s.domain,
-                    createdAt: new Date(s.createdAt).toISOString(),
-                  })),
-                },
-                antiPatterns: {
-                  total: progress.antiPatterns.total,
-                  byDomain: progress.antiPatterns.byDomain,
-                },
-                patterns: {
-                  totalApiPatterns: learningStats.totalApiPatterns,
-                  bypassablePatterns: learningStats.bypassablePatterns,
-                  totalSelectors: learningStats.totalSelectors,
-                  totalValidators: learningStats.totalValidators,
-                },
-                coverage: {
-                  coveredDomains: progress.coverage.coveredDomains,
-                  uncoveredDomains: progress.coverage.uncoveredDomains,
-                  suggestions: progress.coverage.suggestions,
-                },
-                trajectories: {
-                  total: progress.trajectories.total,
-                  successful: progress.trajectories.successful,
-                  failed: progress.trajectories.failed,
-                },
-              }, null, 2),
-            },
-          ],
-        };
+        return jsonResponse({
+          summary: {
+            totalSkills: progress.skills.total,
+            totalAntiPatterns: progress.antiPatterns.total,
+            totalApiPatterns: learningStats.totalApiPatterns,
+            coveredDomains: progress.coverage.coveredDomains,
+            trajectorySuccessRate: progress.trajectories.total > 0
+              ? Math.round((progress.trajectories.successful / progress.trajectories.total) * 100) + '%'
+              : 'N/A',
+          },
+          skills: {
+            byDomain: progress.skills.byDomain,
+            avgSuccessRate: Math.round(progress.skills.avgSuccessRate * 100) + '%',
+            topPerformers: progress.skills.topPerformers.map(s => ({
+              name: s.name,
+              successRate: Math.round(s.successRate * 100) + '%',
+              uses: s.uses,
+            })),
+            recentlyCreated: progress.skills.recentlyCreated.map(s => ({
+              name: s.name,
+              domain: s.domain,
+              createdAt: new Date(s.createdAt).toISOString(),
+            })),
+          },
+          antiPatterns: {
+            total: progress.antiPatterns.total,
+            byDomain: progress.antiPatterns.byDomain,
+          },
+          patterns: {
+            totalApiPatterns: learningStats.totalApiPatterns,
+            bypassablePatterns: learningStats.bypassablePatterns,
+            totalSelectors: learningStats.totalSelectors,
+            totalValidators: learningStats.totalValidators,
+          },
+          coverage: {
+            coveredDomains: progress.coverage.coveredDomains,
+            uncoveredDomains: progress.coverage.uncoveredDomains,
+            suggestions: progress.coverage.suggestions,
+          },
+          trajectories: {
+            total: progress.trajectories.total,
+            successful: progress.trajectories.successful,
+            failed: progress.trajectories.failed,
+          },
+        });
       }
 
       case 'find_applicable_skills': {
@@ -1223,28 +1209,21 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           (args.topK as number) || 3
         );
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                url: args.url,
-                matchedSkills: skills.map(match => ({
-                  skillId: match.skill.id,
-                  name: match.skill.name,
-                  description: match.skill.description,
-                  similarity: Math.round(match.similarity * 100) + '%',
-                  preconditionsMet: match.preconditionsMet,
-                  reason: match.reason,
-                  timesUsed: match.skill.metrics.timesUsed,
-                  successRate: match.skill.metrics.successCount > 0
-                    ? Math.round((match.skill.metrics.successCount / match.skill.metrics.timesUsed) * 100) + '%'
-                    : 'N/A',
-                })),
-              }, null, 2),
-            },
-          ],
-        };
+        return jsonResponse({
+          url: args.url,
+          matchedSkills: skills.map(match => ({
+            skillId: match.skill.id,
+            name: match.skill.name,
+            description: match.skill.description,
+            similarity: Math.round(match.similarity * 100) + '%',
+            preconditionsMet: match.preconditionsMet,
+            reason: match.reason,
+            timesUsed: match.skill.metrics.timesUsed,
+            successRate: match.skill.metrics.successCount > 0
+              ? Math.round((match.skill.metrics.successCount / match.skill.metrics.timesUsed) * 100) + '%'
+              : 'N/A',
+          })),
+        });
       }
 
       case 'get_skill_details': {
@@ -1252,47 +1231,32 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const skill = proceduralMemory.getSkill(args.skillId as string);
 
         if (!skill) {
-          return {
-            content: [
-              {
-                type: 'text',
-                text: JSON.stringify({ error: `Skill not found: ${args.skillId}` }),
-              },
-            ],
-            isError: true,
-          };
+          return errorResponse(`Skill not found: ${args.skillId}`);
         }
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                id: skill.id,
-                name: skill.name,
-                description: skill.description,
-                preconditions: skill.preconditions,
-                actionSequence: skill.actionSequence.map(a => ({
-                  type: a.type,
-                  selector: a.selector,
-                  success: a.success,
-                })),
-                metrics: {
-                  successCount: skill.metrics.successCount,
-                  failureCount: skill.metrics.failureCount,
-                  successRate: skill.metrics.timesUsed > 0
-                    ? Math.round((skill.metrics.successCount / skill.metrics.timesUsed) * 100) + '%'
-                    : 'N/A',
-                  avgDuration: Math.round(skill.metrics.avgDuration) + 'ms',
-                  timesUsed: skill.metrics.timesUsed,
-                  lastUsed: new Date(skill.metrics.lastUsed).toISOString(),
-                },
-                sourceDomain: skill.sourceDomain,
-                createdAt: new Date(skill.createdAt).toISOString(),
-              }, null, 2),
-            },
-          ],
-        };
+        return jsonResponse({
+          id: skill.id,
+          name: skill.name,
+          description: skill.description,
+          preconditions: skill.preconditions,
+          actionSequence: skill.actionSequence.map(a => ({
+            type: a.type,
+            selector: a.selector,
+            success: a.success,
+          })),
+          metrics: {
+            successCount: skill.metrics.successCount,
+            failureCount: skill.metrics.failureCount,
+            successRate: skill.metrics.timesUsed > 0
+              ? Math.round((skill.metrics.successCount / skill.metrics.timesUsed) * 100) + '%'
+              : 'N/A',
+            avgDuration: Math.round(skill.metrics.avgDuration) + 'ms',
+            timesUsed: skill.metrics.timesUsed,
+            lastUsed: new Date(skill.metrics.lastUsed).toISOString(),
+          },
+          sourceDomain: skill.sourceDomain,
+          createdAt: new Date(skill.createdAt).toISOString(),
+        });
       }
 
       case 'manage_skills': {
@@ -1302,114 +1266,66 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         switch (action) {
           case 'export': {
             const exported = await proceduralMemory.exportMemory();
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: JSON.stringify({
-                    message: 'Skills exported successfully',
-                    data: JSON.parse(exported),
-                  }, null, 2),
-                },
-              ],
-            };
+            return jsonResponse({
+              message: 'Skills exported successfully',
+              data: JSON.parse(exported),
+            });
           }
 
           case 'import': {
             if (!args.data) {
-              return {
-                content: [{ type: 'text', text: JSON.stringify({ error: 'No data provided for import' }) }],
-                isError: true,
-              };
+              return errorResponse('No data provided for import');
             }
             const imported = await proceduralMemory.importSkills(args.data as string);
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: JSON.stringify({
-                    message: `Imported ${imported} skills`,
-                    totalSkills: proceduralMemory.getStats().totalSkills,
-                  }, null, 2),
-                },
-              ],
-            };
+            return jsonResponse({
+              message: `Imported ${imported} skills`,
+              totalSkills: proceduralMemory.getStats().totalSkills,
+            });
           }
 
           case 'prune': {
             const minRate = (args.minSuccessRate as number) || 0.3;
             const pruned = proceduralMemory.pruneFailedSkills(minRate);
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: JSON.stringify({
-                    message: `Pruned ${pruned} low-performing skills`,
-                    remainingSkills: proceduralMemory.getStats().totalSkills,
-                  }, null, 2),
-                },
-              ],
-            };
+            return jsonResponse({
+              message: `Pruned ${pruned} low-performing skills`,
+              remainingSkills: proceduralMemory.getStats().totalSkills,
+            });
           }
 
           case 'reset': {
             await proceduralMemory.reset();
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: JSON.stringify({ message: 'All skills have been reset' }, null, 2),
-                },
-              ],
-            };
+            return jsonResponse({ message: 'All skills have been reset' });
           }
 
           case 'coverage': {
             const coverage = proceduralMemory.getCoverageStats();
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: JSON.stringify({
-                    coverage: {
-                      coveredDomains: coverage.coveredDomains.length,
-                      coveredPageTypes: coverage.coveredPageTypes,
-                      uncoveredDomains: coverage.uncoveredDomains.slice(0, 10),
-                      uncoveredPageTypes: coverage.uncoveredPageTypes,
-                    },
-                    suggestions: coverage.suggestions,
-                  }, null, 2),
-                },
-              ],
-            };
+            return jsonResponse({
+              coverage: {
+                coveredDomains: coverage.coveredDomains.length,
+                coveredPageTypes: coverage.coveredPageTypes,
+                uncoveredDomains: coverage.uncoveredDomains.slice(0, 10),
+                uncoveredPageTypes: coverage.uncoveredPageTypes,
+              },
+              suggestions: coverage.suggestions,
+            });
           }
 
           case 'workflows': {
             const potentialWorkflows = proceduralMemory.detectPotentialWorkflows();
             const existingWorkflows = proceduralMemory.getAllWorkflows();
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: JSON.stringify({
-                    existingWorkflows: existingWorkflows.map(w => ({
-                      id: w.id,
-                      name: w.name,
-                      skills: w.skillIds.length,
-                      timesUsed: w.metrics.timesUsed,
-                    })),
-                    potentialWorkflows: potentialWorkflows.slice(0, 5),
-                  }, null, 2),
-                },
-              ],
-            };
+            return jsonResponse({
+              existingWorkflows: existingWorkflows.map(w => ({
+                id: w.id,
+                name: w.name,
+                skills: w.skillIds.length,
+                timesUsed: w.metrics.timesUsed,
+              })),
+              potentialWorkflows: potentialWorkflows.slice(0, 5),
+            });
           }
 
           default:
-            return {
-              content: [{ type: 'text', text: JSON.stringify({ error: `Unknown action: ${action}` }) }],
-              isError: true,
-            };
+            return errorResponse(`Unknown action: ${action}`);
         }
       }
 
@@ -1422,39 +1338,29 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const skill = proceduralMemory.getSkill(skillId);
 
         if (!skill) {
-          return {
-            content: [{ type: 'text', text: JSON.stringify({ error: `Skill not found: ${skillId}` }) }],
-            isError: true,
-          };
+          return errorResponse(`Skill not found: ${skillId}`);
         }
 
         const versions = proceduralMemory.getVersionHistory(skillId);
         const bestVersion = proceduralMemory.getBestVersion(skillId);
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                skillId,
-                skillName: skill.name,
-                totalVersions: versions.length,
-                versions: versions.map(v => ({
-                  version: v.version,
-                  createdAt: new Date(v.createdAt).toISOString(),
-                  changeReason: v.changeReason,
-                  changeDescription: v.changeDescription,
-                  successRate: Math.round(v.metricsSnapshot.successRate * 100) + '%',
-                  timesUsed: v.metricsSnapshot.timesUsed,
-                })),
-                bestVersion: bestVersion ? {
-                  version: bestVersion.version,
-                  successRate: Math.round(bestVersion.metricsSnapshot.successRate * 100) + '%',
-                } : null,
-              }, null, 2),
-            },
-          ],
-        };
+        return jsonResponse({
+          skillId,
+          skillName: skill.name,
+          totalVersions: versions.length,
+          versions: versions.map(v => ({
+            version: v.version,
+            createdAt: new Date(v.createdAt).toISOString(),
+            changeReason: v.changeReason,
+            changeDescription: v.changeDescription,
+            successRate: Math.round(v.metricsSnapshot.successRate * 100) + '%',
+            timesUsed: v.metricsSnapshot.timesUsed,
+          })),
+          bestVersion: bestVersion ? {
+            version: bestVersion.version,
+            successRate: Math.round(bestVersion.metricsSnapshot.successRate * 100) + '%',
+          } : null,
+        });
       }
 
       case 'rollback_skill': {
@@ -1465,24 +1371,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const success = await proceduralMemory.rollbackSkill(skillId, targetVersion);
 
         if (!success) {
-          return {
-            content: [{ type: 'text', text: JSON.stringify({ error: 'Rollback failed - check skill ID and version history' }) }],
-            isError: true,
-          };
+          return errorResponse('Rollback failed - check skill ID and version history');
         }
 
         const skill = proceduralMemory.getSkill(skillId);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                message: `Successfully rolled back skill ${skill?.name}`,
-                newSuccessRate: skill ? Math.round((skill.metrics.successCount / Math.max(skill.metrics.timesUsed, 1)) * 100) + '%' : 'N/A',
-              }, null, 2),
-            },
-          ],
-        };
+        return jsonResponse({
+          message: `Successfully rolled back skill ${skill?.name}`,
+          newSuccessRate: skill ? Math.round((skill.metrics.successCount / Math.max(skill.metrics.timesUsed, 1)) * 100) + '%' : 'N/A',
+        });
       }
 
       // ============================================
@@ -1501,22 +1397,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const feedbackSummary = proceduralMemory.getFeedbackSummary(skillId);
         const skill = proceduralMemory.getSkill(skillId);
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                message: `Recorded ${rating} feedback for skill ${skill?.name || skillId}`,
-                feedbackSummary: {
-                  positive: feedbackSummary.positive,
-                  negative: feedbackSummary.negative,
-                  commonIssues: feedbackSummary.commonIssues,
-                },
-                currentSuccessRate: skill ? Math.round((skill.metrics.successCount / Math.max(skill.metrics.timesUsed, 1)) * 100) + '%' : 'N/A',
-              }, null, 2),
-            },
-          ],
-        };
+        return jsonResponse({
+          message: `Recorded ${rating} feedback for skill ${skill?.name || skillId}`,
+          feedbackSummary: {
+            positive: feedbackSummary.positive,
+            negative: feedbackSummary.negative,
+            commonIssues: feedbackSummary.commonIssues,
+          },
+          currentSuccessRate: skill ? Math.round((skill.metrics.successCount / Math.max(skill.metrics.timesUsed, 1)) * 100) + '%' : 'N/A',
+        });
       }
 
       // ============================================
@@ -1529,20 +1418,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const explanation = proceduralMemory.generateSkillExplanation(skillId);
 
         if (!explanation) {
-          return {
-            content: [{ type: 'text', text: JSON.stringify({ error: `Skill not found: ${skillId}` }) }],
-            isError: true,
-          };
+          return errorResponse(`Skill not found: ${skillId}`);
         }
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(explanation, null, 2),
-            },
-          ],
-        };
+        return jsonResponse(explanation);
       }
 
       // ============================================
@@ -1556,26 +1435,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           ? proceduralMemory.getAntiPatternsForDomain(domain)
           : proceduralMemory.getAllAntiPatterns();
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                totalAntiPatterns: antiPatterns.length,
-                antiPatterns: antiPatterns.map(ap => ({
-                  id: ap.id,
-                  name: ap.name,
-                  description: ap.description,
-                  domain: ap.sourceDomain,
-                  avoidActions: ap.avoidActions,
-                  occurrenceCount: ap.occurrenceCount,
-                  consequences: ap.consequences,
-                  lastUpdated: new Date(ap.updatedAt).toISOString(),
-                })),
-              }, null, 2),
-            },
-          ],
-        };
+        return jsonResponse({
+          totalAntiPatterns: antiPatterns.length,
+          antiPatterns: antiPatterns.map(ap => ({
+            id: ap.id,
+            name: ap.name,
+            description: ap.description,
+            domain: ap.sourceDomain,
+            avoidActions: ap.avoidActions,
+            occurrenceCount: ap.occurrenceCount,
+            consequences: ap.consequences,
+            lastUpdated: new Date(ap.updatedAt).toISOString(),
+          })),
+        });
       }
 
       // ============================================
@@ -1590,82 +1462,49 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         switch (action) {
           case 'add_fallbacks': {
             if (!relatedSkillIds || relatedSkillIds.length === 0) {
-              return {
-                content: [{ type: 'text', text: JSON.stringify({ error: 'No fallback skill IDs provided' }) }],
-                isError: true,
-              };
+              return errorResponse('No fallback skill IDs provided');
             }
             const success = await proceduralMemory.addFallbackSkills(skillId, relatedSkillIds);
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: JSON.stringify({
-                    success,
-                    message: success ? `Added ${relatedSkillIds.length} fallback skills` : 'Failed to add fallbacks',
-                  }, null, 2),
-                },
-              ],
-            };
+            return jsonResponse({
+              success,
+              message: success ? `Added ${relatedSkillIds.length} fallback skills` : 'Failed to add fallbacks',
+            });
           }
 
           case 'add_prerequisites': {
             if (!relatedSkillIds || relatedSkillIds.length === 0) {
-              return {
-                content: [{ type: 'text', text: JSON.stringify({ error: 'No prerequisite skill IDs provided' }) }],
-                isError: true,
-              };
+              return errorResponse('No prerequisite skill IDs provided');
             }
             const success = await proceduralMemory.addPrerequisites(skillId, relatedSkillIds);
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: JSON.stringify({
-                    success,
-                    message: success ? `Added ${relatedSkillIds.length} prerequisite skills` : 'Failed to add prerequisites (check for circular dependencies)',
-                  }, null, 2),
-                },
-              ],
-            };
+            return jsonResponse({
+              success,
+              message: success ? `Added ${relatedSkillIds.length} prerequisite skills` : 'Failed to add prerequisites (check for circular dependencies)',
+            });
           }
 
           case 'get_chain': {
             const skill = proceduralMemory.getSkill(skillId);
             if (!skill) {
-              return {
-                content: [{ type: 'text', text: JSON.stringify({ error: `Skill not found: ${skillId}` }) }],
-                isError: true,
-              };
+              return errorResponse(`Skill not found: ${skillId}`);
             }
 
             const prerequisites = proceduralMemory.getPrerequisiteSkills(skillId);
             const fallbacks = proceduralMemory.getFallbackSkills(skillId);
 
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: JSON.stringify({
-                    skill: { id: skill.id, name: skill.name },
-                    prerequisites: prerequisites.map(s => ({ id: s.id, name: s.name })),
-                    fallbacks: fallbacks.map(s => ({ id: s.id, name: s.name })),
-                    executionOrder: [
-                      ...prerequisites.map(s => `[prereq] ${s.name}`),
-                      `[main] ${skill.name}`,
-                      ...fallbacks.map(s => `[fallback] ${s.name}`),
-                    ],
-                  }, null, 2),
-                },
+            return jsonResponse({
+              skill: { id: skill.id, name: skill.name },
+              prerequisites: prerequisites.map(s => ({ id: s.id, name: s.name })),
+              fallbacks: fallbacks.map(s => ({ id: s.id, name: s.name })),
+              executionOrder: [
+                ...prerequisites.map(s => `[prereq] ${s.name}`),
+                `[main] ${skill.name}`,
+                ...fallbacks.map(s => `[fallback] ${s.name}`),
               ],
-            };
+            });
           }
 
           default:
-            return {
-              content: [{ type: 'text', text: JSON.stringify({ error: `Unknown action: ${action}` }) }],
-              isError: true,
-            };
+            return errorResponse(`Unknown action: ${action}`);
         }
       }
 
@@ -1676,18 +1515,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const proceduralMemory = smartBrowser.getProceduralMemory();
         const bootstrapped = await proceduralMemory.bootstrapFromTemplates();
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                message: `Bootstrapped ${bootstrapped} skills from templates`,
-                totalSkills: proceduralMemory.getStats().totalSkills,
-                templates: ['cookie_banner_dismiss', 'pagination_navigate', 'form_extraction', 'table_extraction'],
-              }, null, 2),
-            },
-          ],
-        };
+        return jsonResponse({
+          message: `Bootstrapped ${bootstrapped} skills from templates`,
+          totalSkills: proceduralMemory.getStats().totalSkills,
+          templates: ['cookie_banner_dismiss', 'pagination_navigate', 'form_extraction', 'table_extraction'],
+        });
       }
 
       // ============================================
@@ -1710,18 +1542,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         });
 
         // Include deprecation notice in response
-        const response = {
+        return jsonResponse({
           _deprecation: {
             warning: 'The "browse" tool is deprecated and will be removed in a future version.',
             replacement: 'Use "smart_browse" instead for better results with learning and API discovery.',
             deprecatedSince: '2025-01-01',
           },
           ...result,
-        };
-
-        return {
-          content: [{ type: 'text', text: JSON.stringify(response, null, 2) }],
-        };
+        });
       }
 
       case 'execute_api_call': {
@@ -1732,9 +1560,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           sessionProfile: args.sessionProfile as string,
         });
 
-        return {
-          content: [{ type: 'text', text: JSON.stringify(result, null, 2) }],
-        };
+        return jsonResponse(result);
       }
 
       case 'save_session': {
@@ -1745,21 +1571,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           (args.sessionProfile as string) || 'default'
         );
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({ success: true, message: `Session saved for ${args.domain}` }),
-            },
-          ],
-        };
+        return jsonResponse({ success: true, message: `Session saved for ${args.domain}` });
       }
 
       case 'list_sessions': {
         const sessions = sessionManager.listSessions();
-        return {
-          content: [{ type: 'text', text: JSON.stringify({ sessions }, null, 2) }],
-        };
+        return jsonResponse({ sessions });
       }
 
       case 'get_session_health': {
@@ -1769,9 +1586,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             args.domain as string,
             (args.profile as string) || 'default'
           );
-          return {
-            content: [{ type: 'text', text: JSON.stringify(health, null, 2) }],
-          };
+          return jsonResponse(health);
         } else {
           // Check all sessions
           const allHealth = sessionManager.getAllSessionHealth();
@@ -1782,34 +1597,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             expired: allHealth.filter((h) => h.status === 'expired').length,
             stale: allHealth.filter((h) => h.status === 'stale').length,
           };
-          return {
-            content: [
-              {
-                type: 'text',
-                text: JSON.stringify({ summary, sessions: allHealth }, null, 2),
-              },
-            ],
-          };
+          return jsonResponse({ summary, sessions: allHealth });
         }
       }
 
       case 'get_knowledge_stats': {
         const stats = learningEngine.getStats();
-        return {
-          content: [{ type: 'text', text: JSON.stringify(stats, null, 2) }],
-        };
+        return jsonResponse(stats);
       }
 
       case 'get_learned_patterns': {
         const patterns = learningEngine.getPatterns(args.domain as string);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({ domain: args.domain, patterns }, null, 2),
-            },
-          ],
-        };
+        return jsonResponse({ domain: args.domain, patterns });
       }
 
       // ============================================
@@ -1819,43 +1618,36 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const tieredFetcher = smartBrowser.getTieredFetcher();
         const tierStats = tieredFetcher.getStats();
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                summary: {
-                  totalDomains: tierStats.totalDomains,
-                  domainsByTier: tierStats.byTier,
-                  playwrightAvailable: tierStats.playwrightAvailable,
-                },
-                performance: {
-                  avgResponseTimes: {
-                    intelligence: Math.round(tierStats.avgResponseTimes.intelligence) + 'ms',
-                    lightweight: Math.round(tierStats.avgResponseTimes.lightweight) + 'ms',
-                    playwright: Math.round(tierStats.avgResponseTimes.playwright) + 'ms',
-                  },
-                },
-                efficiency: {
-                  intelligencePercent: tierStats.totalDomains > 0
-                    ? Math.round((tierStats.byTier.intelligence / tierStats.totalDomains) * 100) + '%'
-                    : '0%',
-                  lightweightPercent: tierStats.totalDomains > 0
-                    ? Math.round((tierStats.byTier.lightweight / tierStats.totalDomains) * 100) + '%'
-                    : '0%',
-                  playwrightPercent: tierStats.totalDomains > 0
-                    ? Math.round((tierStats.byTier.playwright / tierStats.totalDomains) * 100) + '%'
-                    : '0%',
-                  message: tierStats.byTier.intelligence + tierStats.byTier.lightweight > tierStats.byTier.playwright
-                    ? 'Good! Most requests are using lightweight rendering'
-                    : tierStats.playwrightAvailable
-                    ? 'Consider optimizing - many requests still require full browser'
-                    : 'Playwright not installed - using lightweight strategies only',
-                },
-              }, null, 2),
+        return jsonResponse({
+          summary: {
+            totalDomains: tierStats.totalDomains,
+            domainsByTier: tierStats.byTier,
+            playwrightAvailable: tierStats.playwrightAvailable,
+          },
+          performance: {
+            avgResponseTimes: {
+              intelligence: Math.round(tierStats.avgResponseTimes.intelligence) + 'ms',
+              lightweight: Math.round(tierStats.avgResponseTimes.lightweight) + 'ms',
+              playwright: Math.round(tierStats.avgResponseTimes.playwright) + 'ms',
             },
-          ],
-        };
+          },
+          efficiency: {
+            intelligencePercent: tierStats.totalDomains > 0
+              ? Math.round((tierStats.byTier.intelligence / tierStats.totalDomains) * 100) + '%'
+              : '0%',
+            lightweightPercent: tierStats.totalDomains > 0
+              ? Math.round((tierStats.byTier.lightweight / tierStats.totalDomains) * 100) + '%'
+              : '0%',
+            playwrightPercent: tierStats.totalDomains > 0
+              ? Math.round((tierStats.byTier.playwright / tierStats.totalDomains) * 100) + '%'
+              : '0%',
+            message: tierStats.byTier.intelligence + tierStats.byTier.lightweight > tierStats.byTier.playwright
+              ? 'Good! Most requests are using lightweight rendering'
+              : tierStats.playwrightAvailable
+              ? 'Consider optimizing - many requests still require full browser'
+              : 'Playwright not installed - using lightweight strategies only',
+          },
+        });
       }
 
       case 'set_domain_tier': {
@@ -1865,22 +1657,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
         tieredFetcher.setDomainPreference(domain, tier);
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                success: true,
-                message: `Set ${domain} to use ${tier} tier`,
-                note: tier === 'intelligence'
-                  ? 'Content Intelligence - tries framework extraction, API prediction, caches, then static parsing'
-                  : tier === 'lightweight'
-                  ? 'Lightweight JS - executes scripts without full browser'
-                  : 'Full browser - handles all pages but slowest (requires Playwright)',
-              }, null, 2),
-            },
-          ],
-        };
+        return jsonResponse({
+          success: true,
+          message: `Set ${domain} to use ${tier} tier`,
+          note: tier === 'intelligence'
+            ? 'Content Intelligence - tries framework extraction, API prediction, caches, then static parsing'
+            : tier === 'lightweight'
+            ? 'Lightweight JS - executes scripts without full browser'
+            : 'Full browser - handles all pages but slowest (requires Playwright)',
+        });
       }
 
       case 'get_tier_usage_by_domain': {
@@ -1947,22 +1732,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           playwright: filtered.filter(p => p.preferredTier === 'playwright').length,
         };
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                totalDomains: preferences.length,
-                filteredCount: filtered.length,
-                showing: limited.length,
-                filter: filterTier || 'none',
-                sortedBy: sortBy,
-                summary: filterTier ? undefined : summary,
-                domains: formatted,
-              }, null, 2),
-            },
-          ],
-        };
+        return jsonResponse({
+          totalDomains: preferences.length,
+          filteredCount: filtered.length,
+          showing: limited.length,
+          filter: filterTier || 'none',
+          sortedBy: sortBy,
+          summary: filterTier ? undefined : summary,
+          domains: formatted,
+        });
       }
 
       // ============================================
@@ -1994,39 +1772,25 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         if (domain) {
           const domainPerf = tracker.getDomainPerformance(domain);
           if (!domainPerf) {
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: JSON.stringify({
-                    error: `No performance data found for domain: ${domain}`,
-                    suggestion: 'This domain may not have been accessed yet. Try browsing it first with smart_browse.',
-                  }, null, 2),
-                },
-              ],
-            };
+            return jsonResponse({
+              error: `No performance data found for domain: ${domain}`,
+              suggestion: 'This domain may not have been accessed yet. Try browsing it first with smart_browse.',
+            });
           }
 
-          return {
-            content: [
-              {
-                type: 'text',
-                text: JSON.stringify({
-                  domain: domainPerf.domain,
-                  totalRequests: domainPerf.totalRequests,
-                  successRate: `${Math.round(domainPerf.successRate * 100)}%`,
-                  preferredTier: domainPerf.preferredTier,
-                  lastUpdated: new Date(domainPerf.lastUpdated).toISOString(),
-                  overall: formatStats(domainPerf.overall),
-                  byTier: {
-                    intelligence: formatStats(domainPerf.byTier.intelligence),
-                    lightweight: formatStats(domainPerf.byTier.lightweight),
-                    playwright: formatStats(domainPerf.byTier.playwright),
-                  },
-                }, null, 2),
-              },
-            ],
-          };
+          return jsonResponse({
+            domain: domainPerf.domain,
+            totalRequests: domainPerf.totalRequests,
+            successRate: `${Math.round(domainPerf.successRate * 100)}%`,
+            preferredTier: domainPerf.preferredTier,
+            lastUpdated: new Date(domainPerf.lastUpdated).toISOString(),
+            overall: formatStats(domainPerf.overall),
+            byTier: {
+              intelligence: formatStats(domainPerf.byTier.intelligence),
+              lightweight: formatStats(domainPerf.byTier.lightweight),
+              playwright: formatStats(domainPerf.byTier.playwright),
+            },
+          });
         }
 
         // Return system-wide metrics
@@ -2034,48 +1798,41 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const componentBreakdown = tracker.getComponentBreakdown();
         const domainRankings = tracker.getDomainsByPerformance(sortBy, order, limit);
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                summary: {
-                  totalRequests: systemPerf.totalRequests,
-                  totalDomains: systemPerf.totalDomains,
-                  successRate: `${Math.round(systemPerf.successRate * 100)}%`,
-                },
-                overall: formatStats(systemPerf.overall),
-                byTier: {
-                  intelligence: formatStats(systemPerf.byTier.intelligence),
-                  lightweight: formatStats(systemPerf.byTier.lightweight),
-                  playwright: formatStats(systemPerf.byTier.playwright),
-                },
-                componentBreakdown: {
-                  network: formatStats(componentBreakdown.network),
-                  parsing: formatStats(componentBreakdown.parsing),
-                  jsExecution: formatStats(componentBreakdown.jsExecution),
-                  extraction: formatStats(componentBreakdown.extraction),
-                },
-                topFastestDomains: systemPerf.topFastDomains.map(d => ({
-                  domain: d.domain,
-                  avgTime: `${d.avgTime}ms`,
-                })),
-                topSlowestDomains: systemPerf.topSlowDomains.map(d => ({
-                  domain: d.domain,
-                  avgTime: `${d.avgTime}ms`,
-                })),
-                domainRankings: domainRankings.map(d => ({
-                  domain: d.domain,
-                  requests: d.totalRequests,
-                  successRate: `${Math.round(d.successRate * 100)}%`,
-                  avgTime: `${Math.round(d.overall.avg)}ms`,
-                  p95: `${Math.round(d.overall.p95)}ms`,
-                  preferredTier: d.preferredTier,
-                })),
-              }, null, 2),
-            },
-          ],
-        };
+        return jsonResponse({
+          summary: {
+            totalRequests: systemPerf.totalRequests,
+            totalDomains: systemPerf.totalDomains,
+            successRate: `${Math.round(systemPerf.successRate * 100)}%`,
+          },
+          overall: formatStats(systemPerf.overall),
+          byTier: {
+            intelligence: formatStats(systemPerf.byTier.intelligence),
+            lightweight: formatStats(systemPerf.byTier.lightweight),
+            playwright: formatStats(systemPerf.byTier.playwright),
+          },
+          componentBreakdown: {
+            network: formatStats(componentBreakdown.network),
+            parsing: formatStats(componentBreakdown.parsing),
+            jsExecution: formatStats(componentBreakdown.jsExecution),
+            extraction: formatStats(componentBreakdown.extraction),
+          },
+          topFastestDomains: systemPerf.topFastDomains.map(d => ({
+            domain: d.domain,
+            avgTime: `${d.avgTime}ms`,
+          })),
+          topSlowestDomains: systemPerf.topSlowDomains.map(d => ({
+            domain: d.domain,
+            avgTime: `${d.avgTime}ms`,
+          })),
+          domainRankings: domainRankings.map(d => ({
+            domain: d.domain,
+            requests: d.totalRequests,
+            successRate: `${Math.round(d.successRate * 100)}%`,
+            avgTime: `${Math.round(d.overall.avg)}ms`,
+            p95: `${Math.round(d.overall.p95)}ms`,
+            preferredTier: d.preferredTier,
+          })),
+        });
       }
 
       // ============================================
@@ -2087,24 +1844,17 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           (args.profile as string) || 'default'
         );
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                domain: status.domain,
-                status: status.status,
-                message: status.message,
-                detectedAuth: status.detectedAuth,
-                configuredCredentials: status.configuredCredentials,
-                missingAuth: status.missingAuth.map(auth => ({
-                  type: auth.type,
-                  guidance: authWorkflow.getAuthGuidance(auth),
-                })),
-              }, null, 2),
-            },
-          ],
-        };
+        return jsonResponse({
+          domain: status.domain,
+          status: status.status,
+          message: status.message,
+          detectedAuth: status.detectedAuth,
+          configuredCredentials: status.configuredCredentials,
+          missingAuth: status.missingAuth.map(auth => ({
+            type: auth.type,
+            guidance: authWorkflow.getAuthGuidance(auth),
+          })),
+        });
       }
 
       case 'configure_api_auth': {
@@ -2163,10 +1913,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             };
             break;
           default:
-            return {
-              content: [{ type: 'text', text: JSON.stringify({ error: `Unknown auth type: ${authType}` }) }],
-              isError: true,
-            };
+            return errorResponse(`Unknown auth type: ${authType}`);
         }
 
         const result = await authWorkflow.configureCredentials(
@@ -2176,22 +1923,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           args.validate !== false
         );
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                success: result.success,
-                domain: result.domain,
-                type: result.type,
-                profile: result.profile,
-                validated: result.validated,
-                error: result.error,
-                nextStep: result.nextStep,
-              }, null, 2),
-            },
-          ],
-        };
+        return jsonResponse({
+          success: result.success,
+          domain: result.domain,
+          type: result.type,
+          profile: result.profile,
+          validated: result.validated,
+          error: result.error,
+          nextStep: result.nextStep,
+        });
       }
 
       case 'complete_oauth': {
@@ -2200,23 +1940,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           args.state as string
         );
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                success: result.success,
-                domain: result.domain,
-                profile: result.profile,
-                validated: result.validated,
-                error: result.error,
-                message: result.success
-                  ? 'OAuth authorization completed successfully. You can now make authenticated API calls.'
-                  : 'OAuth authorization failed. Please try again.',
-              }, null, 2),
-            },
-          ],
-        };
+        return jsonResponse({
+          success: result.success,
+          domain: result.domain,
+          profile: result.profile,
+          validated: result.validated,
+          error: result.error,
+          message: result.success
+            ? 'OAuth authorization completed successfully. You can now make authenticated API calls.'
+            : 'OAuth authorization failed. Please try again.',
+        });
       }
 
       case 'get_auth_guidance': {
@@ -2246,18 +1979,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           }
         }
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                domain: args.domain,
-                detectedAuthTypes: status.detectedAuth.map(a => a.type),
-                guidance,
-              }, null, 2),
-            },
-          ],
-        };
+        return jsonResponse({
+          domain: args.domain,
+          detectedAuthTypes: status.detectedAuth.map(a => a.type),
+          guidance,
+        });
       }
 
       case 'delete_api_auth': {
@@ -2267,38 +1993,24 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           (args.profile as string) || 'default'
         );
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                success: deleted,
-                domain: args.domain,
-                authType: args.authType || 'all',
-                profile: args.profile || 'default',
-                message: deleted
-                  ? 'Credentials deleted successfully'
-                  : 'No matching credentials found',
-              }, null, 2),
-            },
-          ],
-        };
+        return jsonResponse({
+          success: deleted,
+          domain: args.domain,
+          authType: args.authType || 'all',
+          profile: args.profile || 'default',
+          message: deleted
+            ? 'Credentials deleted successfully'
+            : 'No matching credentials found',
+        });
       }
 
       case 'list_configured_auth': {
         const configuredDomains = authWorkflow.listConfiguredDomains();
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify({
-                totalDomains: configuredDomains.length,
-                domains: configuredDomains,
-              }, null, 2),
-            },
-          ],
-        };
+        return jsonResponse({
+          totalDomains: configuredDomains.length,
+          domains: configuredDomains,
+        });
       }
 
       default:
