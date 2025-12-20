@@ -4,7 +4,7 @@
 **Version:** 0.5.0
 **Current Phase:** Production Readiness (Phase 2)
 **Total Code:** ~16,000 lines TypeScript
-**Tests:** 1072 passing + 44 live tests
+**Tests:** 1113 passing + 44 live tests
 
 ---
 
@@ -259,7 +259,7 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 | D-003 | 4 | Link Discovery | Complete |
 | D-002 | 5 | Docs Page Detection | Complete |
 | D-009 | 6 | Auth Workflow Helper | Complete |
-| D-005 | 7 | AsyncAPI Discovery | In Progress |
+| D-005 | 7 | AsyncAPI Discovery | Complete |
 | D-006 | 8 | Alt Spec Formats | Planned |
 | D-007 | 9 | Robots/Sitemap Analysis | Planned |
 | D-010 | 10 | Backend Framework Fingerprinting | Planned |
@@ -268,8 +268,18 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ## Changelog
 
-### v0.5.0 (2025-12-19)
+### v0.5.0 (2025-12-20)
 
+- Added API Documentation Discovery Phase 7: AsyncAPI Discovery (D-005)
+  - New core module `src/core/asyncapi-discovery.ts` for event-driven API discovery
+  - Support for AsyncAPI 2.x and 3.x specifications
+  - Discovery at common locations (/asyncapi.json, /asyncapi.yaml, /.well-known/asyncapi, etc.)
+  - Protocol support: WebSocket (ws/wss), MQTT, Kafka, AMQP, and more
+  - Channel, server, and message schema extraction
+  - Security scheme parsing (apiKey, oauth2, userPassword, etc.)
+  - Pattern generation for WebSocket endpoints
+  - Integration with Discovery Orchestrator as 'asyncapi' source
+  - 41 new tests for AsyncAPI discovery
 - Added API Documentation Discovery Phase 6: Auth Workflow Helper (D-009)
   - New core module `src/core/auth-workflow.ts` for guided API authentication
   - Support for multiple auth types: API Key (header/query/cookie), Bearer, Basic, OAuth 2.0, Cookie

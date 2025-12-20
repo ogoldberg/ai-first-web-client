@@ -29,6 +29,12 @@ import {
   generatePatternsFromDocs,
   type DocsDiscoveryResult,
 } from './docs-page-discovery.js';
+import {
+  discoverAsyncAPICached,
+  generatePatternsFromAsyncAPI,
+  type AsyncAPIDiscoveryResult,
+  type ParsedAsyncAPISpec,
+} from './asyncapi-discovery.js';
 import type { LearnedApiPattern, ParsedOpenAPISpec, OpenAPIDiscoveryOptions } from '../types/api-patterns.js';
 
 // ============================================
@@ -124,6 +130,7 @@ export interface DiscoveryResult {
     graphql?: GraphQLDiscoveryResult;
     links?: LinkDiscoveryResult;
     docs?: DocsDiscoveryResult;
+    asyncapi?: AsyncAPIDiscoveryResult;
   };
 }
 
@@ -684,6 +691,139 @@ async function discoverDocsSource(
   }
 }
 
+/**
+ * Discover AsyncAPI specification
+ */
+async function discoverAsyncAPISource(
+  domain: string,
+  options: DiscoveryOptions
+): Promise<DiscoveryResult> {
+  const startTime = Date.now();
+
+  try {
+    const result = await discoverAsyncAPICached(domain, {
+      headers: options.headers,
+      fetchFn: options.fetchFn,
+      timeout: options.timeout || DEFAULT_SOURCE_TIMEOUT_MS,
+    });
+
+    if (!result.found || !result.spec) {
+      return {
+        source: 'asyncapi',
+        confidence: 0,
+        patterns: [],
+        metadata: {},
+        discoveryTime: Date.now() - startTime,
+        found: false,
+        error: result.error,
+      };
+    }
+
+    // Generate patterns from the spec
+    const patterns = generatePatternsFromAsyncAPI(result.spec, domain);
+
+    // Extract metadata
+    const metadata: DiscoveryMetadata = {
+      specVersion: result.spec.asyncapiVersion,
+      title: result.spec.title,
+      description: result.spec.description,
+    };
+
+    // Get base URL from first server
+    const servers = Object.values(result.spec.servers);
+    if (servers.length > 0) {
+      metadata.baseUrl = servers[0].url;
+    }
+
+    // Extract authentication info
+    if (result.spec.securitySchemes) {
+      metadata.authentication = Object.entries(result.spec.securitySchemes).map(
+        ([name, scheme]) => {
+          const auth: AuthInfo = {
+            type: mapAsyncAPISecurityType(scheme.type),
+            name: scheme.name || name,
+            in: scheme.in as 'header' | 'query' | 'cookie' | undefined,
+          };
+
+          // Add OAuth2 info if applicable
+          if (scheme.flows) {
+            auth.oauthUrls = {};
+            if (scheme.flows.authorizationCode) {
+              auth.oauthFlow = 'authorization_code';
+              auth.oauthUrls.authorizationUrl = scheme.flows.authorizationCode.authorizationUrl;
+              auth.oauthUrls.tokenUrl = scheme.flows.authorizationCode.tokenUrl;
+              auth.oauthUrls.scopes = scheme.flows.authorizationCode.scopes;
+            } else if (scheme.flows.clientCredentials) {
+              auth.oauthFlow = 'client_credentials';
+              auth.oauthUrls.tokenUrl = scheme.flows.clientCredentials.tokenUrl;
+              auth.oauthUrls.scopes = scheme.flows.clientCredentials.scopes;
+            } else if (scheme.flows.password) {
+              auth.oauthFlow = 'password';
+              auth.oauthUrls.tokenUrl = scheme.flows.password.tokenUrl;
+              auth.oauthUrls.scopes = scheme.flows.password.scopes;
+            } else if (scheme.flows.implicit) {
+              auth.oauthFlow = 'implicit';
+              auth.oauthUrls.authorizationUrl = scheme.flows.implicit.authorizationUrl;
+              auth.oauthUrls.scopes = scheme.flows.implicit.scopes;
+            }
+          }
+
+          return auth;
+        }
+      );
+    }
+
+    discoveryLogger.info('AsyncAPI discovery successful', {
+      domain,
+      specUrl: result.specUrl,
+      channels: result.spec.channels.length,
+      patterns: patterns.length,
+    });
+
+    return {
+      source: 'asyncapi',
+      confidence: SOURCE_CONFIDENCE.asyncapi,
+      patterns,
+      metadata,
+      discoveryTime: Date.now() - startTime,
+      found: true,
+      rawData: { asyncapi: result },
+    };
+  } catch (error) {
+    discoveryLogger.error('AsyncAPI discovery failed', { domain, error });
+    return {
+      source: 'asyncapi',
+      confidence: 0,
+      patterns: [],
+      metadata: {},
+      discoveryTime: Date.now() - startTime,
+      found: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
+/**
+ * Map AsyncAPI security scheme type to our AuthInfo type
+ */
+function mapAsyncAPISecurityType(type: string): AuthInfo['type'] {
+  switch (type) {
+    case 'apiKey':
+    case 'httpApiKey':
+      return 'api_key';
+    case 'http':
+      return 'bearer';
+    case 'userPassword':
+    case 'plain':
+      return 'basic';
+    case 'oauth2':
+    case 'openIdConnect':
+      return 'oauth2';
+    default:
+      return 'api_key';
+  }
+}
+
 // ============================================
 // ORCHESTRATION
 // ============================================
@@ -742,10 +882,12 @@ export async function discoverApiDocumentation(
     });
   }
 
-  // Future: Add more discovery sources here
-  // if (!skipSources.has('asyncapi')) {
-  //   sources.push({ name: 'asyncapi', discover: () => discoverAsyncAPISource(domain, options) });
-  // }
+  if (!skipSources.has('asyncapi')) {
+    sources.push({
+      name: 'asyncapi',
+      discover: () => discoverAsyncAPISource(domain, options),
+    });
+  }
 
   // Run all discoveries in parallel, tracking timing for each
   const timedSources = sources.map((s) => {
@@ -874,6 +1016,7 @@ export {
   discoverGraphQLSource,
   discoverLinksSource,
   discoverDocsSource,
+  discoverAsyncAPISource,
   convertGraphQLPattern,
 };
 
@@ -888,3 +1031,12 @@ export type {
   DocumentedEndpoint,
   DocFramework,
 } from './docs-page-discovery.js';
+
+export type {
+  AsyncAPIDiscoveryResult,
+  ParsedAsyncAPISpec,
+  AsyncAPIChannel,
+  AsyncAPIServer,
+  AsyncAPIProtocol,
+  AsyncAPIPattern,
+} from './asyncapi-discovery.js';
