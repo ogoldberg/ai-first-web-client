@@ -282,7 +282,7 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ## Current Task: V-004 (Extended Features)
 
-**Status:** Next up
+**Status:** In Progress
 
 **Goal:** Skill similarity search, error pattern matching, content dedup, analytics
 
@@ -310,7 +310,7 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for ful
 | V-001 | 1 | VectorStore Core | DONE |
 | V-002 | 2 | Embedding Pipeline | DONE |
 | V-003 | 3 | Query Integration | DONE |
-| V-004 | 4 | Extended Features | TODO |
+| V-004 | 4 | Extended Features | IN PROGRESS |
 
 ---
 
