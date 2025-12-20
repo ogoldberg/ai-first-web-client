@@ -48,10 +48,16 @@ vi.mock('../../src/core/docs-page-discovery.js', () => ({
   generatePatternsFromDocs: vi.fn(),
 }));
 
+vi.mock('../../src/core/asyncapi-discovery.js', () => ({
+  discoverAsyncAPICached: vi.fn(),
+  generatePatternsFromAsyncAPI: vi.fn(),
+}));
+
 import { discoverOpenAPICached, generatePatternsFromOpenAPISpec } from '../../src/core/openapi-discovery.js';
 import { discoverGraphQL } from '../../src/core/graphql-introspection.js';
 import { discoverLinks, generatePatternsFromLinks } from '../../src/core/link-discovery.js';
 import { discoverDocs, generatePatternsFromDocs } from '../../src/core/docs-page-discovery.js';
+import { discoverAsyncAPICached, generatePatternsFromAsyncAPI } from '../../src/core/asyncapi-discovery.js';
 
 const mockDiscoverOpenAPI = vi.mocked(discoverOpenAPICached);
 const mockGeneratePatterns = vi.mocked(generatePatternsFromOpenAPISpec);
@@ -60,6 +66,8 @@ const mockDiscoverLinks = vi.mocked(discoverLinks);
 const mockGeneratePatternsFromLinks = vi.mocked(generatePatternsFromLinks);
 const mockDiscoverDocs = vi.mocked(discoverDocs);
 const mockGeneratePatternsFromDocs = vi.mocked(generatePatternsFromDocs);
+const mockDiscoverAsyncAPI = vi.mocked(discoverAsyncAPICached);
+const mockGeneratePatternsFromAsyncAPI = vi.mocked(generatePatternsFromAsyncAPI);
 
 // ============================================
 // TEST UTILITIES
@@ -174,6 +182,13 @@ beforeEach(() => {
     discoveryTime: 50,
   });
   mockGeneratePatternsFromDocs.mockReturnValue([]);
+  // Default mock for asyncapi discovery (usually returns nothing found)
+  mockDiscoverAsyncAPI.mockResolvedValue({
+    found: false,
+    probedLocations: [],
+    discoveryTime: 50,
+  });
+  mockGeneratePatternsFromAsyncAPI.mockReturnValue([]);
 });
 
 afterEach(() => {
@@ -562,12 +577,13 @@ describe('Discovery Orchestration', () => {
       const result = await discoverApiDocumentation('example.com');
 
       expect(result.found).toBe(true);
-      expect(result.results).toHaveLength(4); // openapi, graphql, links, docs-page
+      expect(result.results).toHaveLength(5); // openapi, graphql, asyncapi, links, docs-page
       // OpenAPI should be first (higher priority)
       expect(result.results[0].source).toBe('openapi');
       expect(result.results[1].source).toBe('graphql');
-      // links and docs-page order may vary
+      // asyncapi, links and docs-page order may vary
       const sources = result.results.map(r => r.source);
+      expect(sources).toContain('asyncapi');
       expect(sources).toContain('links');
       expect(sources).toContain('docs-page');
     });
@@ -772,9 +788,9 @@ describe('Discovery Orchestration', () => {
       });
       mockDiscoverGraphQL.mockResolvedValue(createMockGraphQLResult(false));
 
-      const result = await getDiscoveryBySource('example.com', 'asyncapi');
+      const result = await getDiscoveryBySource('example.com', 'raml');
 
-      // asyncapi source is not implemented yet
+      // raml source is not implemented yet
       expect(result).toBeNull();
     });
   });
@@ -790,12 +806,13 @@ describe('Error Handling', () => {
     mockDiscoverGraphQL.mockRejectedValue(new Error('GraphQL error'));
     mockDiscoverLinks.mockRejectedValue(new Error('Links error'));
     mockDiscoverDocs.mockRejectedValue(new Error('Docs error'));
+    mockDiscoverAsyncAPI.mockRejectedValue(new Error('AsyncAPI error'));
 
     const result = await discoverApiDocumentation('example.com');
 
     expect(result.found).toBe(false);
     expect(result.allPatterns).toHaveLength(0);
-    expect(result.results).toHaveLength(4); // openapi, graphql, links, docs-page
+    expect(result.results).toHaveLength(5); // openapi, graphql, asyncapi, links, docs-page
     expect(result.results.every((r) => r.error)).toBe(true);
   });
 
