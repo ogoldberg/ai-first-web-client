@@ -108,6 +108,17 @@ describe('schema-version', () => {
 
       expect(result.schemaVersion).toBe(SCHEMA_VERSION);
     });
+
+    it('should throw an error when passed an array', () => {
+      // Arrays cannot be spread into objects without losing their array nature
+      // This ensures developers wrap arrays in an object first
+      expect(() => addSchemaVersion([] as unknown as Record<string, unknown>)).toThrow(
+        'addSchemaVersion cannot be used with arrays'
+      );
+      expect(() => addSchemaVersion([1, 2, 3] as unknown as Record<string, unknown>)).toThrow(
+        'addSchemaVersion cannot be used with arrays'
+      );
+    });
   });
 
   describe('isVersionedResponse', () => {

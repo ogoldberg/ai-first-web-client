@@ -84,10 +84,13 @@ export function withSchemaVersion<T>(data: T): VersionedResponse<T> {
  * ```
  */
 export function addSchemaVersion<T extends object>(response: T): T & SchemaVersionInfo {
+  if (Array.isArray(response)) {
+    throw new Error('addSchemaVersion cannot be used with arrays. Wrap the array in an object first.');
+  }
   return {
-    ...response,
+    ...(response as Record<string, unknown>),
     schemaVersion: SCHEMA_VERSION,
-  };
+  } as T & SchemaVersionInfo;
 }
 
 /**
