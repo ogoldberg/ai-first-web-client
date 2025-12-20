@@ -4,7 +4,7 @@
 **Version:** 0.5.0
 **Current Phase:** Production Readiness (Phase 2)
 **Total Code:** ~16,000 lines TypeScript
-**Tests:** 1150 passing + 44 live tests
+**Tests:** 1278 passing + 44 live tests
 
 ---
 
@@ -279,9 +279,9 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ---
 
-## Current Task: CX-001 Response Schema Versioning
+## Current Task: None
 
-**Status:** In Progress
+Looking for next task from backlog...
 
 ---
 
@@ -289,6 +289,7 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ### v0.5.0 (2025-12-20)
 
+- Added CX-001: Response Schema Versioning - All MCP tool responses now include schemaVersion field
 - Added API Documentation Discovery Phase 10: Backend Framework Fingerprinting (D-010)
   - New core module `src/core/backend-framework-fingerprinting.ts` for framework detection
   - Detects 8 backend frameworks: Rails, Django, Phoenix, FastAPI, Spring Boot, Laravel, Express, ASP.NET Core
