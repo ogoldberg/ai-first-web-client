@@ -4,7 +4,7 @@
 **Version:** 0.5.0
 **Current Phase:** Production Readiness (Phase 2)
 **Total Code:** ~16,000 lines TypeScript
-**Tests:** 1657 passing + 44 live tests
+**Tests:** 1681 passing + 44 live tests
 
 ---
 
@@ -280,11 +280,11 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ---
 
-## Current Task: V-003 (Query Integration)
+## Current Task: V-004 (Extended Features)
 
-**Status:** In Progress
+**Status:** Next up
 
-**Goal:** Create SemanticPatternMatcher, integrate with LearningEngine for semantic pattern search
+**Goal:** Skill similarity search, error pattern matching, content dedup, analytics
 
 **Previously completed:**
 
@@ -297,6 +297,7 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 - CX-008: Memory Isolation + Shared Pool
 - V-001: VectorStore Core (LanceDB integration)
 - V-002: Embedding Pipeline (EmbeddingProvider + ingestion + migration)
+- V-003: Query Integration (SemanticPatternMatcher + LearningEngine integration)
 
 ### Phase 5: Vector Embedding Storage - IN PROGRESS
 
@@ -308,7 +309,7 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for ful
 |----|-------|------|--------|
 | V-001 | 1 | VectorStore Core | DONE |
 | V-002 | 2 | Embedding Pipeline | DONE |
-| V-003 | 3 | Query Integration | TODO |
+| V-003 | 3 | Query Integration | DONE |
 | V-004 | 4 | Extended Features | TODO |
 
 ---
@@ -317,6 +318,15 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for ful
 
 ### v0.5.0 (2025-12-20)
 
+- Added V-003: Query Integration - Semantic pattern matching for LearningEngine
+  - New SemanticPatternMatcher class for similarity-based pattern search
+  - Converts URLs and content to embeddings for semantic matching
+  - Integration with LearningEngine via findPatternAsync() and findSimilarPatterns()
+  - Combined scoring: vector similarity (70%), pattern confidence (20%), recency (10%)
+  - Graceful fallback when vector search unavailable
+  - URL text extraction with ID filtering (strips numeric/UUID segments)
+  - Domain-scoped and tenant-scoped search filters
+  - 24 new tests for semantic pattern matcher
 - Added CX-008: Memory Isolation + Shared Pool - Multi-tenant support for deployments
   - New TenantStore class that wraps EmbeddedStore with tenant-prefixed namespaces
   - Complete data isolation between tenants via namespace prefixing
