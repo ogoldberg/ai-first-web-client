@@ -105,7 +105,7 @@ Note: "Order" reflects the implementation sequence from the plan document, optim
 | D-009 | 6 | Auth Workflow Helper | L | DONE | Guided authentication setup for discovered APIs |
 | D-005 | 7 | AsyncAPI Discovery | M | DONE | WebSocket, MQTT, Kafka event-driven APIs |
 | D-006 | 8 | Alt Spec Formats | M | DONE | RAML, API Blueprint, WADL parsing |
-| D-007 | 9 | Robots/Sitemap Analysis | S | | Extract API hints from robots.txt/sitemap.xml |
+| D-007 | 9 | Robots/Sitemap Analysis | S | In Progress | Extract API hints from robots.txt/sitemap.xml |
 | D-010 | 10 | Backend Framework Fingerprinting | M | | Detect Rails, Django, Phoenix, FastAPI, Spring Boot, Laravel, Express from headers/HTML and apply convention-based API patterns |
 
 **Supersedes:** I-012 (GraphQL introspection), I-013 (Authentication workflow helper)

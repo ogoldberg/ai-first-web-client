@@ -274,7 +274,7 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 | D-009 | 6 | Auth Workflow Helper | Complete |
 | D-005 | 7 | AsyncAPI Discovery | Complete |
 | D-006 | 8 | Alt Spec Formats | Complete |
-| D-007 | 9 | Robots/Sitemap Analysis | Planned |
+| D-007 | 9 | Robots/Sitemap Analysis | In Progress |
 | D-010 | 10 | Backend Framework Fingerprinting | Planned |
 
 ---
