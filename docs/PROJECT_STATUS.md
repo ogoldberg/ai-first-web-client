@@ -275,7 +275,7 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 | D-005 | 7 | AsyncAPI Discovery | Complete |
 | D-006 | 8 | Alt Spec Formats | Complete |
 | D-007 | 9 | Robots/Sitemap Analysis | Complete |
-| D-010 | 10 | Backend Framework Fingerprinting | Planned |
+| D-010 | 10 | Backend Framework Fingerprinting | In Progress |
 
 ---
 
