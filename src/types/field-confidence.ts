@@ -149,6 +149,11 @@ export function aggregateConfidence(
   const effectiveWeights = weights || confidences.map(() => 1);
   const totalWeight = effectiveWeights.reduce((a, b) => a + b, 0);
 
+  // Guard against division by zero
+  if (totalWeight === 0) {
+    return createFieldConfidence(0, 'unknown', 'Cannot aggregate with zero total weight');
+  }
+
   // Weighted geometric mean
   const logSum = confidences.reduce((sum, conf, i) => {
     const weight = effectiveWeights[i] / totalWeight;
@@ -178,23 +183,17 @@ export function boostForValidation(
   validationPassed: boolean,
   boost: number = 0.1
 ): FieldConfidence {
-  if (validationPassed) {
-    return {
-      ...confidence,
-      score: Math.min(1, confidence.score + boost),
-      level: scoreToLevel(Math.min(1, confidence.score + boost)),
-      reason: confidence.reason
-        ? `${confidence.reason}; validated`
-        : 'Validation passed',
-    };
-  }
+  const scoreAdjustment = validationPassed ? boost : -boost;
+  const newScore = Math.max(0, Math.min(1, confidence.score + scoreAdjustment));
+  const validationReason = validationPassed ? 'validated' : 'validation failed';
+
   return {
     ...confidence,
-    score: Math.max(0, confidence.score - boost),
-    level: scoreToLevel(Math.max(0, confidence.score - boost)),
+    score: newScore,
+    level: scoreToLevel(newScore),
     reason: confidence.reason
-      ? `${confidence.reason}; validation failed`
-      : 'Validation failed',
+      ? `${confidence.reason}; ${validationReason}`
+      : validationPassed ? 'Validation passed' : 'Validation failed',
   };
 }
 

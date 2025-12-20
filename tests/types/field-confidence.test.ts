@@ -146,6 +146,20 @@ describe('field-confidence', () => {
 
       expect(result.score).toBeCloseTo(0.85, 2);
     });
+
+    it('should handle zero total weight', () => {
+      const confidences: FieldConfidence[] = [
+        createFieldConfidence(0.9, 'selector_match'),
+        createFieldConfidence(0.6, 'heuristic'),
+      ];
+
+      // Pass zero weights
+      const result = aggregateConfidence(confidences, [0, 0]);
+
+      expect(result.score).toBe(0);
+      expect(result.source).toBe('unknown');
+      expect(result.reason).toContain('zero total weight');
+    });
   });
 
   describe('boostForValidation', () => {

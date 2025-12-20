@@ -87,7 +87,7 @@ describe('ContentExtractor confidence tracking', () => {
 
       expect(result.title).toBe('OpenGraph Title');
       expect(result.metadata.titleSource).toBe('og_title');
-      expect(result.confidence.title.source).toBe('meta_tags');
+      expect(result.confidence.title.source).toBe('structured_data');
     });
 
     it('should use h1 as title fallback with lower confidence', () => {
@@ -168,110 +168,6 @@ describe('ContentExtractor confidence tracking', () => {
       // Overall should be aggregate of title and content
       expect(result.confidence.overall.score).toBeGreaterThan(0);
       expect(result.confidence.overall.score).toBeLessThanOrEqual(1);
-    });
-  });
-
-  describe('extractTablesWithConfidence', () => {
-    it('should extract tables with confidence scores', () => {
-      const html = `
-        <html>
-        <body>
-          <table>
-            <thead>
-              <tr><th>Name</th><th>Age</th></tr>
-            </thead>
-            <tbody>
-              <tr><td>Alice</td><td>30</td></tr>
-              <tr><td>Bob</td><td>25</td></tr>
-            </tbody>
-          </table>
-        </body>
-        </html>
-      `;
-
-      const tables = extractor.extractTablesWithConfidence(html);
-
-      expect(tables).toHaveLength(1);
-      expect(tables[0].headers).toEqual(['Name', 'Age']);
-      expect(tables[0].rows).toHaveLength(2);
-      expect(tables[0].confidence).toBeDefined();
-      expect(tables[0].confidence.score).toBeGreaterThan(0.8);
-    });
-
-    it('should have higher confidence for tables with thead', () => {
-      const htmlWithThead = `
-        <table>
-          <thead><tr><th>A</th><th>B</th></tr></thead>
-          <tbody><tr><td>1</td><td>2</td></tr></tbody>
-        </table>
-      `;
-
-      const htmlWithoutThead = `
-        <table>
-          <tr><th>A</th><th>B</th></tr>
-          <tr><td>1</td><td>2</td></tr>
-        </table>
-      `;
-
-      const withThead = extractor.extractTablesWithConfidence(htmlWithThead);
-      const withoutThead = extractor.extractTablesWithConfidence(htmlWithoutThead);
-
-      expect(withThead[0].confidence.score).toBeGreaterThan(
-        withoutThead[0].confidence.score
-      );
-    });
-
-    it('should have lower confidence for tables without headers', () => {
-      const html = `
-        <table>
-          <tr><td>Data 1</td><td>Data 2</td></tr>
-          <tr><td>Data 3</td><td>Data 4</td></tr>
-        </table>
-      `;
-
-      const tables = extractor.extractTablesWithConfidence(html);
-
-      expect(tables).toHaveLength(1);
-      expect(tables[0].confidence.score).toBeLessThan(0.6);
-      expect(tables[0].confidence.reason).toContain('without clear headers');
-    });
-
-    it('should boost confidence for tables with caption', () => {
-      const htmlWithCaption = `
-        <table>
-          <caption>User Data</caption>
-          <thead><tr><th>Name</th></tr></thead>
-          <tbody><tr><td>Alice</td></tr></tbody>
-        </table>
-      `;
-
-      const htmlWithoutCaption = `
-        <table>
-          <thead><tr><th>Name</th></tr></thead>
-          <tbody><tr><td>Alice</td></tr></tbody>
-        </table>
-      `;
-
-      const withCaption = extractor.extractTablesWithConfidence(htmlWithCaption);
-      const withoutCaption = extractor.extractTablesWithConfidence(htmlWithoutCaption);
-
-      expect(withCaption[0].caption).toBe('User Data');
-      expect(withCaption[0].confidence.score).toBeGreaterThan(
-        withoutCaption[0].confidence.score
-      );
-    });
-
-    it('should extract multiple tables', () => {
-      const html = `
-        <table><tr><th>A</th></tr><tr><td>1</td></tr></table>
-        <table><tr><th>B</th></tr><tr><td>2</td></tr></table>
-      `;
-
-      const tables = extractor.extractTablesWithConfidence(html);
-
-      expect(tables).toHaveLength(2);
-      expect(tables[0].confidence).toBeDefined();
-      expect(tables[1].confidence).toBeDefined();
     });
   });
 });

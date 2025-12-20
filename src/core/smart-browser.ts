@@ -1477,21 +1477,21 @@ export class SmartBrowser {
       };
     }
 
-    // Compute table confidence
+    // Compute table confidence using SOURCE_CONFIDENCE_SCORES
     const tableConfidences: TableConfidence[] = tables.map((table, index) => {
       const hasHeaders = table.headers.length > 0;
       const hasData = table.data.length > 0;
 
-      // Header confidence
-      const headerScore = hasHeaders ? 0.85 : 0.30;
+      // Header confidence using predefined scores
+      const headerScore = hasHeaders ? SOURCE_CONFIDENCE_SCORES.selector_match : SOURCE_CONFIDENCE_SCORES.fallback;
       const headerConfidence = createFieldConfidence(
         headerScore,
         hasHeaders ? 'selector_match' : 'fallback',
         hasHeaders ? `${table.headers.length} headers detected` : 'No headers detected'
       );
 
-      // Data confidence
-      const dataScore = hasData ? 0.80 : 0.10;
+      // Data confidence - use selector_match score for valid data, lower for missing
+      const dataScore = hasData ? SOURCE_CONFIDENCE_SCORES.selector_match : 0.10;
       const dataConfidence = createFieldConfidence(
         dataScore,
         hasData ? 'selector_match' : 'fallback',
@@ -1500,7 +1500,7 @@ export class SmartBrowser {
 
       // Caption confidence (optional)
       const captionConfidence = table.caption
-        ? createFieldConfidence(0.90, 'selector_match', 'Caption found')
+        ? createFieldConfidence(SOURCE_CONFIDENCE_SCORES.selector_match, 'selector_match', 'Caption found')
         : undefined;
 
       return {
@@ -1511,10 +1511,15 @@ export class SmartBrowser {
       };
     });
 
+    // Map string confidence to numeric (defined outside map for efficiency)
+    const confidenceMap: Record<'high' | 'medium' | 'low', number> = {
+      high: 0.90,
+      medium: 0.70,
+      low: 0.45,
+    };
+
     // Compute API confidence
     const apiConfidences: ApiConfidence[] = discoveredApis.map((api) => {
-      // Map string confidence to numeric
-      const confidenceMap = { high: 0.90, medium: 0.70, low: 0.45 };
       const baseScore = confidenceMap[api.confidence];
 
       return {
@@ -1530,28 +1535,20 @@ export class SmartBrowser {
           `HTTP ${api.method} method detected`
         ),
         bypassConfidence: createFieldConfidence(
-          api.canBypass ? 0.85 : 0.40,
+          api.canBypass ? SOURCE_CONFIDENCE_SCORES.selector_match : SOURCE_CONFIDENCE_SCORES.heuristic,
           api.canBypass ? 'api_response' : 'heuristic',
           api.canBypass ? 'Can likely bypass browser rendering' : 'May require browser for auth/state'
         ),
       };
     });
 
-    // Compute overall confidence
+    // Compute overall confidence using flatMap for cleaner array building
     const allConfidences: FieldConfidence[] = [
       extraction.confidence.title,
       contentConfidence,
+      ...tableConfidences.flatMap(tc => [tc.headers, tc.data]),
+      ...apiConfidences.map(ac => ac.endpointConfidence),
     ];
-
-    // Add table confidences if present
-    for (const tc of tableConfidences) {
-      allConfidences.push(tc.headers, tc.data);
-    }
-
-    // Add API confidences if present
-    for (const ac of apiConfidences) {
-      allConfidences.push(ac.endpointConfidence);
-    }
 
     const overall = aggregateConfidence(allConfidences);
 

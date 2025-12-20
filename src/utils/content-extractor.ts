@@ -200,8 +200,8 @@ export class ContentExtractor {
         title: ogTitle.trim(),
         source: 'og_title',
         confidence: createFieldConfidence(
-          SOURCE_CONFIDENCE_SCORES.meta_tags,
-          'meta_tags',
+          SOURCE_CONFIDENCE_SCORES.structured_data,
+          'structured_data',
           'OpenGraph title from meta tag'
         ),
       };
@@ -306,92 +306,6 @@ export class ContentExtractor {
         'Content extracted from body - no semantic container found'
       ),
     };
-  }
-
-  /**
-   * Extract tables with confidence tracking (CX-002)
-   */
-  extractTablesWithConfidence(html: string): Array<ExtractedTable & { confidence: FieldConfidence }> {
-    const $ = cheerio.load(html);
-    const tables: Array<ExtractedTable & { confidence: FieldConfidence }> = [];
-
-    $('table').each((index, tableEl) => {
-      const $table = $(tableEl);
-      const headers: string[] = [];
-      const rows: string[][] = [];
-
-      // Get caption if exists
-      const caption = $table.find('caption').text().trim() || undefined;
-      const id = $table.attr('id') || undefined;
-
-      // Extract headers from thead or first row
-      const $headerRow = $table.find('thead tr').first();
-      let headerSource: ExtractionSource = 'selector_match';
-      let headerConfidenceScore = 0.85;
-
-      if ($headerRow.length > 0) {
-        $headerRow.find('th, td').each((_, cell) => {
-          headers.push($(cell).text().trim());
-        });
-        headerSource = 'selector_match';
-        headerConfidenceScore = 0.90; // thead is explicit
-      } else {
-        // Try first row if no thead
-        const $firstRow = $table.find('tr').first();
-        const $headerCells = $firstRow.find('th');
-        if ($headerCells.length > 0) {
-          $headerCells.each((_, cell) => {
-            headers.push($(cell).text().trim());
-          });
-          headerSource = 'heuristic';
-          headerConfidenceScore = 0.75; // Inferred from th elements
-        }
-      }
-
-      // Extract data rows
-      const $bodyRows = $table.find('tbody tr');
-      const rowsToProcess = $bodyRows.length > 0 ? $bodyRows : $table.find('tr').slice(headers.length > 0 ? 1 : 0);
-
-      rowsToProcess.each((_, rowEl) => {
-        const row: string[] = [];
-        $(rowEl).find('td, th').each((_, cell) => {
-          row.push($(cell).text().trim());
-        });
-        if (row.length > 0) {
-          rows.push(row);
-        }
-      });
-
-      // Only include tables with actual content
-      if (rows.length > 0 || headers.length > 0) {
-        // Compute confidence based on table structure quality
-        let confidenceScore = 0.70; // Base score for any table
-        let reason = 'Table structure detected';
-
-        if (headers.length > 0 && rows.length > 0) {
-          confidenceScore = headerConfidenceScore;
-          reason = `Table with ${headers.length} headers and ${rows.length} rows`;
-        } else if (headers.length === 0) {
-          confidenceScore = 0.50;
-          reason = 'Table without clear headers - structure uncertain';
-        }
-
-        if (caption) {
-          confidenceScore = Math.min(1.0, confidenceScore + 0.05);
-          reason += ' (has caption)';
-        }
-
-        tables.push({
-          headers,
-          rows,
-          caption,
-          id,
-          confidence: createFieldConfidence(confidenceScore, headerSource, reason),
-        });
-      }
-    });
-
-    return tables;
   }
 
   /**
