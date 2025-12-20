@@ -30,6 +30,7 @@ import { LearningEngine } from './core/learning-engine.js';
 import { SmartBrowser } from './core/smart-browser.js';
 import { BrowseTool } from './tools/browse-tool.js';
 import { ApiCallTool } from './tools/api-call-tool.js';
+import { AuthWorkflow } from './core/auth-workflow.js';
 import { logger } from './utils/logger.js';
 
 // Initialize core components
@@ -56,6 +57,9 @@ const browseTool = new BrowseTool(
   learningEngine
 );
 const apiCallTool = new ApiCallTool(browserManager);
+
+// Initialize auth workflow
+const authWorkflow = new AuthWorkflow(sessionManager);
 
 // Create MCP server
 const server = new Server(
@@ -780,6 +784,162 @@ Use this to:
               description: 'Maximum domains to return in rankings (default: 20)',
             },
           },
+        },
+      },
+
+      // ============================================
+      // API AUTHENTICATION WORKFLOW
+      // ============================================
+      {
+        name: 'get_api_auth_status',
+        description: `Get authentication status for a domain's discovered APIs.
+
+Shows:
+- Detected authentication requirements (from API documentation)
+- Currently configured credentials
+- Missing authentication that needs configuration
+- Overall status (not_configured, partially_configured, configured, expired)
+
+Use this before making API calls to understand what auth is needed.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            domain: {
+              type: 'string',
+              description: 'The domain to check auth status for',
+            },
+            profile: {
+              type: 'string',
+              description: 'Auth profile name (default: "default")',
+            },
+          },
+          required: ['domain'],
+        },
+      },
+      {
+        name: 'configure_api_auth',
+        description: `Configure API authentication credentials for a domain.
+
+Supports multiple auth types:
+- api_key: API key in header, query param, or cookie
+- bearer: Bearer token authentication
+- basic: Username/password basic auth
+- oauth2: OAuth 2.0 flows (authorization_code, client_credentials, password)
+- cookie: Cookie-based session authentication
+
+For OAuth 2.0 authorization_code flow, this will return a URL to visit.
+After authorizing, use complete_oauth to finish the flow.
+
+Credentials are stored securely and persist across sessions.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            domain: {
+              type: 'string',
+              description: 'The domain to configure auth for',
+            },
+            authType: {
+              type: 'string',
+              enum: ['api_key', 'bearer', 'basic', 'oauth2', 'cookie'],
+              description: 'The type of authentication',
+            },
+            credentials: {
+              type: 'object',
+              description: 'The credentials (varies by authType). See get_auth_guidance for required fields.',
+            },
+            profile: {
+              type: 'string',
+              description: 'Auth profile name (default: "default"). Use different profiles for multiple accounts.',
+            },
+            validate: {
+              type: 'boolean',
+              description: 'Whether to validate credentials (default: true)',
+            },
+          },
+          required: ['domain', 'authType', 'credentials'],
+        },
+      },
+      {
+        name: 'complete_oauth',
+        description: `Complete OAuth 2.0 authorization_code flow after user authorization.
+
+After configure_api_auth with oauth2 authorization_code flow returns a URL,
+the user visits that URL and authorizes. They receive a code.
+Use this tool with that code and state to complete the flow.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            code: {
+              type: 'string',
+              description: 'The authorization code received after user authorization',
+            },
+            state: {
+              type: 'string',
+              description: 'The state parameter from the original authorization URL',
+            },
+          },
+          required: ['code', 'state'],
+        },
+      },
+      {
+        name: 'get_auth_guidance',
+        description: `Get guidance for configuring a specific auth type.
+
+Returns:
+- Instructions for what credentials are needed
+- Required and optional fields
+- Example configuration
+
+Use this to understand what credentials to provide before calling configure_api_auth.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            domain: {
+              type: 'string',
+              description: 'The domain to get auth guidance for',
+            },
+            authType: {
+              type: 'string',
+              enum: ['api_key', 'bearer', 'basic', 'oauth2', 'cookie'],
+              description: 'The auth type to get guidance for (optional - shows all detected if not specified)',
+            },
+          },
+          required: ['domain'],
+        },
+      },
+      {
+        name: 'delete_api_auth',
+        description: `Delete stored API authentication credentials.
+
+Removes credentials for a domain. Can delete specific auth type or all credentials.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            domain: {
+              type: 'string',
+              description: 'The domain to delete auth for',
+            },
+            authType: {
+              type: 'string',
+              enum: ['api_key', 'bearer', 'basic', 'oauth2', 'cookie'],
+              description: 'Specific auth type to delete (optional - deletes all if not specified)',
+            },
+            profile: {
+              type: 'string',
+              description: 'Auth profile name (default: "default")',
+            },
+          },
+          required: ['domain'],
+        },
+      },
+      {
+        name: 'list_configured_auth',
+        description: `List all domains with configured API authentication.
+
+Shows which domains have auth configured and what types.`,
+        inputSchema: {
+          type: 'object',
+          properties: {},
         },
       },
     ],
@@ -1918,6 +2078,229 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         };
       }
 
+      // ============================================
+      // API AUTHENTICATION WORKFLOW
+      // ============================================
+      case 'get_api_auth_status': {
+        const status = await authWorkflow.getAuthStatus(
+          args.domain as string,
+          (args.profile as string) || 'default'
+        );
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                domain: status.domain,
+                status: status.status,
+                message: status.message,
+                detectedAuth: status.detectedAuth,
+                configuredCredentials: status.configuredCredentials,
+                missingAuth: status.missingAuth.map(auth => ({
+                  type: auth.type,
+                  guidance: authWorkflow.getAuthGuidance(auth),
+                })),
+              }, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'configure_api_auth': {
+        const authType = args.authType as string;
+        const rawCredentials = args.credentials as Record<string, unknown>;
+
+        // Build typed credentials based on auth type
+        let typedCredentials: any;
+        switch (authType) {
+          case 'api_key':
+            typedCredentials = {
+              type: 'api_key',
+              in: rawCredentials.in || 'header',
+              name: rawCredentials.name || 'X-API-Key',
+              value: rawCredentials.value,
+            };
+            break;
+          case 'bearer':
+            typedCredentials = {
+              type: 'bearer',
+              token: rawCredentials.token,
+              expiresAt: rawCredentials.expiresAt,
+            };
+            break;
+          case 'basic':
+            typedCredentials = {
+              type: 'basic',
+              username: rawCredentials.username,
+              password: rawCredentials.password,
+            };
+            break;
+          case 'oauth2':
+            typedCredentials = {
+              type: 'oauth2',
+              flow: rawCredentials.flow || 'authorization_code',
+              clientId: rawCredentials.clientId,
+              clientSecret: rawCredentials.clientSecret,
+              accessToken: rawCredentials.accessToken,
+              refreshToken: rawCredentials.refreshToken,
+              scopes: rawCredentials.scopes,
+              urls: {
+                authorizationUrl: rawCredentials.authorizationUrl,
+                tokenUrl: rawCredentials.tokenUrl,
+                refreshUrl: rawCredentials.refreshUrl,
+              },
+              username: rawCredentials.username,
+              password: rawCredentials.password,
+            };
+            break;
+          case 'cookie':
+            typedCredentials = {
+              type: 'cookie',
+              name: rawCredentials.name,
+              value: rawCredentials.value,
+              expiresAt: rawCredentials.expiresAt,
+            };
+            break;
+          default:
+            return {
+              content: [{ type: 'text', text: JSON.stringify({ error: `Unknown auth type: ${authType}` }) }],
+              isError: true,
+            };
+        }
+
+        const result = await authWorkflow.configureCredentials(
+          args.domain as string,
+          typedCredentials,
+          (args.profile as string) || 'default',
+          args.validate !== false
+        );
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                success: result.success,
+                domain: result.domain,
+                type: result.type,
+                profile: result.profile,
+                validated: result.validated,
+                error: result.error,
+                nextStep: result.nextStep,
+              }, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'complete_oauth': {
+        const result = await authWorkflow.completeOAuthFlow(
+          args.code as string,
+          args.state as string
+        );
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                success: result.success,
+                domain: result.domain,
+                profile: result.profile,
+                validated: result.validated,
+                error: result.error,
+                message: result.success
+                  ? 'OAuth authorization completed successfully. You can now make authenticated API calls.'
+                  : 'OAuth authorization failed. Please try again.',
+              }, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'get_auth_guidance': {
+        const status = await authWorkflow.getAuthStatus(args.domain as string);
+        const authType = args.authType as string | undefined;
+
+        let guidance: Array<{ type: string; guidance: ReturnType<typeof authWorkflow.getAuthGuidance> }>;
+
+        if (authType) {
+          // Get guidance for specific type
+          const authInfo = status.detectedAuth.find(a => a.type === authType) ||
+            { type: authType as any, in: 'header', name: undefined };
+          guidance = [{ type: authType, guidance: authWorkflow.getAuthGuidance(authInfo) }];
+        } else {
+          // Get guidance for all detected auth types
+          guidance = status.detectedAuth.map(auth => ({
+            type: auth.type,
+            guidance: authWorkflow.getAuthGuidance(auth),
+          }));
+
+          // If no auth detected, show guidance for common types
+          if (guidance.length === 0) {
+            guidance = [
+              { type: 'api_key', guidance: authWorkflow.getAuthGuidance({ type: 'api_key', in: 'header' }) },
+              { type: 'bearer', guidance: authWorkflow.getAuthGuidance({ type: 'bearer' }) },
+            ];
+          }
+        }
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                domain: args.domain,
+                detectedAuthTypes: status.detectedAuth.map(a => a.type),
+                guidance,
+              }, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'delete_api_auth': {
+        const deleted = await authWorkflow.deleteCredentials(
+          args.domain as string,
+          args.authType as any,
+          (args.profile as string) || 'default'
+        );
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                success: deleted,
+                domain: args.domain,
+                authType: args.authType || 'all',
+                profile: args.profile || 'default',
+                message: deleted
+                  ? 'Credentials deleted successfully'
+                  : 'No matching credentials found',
+              }, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'list_configured_auth': {
+        const configuredDomains = authWorkflow.listConfiguredDomains();
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({
+                totalDomains: configuredDomains.length,
+                domains: configuredDomains,
+              }, null, 2),
+            },
+          ],
+        };
+      }
+
       default:
         throw new Error(`Unknown tool: ${name}`);
     }
@@ -1979,6 +2362,7 @@ async function main() {
   await sessionManager.initialize();
   await learningEngine.initialize();
   await smartBrowser.initialize();
+  await authWorkflow.initialize();
 
   const transport = new StdioServerTransport();
   await server.connect(transport);

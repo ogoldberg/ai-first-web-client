@@ -4,7 +4,7 @@
 **Version:** 0.5.0
 **Current Phase:** Production Readiness (Phase 2)
 **Total Code:** ~16,000 lines TypeScript
-**Tests:** 1028 passing + 44 live tests
+**Tests:** 1072 passing + 44 live tests
 
 ---
 
@@ -150,8 +150,9 @@ The LLM Browser MCP Server is an intelligent browser designed specifically for L
 | Discovery Orchestrator | 39 | Cache, source discovery, aggregation, error handling |
 | Link Discovery | 87 | RFC 8288 headers, HTML links, HATEOAS (HAL, JSON:API, Siren, Collection+JSON, Hydra) |
 | Docs Page Discovery | 89 | Framework detection, endpoint extraction, pattern generation |
+| Auth Workflow | 43 | Credential management, OAuth flows, token refresh |
 | Site API Live Tests | 44 | Real API requests (Reddit, HN, GitHub, Wikipedia, StackOverflow, NPM, PyPI, Dev.to) |
-| **Total** | **1028 + 44 live** | All passing |
+| **Total** | **1072 + 44 live** | All passing |
 
 ---
 
@@ -257,7 +258,7 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 | D-004 | 3 | OpenAPI Enhancement | Complete |
 | D-003 | 4 | Link Discovery | Complete |
 | D-002 | 5 | Docs Page Detection | Complete |
-| D-009 | 6 | Auth Workflow Helper | In Progress |
+| D-009 | 6 | Auth Workflow Helper | Complete |
 | D-005 | 7 | AsyncAPI Discovery | Planned |
 | D-006 | 8 | Alt Spec Formats | Planned |
 | D-007 | 9 | Robots/Sitemap Analysis | Planned |
@@ -269,6 +270,16 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ### v0.5.0 (2025-12-19)
 
+- Added API Documentation Discovery Phase 6: Auth Workflow Helper (D-009)
+  - New core module `src/core/auth-workflow.ts` for guided API authentication
+  - Support for multiple auth types: API Key (header/query/cookie), Bearer, Basic, OAuth 2.0, Cookie
+  - OAuth 2.0 flows: authorization_code, client_credentials, password
+  - Token expiration detection and auto-refresh for OAuth tokens
+  - Credential validation and persistence to `api-credentials.json`
+  - 6 new MCP tools: get_api_auth_status, configure_api_auth, complete_oauth, get_auth_guidance, delete_api_auth, list_configured_auth
+  - Multiple profile support for multiple accounts per domain
+  - Integration with API documentation discovery for auth requirement detection
+  - 43 new tests for auth workflow
 - Added API Documentation Discovery Phase 5: Docs Page Detection (D-002)
   - Documentation URL probing at common locations (/docs, /api-docs, /developers, etc.)
   - Framework detection for Swagger UI, Redoc, ReadMe, Slate, Docusaurus, GitBook, Mintlify, Stoplight
