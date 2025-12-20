@@ -18,6 +18,12 @@
 import { logger } from '../utils/logger.js';
 import { discoverOpenAPICached, generatePatternsFromOpenAPISpec } from './openapi-discovery.js';
 import { discoverGraphQL, type GraphQLDiscoveryResult, type GraphQLQueryPattern } from './graphql-introspection.js';
+import {
+  discoverLinks,
+  generatePatternsFromLinks,
+  type LinkDiscoveryResult,
+  type DiscoveredLink,
+} from './link-discovery.js';
 import type { LearnedApiPattern, ParsedOpenAPISpec, OpenAPIDiscoveryOptions } from '../types/api-patterns.js';
 
 // ============================================
@@ -111,6 +117,7 @@ export interface DiscoveryResult {
   rawData?: {
     openapi?: ParsedOpenAPISpec;
     graphql?: GraphQLDiscoveryResult;
+    links?: LinkDiscoveryResult;
   };
 }
 
@@ -515,6 +522,86 @@ function mapSecuritySchemeType(scheme: { type: string; scheme?: string }): AuthI
   }
 }
 
+/**
+ * Discover API links via RFC 8288 Link headers, HTML links, and HATEOAS
+ */
+async function discoverLinksSource(
+  domain: string,
+  options: DiscoveryOptions
+): Promise<DiscoveryResult> {
+  const startTime = Date.now();
+
+  try {
+    // Try to discover links from the domain root
+    const url = `https://${domain}`;
+    const result = await discoverLinks(url, {
+      headers: options.headers,
+      fetchFn: options.fetchFn,
+      timeout: options.timeout || DEFAULT_SOURCE_TIMEOUT_MS,
+    });
+
+    if (!result.found || result.links.length === 0) {
+      return {
+        source: 'links',
+        confidence: 0,
+        patterns: [],
+        metadata: {},
+        discoveryTime: Date.now() - startTime,
+        found: false,
+        error: result.error,
+      };
+    }
+
+    // Generate patterns from discovered links
+    const patterns = generatePatternsFromLinks(result.apiLinks, domain);
+
+    // Extract metadata from documentation links
+    const metadata: DiscoveryMetadata = {};
+
+    // If we found documentation links, note the base URL
+    if (result.documentationLinks.length > 0) {
+      // First documentation link is likely the API docs
+      const firstDoc = result.documentationLinks[0];
+      metadata.description = `API documentation available at ${firstDoc.href}`;
+    }
+
+    // If we detected a hypermedia format, note it
+    if (result.hypermediaFormat) {
+      metadata.title = `${result.hypermediaFormat.toUpperCase()} API`;
+    }
+
+    discoveryLogger.info('Link discovery successful', {
+      domain,
+      totalLinks: result.links.length,
+      apiLinks: result.apiLinks.length,
+      documentationLinks: result.documentationLinks.length,
+      patterns: patterns.length,
+      hypermediaFormat: result.hypermediaFormat,
+    });
+
+    return {
+      source: 'links',
+      confidence: SOURCE_CONFIDENCE.links,
+      patterns,
+      metadata,
+      discoveryTime: Date.now() - startTime,
+      found: true,
+      rawData: { links: result },
+    };
+  } catch (error) {
+    discoveryLogger.error('Link discovery failed', { domain, error });
+    return {
+      source: 'links',
+      confidence: 0,
+      patterns: [],
+      metadata: {},
+      discoveryTime: Date.now() - startTime,
+      found: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
 // ============================================
 // ORCHESTRATION
 // ============================================
@@ -559,9 +646,16 @@ export async function discoverApiDocumentation(
     });
   }
 
+  if (!skipSources.has('links')) {
+    sources.push({
+      name: 'links',
+      discover: () => discoverLinksSource(domain, options),
+    });
+  }
+
   // Future: Add more discovery sources here
-  // if (!skipSources.has('links')) {
-  //   sources.push({ name: 'links', discover: () => discoverLinksSource(domain, options) });
+  // if (!skipSources.has('asyncapi')) {
+  //   sources.push({ name: 'asyncapi', discover: () => discoverAsyncAPISource(domain, options) });
   // }
 
   // Run all discoveries in parallel, tracking timing for each
@@ -689,5 +783,12 @@ export async function getDiscoveryBySource(
 export {
   discoverOpenAPISource,
   discoverGraphQLSource,
+  discoverLinksSource,
   convertGraphQLPattern,
 };
+
+// Re-export link discovery types for convenience
+export type {
+  LinkDiscoveryResult,
+  DiscoveredLink,
+} from './link-discovery.js';

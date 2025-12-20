@@ -88,7 +88,7 @@ Note: "Order" reflects the implementation sequence from the plan document, optim
 | D-001 | 1 | GraphQL Introspection | L | DONE | Auto-discover GraphQL schema via `__schema` query |
 | D-008 | 2 | Discovery Orchestrator | L | DONE | Unified pipeline with caching and prioritization |
 | D-004 | 3 | OpenAPI Enhancement | M | DONE | $ref resolution, POST/PUT/DELETE support, better YAML |
-| D-003 | 4 | Link Discovery | M | | RFC 8288 Link headers, HTML `<link>` tags, HATEOAS |
+| D-003 | 4 | Link Discovery | M | DONE | RFC 8288 Link headers, HTML `<link>` tags, HATEOAS |
 | D-002 | 5 | Docs Page Detection | L | | Parse HTML API documentation (/docs, /developers, etc.) |
 | D-009 | 6 | Auth Workflow Helper | L | | Guided authentication setup for discovered APIs |
 | D-005 | 7 | AsyncAPI Discovery | M | | WebSocket, MQTT, Kafka event-driven APIs |
@@ -190,6 +190,7 @@ Note: "Order" reflects the implementation sequence from the plan document, optim
 
 | ID | Task | Completed | Notes |
 |----|------|-----------|-------|
+| D-003 | Link Discovery | 2025-12-19 | RFC 8288 Link header parsing, HTML `<link>` extraction, HATEOAS detection (HAL, JSON:API, Siren). Pattern generation, pagination link extraction. Integrated with Discovery Orchestrator. 69 tests. |
 | D-001 | GraphQL Introspection | 2025-12-19 | Auto-discover GraphQL APIs via introspection. Endpoint detection, schema parsing, pagination pattern detection, query/mutation pattern generation, ContentIntelligence integration. 49 tests. |
 | L-007 | Failure Learning | 2025-12-19 | Learn from mistakes, build anti-patterns. Failure classification by category, anti-pattern creation, smart retry strategies, integration with pattern application. 59 tests. |
 | L-005 | Cross-Site Transfer | 2025-12-19 | Transfer patterns to similar sites. API domain groups, site similarity scoring, pattern transfer with confidence decay, auto-transfer, outcome tracking. 30 tests. PR #43. |
