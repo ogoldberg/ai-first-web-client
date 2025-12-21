@@ -281,11 +281,19 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ---
 
-## Current Task: Learning System Integration & Validation
+## Current Task: Debug/Replay Trace Recording (O-005)
 
-**Status:** Ready for Phase 2.5
+**Status:** In Progress
 
-**Next Initiative:** Complete integration of existing learning components and validate effectiveness. The learning system has advanced features (temporal decay, skill versioning, cross-domain transfer, anti-patterns, vector embeddings) but needs wiring and real-world validation.
+**Goal:** Add debug/replay trace recording capability for failure reproduction. This enables recording tier decisions, selectors tried, and validation reasons to persistent storage for later analysis and debugging.
+
+| ID    | Task                         | Priority | Effort | Status      |
+|-------|------------------------------|----------|--------|-------------|
+| O-005 | Debug/replay trace recording | Medium   | M      | In Progress |
+
+---
+
+## Previous Task: Learning System Integration & Validation (Complete)
 
 | ID | Task | Priority | Effort | Status |
 |----|------|----------|--------|--------|
