@@ -281,15 +281,22 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ---
 
-## Currently In Progress: Hosted Alpha Checklist (GTM-003)
+## Recently Completed: Hosted Alpha Checklist (GTM-003)
 
-**Status:** In Progress
+**Status:** Complete
 
 **Goal:** Document infrastructure, auth, rate limiting, logging, and onboarding requirements for a hosted alpha deployment.
 
-| ID      | Task                    | Priority | Effort | Status      |
-|---------|-------------------------|----------|--------|-------------|
-| GTM-003 | Hosted alpha checklist  | Medium   | S      | In Progress |
+| ID      | Task                    | Priority | Effort | Status   |
+|---------|-------------------------|----------|--------|----------|
+| GTM-003 | Hosted alpha checklist  | Medium   | S      | Complete |
+
+**Implementation:**
+- New comprehensive checklist document: `docs/HOSTED_ALPHA_CHECKLIST.md`
+- 10 sections covering infrastructure, auth, rate limiting, logging, reliability, onboarding, security, deployment, pre-launch, and post-alpha
+- Tracks existing completed items (session encryption, SSRF protection, multi-tenant isolation, structured logging)
+- Defines TODO items for hosted deployment (container image, API key auth, customer rate limits, etc.)
+- Includes alpha success criteria and metrics targets
 
 ---
 
