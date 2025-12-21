@@ -280,14 +280,13 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ---
 
-## Current Task: CX-012 (LLM Onboarding Spec)
+## Current Task: None (backlog ready)
 
-**Status:** In Progress
-
-**Task:** Document confidence levels, error taxonomy, and trust contract for LLM clients.
+**Status:** Ready for next task
 
 **Recently completed:**
 
+- CX-012: LLM Onboarding Spec - DONE
 - CX-009: Tier Parity Learning - DONE
 - CX-005: Budget Knobs (maxLatencyMs, maxCostTier, freshnessRequirement) - DONE
 - CX-011: Domain Capability Summary - DONE
@@ -323,6 +322,15 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for ful
 
 ### v0.5.0 (2025-12-21)
 
+- Added CX-012: LLM Onboarding Spec documentation
+  - Comprehensive trust contract (schema versioning compatibility rules)
+  - Confidence framework (interpretation guide, source baselines, decision matrix)
+  - Error recovery protocol (12 categories, 40+ error codes, retry decision tree)
+  - Pattern lifecycle (sources, decay reasons, trust assessment)
+  - Response structure reference (BrowseResult, ApiPattern, NetworkRequest)
+  - Decision transparency (tier and selector trace interpretation)
+  - Budget and performance controls (tier selection, latency expectations)
+  - New doc: LLM_ONBOARDING_SPEC.md
 - Added CX-009: Tier Parity Learning for API pattern discovery from non-Playwright tiers
   - Enhanced LightweightRenderer network tracking with request/response headers and bodies
   - Added tier-aware API analysis with confidence degradation (lightweight: -1 level, intelligence: -2 levels)
