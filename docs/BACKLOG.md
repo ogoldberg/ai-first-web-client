@@ -209,8 +209,8 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 
 | ID | Task | Effort | Category | Notes |
 |----|------|--------|----------|-------|
-| I-001 | Angular framework support | M | Features | Add to Content Intelligence |
-| I-002 | Vue.js framework support | M | Features | Add to Content Intelligence |
+| I-001 | Angular framework support | M | Features | Add to Content Intelligence (DONE - PR #89) |
+| I-002 | Vue.js framework support | M | Features | Add to Content Intelligence (DONE - PR #90) |
 | I-003 | Better API prediction heuristics | L | Performance | Superseded by L-004 (API Learning System Phase 3) |
 | I-004 | Cross-domain skill transfer | M | Features | Superseded by L-005 (API Learning System Phase 4) |
 | I-005 | Automatic skill discovery | L | Features | Superseded by L-003 (API Learning System Phase 2) |
