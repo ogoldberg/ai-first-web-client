@@ -290,7 +290,7 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 | ID | Task | Priority | Effort | Status |
 |----|------|----------|--------|--------|
 | LI-001 | Enable semantic matching by default | High | S | Completed |
-| LI-002 | Wire feedback loops for anti-patterns | Medium | M | Not Started |
+| LI-002 | Wire feedback loops for anti-patterns | Medium | M | In Progress |
 | LI-003 | Add learning effectiveness metrics | High | M | Completed |
 | LI-004 | Real-world pattern validation suite | High | L | Complete |
 | LI-005 | Dynamic domain group learning | Medium | M | Not Started |
