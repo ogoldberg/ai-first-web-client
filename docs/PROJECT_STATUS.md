@@ -300,15 +300,23 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ---
 
-## Currently In Progress: Pricing & Packaging Doc (GTM-004)
+## Recently Completed: Pricing & Packaging Doc (GTM-004)
 
-**Status:** In Progress
+**Status:** Complete
 
 **Goal:** Document public-facing pricing tiers and usage model for the hosted service.
 
-| ID      | Task                    | Priority | Effort | Status      |
-|---------|-------------------------|----------|--------|-------------|
-| GTM-004 | Pricing & packaging doc | Medium   | S      | In Progress |
+| ID      | Task                    | Priority | Effort | Status   |
+|---------|-------------------------|----------|--------|----------|
+| GTM-004 | Pricing & packaging doc | Medium   | S      | Complete |
+
+**Implementation:**
+- New comprehensive pricing document: `docs/PRICING.md`
+- Four tiers: Free, Starter, Team, Enterprise
+- Usage-based pricing model with request units (Intelligence=1, Lightweight=5, Playwright=25)
+- Feature comparison matrix
+- Add-ons, billing, and FAQ sections
+- Support tier matrix
 
 ---
 
