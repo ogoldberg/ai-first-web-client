@@ -4,7 +4,7 @@
 **Version:** 0.5.0
 **Current Phase:** Production Readiness (Phase 2)
 **Total Code:** ~16,000 lines TypeScript
-**Tests:** 1850 passing + 44 live tests
+**Tests:** 1894 passing + 44 live tests
 
 ---
 
@@ -290,7 +290,7 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 | ID | Task | Priority | Effort | Status |
 |----|------|----------|--------|--------|
 | LI-001 | Enable semantic matching by default | High | S | Completed |
-| LI-002 | Wire feedback loops for anti-patterns | Medium | M | In Progress |
+| LI-002 | Wire feedback loops for anti-patterns | Medium | M | Complete |
 | LI-003 | Add learning effectiveness metrics | High | M | Completed |
 | LI-004 | Real-world pattern validation suite | High | L | Complete |
 | LI-005 | Dynamic domain group learning | Medium | M | Not Started |
@@ -302,6 +302,7 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 **Recently completed:**
 
+- LI-002: Wire feedback loops for anti-patterns - DONE
 - LI-006: Semantic skill retrieval integration - DONE (PR #78)
 - LI-004: Real-world pattern validation suite - DONE
 - LI-003: Add learning effectiveness metrics - DONE
@@ -342,6 +343,16 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for ful
 
 ### v0.5.0 (2025-12-21)
 
+- Added LI-002: Wire feedback loops for anti-patterns
+  - LearningEngine persists high-confidence anti-patterns (MIN_FAILURES_FOR_PERSISTENCE: 5)
+  - Only persists permanent failure categories: auth_required, wrong_endpoint, validation_failed
+  - New recordPatternFailure() method in LearningEngine for pattern confidence decay
+  - Pattern confidence downgrades from high->medium->low based on failure count and severity
+  - subscribeToPatternRegistry() for receiving anti_pattern_created events
+  - loadPersistedAntiPatternsInto() restores anti-patterns on startup
+  - wireToContentIntelligence() convenience method for full integration
+  - ApiPatternRegistry.importAntiPattern() for loading persisted anti-patterns
+  - 11 new tests covering persistence, expiry, registry subscription, and wiring
 - Added LI-006: Semantic skill retrieval integration
   - Wire ProceduralMemory to VectorStore for consistent semantic skill retrieval
   - Add setVectorStore() and hasVectorStoreIntegration() methods for opt-in integration

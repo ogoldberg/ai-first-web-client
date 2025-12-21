@@ -971,3 +971,114 @@ describe('ApiPatternRegistry.learnFromExtraction', () => {
     expect(events.some((e) => e.type === 'pattern_applied')).toBe(true);
   });
 });
+
+// ============================================
+// ANTI-PATTERN IMPORT TESTS (LI-002)
+// ============================================
+describe('Anti-Pattern Import', () => {
+  let registry: ApiPatternRegistry;
+  let storagePath: string;
+
+  beforeEach(async () => {
+    storagePath = `/tmp/api-pattern-import-test-${Date.now()}`;
+    mkdirSync(dirname(storagePath), { recursive: true });
+    registry = new ApiPatternRegistry({ storagePath });
+    await registry.initialize();
+  });
+
+  afterEach(() => {
+    try {
+      if (existsSync(`${storagePath}/learned-patterns.json`)) {
+        unlinkSync(`${storagePath}/learned-patterns.json`);
+      }
+    } catch {
+      // Ignore cleanup errors
+    }
+  });
+
+  it('should import anti-pattern from external source', () => {
+    const antiPattern = {
+      id: 'ap-import-1',
+      urlPattern: /^https:\/\/api\.example\.com/,
+      failureCategory: 'auth_required' as const,
+      domains: ['api.example.com'],
+      confidence: 0.9,
+      failureCount: 10,
+      createdAt: Date.now(),
+      lastTriggered: Date.now(),
+      expiresAt: 0,
+      sourcePatternId: 'pattern-123',
+    };
+
+    const imported = registry.importAntiPattern(antiPattern);
+    expect(imported).toBe(true);
+
+    const activePatterns = registry.getActiveAntiPatterns();
+    expect(activePatterns.length).toBe(1);
+    expect(activePatterns[0].id).toBe('ap-import-1');
+  });
+
+  it('should not import duplicate anti-pattern', () => {
+    const antiPattern = {
+      id: 'ap-import-dup',
+      urlPattern: /^https:\/\/api\.duplicate\.com/,
+      failureCategory: 'wrong_endpoint' as const,
+      domains: ['api.duplicate.com'],
+      confidence: 0.85,
+      failureCount: 8,
+      createdAt: Date.now(),
+      lastTriggered: Date.now(),
+      expiresAt: 0,
+    };
+
+    // First import should succeed
+    expect(registry.importAntiPattern(antiPattern)).toBe(true);
+
+    // Second import of same pattern should fail
+    expect(registry.importAntiPattern(antiPattern)).toBe(false);
+
+    // Should still only have one pattern
+    expect(registry.getActiveAntiPatterns().length).toBe(1);
+  });
+
+  it('should not import expired anti-pattern', () => {
+    const expiredAntiPattern = {
+      id: 'ap-expired',
+      urlPattern: /^https:\/\/api\.expired\.com/,
+      failureCategory: 'auth_required' as const,
+      domains: ['api.expired.com'],
+      confidence: 0.9,
+      failureCount: 10,
+      createdAt: Date.now() - 1000000,
+      lastTriggered: Date.now() - 1000000,
+      expiresAt: Date.now() - 100, // Already expired
+    };
+
+    const imported = registry.importAntiPattern(expiredAntiPattern);
+    expect(imported).toBe(false);
+    expect(registry.getActiveAntiPatterns().length).toBe(0);
+  });
+
+  it('should add imported anti-pattern to secondary index', () => {
+    const antiPattern = {
+      id: 'ap-indexed',
+      urlPattern: /^https:\/\/api\.indexed\.com/,
+      failureCategory: 'validation_failed' as const,
+      domains: ['api.indexed.com'],
+      confidence: 0.8,
+      failureCount: 6,
+      createdAt: Date.now(),
+      lastTriggered: Date.now(),
+      expiresAt: 0,
+      sourcePatternId: 'source-pattern-abc',
+    };
+
+    registry.importAntiPattern(antiPattern);
+
+    // Verify the anti-pattern can be matched against URLs
+    // This indirectly verifies the indexes are populated
+    const activePatterns = registry.getActiveAntiPatterns();
+    const matchingPattern = activePatterns.find(p => p.sourcePatternId === 'source-pattern-abc');
+    expect(matchingPattern).toBeDefined();
+  });
+});

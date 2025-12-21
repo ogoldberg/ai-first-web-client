@@ -35,6 +35,9 @@ import type {
   PatternSource,
   ProvenanceMetadata,
 } from '../types/index.js';
+import type { AntiPattern, FailureCategory, PatternLearningEvent } from '../types/api-patterns.js';
+import type { ApiPatternRegistry } from './api-pattern-learner.js';
+import type { ContentIntelligence } from './content-intelligence.js';
 import {
   createProvenance,
   recordVerification,
@@ -64,6 +67,8 @@ interface LearningEngineData {
   entries: { [domain: string]: EnhancedKnowledgeBaseEntry };
   learningEvents: LearningEvent[];
   lastSaved: number;
+  /** Persisted high-confidence anti-patterns (LI-002) */
+  antiPatterns?: AntiPattern[];
 }
 
 /**
@@ -80,6 +85,16 @@ export interface LearnApiPatternOptions {
   sourceMetadata?: Record<string, unknown>;
 }
 
+/** Minimum failure count for an anti-pattern to be persisted */
+const MIN_FAILURES_FOR_PERSISTENCE = 5;
+
+/** Anti-pattern categories that should be persisted (more permanent issues) */
+const PERSISTENT_ANTI_PATTERN_CATEGORIES: FailureCategory[] = [
+  'auth_required',
+  'wrong_endpoint',
+  'validation_failed',
+];
+
 export class LearningEngine {
   private entries: Map<string, EnhancedKnowledgeBaseEntry> = new Map();
   private domainGroups: Map<string, DomainGroup> = new Map();
@@ -87,6 +102,12 @@ export class LearningEngine {
   private store: PersistentStore<LearningEngineData>;
   private decayConfig: ConfidenceDecayConfig;
   private semanticMatcher: SemanticPatternMatcher | null = null;
+
+  /**
+   * Persisted anti-patterns (LI-002)
+   * These are high-confidence anti-patterns that survive restarts
+   */
+  private antiPatterns: Map<string, AntiPattern> = new Map();
 
   constructor(
     filePath: string = './enhanced-knowledge-base.json',
@@ -1669,6 +1690,247 @@ export class LearningEngine {
   }
 
   // ============================================
+  // ANTI-PATTERN PERSISTENCE (LI-002)
+  // ============================================
+
+  /**
+   * Check if an anti-pattern should be persisted
+   * Only high-confidence anti-patterns are persisted
+   */
+  private shouldPersistAntiPattern(antiPattern: AntiPattern): boolean {
+    // Must have enough failures to be considered reliable
+    if (antiPattern.failureCount < MIN_FAILURES_FOR_PERSISTENCE) {
+      return false;
+    }
+
+    // Only persist certain categories (more permanent issues)
+    if (!PERSISTENT_ANTI_PATTERN_CATEGORIES.includes(antiPattern.failureCategory)) {
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * Persist a high-confidence anti-pattern
+   * Called by ApiPatternRegistry when an anti-pattern is created
+   */
+  persistAntiPattern(antiPattern: AntiPattern): void {
+    if (!this.shouldPersistAntiPattern(antiPattern)) {
+      log.debug('Anti-pattern not eligible for persistence', {
+        id: antiPattern.id,
+        category: antiPattern.failureCategory,
+        failureCount: antiPattern.failureCount,
+      });
+      return;
+    }
+
+    // Check if we already have this anti-pattern
+    const existing = this.antiPatterns.get(antiPattern.id);
+    if (existing) {
+      // Update with new data
+      log.debug('Updating persisted anti-pattern', {
+        id: antiPattern.id,
+        oldFailureCount: existing.failureCount,
+        newFailureCount: antiPattern.failureCount,
+      });
+    } else {
+      log.info('Persisting new anti-pattern', {
+        id: antiPattern.id,
+        category: antiPattern.failureCategory,
+        domains: antiPattern.domains,
+        failureCount: antiPattern.failureCount,
+      });
+    }
+
+    this.antiPatterns.set(antiPattern.id, antiPattern);
+    this.save();
+  }
+
+  /**
+   * Get all persisted anti-patterns (active only)
+   */
+  getPersistedAntiPatterns(): AntiPattern[] {
+    const now = Date.now();
+    const active: AntiPattern[] = [];
+
+    for (const antiPattern of this.antiPatterns.values()) {
+      // Filter out expired anti-patterns
+      if (antiPattern.expiresAt === 0 || antiPattern.expiresAt > now) {
+        active.push(antiPattern);
+      }
+    }
+
+    return active;
+  }
+
+  /**
+   * Clear a persisted anti-pattern (e.g., after user provides authentication)
+   */
+  clearPersistedAntiPattern(antiPatternId: string): boolean {
+    const existed = this.antiPatterns.delete(antiPatternId);
+    if (existed) {
+      log.info('Cleared persisted anti-pattern', { antiPatternId });
+      this.save();
+    }
+    return existed;
+  }
+
+  /**
+   * Get anti-patterns for a specific domain
+   */
+  getAntiPatternsForDomain(domain: string): AntiPattern[] {
+    const now = Date.now();
+    const result: AntiPattern[] = [];
+
+    for (const antiPattern of this.antiPatterns.values()) {
+      if (antiPattern.expiresAt !== 0 && antiPattern.expiresAt <= now) {
+        continue; // Expired
+      }
+      if (antiPattern.domains.includes(domain)) {
+        result.push(antiPattern);
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Record a pattern failure for feedback loop
+   * This updates pattern confidence and tracks failure context
+   */
+  recordPatternFailure(
+    domain: string,
+    patternId: string,
+    failureCategory: FailureCategory,
+    errorMessage?: string
+  ): void {
+    const entry = this.entries.get(domain);
+    if (!entry) {
+      log.debug('No entry found for domain when recording failure', { domain, patternId });
+      return;
+    }
+
+    // Find the pattern by endpoint
+    const pattern = entry.apiPatterns.find(
+      (p: EnhancedApiPattern) => p.endpoint === patternId
+    );
+    if (pattern) {
+      // Increment failure count
+      const oldFailureCount = pattern.failureCount;
+      pattern.failureCount += 1;
+
+      // Record failure context
+      pattern.lastFailure = {
+        type: this.mapFailureCategoryToContextType(failureCategory),
+        errorMessage,
+        timestamp: Date.now(),
+      };
+
+      // Downgrade confidence based on failure count and severity
+      const oldConfidence = pattern.confidence;
+      const isSevereFailure = ['auth_required', 'wrong_endpoint', 'validation_failed'].includes(failureCategory);
+
+      // Severe failures downgrade faster
+      const downgradeThreshold = isSevereFailure ? 2 : 5;
+
+      if (pattern.failureCount >= downgradeThreshold) {
+        if (pattern.confidence === 'high') {
+          pattern.confidence = 'medium';
+        } else if (pattern.confidence === 'medium' && pattern.failureCount >= downgradeThreshold * 2) {
+          pattern.confidence = 'low';
+        }
+      }
+
+      log.debug('Pattern failure recorded', {
+        domain,
+        patternId,
+        category: failureCategory,
+        oldFailureCount,
+        newFailureCount: pattern.failureCount,
+        oldConfidence,
+        newConfidence: pattern.confidence,
+      });
+
+      // Record in learning events
+      this.learningEvents.push({
+        type: 'failure_recorded',
+        domain,
+        details: {
+          patternId,
+          category: failureCategory,
+          message: errorMessage,
+          failureCount: pattern.failureCount,
+        },
+        timestamp: Date.now(),
+      });
+
+      this.save();
+    }
+  }
+
+  /**
+   * Map FailureCategory to FailureContext type
+   */
+  private mapFailureCategoryToContextType(category: FailureCategory): FailureContext['type'] {
+    switch (category) {
+      case 'auth_required':
+        return 'auth_expired';
+      case 'rate_limited':
+        return 'rate_limited';
+      case 'wrong_endpoint':
+        return 'not_found';
+      case 'validation_failed':
+        return 'unknown';
+      case 'timeout':
+        return 'timeout';
+      case 'network_error':
+        return 'unknown';
+      case 'server_error':
+        return 'server_error';
+      default:
+        return 'unknown';
+    }
+  }
+
+  /**
+   * Get anti-pattern statistics
+   */
+  getAntiPatternStats(): {
+    total: number;
+    active: number;
+    byCategory: Record<FailureCategory, number>;
+    byDomain: Record<string, number>;
+  } {
+    const now = Date.now();
+    const byCategory: Record<string, number> = {};
+    const byDomain: Record<string, number> = {};
+    let active = 0;
+
+    for (const antiPattern of this.antiPatterns.values()) {
+      const isActive = antiPattern.expiresAt === 0 || antiPattern.expiresAt > now;
+      if (isActive) {
+        active++;
+      }
+
+      // Count by category
+      byCategory[antiPattern.failureCategory] = (byCategory[antiPattern.failureCategory] || 0) + 1;
+
+      // Count by domain
+      for (const domain of antiPattern.domains) {
+        byDomain[domain] = (byDomain[domain] || 0) + 1;
+      }
+    }
+
+    return {
+      total: this.antiPatterns.size,
+      active,
+      byCategory: byCategory as Record<FailureCategory, number>,
+      byDomain,
+    };
+  }
+
+  // ============================================
   // PERSISTENCE
   // ============================================
 
@@ -1686,6 +1948,21 @@ export class LearningEngine {
       // Load learning events
       if (data.learningEvents) {
         this.learningEvents = data.learningEvents;
+      }
+
+      // Load persisted anti-patterns (LI-002)
+      if (data.antiPatterns) {
+        this.antiPatterns = new Map();
+        for (const antiPattern of data.antiPatterns) {
+          // Only load if not expired
+          if (antiPattern.expiresAt === 0 || antiPattern.expiresAt > Date.now()) {
+            this.antiPatterns.set(antiPattern.id, antiPattern);
+          }
+        }
+        log.info('Loaded persisted anti-patterns', {
+          total: data.antiPatterns.length,
+          active: this.antiPatterns.size,
+        });
       }
 
       logger.learning.info('Loaded knowledge base', { totalDomains: this.entries.size });
@@ -1835,6 +2112,8 @@ export class LearningEngine {
       entries: Object.fromEntries(this.entries),
       learningEvents: this.learningEvents.slice(-100),
       lastSaved: Date.now(),
+      // Persist anti-patterns (LI-002)
+      antiPatterns: [...this.antiPatterns.values()],
     };
 
     // Fire-and-forget save (debounced by PersistentStore)
@@ -1864,6 +2143,101 @@ export class LearningEngine {
       null,
       2
     );
+  }
+
+  // ============================================
+  // PATTERN REGISTRY WIRING (LI-002)
+  // ============================================
+
+  /** Unsubscribe function for pattern registry */
+  private patternRegistryUnsubscribe?: () => void;
+
+  /**
+   * Subscribe to an ApiPatternRegistry to receive and persist anti-pattern events.
+   * When the registry creates an anti-pattern, LearningEngine will persist it.
+   * @returns Unsubscribe function
+   */
+  subscribeToPatternRegistry(registry: ApiPatternRegistry): () => void {
+    // Unsubscribe from previous registry if any
+    if (this.patternRegistryUnsubscribe) {
+      this.patternRegistryUnsubscribe();
+    }
+
+    // Subscribe to pattern learning events
+    const unsubscribe = registry.subscribe((event: PatternLearningEvent) => {
+      if (event.type === 'anti_pattern_created') {
+        // Persist the anti-pattern if it meets criteria
+        if (this.shouldPersistAntiPattern(event.antiPattern)) {
+          this.persistAntiPattern(event.antiPattern);
+          log.info('Persisted anti-pattern from registry', {
+            antiPatternId: event.antiPattern.id,
+            domain: event.antiPattern.domains[0],
+            category: event.antiPattern.failureCategory,
+          });
+        }
+      }
+    });
+
+    this.patternRegistryUnsubscribe = unsubscribe;
+    log.debug('Subscribed to pattern registry for anti-pattern persistence');
+
+    return unsubscribe;
+  }
+
+  /**
+   * Load persisted anti-patterns into an ApiPatternRegistry.
+   * This should be called after the registry is initialized.
+   */
+  async loadPersistedAntiPatternsInto(registry: ApiPatternRegistry): Promise<number> {
+    // Dynamically import to get the addAntiPatternToRegistry helper
+    const { addAntiPatternToRegistry } = await import('./failure-learning.js');
+
+    let loadedCount = 0;
+    const now = Date.now();
+
+    for (const antiPattern of this.antiPatterns.values()) {
+      // Skip expired anti-patterns
+      if (antiPattern.expiresAt !== 0 && antiPattern.expiresAt <= now) {
+        continue;
+      }
+
+      // Add to registry using the helper function
+      addAntiPatternToRegistry(registry, antiPattern);
+      loadedCount++;
+    }
+
+    if (loadedCount > 0) {
+      log.info('Loaded persisted anti-patterns into registry', {
+        count: loadedCount,
+      });
+    }
+
+    return loadedCount;
+  }
+
+  /**
+   * Wire to a ContentIntelligence instance for anti-pattern feedback.
+   * This subscribes to the ContentIntelligence's pattern registry and loads
+   * persisted anti-patterns into it.
+   * @returns Unsubscribe function and count of loaded anti-patterns
+   */
+  async wireToContentIntelligence(
+    contentIntelligence: ContentIntelligence
+  ): Promise<{ unsubscribe: () => void; loadedAntiPatterns: number }> {
+    const registry = contentIntelligence.getPatternRegistry();
+
+    // Subscribe to receive anti-pattern events for persistence
+    const unsubscribe = this.subscribeToPatternRegistry(registry);
+
+    // Load persisted anti-patterns into the registry
+    const loadedAntiPatterns = await this.loadPersistedAntiPatternsInto(registry);
+
+    log.info('Wired to ContentIntelligence', {
+      loadedAntiPatterns,
+      subscribedToEvents: true,
+    });
+
+    return { unsubscribe, loadedAntiPatterns };
   }
 }
 

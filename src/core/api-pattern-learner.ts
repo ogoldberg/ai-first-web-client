@@ -2231,6 +2231,42 @@ export class ApiPatternRegistry {
   }
 
   /**
+   * Import an anti-pattern from external source (e.g., LearningEngine persistence).
+   * This adds the anti-pattern to the registry without emitting an event.
+   * @param antiPattern The anti-pattern to import
+   * @returns true if imported, false if already exists or expired
+   */
+  importAntiPattern(antiPattern: import('../types/api-patterns.js').AntiPattern): boolean {
+    // Skip if already exists
+    if (this.antiPatterns.has(antiPattern.id)) {
+      return false;
+    }
+
+    // Skip if expired
+    const now = Date.now();
+    if (antiPattern.expiresAt !== 0 && antiPattern.expiresAt <= now) {
+      return false;
+    }
+
+    // Add to main map
+    this.antiPatterns.set(antiPattern.id, antiPattern);
+
+    // Add to secondary index if source pattern exists
+    if (antiPattern.sourcePatternId) {
+      const indexKey = `${antiPattern.sourcePatternId}:${antiPattern.failureCategory}`;
+      this.antiPatternIndex.set(indexKey, antiPattern.id);
+    }
+
+    patternsLogger.debug('Imported anti-pattern', {
+      antiPatternId: antiPattern.id,
+      domains: antiPattern.domains,
+      category: antiPattern.failureCategory,
+    });
+
+    return true;
+  }
+
+  /**
    * Get failure summary for a pattern
    */
   async getPatternFailureSummary(
