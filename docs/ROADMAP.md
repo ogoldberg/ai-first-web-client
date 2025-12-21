@@ -137,7 +137,7 @@
 | Task | Priority | Effort | Status |
 |------|----------|--------|--------|
 | LI-001 Enable semantic matching by default | High | 1 day | Not Started |
-| LI-006 Wire ProceduralMemory to VectorStore | Medium | 1 day | Not Started |
+| LI-006 Wire ProceduralMemory to VectorStore | Medium | 1 day | Complete (PR #78) |
 | LI-002 Persist anti-patterns to LearningEngine | Medium | 2 days | Not Started |
 
 **Success Criteria**:
@@ -149,7 +149,7 @@
 
 | Task | Priority | Effort | Status |
 |------|----------|--------|--------|
-| LI-003 Add learning effectiveness metrics | High | 2 days | Not Started |
+| LI-003 Add learning effectiveness metrics | High | 2 days | Complete (PR #77) |
 | LI-004 Real-world pattern validation suite | High | 3 days | Not Started |
 
 **Success Criteria**:
