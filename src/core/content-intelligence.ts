@@ -690,11 +690,11 @@ export class ContentIntelligence {
       const match = html.match(pattern);
       if (match) {
         try {
-          // Handle JSON-escaped strings
+          // Handle JSON-escaped strings from JavaScript context
           let jsonStr = match[1];
           if (pattern.source.includes("JSON.parse")) {
-            // Unescape the JSON string
-            jsonStr = jsonStr.replace(/\\'/g, "'").replace(/\\\\/g, '\\');
+            // Unescape common JavaScript string escape sequences
+            jsonStr = this.unescapeJavaScriptString(jsonStr);
           }
           const data = JSON.parse(jsonStr);
           const text = this.extractTextFromObject(data);
@@ -718,8 +718,8 @@ export class ContentIntelligence {
     for (const pattern of contentPatterns) {
       const contentMatch = html.match(pattern);
       if (contentMatch) {
-        // Strip HTML tags to get text content
-        const text = this.stripHtmlTags(contentMatch[1]);
+        // Convert HTML to plain text using existing robust method
+        const text = this.htmlToPlainText(contentMatch[1]);
         if (text.length > 50) {
           // Try to get title from page heading
           const titleMatch = html.match(/<h1[^>]*>([^<]+)<\/h1>/i);
@@ -800,8 +800,8 @@ export class ContentIntelligence {
     for (const pattern of contentPatterns) {
       const contentMatch = html.match(pattern);
       if (contentMatch) {
-        // Strip HTML tags to get text content
-        const text = this.stripHtmlTags(contentMatch[1]);
+        // Convert HTML to plain text using existing robust method
+        const text = this.htmlToPlainText(contentMatch[1]);
         if (text.length > 50) {
           // Try to get title from page heading
           const titleMatch = html.match(/<h1[^>]*>([^<]+)<\/h1>/i);
@@ -837,22 +837,20 @@ export class ContentIntelligence {
     return vuepressIndicators.some(indicator => indicator.test(html));
   }
 
-  private stripHtmlTags(html: string): string {
-    // Remove script and style content
-    let text = html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
-    text = text.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
-    // Remove HTML tags
-    text = text.replace(/<[^>]+>/g, ' ');
-    // Decode common HTML entities
-    text = text.replace(/&nbsp;/g, ' ');
-    text = text.replace(/&amp;/g, '&');
-    text = text.replace(/&lt;/g, '<');
-    text = text.replace(/&gt;/g, '>');
-    text = text.replace(/&quot;/g, '"');
-    text = text.replace(/&#39;/g, "'");
-    // Normalize whitespace
-    text = text.replace(/\s+/g, ' ').trim();
-    return text;
+  private unescapeJavaScriptString(str: string): string {
+    // Handle common JavaScript string escape sequences
+    // Order matters: process backslash escapes before others
+    return str
+      .replace(/\\\\/g, '\x00') // Temporarily mark escaped backslashes
+      .replace(/\\'/g, "'")
+      .replace(/\\"/g, '"')
+      .replace(/\\n/g, '\n')
+      .replace(/\\r/g, '\r')
+      .replace(/\\t/g, '\t')
+      .replace(/\\b/g, '\b')
+      .replace(/\\f/g, '\f')
+      .replace(/\\u([0-9A-Fa-f]{4})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+      .replace(/\x00/g, '\\'); // Restore backslashes
   }
 
   private extractTitleFromObject(obj: unknown, visited = new Set<unknown>()): string {
