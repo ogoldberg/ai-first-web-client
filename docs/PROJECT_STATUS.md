@@ -281,6 +281,18 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ---
 
+## In Progress: Basic Analytics Dashboard (GTM-002)
+
+**Status:** In Progress
+
+**Goal:** Aggregate latency, tier usage, and success rate into a basic analytics dashboard.
+
+| ID      | Task                          | Priority | Effort | Status      |
+|---------|-------------------------------|----------|--------|-------------|
+| GTM-002 | Basic analytics dashboard     | Medium   | M      | In Progress |
+
+---
+
 ## Recently Completed: Usage Metering & Tier Cost Reporting (GTM-001)
 
 **Status:** Complete (PR #84)
