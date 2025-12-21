@@ -71,6 +71,8 @@ export type ExtractionStrategy =
   | 'framework:gatsby'
   | 'framework:remix'
   | 'framework:angular'
+  | 'framework:vitepress'
+  | 'framework:vuepress'
   | 'structured:jsonld'
   | 'structured:opengraph'
   | 'api:predicted'
@@ -376,6 +378,8 @@ export class ContentIntelligence {
       'framework:gatsby': () => this.tryFrameworkExtraction(url, opts),
       'framework:remix': () => this.tryFrameworkExtraction(url, opts),
       'framework:angular': () => this.tryFrameworkExtraction(url, opts),
+      'framework:vitepress': () => this.tryFrameworkExtraction(url, opts),
+      'framework:vuepress': () => this.tryFrameworkExtraction(url, opts),
       'structured:jsonld': () => this.tryStructuredData(url, opts),
       'structured:opengraph': () => this.tryStructuredData(url, opts),
       'api:predicted': () => this.tryPredictedAPI(url, opts),
@@ -456,6 +460,18 @@ export class ContentIntelligence {
     const angularData = this.extractAngularData(html);
     if (angularData) {
       return this.buildResult(url, url, 'framework:angular', angularData, 'high');
+    }
+
+    // Try VitePress (Vue 3 static site generator)
+    const vitepressData = this.extractVitePressData(html);
+    if (vitepressData) {
+      return this.buildResult(url, url, 'framework:vitepress', vitepressData, 'high');
+    }
+
+    // Try VuePress (Vue 2/3 documentation generator)
+    const vuepressData = this.extractVuePressData(html);
+    if (vuepressData) {
+      return this.buildResult(url, url, 'framework:vuepress', vuepressData, 'high');
     }
 
     return null;
@@ -648,6 +664,193 @@ export class ContentIntelligence {
     ];
 
     return angularIndicators.some(indicator => indicator.test(html));
+  }
+
+  private extractVitePressData(html: string): { title: string; text: string; structured?: unknown } | null {
+    // VitePress stores page data in a script tag with type="application/json"
+    // It may use __VP_HASH_MAP__ or have VitePress-specific markers
+
+    // Check for VitePress indicators first
+    if (!this.detectVitePressApp(html)) {
+      return null;
+    }
+
+    // Try to extract page data from VitePress SSR context
+    // VitePress 1.x uses app.config.globalProperties pattern
+    const pageDataPatterns = [
+      // VitePress page data in script tag
+      /<script[^>]*id="__VP_ROUTE_DATA__"[^>]*type="application\/json"[^>]*>([^<]+)<\/script>/i,
+      // VitePress SSR state
+      /window\.__VP_HASH_MAP__\s*=\s*JSON\.parse\('(.+?)'\)/s,
+      // VitePress page frontmatter data
+      /<script[^>]*>window\.__VP_PAGE_DATA__\s*=\s*({[\s\S]*?})\s*<\/script>/s,
+    ];
+
+    for (const pattern of pageDataPatterns) {
+      const match = html.match(pattern);
+      if (match) {
+        try {
+          // Handle JSON-escaped strings from JavaScript context
+          let jsonStr = match[1];
+          if (pattern.source.includes("JSON.parse")) {
+            // Unescape common JavaScript string escape sequences
+            jsonStr = this.unescapeJavaScriptString(jsonStr);
+          }
+          const data = JSON.parse(jsonStr);
+          const text = this.extractTextFromObject(data);
+          if (text.length > 50) {
+            const title = this.extractTitleFromObject(data);
+            return { title, text, structured: data };
+          }
+        } catch (error) {
+          logger.intelligence.debug('Failed to parse VitePress data JSON', { error });
+        }
+      }
+    }
+
+    // Try to extract from VitePress content containers
+    // VitePress renders content in .vp-doc or .VPDoc containers
+    const contentPatterns = [
+      /<div[^>]*class="[^"]*(?:vp-doc|VPDoc)[^"]*"[^>]*>([\s\S]*?)<\/div>/i,
+      /<div[^>]*class="[^"]*VPContent[^"]*"[^>]*>([\s\S]*?)<\/div>/i,
+    ];
+
+    for (const pattern of contentPatterns) {
+      const contentMatch = html.match(pattern);
+      if (contentMatch) {
+        // Convert HTML to plain text using existing robust method
+        const text = this.htmlToPlainText(contentMatch[1]);
+        if (text.length > 50) {
+          // Try to get title from page heading
+          const titleMatch = html.match(/<h1[^>]*>([^<]+)<\/h1>/i);
+          const title = titleMatch ? titleMatch[1].trim() : '';
+          return { title, text };
+        }
+      }
+    }
+
+    return null;
+  }
+
+  private detectVitePressApp(html: string): boolean {
+    const vitepressIndicators = [
+      // VitePress meta tag
+      /<meta[^>]*name="generator"[^>]*content="VitePress[^"]*"/i,
+      // VitePress hash map
+      /__VP_HASH_MAP__/,
+      // VitePress-specific classes
+      /class="[^"]*VPNav[^"]*"/i,
+      /class="[^"]*VPContent[^"]*"/i,
+      /class="[^"]*VPDoc[^"]*"/i,
+      // VitePress script
+      /assets\/chunks\/VitePress\.[a-zA-Z0-9]+\.js/i,
+      // VitePress route data
+      /__VP_ROUTE_DATA__/,
+      // VitePress page data
+      /__VP_PAGE_DATA__/,
+    ];
+
+    return vitepressIndicators.some(indicator => indicator.test(html));
+  }
+
+  private extractVuePressData(html: string): { title: string; text: string; structured?: unknown } | null {
+    // VuePress (v1 and v2) stores SSR context data
+    // VuePress 2.x uses __VUEPRESS_SSR_CONTEXT__
+    // VuePress 1.x uses VUEPRESS_DATA__ or similar
+
+    // Check for VuePress indicators first
+    if (!this.detectVuePressApp(html)) {
+      return null;
+    }
+
+    // Try to extract page data from VuePress SSR context
+    const pageDataPatterns = [
+      // VuePress 2.x SSR context
+      /window\.__VUEPRESS_SSR_CONTEXT__\s*=\s*({[\s\S]*?})\s*<\/script>/s,
+      // VuePress page data
+      /<script[^>]*>VUEPRESS_DATA__\s*=\s*({[\s\S]*?})\s*<\/script>/s,
+      // VuePress 2.x page data in JSON script
+      /<script[^>]*id="__VUEPRESS_DATA__"[^>]*type="application\/json"[^>]*>([^<]+)<\/script>/i,
+    ];
+
+    for (const pattern of pageDataPatterns) {
+      const match = html.match(pattern);
+      if (match) {
+        try {
+          const data = JSON.parse(match[1]);
+          const text = this.extractTextFromObject(data);
+          if (text.length > 50) {
+            const title = this.extractTitleFromObject(data);
+            return { title, text, structured: data };
+          }
+        } catch (error) {
+          logger.intelligence.debug('Failed to parse VuePress data JSON', { error });
+        }
+      }
+    }
+
+    // Try to extract from VuePress content containers
+    // VuePress 2.x uses .theme-default-content, VuePress 1.x uses .content
+    const contentPatterns = [
+      /<div[^>]*class="[^"]*theme-default-content[^"]*"[^>]*>([\s\S]*?)<\/div>/i,
+      /<div[^>]*class="[^"]*content[^"]*"[^>]*>([\s\S]*?)<\/div>/i,
+      /<div[^>]*class="[^"]*page[^"]*"[^>]*>([\s\S]*?)<\/div>/i,
+    ];
+
+    for (const pattern of contentPatterns) {
+      const contentMatch = html.match(pattern);
+      if (contentMatch) {
+        // Convert HTML to plain text using existing robust method
+        const text = this.htmlToPlainText(contentMatch[1]);
+        if (text.length > 50) {
+          // Try to get title from page heading
+          const titleMatch = html.match(/<h1[^>]*>([^<]+)<\/h1>/i);
+          const title = titleMatch ? titleMatch[1].trim() : '';
+          return { title, text };
+        }
+      }
+    }
+
+    return null;
+  }
+
+  private detectVuePressApp(html: string): boolean {
+    const vuepressIndicators = [
+      // VuePress meta tag (v2)
+      /<meta[^>]*name="generator"[^>]*content="VuePress[^"]*"/i,
+      // VuePress SSR context
+      /__VUEPRESS_SSR_CONTEXT__/,
+      // VuePress data marker
+      /VUEPRESS_DATA__/,
+      // VuePress-specific classes (v2)
+      /class="[^"]*vp-sidebar[^"]*"/i,
+      /class="[^"]*theme-default-content[^"]*"/i,
+      // VuePress script patterns
+      /assets\/js\/app\.[a-f0-9]+\.js/i,
+      // VuePress v1 patterns
+      /class="[^"]*sidebar-links[^"]*"/i,
+      /class="[^"]*page-edit[^"]*"/i,
+      // VuePress data attribute
+      /data-server-rendered="true"/i,
+    ];
+
+    return vuepressIndicators.some(indicator => indicator.test(html));
+  }
+
+  private unescapeJavaScriptString(str: string): string {
+    // Handle common JavaScript string escape sequences
+    // Order matters: process backslash escapes before others
+    return str
+      .replace(/\\\\/g, '\x00') // Temporarily mark escaped backslashes
+      .replace(/\\'/g, "'")
+      .replace(/\\"/g, '"')
+      .replace(/\\n/g, '\n')
+      .replace(/\\r/g, '\r')
+      .replace(/\\t/g, '\t')
+      .replace(/\\b/g, '\b')
+      .replace(/\\f/g, '\f')
+      .replace(/\\u([0-9A-Fa-f]{4})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)))
+      .replace(/\x00/g, '\\'); // Restore backslashes
   }
 
   private extractTitleFromObject(obj: unknown, visited = new Set<unknown>()): string {
@@ -4182,6 +4385,8 @@ export class ContentIntelligence {
       { strategy: 'framework:gatsby', available: true },
       { strategy: 'framework:remix', available: true },
       { strategy: 'framework:angular', available: true },
+      { strategy: 'framework:vitepress', available: true },
+      { strategy: 'framework:vuepress', available: true },
       { strategy: 'structured:jsonld', available: true },
       { strategy: 'structured:opengraph', available: true },
       { strategy: 'api:predicted', available: true },

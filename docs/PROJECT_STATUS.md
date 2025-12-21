@@ -281,15 +281,23 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ---
 
-## In Progress: Vue.js Framework Support (I-002)
+## Open PR: Vue.js Framework Support (I-002)
 
-**Status:** In Progress
+**Status:** PR Open - [#90](https://github.com/ogoldberg/ai-first-web-client/pull/90)
 
-**Goal:** Add Vue.js (including Nuxt.js SSR) framework detection to Content Intelligence, enabling data extraction from Vue.js applications.
+**Goal:** Add Vue.js ecosystem framework detection to Content Intelligence, enabling data extraction from VitePress and VuePress sites.
 
-| ID    | Task                     | Priority | Effort | Status      |
-|-------|--------------------------|----------|--------|-------------|
-| I-002 | Vue.js framework support | Medium   | M      | In Progress |
+**Implementation:**
+
+- VitePress (Vue 3 SSG) detection via generator meta, __VP_HASH_MAP__, VPDoc classes
+- VuePress (Vue 2/3 SSG) detection via generator meta, __VUEPRESS_SSR_CONTEXT__, theme classes
+- Support for both VuePress v1 and v2 patterns
+- HTML content fallback extraction with stripHtmlTags helper
+- 9 comprehensive test cases covering all extraction scenarios
+
+| ID    | Task                     | Priority | Effort | Status  |
+|-------|--------------------------|----------|--------|---------|
+| I-002 | Vue.js framework support | Medium   | M      | PR Open |
 
 ---
 
