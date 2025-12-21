@@ -171,7 +171,7 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 | ID | Task | Effort | Category | Notes |
 |----|------|--------|----------|-------|
 | O-005 | Add debug/replay trace recording | M | Features | DONE (PR #82) |
-| O-006 | Extraction quality benchmarking | L | Testing | Offline corpus + regression suite for content extraction and table parsing |
+| O-006 | Extraction quality benchmarking | L | Testing | DONE (PR #83) |
 
 ### Go-To-Market (GTM)
 

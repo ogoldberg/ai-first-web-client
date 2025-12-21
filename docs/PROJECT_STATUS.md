@@ -281,15 +281,15 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ---
 
-## Current Task: Extraction Quality Benchmarking (O-006)
+## Recently Completed: Extraction Quality Benchmarking (O-006)
 
-**Status:** In Progress
+**Status:** Complete (PR #83)
 
 **Goal:** Create an offline corpus and regression suite for content extraction and table parsing quality benchmarking.
 
-| ID    | Task                            | Priority | Effort | Status      |
-|-------|---------------------------------|----------|--------|-------------|
-| O-006 | Extraction quality benchmarking | Medium   | L      | In Progress |
+| ID    | Task                            | Priority | Effort | Status   |
+|-------|---------------------------------|----------|--------|----------|
+| O-006 | Extraction quality benchmarking | Medium   | L      | Complete |
 
 ---
 
@@ -363,6 +363,17 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for ful
 
 ### v0.5.0 (2025-12-21)
 
+- Added O-006: Extraction quality benchmarking
+  - New ExtractionBenchmark class for offline corpus-based regression testing
+  - CorpusEntry type for defining test cases with expected extraction results
+  - Quality metrics: title accuracy, content validation, table matching, link checks
+  - Fuzzy matching for title and content validation
+  - Table header accuracy and row count validation with double-match prevention
+  - Confidence level calibration checks
+  - Human-readable benchmark reports
+  - Built-in standard corpus with 8 representative test cases
+  - Tag-based filtering for selective benchmark runs
+  - 35 new tests
 - Added O-005: Debug/replay trace recording
   - New DebugTraceRecorder utility for recording browse/API call traces
   - Records tier decisions, selectors tried, validation reasons, errors
