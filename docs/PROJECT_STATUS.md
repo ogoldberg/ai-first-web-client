@@ -4,7 +4,7 @@
 **Version:** 0.5.0
 **Current Phase:** Production Readiness (Phase 2)
 **Total Code:** ~16,000 lines TypeScript
-**Tests:** 1681 passing + 44 live tests
+**Tests:** 1778 passing + 44 live tests
 
 ---
 
@@ -280,26 +280,24 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ---
 
-## Current Task: CX-010 (Config-driven heuristics)
+## Current Task: None
 
-**Status:** In Progress
+**Status:** All P0, P1, P1.5, P2 tasks complete
 
-**Goal:** Move domain groups and tier rules from hardcoded constants to external config
+**Recently completed:**
 
-**Previously V-004:** Skill similarity search, error pattern matching, content dedup, analytics - DONE
-
-**Previously completed:**
-
-- CX-001: Response Schema Versioning
-- CX-002: Field-level Confidence Map
-- CX-003: Decision Trace in Responses
-- CX-004: Error Taxonomy + Action Hints
-- CX-006: Learning Provenance Metadata
-- CX-007: Embedded Store Migration
-- CX-008: Memory Isolation + Shared Pool
-- V-001: VectorStore Core (LanceDB integration)
-- V-002: Embedding Pipeline (EmbeddingProvider + ingestion + migration)
-- V-003: Query Integration (SemanticPatternMatcher + LearningEngine integration)
+- CX-010: Config-driven Heuristics - DONE
+- V-004: Extended Features (Skill similarity, error matching, content dedup, analytics) - DONE
+- V-003: Query Integration (SemanticPatternMatcher + LearningEngine integration) - DONE
+- V-002: Embedding Pipeline (EmbeddingProvider + ingestion + migration) - DONE
+- V-001: VectorStore Core (LanceDB integration) - DONE
+- CX-008: Memory Isolation + Shared Pool - DONE
+- CX-007: Embedded Store Migration - DONE
+- CX-006: Learning Provenance Metadata - DONE
+- CX-004: Error Taxonomy + Action Hints - DONE
+- CX-003: Decision Trace in Responses - DONE
+- CX-002: Field-level Confidence Map - DONE
+- CX-001: Response Schema Versioning - DONE
 
 ### Phase 5: Vector Embedding Storage - IN PROGRESS
 
@@ -320,6 +318,14 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for ful
 
 ### v0.5.0 (2025-12-20)
 
+- Added CX-010: Config-driven Heuristics
+  - New heuristics-config.ts module for externalized domain/tier configuration
+  - Domain groups (spanish_gov, us_gov, eu_gov) loaded from config instead of hardcoded
+  - Tier routing rules (static domains, browser-required, content markers) externalized
+  - Pattern compilation with caching for performance
+  - API for runtime configuration updates (addDomainGroup, addPattern, etc.)
+  - Import/export for configuration persistence
+  - 52 tests for the config module
 - Added V-004: Extended Features - Skill similarity, error matching, content dedup, analytics
   - New SemanticSearchExtended class for extended semantic search capabilities
   - Skill similarity search: find skills by query, action type, or domain
