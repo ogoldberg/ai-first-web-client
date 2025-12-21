@@ -165,8 +165,9 @@ These items are tracked as CX-001 through CX-012 in `docs/BACKLOG.md` and `docs/
 | Docs Page Discovery | 89 | Framework detection, endpoint extraction, pattern generation |
 | Auth Workflow | 43 | Credential management, OAuth flows, token refresh |
 | Site API Live Tests | 44 | Real API requests (Reddit, HN, GitHub, Wikipedia, StackOverflow, NPM, PyPI, Dev.to) |
+| Pattern Validation Live Tests | 32 | Bootstrap patterns, learned patterns, cross-domain transfer, metrics |
 | Tenant Store | 64 | Tenant isolation, shared pool, usage tracking, persistence |
-| **Total** | **1136 + 44 live** | All passing |
+| **Total** | **1883 + 76 live** | All passing |
 
 ---
 
@@ -291,7 +292,7 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 | LI-001 | Enable semantic matching by default | High | S | Completed |
 | LI-002 | Wire feedback loops for anti-patterns | Medium | M | Not Started |
 | LI-003 | Add learning effectiveness metrics | High | M | Completed |
-| LI-004 | Real-world pattern validation suite | High | L | In Progress |
+| LI-004 | Real-world pattern validation suite | High | L | Complete |
 | LI-005 | Dynamic domain group learning | Medium | M | Not Started |
 | LI-006 | Semantic skill retrieval integration | Medium | S | Complete (PR #78) |
 
@@ -301,6 +302,8 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 **Recently completed:**
 
+- LI-006: Semantic skill retrieval integration - DONE (PR #78)
+- LI-004: Real-world pattern validation suite - DONE
 - LI-003: Add learning effectiveness metrics - DONE
 - LI-001: Enable semantic matching by default - DONE
 - CX-012: LLM Onboarding Spec - DONE
@@ -339,6 +342,20 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for ful
 
 ### v0.5.0 (2025-12-21)
 
+- Added LI-006: Semantic skill retrieval integration
+  - Wire ProceduralMemory to VectorStore for consistent semantic skill retrieval
+  - Add setVectorStore() and hasVectorStoreIntegration() methods for opt-in integration
+  - Implement retrieveSkillsAsync() that uses VectorStore's 384-dim semantic embeddings when available
+  - Skills are automatically indexed into VectorStore when added via addSkill() or addManualSkill()
+  - Fall back gracefully to existing 64-dim hash-based embeddings when VectorStore is not configured
+- Added LI-004: Real-world pattern validation suite
+  - Live test suite (32 tests) for validating learned patterns against real sites
+  - Bootstrap pattern validation: json-suffix, registry-lookup, rest-resource, firebase-rest, query-api
+  - Learned pattern application testing with programmatic pattern creation
+  - Cross-domain pattern transfer validation with domain group coverage
+  - Pattern metrics and staleness detection infrastructure
+  - End-to-end pattern application via ContentIntelligence extraction pipeline
+  - Regression tracking infrastructure for monitoring pattern health over time
 - Added LI-003: Add learning effectiveness metrics
   - New learning-effectiveness.ts module with comprehensive metrics
   - Tracks pattern hit rate, confidence accuracy, tier optimization, skill reuse
