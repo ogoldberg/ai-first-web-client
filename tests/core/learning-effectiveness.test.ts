@@ -190,9 +190,9 @@ describe('LearningEffectiveness', () => {
 
   describe('Pattern Effectiveness', () => {
     it('should calculate hit rate correctly', async () => {
-      // Add patterns but none are verified (used)
+      // Add a pattern - learnApiPattern initializes with verificationCount = 1
       learningEngine.learnApiPattern('example.com', {
-        endpoint: '/api/unused',
+        endpoint: '/api/used',
         method: 'GET',
         confidence: 'high',
         canBypass: true,
@@ -201,10 +201,9 @@ describe('LearningEffectiveness', () => {
       const report = await computeLearningEffectiveness(learningEngine);
 
       // Hit rate is patternsUsed / totalDiscovered
-      // patternsUsed counts patterns where verificationCount > 0
-      // New patterns start with verificationCount = 1 from learnApiPattern
-      expect(report.patterns.hitRate).toBeGreaterThanOrEqual(0);
-      expect(report.patterns.hitRate).toBeLessThanOrEqual(1);
+      // Since learnApiPattern initializes with verificationCount = 1,
+      // the hit rate should be 1 (100%) for a single pattern
+      expect(report.patterns.hitRate).toBe(1);
     });
 
     it('should count bypassable patterns', async () => {

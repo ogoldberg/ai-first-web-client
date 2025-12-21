@@ -1311,6 +1311,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const tieredFetcher = smartBrowser.getTieredFetcher();
         const proceduralMemory = smartBrowser.getProceduralMemory();
 
+        // Helper for percent formatting
+        const formatPercent = (value: number): string => `${Math.round(value * 100)}%`;
+        const formatPercentDecimal = (value: number): string => `${(value * 100).toFixed(1)}%`;
+
         const report = await computeLearningEffectiveness(
           learningEngine,
           tieredFetcher,
@@ -1323,37 +1327,37 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           patterns: {
             totalDiscovered: report.patterns.totalDiscovered,
             patternsUsed: report.patterns.patternsUsed,
-            hitRate: `${Math.round(report.patterns.hitRate * 100)}%`,
+            hitRate: formatPercent(report.patterns.hitRate),
             bypassablePatterns: report.patterns.bypassablePatterns,
             recentlyFailedPatterns: report.patterns.recentlyFailedPatterns,
             byConfidence: {
               high: {
                 count: report.patterns.byConfidence.high.count,
-                successRate: `${Math.round(report.patterns.byConfidence.high.successRate * 100)}%`,
+                successRate: formatPercent(report.patterns.byConfidence.high.successRate),
               },
               medium: {
                 count: report.patterns.byConfidence.medium.count,
-                successRate: `${Math.round(report.patterns.byConfidence.medium.successRate * 100)}%`,
+                successRate: formatPercent(report.patterns.byConfidence.medium.successRate),
               },
               low: {
                 count: report.patterns.byConfidence.low.count,
-                successRate: `${Math.round(report.patterns.byConfidence.low.successRate * 100)}%`,
+                successRate: formatPercent(report.patterns.byConfidence.low.successRate),
               },
             },
           },
           confidence: {
-            overallAccuracy: `${Math.round(report.confidence.overallAccuracy * 100)}%`,
-            highConfidenceAccuracy: `${Math.round(report.confidence.highConfidenceAccuracy * 100)}%`,
-            mediumConfidenceAccuracy: `${Math.round(report.confidence.mediumConfidenceAccuracy * 100)}%`,
-            lowConfidenceAccuracy: `${Math.round(report.confidence.lowConfidenceAccuracy * 100)}%`,
-            confidenceGap: `${(report.confidence.confidenceGap * 100).toFixed(1)}%`,
+            overallAccuracy: formatPercent(report.confidence.overallAccuracy),
+            highConfidenceAccuracy: formatPercent(report.confidence.highConfidenceAccuracy),
+            mediumConfidenceAccuracy: formatPercent(report.confidence.mediumConfidenceAccuracy),
+            lowConfidenceAccuracy: formatPercent(report.confidence.lowConfidenceAccuracy),
+            confidenceGap: formatPercentDecimal(report.confidence.confidenceGap),
             overConfidentPatterns: report.confidence.overConfidentPatterns,
             underConfidentPatterns: report.confidence.underConfidentPatterns,
           },
           tiers: {
-            firstTierSuccessRate: `${Math.round(report.tiers.firstTierSuccessRate * 100)}%`,
+            firstTierSuccessRate: formatPercent(report.tiers.firstTierSuccessRate),
             timeSavedMs: Math.round(report.tiers.timeSavedMs),
-            optimizationRatio: `${Math.round(report.tiers.optimizationRatio * 100)}%`,
+            optimizationRatio: formatPercent(report.tiers.optimizationRatio),
             tierDistribution: {
               intelligence: report.tiers.tierDistribution.intelligence.count,
               lightweight: report.tiers.tierDistribution.lightweight.count,
@@ -1363,15 +1367,15 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           skills: {
             totalSkills: report.skills.totalSkills,
             reusedSkills: report.skills.reusedSkills,
-            reuseRate: `${Math.round(report.skills.reuseRate * 100)}%`,
-            avgSuccessRate: `${Math.round(report.skills.avgSuccessRate * 100)}%`,
+            reuseRate: formatPercent(report.skills.reuseRate),
+            avgSuccessRate: formatPercent(report.skills.avgSuccessRate),
             highPerformingSkills: report.skills.highPerformingSkills,
             antiPatterns: report.skills.antiPatterns,
           },
           selectors: {
             totalSelectors: report.selectors.totalSelectors,
             highPrioritySelectors: report.selectors.highPrioritySelectors,
-            avgSuccessRate: `${Math.round(report.selectors.avgSuccessRate * 100)}%`,
+            avgSuccessRate: formatPercent(report.selectors.avgSuccessRate),
             avgFallbackChainLength: report.selectors.avgFallbackChainLength.toFixed(1),
           },
           domains: {
@@ -1379,7 +1383,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             domainsWithPatterns: report.domains.domainsWithPatterns,
             domainsWithSelectors: report.domains.domainsWithSelectors,
             highSuccessDomains: report.domains.highSuccessDomains,
-            avgDomainSuccessRate: `${Math.round(report.domains.avgDomainSuccessRate * 100)}%`,
+            avgDomainSuccessRate: formatPercent(report.domains.avgDomainSuccessRate),
             crossDomainBeneficiaries: report.domains.crossDomainBeneficiaries,
           },
           trend24h: {

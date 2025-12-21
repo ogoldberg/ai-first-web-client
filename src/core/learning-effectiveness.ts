@@ -20,6 +20,68 @@ import type { EnhancedKnowledgeBaseEntry, FailureContext } from '../types/index.
 const log = logger.create('LearningEffectiveness');
 
 /**
+ * Confidence level numeric values for accuracy calculations
+ */
+const CONFIDENCE_VALUES = {
+  high: 0.9,
+  medium: 0.7,
+  low: 0.5,
+} as const;
+
+/**
+ * Threshold for determining if a pattern is over/under-confident
+ */
+const CONFIDENCE_GAP_THRESHOLD = 0.2;
+
+/**
+ * Default approximation for average tiers attempted
+ * Note: This is an approximation since the tiered fetcher doesn't track
+ * per-request tier attempts. Most requests succeed on first tier.
+ */
+const DEFAULT_AVG_TIERS_ATTEMPTED = 1.2;
+
+/**
+ * Thresholds for generating insights
+ */
+const INSIGHT_THRESHOLDS = {
+  // Pattern insights
+  LOW_HIT_RATE: 0.5,
+  MIN_PATTERNS_FOR_HIT_RATE: 10,
+
+  // Confidence insights
+  CONFIDENCE_GAP_SIGNIFICANT: 0.2,
+  MIN_OVERCONFIDENT_PATTERNS: 5,
+
+  // Tier insights
+  MIN_TIME_SAVED_FOR_INSIGHT: 10000,
+  PLAYWRIGHT_HEAVY_RATIO: 2,
+
+  // Skill insights
+  MIN_SKILLS_FOR_REUSE_INSIGHT: 10,
+  LOW_SKILL_REUSE_RATE: 0.3,
+  MIN_ANTI_PATTERNS_FOR_INSIGHT: 10,
+
+  // Selector insights
+  MAX_FALLBACK_CHAIN_LENGTH: 3,
+
+  // Trend insights
+  HIGH_ACTIVITY_EVENTS_PER_HOUR: 10,
+  LOW_ACTIVITY_EVENTS_PER_HOUR: 1,
+  LOW_ACTIVITY_MIN_WINDOW_MS: 60 * 60 * 1000,
+} as const;
+
+/**
+ * Weights for health score calculation
+ */
+const HEALTH_SCORE_WEIGHTS = {
+  patternHitRate: 20,
+  confidenceAccuracy: 25,
+  tierOptimization: 20,
+  skillReuse: 15,
+  domainCoverage: 20,
+} as const;
+
+/**
  * Pattern effectiveness metrics
  */
 export interface PatternEffectiveness {
@@ -479,15 +541,15 @@ function computeConfidenceAccuracy(
 
       let predictedConfidence = 0;
       if (pattern.confidence === 'high') {
-        predictedConfidence = 0.9;
+        predictedConfidence = CONFIDENCE_VALUES.high;
         highConfPatterns++;
         highConfSuccess += actualSuccessRate;
       } else if (pattern.confidence === 'medium') {
-        predictedConfidence = 0.7;
+        predictedConfidence = CONFIDENCE_VALUES.medium;
         medConfPatterns++;
         medConfSuccess += actualSuccessRate;
       } else {
-        predictedConfidence = 0.5;
+        predictedConfidence = CONFIDENCE_VALUES.low;
         lowConfPatterns++;
         lowConfSuccess += actualSuccessRate;
       }
@@ -496,9 +558,9 @@ function computeConfidenceAccuracy(
 
       // Check over/under confidence
       const gap = predictedConfidence - actualSuccessRate;
-      if (gap > 0.2) {
+      if (gap > CONFIDENCE_GAP_THRESHOLD) {
         overConfident++;
-      } else if (gap < -0.2) {
+      } else if (gap < -CONFIDENCE_GAP_THRESHOLD) {
         underConfident++;
       }
     }
@@ -581,7 +643,7 @@ function computeTierOptimization(fetcher: TieredFetcher): TierOptimization {
 
   return {
     firstTierSuccessRate,
-    avgTiersAttempted: 1.2, // Approximation
+    avgTiersAttempted: DEFAULT_AVG_TIERS_ATTEMPTED,
     timeSavedMs: Math.max(0, timeSaved),
     estimatedPlaywrightTimeMs: estimatedPlaywrightTime,
     actualTimeMs: actualTime,
@@ -802,15 +864,7 @@ function computeHealthScore(
   skills: SkillEffectiveness,
   domains: DomainCoverage
 ): number {
-  // Weighted average of component scores
-  const weights = {
-    patternHitRate: 20,
-    confidenceAccuracy: 25,
-    tierOptimization: 20,
-    skillReuse: 15,
-    domainCoverage: 20,
-  };
-
+  // Weighted average of component scores using predefined weights
   const patternScore = patterns.hitRate * 100;
   const confidenceScore = confidence.overallAccuracy * 100;
   const tierScore = tiers.optimizationRatio * 100;
@@ -820,13 +874,13 @@ function computeHealthScore(
       ? (domains.domainsWithPatterns / domains.totalDomains) * 100
       : 0;
 
-  const totalWeight = Object.values(weights).reduce((a, b) => a + b, 0);
+  const totalWeight = Object.values(HEALTH_SCORE_WEIGHTS).reduce((a, b) => a + b, 0);
   const weightedSum =
-    patternScore * weights.patternHitRate +
-    confidenceScore * weights.confidenceAccuracy +
-    tierScore * weights.tierOptimization +
-    skillScore * weights.skillReuse +
-    domainScore * weights.domainCoverage;
+    patternScore * HEALTH_SCORE_WEIGHTS.patternHitRate +
+    confidenceScore * HEALTH_SCORE_WEIGHTS.confidenceAccuracy +
+    tierScore * HEALTH_SCORE_WEIGHTS.tierOptimization +
+    skillScore * HEALTH_SCORE_WEIGHTS.skillReuse +
+    domainScore * HEALTH_SCORE_WEIGHTS.domainCoverage;
 
   return Math.round(Math.min(100, Math.max(0, weightedSum / totalWeight)));
 }
@@ -846,7 +900,10 @@ function generateInsights(
   const insights: string[] = [];
 
   // Pattern insights
-  if (patterns.hitRate < 0.5 && patterns.totalDiscovered > 10) {
+  if (
+    patterns.hitRate < INSIGHT_THRESHOLDS.LOW_HIT_RATE &&
+    patterns.totalDiscovered > INSIGHT_THRESHOLDS.MIN_PATTERNS_FOR_HIT_RATE
+  ) {
     insights.push(
       `Low pattern hit rate (${(patterns.hitRate * 100).toFixed(1)}%): ${patterns.totalDiscovered - patterns.patternsUsed} discovered APIs have never been used`
     );
@@ -859,50 +916,56 @@ function generateInsights(
   }
 
   // Confidence insights
-  if (confidence.confidenceGap > 0.2) {
+  if (confidence.confidenceGap > INSIGHT_THRESHOLDS.CONFIDENCE_GAP_SIGNIFICANT) {
     insights.push(
       `Confidence predictions are ${(confidence.confidenceGap * 100).toFixed(1)}% too optimistic - consider lowering thresholds`
     );
-  } else if (confidence.confidenceGap < -0.2) {
+  } else if (confidence.confidenceGap < -INSIGHT_THRESHOLDS.CONFIDENCE_GAP_SIGNIFICANT) {
     insights.push(
       `Confidence predictions are ${Math.abs(confidence.confidenceGap * 100).toFixed(1)}% too pessimistic - patterns are better than expected`
     );
   }
 
-  if (confidence.overConfidentPatterns > 5) {
+  if (confidence.overConfidentPatterns > INSIGHT_THRESHOLDS.MIN_OVERCONFIDENT_PATTERNS) {
     insights.push(
       `${confidence.overConfidentPatterns} patterns are over-confident - predicted confidence exceeds actual success rate`
     );
   }
 
   // Tier optimization insights
-  if (tiers.timeSavedMs > 10000) {
+  if (tiers.timeSavedMs > INSIGHT_THRESHOLDS.MIN_TIME_SAVED_FOR_INSIGHT) {
     insights.push(
       `Tier optimization saved ${(tiers.timeSavedMs / 1000).toFixed(1)}s total - ${(tiers.optimizationRatio * 100).toFixed(0)}% faster than always using Playwright`
     );
   }
 
-  if (tiers.tierDistribution.playwright.count > tiers.tierDistribution.intelligence.count * 2) {
+  if (
+    tiers.tierDistribution.playwright.count >
+    tiers.tierDistribution.intelligence.count * INSIGHT_THRESHOLDS.PLAYWRIGHT_HEAVY_RATIO
+  ) {
     insights.push(
       'Heavy reliance on Playwright tier - consider improving API discovery for faster access'
     );
   }
 
   // Skill insights
-  if (skills.totalSkills > 10 && skills.reuseRate < 0.3) {
+  if (
+    skills.totalSkills > INSIGHT_THRESHOLDS.MIN_SKILLS_FOR_REUSE_INSIGHT &&
+    skills.reuseRate < INSIGHT_THRESHOLDS.LOW_SKILL_REUSE_RATE
+  ) {
     insights.push(
       `Low skill reuse rate (${(skills.reuseRate * 100).toFixed(1)}%): ${skills.totalSkills - skills.reusedSkills} skills have only been used once`
     );
   }
 
-  if (skills.antiPatterns > 10) {
+  if (skills.antiPatterns > INSIGHT_THRESHOLDS.MIN_ANTI_PATTERNS_FOR_INSIGHT) {
     insights.push(
       `${skills.antiPatterns} anti-patterns learned - estimated ${skills.failuresPreventedEstimate} failures prevented`
     );
   }
 
   // Selector insights
-  if (selectors.avgFallbackChainLength > 3) {
+  if (selectors.avgFallbackChainLength > INSIGHT_THRESHOLDS.MAX_FALLBACK_CHAIN_LENGTH) {
     insights.push(
       `Long selector fallback chains (avg ${selectors.avgFallbackChainLength.toFixed(1)}) - primary selectors may be unstable`
     );
@@ -916,9 +979,12 @@ function generateInsights(
   }
 
   // Trend insights
-  if (trend.eventsPerHour > 10) {
+  if (trend.eventsPerHour > INSIGHT_THRESHOLDS.HIGH_ACTIVITY_EVENTS_PER_HOUR) {
     insights.push(`Active learning: ${trend.eventsPerHour.toFixed(1)} events/hour in last 24h`);
-  } else if (trend.eventsPerHour < 1 && trend.windowMs > 60 * 60 * 1000) {
+  } else if (
+    trend.eventsPerHour < INSIGHT_THRESHOLDS.LOW_ACTIVITY_EVENTS_PER_HOUR &&
+    trend.windowMs > INSIGHT_THRESHOLDS.LOW_ACTIVITY_MIN_WINDOW_MS
+  ) {
     insights.push('Low learning activity - consider exploring more domains to build patterns');
   }
 
