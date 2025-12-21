@@ -281,6 +281,18 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ---
 
+## In Progress: Vue.js Framework Support (I-002)
+
+**Status:** In Progress
+
+**Goal:** Add Vue.js (including Nuxt.js SSR) framework detection to Content Intelligence, enabling data extraction from Vue.js applications.
+
+| ID    | Task                     | Priority | Effort | Status      |
+|-------|--------------------------|----------|--------|-------------|
+| I-002 | Vue.js framework support | Medium   | M      | In Progress |
+
+---
+
 ## Recently Completed: Angular Framework Support (I-001)
 
 **Status:** Complete (PR #89)
