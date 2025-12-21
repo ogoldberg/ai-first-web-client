@@ -1553,6 +1553,14 @@ export class LearningEngine {
     return this.entries.get(domain) || null;
   }
 
+  /**
+   * Get all domain names that have been learned
+   * (LI-003: Used by learning effectiveness metrics)
+   */
+  getAllDomains(): string[] {
+    return Array.from(this.entries.keys());
+  }
+
   // ============================================
   // KNOWLEDGEBASE COMPATIBILITY METHODS
   // ============================================
