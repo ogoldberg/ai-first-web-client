@@ -281,23 +281,26 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ---
 
-## In Progress: HAR File Export (F-006)
+## Recently Completed: HAR File Export (F-006)
 
-**Status:** In Progress
+**Status:** Complete (PR #92)
 
 **Goal:** Add HAR (HTTP Archive) file export for network debugging, allowing LLM clients to capture and export network traffic during browsing sessions.
 
-**Implementation Plan:**
+**Implementation:**
 
-- Add HAR generation method to SmartBrowser/BrowserManager
-- Create new MCP tool `export_har` returning HAR JSON data
-- Support for capturing request/response headers, bodies, timing
-- Include page timing and navigation events
-- Comprehensive test coverage
+- SmartBrowser.exportHar() method with configurable options (includeResponseBodies, maxBodySize, pageTitle)
+- New MCP tool `export_har` returning HAR JSON data in HAR 1.2 format
+- HAR type definitions with full HAR 1.2 spec compliance
+- HAR converter utility with byte-accurate size calculations (Buffer.from for proper byte size)
+- Dynamic package version loading from package.json
+- Proper resource cleanup with try...finally pattern
+- SSRF protection for URL validation
+- 13 comprehensive test cases for HAR converter
 
-| ID    | Task            | Priority | Effort | Status      |
-|-------|-----------------|----------|--------|-------------|
-| F-006 | HAR file export | Medium   | M      | In Progress |
+| ID    | Task            | Priority | Effort | Status   |
+|-------|-----------------|----------|--------|----------|
+| F-006 | HAR file export | Medium   | M      | Complete |
 
 ---
 
