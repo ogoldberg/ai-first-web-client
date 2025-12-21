@@ -19,6 +19,7 @@ data/
 knowledge-base.json
 procedural-memory.json
 learning-engine.json
+usage-meter.json
 .knowledge-base-migrated
 *.enc
 
