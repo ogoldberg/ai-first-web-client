@@ -1,10 +1,10 @@
 # LLM Browser MCP Server - Project Status
 
-**Last Updated:** 2025-12-20
+**Last Updated:** 2025-12-21
 **Version:** 0.5.0
 **Current Phase:** Production Readiness (Phase 2)
 **Total Code:** ~16,000 lines TypeScript
-**Tests:** 1797 passing + 44 live tests
+**Tests:** 1833 passing + 44 live tests
 
 ---
 
@@ -280,14 +280,13 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ---
 
-## Current Task: CX-009 (Tier Parity Learning)
+## Current Task: None (backlog ready)
 
-**Status:** In Progress
-
-**Task:** Enable API pattern learning from intelligence and lightweight tiers (not just Playwright).
+**Status:** Ready for next task
 
 **Recently completed:**
 
+- CX-009: Tier Parity Learning - DONE
 - CX-005: Budget Knobs (maxLatencyMs, maxCostTier, freshnessRequirement) - DONE
 - CX-011: Domain Capability Summary - DONE
 - CX-010: Config-driven Heuristics - DONE
@@ -320,8 +319,15 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for ful
 
 ## Changelog
 
-### v0.5.0 (2025-12-20)
+### v0.5.0 (2025-12-21)
 
+- Added CX-009: Tier Parity Learning for API pattern discovery from non-Playwright tiers
+  - Enhanced LightweightRenderer network tracking with request/response headers and bodies
+  - Added tier-aware API analysis with confidence degradation (lightweight: -1 level, intelligence: -2 levels)
+  - Wired TieredFetcher to discover APIs from lightweight tier network requests
+  - ApiAnalyzer.convertLightweightRequests() for format conversion
+  - ApiAnalyzer.analyzeRequestsWithTier() for tier-aware confidence adjustment
+  - 23 tests for tier parity learning
 - Added CX-005: Budget Knobs for LLM cost/latency control
   - New maxLatencyMs parameter: stop tier fallback when latency budget exceeded
   - New maxCostTier parameter: limit to cheaper tiers (intelligence < lightweight < playwright)

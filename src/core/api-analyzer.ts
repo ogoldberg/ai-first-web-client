@@ -178,4 +178,106 @@ export class ApiAnalyzer {
       return 'Complex request - may need browser context or JS-generated parameters';
     }
   }
+
+  // ============================================
+  // CX-009: Tier-Aware API Analysis
+  // ============================================
+
+  /**
+   * Analyze requests with tier-aware confidence degradation
+   *
+   * For non-Playwright tiers, we have less complete data and lower certainty,
+   * so we apply confidence penalties.
+   *
+   * @param requests - Network requests (can be partial data from lightweight tier)
+   * @param tier - The rendering tier that captured these requests
+   * @returns API patterns with tier-adjusted confidence
+   */
+  analyzeRequestsWithTier(
+    requests: NetworkRequest[],
+    tier: 'playwright' | 'lightweight' | 'intelligence'
+  ): ApiPattern[] {
+    const patterns = this.analyzeRequests(requests);
+
+    if (tier === 'playwright') {
+      // Playwright has full data - no degradation needed
+      return patterns;
+    }
+
+    // Apply confidence degradation for non-Playwright tiers
+    return patterns
+      .map(pattern => this.degradeConfidence(pattern, tier))
+      .filter((pattern): pattern is ApiPattern => pattern !== null);
+  }
+
+  /**
+   * Degrade confidence level based on tier
+   *
+   * Lightweight tier: Downgrade by 1 level
+   * Intelligence tier: Downgrade by 2 levels (essentially skip)
+   */
+  private degradeConfidence(
+    pattern: ApiPattern,
+    tier: 'lightweight' | 'intelligence'
+  ): ApiPattern | null {
+    const tierPenalty = tier === 'lightweight' ? 1 : 2;
+    const confidenceLevels: Array<'high' | 'medium' | 'low'> = ['high', 'medium', 'low'];
+    const currentIndex = confidenceLevels.indexOf(pattern.confidence);
+    const newIndex = Math.min(currentIndex + tierPenalty, confidenceLevels.length - 1);
+
+    // If degraded to 'low' and was already 'medium' or 'low', skip this pattern
+    // (too uncertain to be useful)
+    if (tier === 'intelligence' && pattern.confidence !== 'high') {
+      return null;
+    }
+
+    const degradedConfidence = confidenceLevels[newIndex];
+
+    // Update canBypass based on new confidence
+    const canBypass = degradedConfidence === 'high' && pattern.canBypass;
+
+    return {
+      ...pattern,
+      confidence: degradedConfidence,
+      canBypass,
+      reason: `${pattern.reason} (confidence degraded: ${tier} tier)`,
+    };
+  }
+
+  /**
+   * Convert lightweight renderer network requests to full NetworkRequest type
+   *
+   * This bridges the gap between the lightweight renderer's simpler network tracking
+   * and the full NetworkRequest interface expected by analyzeRequests.
+   */
+  static convertLightweightRequests(
+    lightweightRequests: Array<{
+      url: string;
+      method: string;
+      status?: number;
+      contentType?: string;
+      requestHeaders?: Record<string, string>;
+      responseHeaders?: Record<string, string>;
+      responseBody?: unknown;
+      timestamp: number;
+      duration?: number;
+    }>
+  ): NetworkRequest[] {
+    return lightweightRequests.map(req => {
+      const status = req.status || 0;
+      const statusText = status === 200 ? 'OK' : (status === 0 ? 'Error' : 'Unknown');
+      return {
+        url: req.url,
+        method: req.method,
+        status,
+        statusText,
+        headers: req.responseHeaders || {},
+        requestHeaders: req.requestHeaders || {},
+        responseBody: req.responseBody,
+        contentType: req.contentType,
+        timestamp: req.timestamp,
+        duration: req.duration,
+      };
+    });
+  }
 }

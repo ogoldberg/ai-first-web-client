@@ -60,11 +60,18 @@ export interface LightweightRenderResult {
   // Scripts that failed
   scriptErrors: Array<{ src?: string; error: string }>;
   // Network requests made during rendering (fetch/XHR)
+  // Enhanced for CX-009 tier parity learning
   networkRequests: Array<{
     url: string;
     method: string;
     status?: number;
     contentType?: string;
+    // CX-009: Additional fields for API learning
+    requestHeaders?: Record<string, string>;
+    responseHeaders?: Record<string, string>;
+    responseBody?: unknown; // JSON responses only (for API learning)
+    timestamp: number;
+    duration?: number;
   }>;
   // Cookies received
   cookies: Cookie[];
@@ -233,6 +240,7 @@ export class LightweightRenderer {
             // Fetch external script
             const scriptUrl = new URL(src, finalUrl).href;
             try {
+              const scriptFetchStart = Date.now();
               const response = await this.fetchWithCookies(scriptUrl, opts);
               code = response.html;
               networkRequests.push({
@@ -240,6 +248,8 @@ export class LightweightRenderer {
                 method: 'GET',
                 status: 200,
                 contentType: 'application/javascript',
+                timestamp: scriptFetchStart,
+                duration: Date.now() - scriptFetchStart,
               });
             } catch (e) {
               scriptErrors.push({ src: scriptUrl, error: String(e) });
@@ -400,27 +410,57 @@ export class LightweightRenderer {
     const mockFetch = async (input: string | URL, init?: RequestInit): Promise<Response> => {
       const fetchUrl = new URL(input.toString(), baseUrl).href;
       const method = init?.method || 'GET';
+      const requestStart = Date.now();
 
       try {
         const cookieString = await this.cookieJar.getCookieString(fetchUrl);
-        const headers: Record<string, string> = {
+        const requestHeaders: Record<string, string> = {
           'User-Agent': opts.userAgent || DEFAULT_OPTIONS.userAgent!,
           ...(init?.headers as Record<string, string>),
         };
         if (cookieString) {
-          headers['Cookie'] = cookieString;
+          requestHeaders['Cookie'] = cookieString;
         }
 
         const response = await fetch(fetchUrl, {
           ...init,
-          headers,
+          headers: requestHeaders,
         });
+
+        const duration = Date.now() - requestStart;
+        const contentType = response.headers.get('content-type') || undefined;
+
+        // Extract response headers for API learning
+        const responseHeaders: Record<string, string> = {};
+        if (response.headers && typeof response.headers.forEach === 'function') {
+          response.headers.forEach((value, key) => {
+            responseHeaders[key] = value;
+          });
+        }
+
+        // For JSON responses, capture the body for API learning (CX-009)
+        // Clone the response since we need to read the body
+        let responseBody: unknown = undefined;
+        if (contentType?.includes('application/json')) {
+          try {
+            const clonedResponse = response.clone();
+            responseBody = await clonedResponse.json();
+          } catch {
+            // Failed to parse JSON, that's fine
+          }
+        }
 
         networkRequests.push({
           url: fetchUrl,
           method,
           status: response.status,
-          contentType: response.headers.get('content-type') || undefined,
+          contentType,
+          // CX-009: Additional fields for API learning
+          requestHeaders,
+          responseHeaders,
+          responseBody,
+          timestamp: requestStart,
+          duration,
         });
 
         return response;
@@ -429,6 +469,8 @@ export class LightweightRenderer {
           url: fetchUrl,
           method,
           status: 0,
+          timestamp: requestStart,
+          duration: Date.now() - requestStart,
         });
         throw error;
       }

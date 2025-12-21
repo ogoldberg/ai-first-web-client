@@ -29,6 +29,7 @@ import { LightweightRenderer } from './lightweight-renderer.js';
 import { ContentIntelligence, type ContentResult, type ExtractionStrategy } from './content-intelligence.js';
 import { BrowserManager, type Page } from './browser-manager.js';
 import { ContentExtractor } from '../utils/content-extractor.js';
+import { ApiAnalyzer } from './api-analyzer.js';
 import { rateLimiter } from '../utils/rate-limiter.js';
 import { TIMEOUTS } from '../utils/timeouts.js';
 import type { NetworkRequest, ApiPattern, TierAttempt, TierValidationDetails } from '../types/index.js';
@@ -196,6 +197,7 @@ export class TieredFetcher {
   private lightweightRenderer: LightweightRenderer;
   private browserManager: BrowserManager;
   private contentExtractor: ContentExtractor;
+  private apiAnalyzer: ApiAnalyzer; // CX-009: For tier-aware API learning
   private domainPreferences: Map<string, DomainPreference> = new Map();
 
   constructor(
@@ -206,6 +208,7 @@ export class TieredFetcher {
     this.contentExtractor = contentExtractor;
     this.contentIntelligence = new ContentIntelligence();
     this.lightweightRenderer = new LightweightRenderer();
+    this.apiAnalyzer = new ApiAnalyzer(); // CX-009
   }
 
   /**
@@ -496,24 +499,33 @@ export class TieredFetcher {
 
     const content = this.contentExtractor.extract(result.html, result.finalUrl);
 
-    // Convert network requests to our format
-    const networkRequests: NetworkRequest[] = result.networkRequests.map(req => ({
-      url: req.url,
-      method: req.method,
-      status: req.status || 0,
-      statusText: '',
-      headers: {},
-      requestHeaders: {},
-      contentType: req.contentType,
-      timestamp: Date.now(),
-    }));
+    // Convert lightweight network requests to full NetworkRequest format (CX-009)
+    // Uses enhanced data from the updated lightweight renderer
+    const networkRequests: NetworkRequest[] = ApiAnalyzer.convertLightweightRequests(
+      result.networkRequests
+    );
+
+    // CX-009: Analyze network requests with tier-aware confidence degradation
+    // Lightweight tier gets confidence downgraded by 1 level
+    const discoveredApis = this.apiAnalyzer.analyzeRequestsWithTier(
+      networkRequests,
+      'lightweight'
+    );
+
+    if (discoveredApis.length > 0) {
+      logger.tieredFetcher.info('CX-009: Discovered APIs from lightweight tier', {
+        url,
+        apiCount: discoveredApis.length,
+        apis: discoveredApis.map(api => ({ endpoint: api.endpoint, confidence: api.confidence })),
+      });
+    }
 
     return {
       html: result.html,
       content,
       finalUrl: result.finalUrl,
       networkRequests,
-      discoveredApis: [],
+      discoveredApis,
     };
   }
 

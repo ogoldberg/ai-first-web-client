@@ -468,6 +468,144 @@ describe('TieredFetcher', () => {
   });
 
   // ============================================
+  // Tier Parity Learning (CX-009)
+  // ============================================
+  describe('tier parity learning (CX-009)', () => {
+    describe('lightweight tier API discovery', () => {
+      it('should discover APIs from lightweight tier network requests', async () => {
+        // Make intelligence fail so it falls back to lightweight
+        vi.spyOn(mockContentIntelligence, 'extract').mockRejectedValue(new Error('Intelligence failed'));
+
+        // Create lightweight result with network requests that look like APIs
+        vi.spyOn(mockLightweightRenderer, 'render').mockResolvedValue({
+          ...createLightweightResult(),
+          networkRequests: [
+            {
+              url: 'https://api.example.com/v1/users',
+              method: 'GET',
+              status: 200,
+              contentType: 'application/json',
+              requestHeaders: { cookie: 'session=abc123' },
+              responseHeaders: { 'content-type': 'application/json' },
+              responseBody: { users: [{ id: 1 }] },
+              timestamp: Date.now(),
+              duration: 100,
+            },
+          ],
+        });
+
+        const result = await fetcher.fetch('https://example.com');
+
+        expect(result.tier).toBe('lightweight');
+        expect(result.discoveredApis).toBeDefined();
+        expect(result.discoveredApis!.length).toBeGreaterThanOrEqual(1);
+
+        // Check that the API was discovered
+        const userApi = result.discoveredApis!.find(api => api.endpoint.includes('users'));
+        expect(userApi).toBeDefined();
+        expect(userApi!.method).toBe('GET');
+      });
+
+      it('should degrade confidence for lightweight tier discovered APIs', async () => {
+        vi.spyOn(mockContentIntelligence, 'extract').mockRejectedValue(new Error('Intelligence failed'));
+
+        vi.spyOn(mockLightweightRenderer, 'render').mockResolvedValue({
+          ...createLightweightResult(),
+          networkRequests: [
+            {
+              url: 'https://api.example.com/v1/data',
+              method: 'GET',
+              status: 200,
+              contentType: 'application/json',
+              requestHeaders: { cookie: 'session=abc' },
+              responseHeaders: { 'content-type': 'application/json' },
+              responseBody: { data: 'test' },
+              timestamp: Date.now(),
+              duration: 50,
+            },
+          ],
+        });
+
+        const result = await fetcher.fetch('https://example.com');
+
+        expect(result.discoveredApis).toBeDefined();
+        expect(result.discoveredApis!.length).toBeGreaterThanOrEqual(1);
+
+        // Confidence should be degraded (would be 'high' for playwright, 'medium' for lightweight)
+        const api = result.discoveredApis![0];
+        expect(api.confidence).toBe('medium');
+        expect(api.reason).toContain('lightweight tier');
+      });
+
+      it('should not discover APIs from non-API requests', async () => {
+        vi.spyOn(mockContentIntelligence, 'extract').mockRejectedValue(new Error('Intelligence failed'));
+
+        vi.spyOn(mockLightweightRenderer, 'render').mockResolvedValue({
+          ...createLightweightResult(),
+          networkRequests: [
+            {
+              url: 'https://example.com/page.html',
+              method: 'GET',
+              status: 200,
+              contentType: 'text/html',
+              timestamp: Date.now(),
+            },
+            {
+              url: 'https://example.com/styles.css',
+              method: 'GET',
+              status: 200,
+              contentType: 'text/css',
+              timestamp: Date.now(),
+            },
+          ],
+        });
+
+        const result = await fetcher.fetch('https://example.com');
+
+        expect(result.discoveredApis).toBeDefined();
+        expect(result.discoveredApis!.length).toBe(0);
+      });
+
+      it('should include converted network requests in result', async () => {
+        vi.spyOn(mockContentIntelligence, 'extract').mockRejectedValue(new Error('Intelligence failed'));
+
+        const mockTimestamp = Date.now();
+        vi.spyOn(mockLightweightRenderer, 'render').mockResolvedValue({
+          ...createLightweightResult(),
+          networkRequests: [
+            {
+              url: 'https://api.example.com/endpoint',
+              method: 'POST',
+              status: 201,
+              contentType: 'application/json',
+              requestHeaders: { 'authorization': 'Bearer token' },
+              responseHeaders: { 'x-request-id': '123' },
+              responseBody: { created: true },
+              timestamp: mockTimestamp,
+              duration: 200,
+            },
+          ],
+        });
+
+        const result = await fetcher.fetch('https://example.com');
+
+        expect(result.networkRequests).toBeDefined();
+        expect(result.networkRequests!.length).toBe(1);
+
+        const req = result.networkRequests![0];
+        expect(req.url).toBe('https://api.example.com/endpoint');
+        expect(req.method).toBe('POST');
+        expect(req.status).toBe(201);
+        expect(req.requestHeaders).toEqual({ 'authorization': 'Bearer token' });
+        expect(req.headers).toEqual({ 'x-request-id': '123' });
+        expect(req.responseBody).toEqual({ created: true });
+        expect(req.timestamp).toBe(mockTimestamp);
+        expect(req.duration).toBe(200);
+      });
+    });
+  });
+
+  // ============================================
   // Budget Controls (CX-005)
   // ============================================
   describe('budget controls (CX-005)', () => {
