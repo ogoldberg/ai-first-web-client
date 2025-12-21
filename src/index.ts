@@ -41,6 +41,7 @@ import {
 } from './types/errors.js';
 import { UrlSafetyError } from './utils/url-safety.js';
 import { getUsageMeter, type UsageQueryOptions } from './utils/usage-meter.js';
+import { generateDashboard, getQuickStatus } from './utils/analytics-dashboard.js';
 
 /**
  * Create a versioned JSON response for MCP tools
@@ -1406,6 +1407,74 @@ Useful for:
 - Starting fresh after a testing period
 - Clearing data before a new billing period
 - Resetting after configuration changes`,
+        inputSchema: {
+          type: 'object',
+          properties: {},
+        },
+      },
+
+      // ============================================
+      // ANALYTICS DASHBOARD (GTM-002)
+      // ============================================
+      {
+        name: 'get_analytics_dashboard',
+        description: `Get a comprehensive analytics dashboard for the LLM Browser.
+
+Provides a unified view of system analytics including:
+- Summary metrics (requests, costs, success rate, latency)
+- System health assessment with recommendations
+- Per-tier breakdown (intelligence, lightweight, playwright)
+- Top domains by cost, requests, and latency
+- Time series data for trend visualization
+- Period-over-period trends
+
+This is the primary tool for understanding system performance and usage.
+
+Parameters:
+- period: Time period for analysis (hour, day, week, month, all)
+- topDomainsLimit: Number of top domains to include (default: 10)
+- timeSeriesPoints: Number of time series data points
+- domain: Filter to a specific domain
+- tenantId: Filter to a specific tenant`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            period: {
+              type: 'string',
+              enum: ['hour', 'day', 'week', 'month', 'all'],
+              description: 'Time period for analysis (default: day)',
+            },
+            topDomainsLimit: {
+              type: 'number',
+              description: 'Number of top domains to include (default: 10)',
+            },
+            timeSeriesPoints: {
+              type: 'number',
+              description: 'Number of time series data points',
+            },
+            domain: {
+              type: 'string',
+              description: 'Filter to specific domain',
+            },
+            tenantId: {
+              type: 'string',
+              description: 'Filter to specific tenant',
+            },
+          },
+        },
+      },
+      {
+        name: 'get_system_status',
+        description: `Get a quick system status check.
+
+Returns a compact summary suitable for health monitoring:
+- Overall status (healthy, degraded, unhealthy)
+- 24-hour request count
+- Success rate
+- Average latency
+- Cost units consumed
+
+Use this for quick health checks. For detailed analytics, use get_analytics_dashboard.`,
         inputSchema: {
           type: 'object',
           properties: {},
@@ -2860,6 +2929,33 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           success: true,
           message: 'Usage meters reset',
         });
+      }
+
+      // ============================================
+      // ANALYTICS DASHBOARD (GTM-002)
+      // ============================================
+
+      case 'get_analytics_dashboard': {
+        const usageMeter = getUsageMeter();
+        await usageMeter.initialize();
+
+        const dashboard = await generateDashboard({
+          period: (args.period as 'hour' | 'day' | 'week' | 'month' | 'all') ?? 'day',
+          topDomainsLimit: args.topDomainsLimit as number | undefined,
+          timeSeriesPoints: args.timeSeriesPoints as number | undefined,
+          domain: args.domain as string | undefined,
+          tenantId: args.tenantId as string | undefined,
+        });
+
+        return jsonResponse(dashboard);
+      }
+
+      case 'get_system_status': {
+        const usageMeter = getUsageMeter();
+        await usageMeter.initialize();
+
+        const status = await getQuickStatus();
+        return jsonResponse(status);
       }
 
       default:

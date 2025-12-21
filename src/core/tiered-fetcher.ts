@@ -35,6 +35,7 @@ import { TIMEOUTS } from '../utils/timeouts.js';
 import type { NetworkRequest, ApiPattern, TierAttempt, TierValidationDetails } from '../types/index.js';
 import { logger } from '../utils/logger.js';
 import { performanceTracker, type TimingBreakdown } from '../utils/performance-tracker.js';
+import { getUsageMeter } from '../utils/usage-meter.js';
 import { validateUrlOrThrow } from '../utils/url-safety.js';
 import {
   isBrowserRequired,
@@ -292,6 +293,21 @@ export class TieredFetcher {
             tiersAttempted,
           });
 
+          // Record to usage meter (GTM-001 wiring)
+          const usageMeter = getUsageMeter();
+          usageMeter.record({
+            timestamp: Date.now(),
+            domain,
+            url,
+            tier,
+            success: true,
+            durationMs: timing.total,
+            tiersAttempted,
+            fellBack,
+          }).catch(err => {
+            logger.tieredFetcher.debug('Failed to record usage event', { error: String(err) });
+          });
+
           // Check latency budget (CX-005)
           if (options.maxLatencyMs && timing.total > options.maxLatencyMs) {
             latencyExceeded = true;
@@ -409,6 +425,21 @@ export class TieredFetcher {
       success: false,
       fellBack: true,
       tiersAttempted,
+    });
+
+    // Record failure to usage meter (GTM-001 wiring)
+    const usageMeter = getUsageMeter();
+    usageMeter.record({
+      timestamp: Date.now(),
+      domain,
+      url,
+      tier: tiersAttempted[tiersAttempted.length - 1],
+      success: false,
+      durationMs: totalTime,
+      tiersAttempted,
+      fellBack: true,
+    }).catch(err => {
+      logger.tieredFetcher.debug('Failed to record usage event', { error: String(err) });
     });
 
     throw lastError || new Error('All rendering tiers failed');

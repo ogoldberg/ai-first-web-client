@@ -281,15 +281,27 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ---
 
-## In Progress: Basic Analytics Dashboard (GTM-002)
+## Recently Completed: Basic Analytics Dashboard (GTM-002)
 
-**Status:** In Progress
+**Status:** Complete (PR #85)
 
 **Goal:** Aggregate latency, tier usage, and success rate into a basic analytics dashboard.
 
-| ID      | Task                          | Priority | Effort | Status      |
-|---------|-------------------------------|----------|--------|-------------|
-| GTM-002 | Basic analytics dashboard     | Medium   | M      | In Progress |
+| ID      | Task                          | Priority | Effort | Status   |
+|---------|-------------------------------|----------|--------|----------|
+| GTM-002 | Basic analytics dashboard     | Medium   | M      | Complete |
+
+**Implementation:**
+- New AnalyticsDashboard utility for unified analytics view
+- Aggregates usage (UsageMeter) and performance (PerformanceTracker) data
+- System health assessment with issues and recommendations
+- Per-tier breakdown (intelligence, lightweight, playwright)
+- Top domains by cost, requests, and latency
+- Time series data for trend visualization
+- Period-over-period trends
+- Wired UsageMeter recording into TieredFetcher
+- MCP tools: get_analytics_dashboard, get_system_status
+- 21 new tests
 
 ---
 
