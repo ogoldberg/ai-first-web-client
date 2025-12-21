@@ -143,7 +143,7 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 
 | ID | Task | Effort | Status | Notes |
 |----|------|--------|--------|-------|
-| LI-001 | Enable semantic matching by default | S | Not Started | SemanticPatternMatcher (V-003) exists but requires explicit initialization. Auto-initialize when VectorStore available, graceful fallback when not. |
+| LI-001 | Enable semantic matching by default | S | Completed | SemanticPatternMatcher (V-003) exists but requires explicit initialization. Auto-initialize when VectorStore available, graceful fallback when not. |
 | LI-002 | Wire feedback loops for anti-patterns | M | Not Started | FailureLearning creates anti-patterns, but they expire after suppression window. Persist high-confidence anti-patterns to LearningEngine. Feed pattern failures back to improve matching. |
 | LI-003 | Add learning effectiveness metrics | M | Not Started | Track: pattern hit rate, confidence accuracy (predicted vs actual success), tier optimization savings, skill reuse rate. New MCP tool: `get_learning_effectiveness`. |
 | LI-004 | Real-world pattern validation suite | L | Not Started | Create test suite that runs against real sites (like T-008 live tests). Validate learned patterns actually work. Track regression over time. |
@@ -275,6 +275,7 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 
 | ID | Task | Completed | Notes |
 |----|------|-----------|-------|
+| LI-001 | Enable semantic matching by default | 2025-12-21 | Auto-initialize semantic infrastructure (EmbeddingProvider, VectorStore, EmbeddedStore, SemanticPatternMatcher) on SmartBrowser.initialize(). Graceful fallback when dependencies unavailable. New semantic-init.ts module. 17 tests. PR #76. |
 | CX-012 | LLM Onboarding Spec | 2025-12-21 | Comprehensive LLM client onboarding document. Covers trust contract (schema versioning), confidence framework (interpretation guide, source baselines, decision matrix), error recovery protocol (categories, codes, recommended actions, retry decision tree), pattern lifecycle (sources, decay, trust assessment), response structure reference, decision transparency (tier and selector traces), and budget/performance controls. New doc: LLM_ONBOARDING_SPEC.md. |
 | CX-009 | Tier Parity Learning | 2025-12-21 | Enable API pattern learning from lightweight tier with confidence degradation. Enhanced LightweightRenderer network tracking with request/response headers and bodies. Added tier-aware API analysis with confidence degradation (lightweight: -1 level, intelligence: -2 levels). Wired TieredFetcher to discover APIs from lightweight tier. 23 tests. |
 | CX-008 | Memory Isolation + Shared Pool | 2025-12-20 | Multi-tenant support with TenantStore (namespace-prefixed isolation), SharedPatternPool (opt-in pattern sharing), and MultiTenantStore (tenant lifecycle). Tenant config: sharePatterns, consumeShared. Usage tracking, attribution, statistics. LLM_BROWSER_TENANT_ID env var. 64 tests. |

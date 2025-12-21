@@ -4,7 +4,7 @@
 **Version:** 0.5.0
 **Current Phase:** Production Readiness (Phase 2)
 **Total Code:** ~16,000 lines TypeScript
-**Tests:** 1833 passing + 44 live tests
+**Tests:** 1850 passing + 44 live tests
 
 ---
 
@@ -288,7 +288,7 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 | ID | Task | Priority | Effort | Status |
 |----|------|----------|--------|--------|
-| LI-001 | Enable semantic matching by default | High | S | In Progress |
+| LI-001 | Enable semantic matching by default | High | S | Completed |
 | LI-002 | Wire feedback loops for anti-patterns | Medium | M | Not Started |
 | LI-003 | Add learning effectiveness metrics | High | M | Not Started |
 | LI-004 | Real-world pattern validation suite | High | L | Not Started |
@@ -301,6 +301,7 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 **Recently completed:**
 
+- LI-001: Enable semantic matching by default - DONE
 - CX-012: LLM Onboarding Spec - DONE
 - CX-009: Tier Parity Learning - DONE
 - CX-005: Budget Knobs (maxLatencyMs, maxCostTier, freshnessRequirement) - DONE
@@ -337,6 +338,14 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for ful
 
 ### v0.5.0 (2025-12-21)
 
+- Added LI-001: Enable semantic matching by default
+  - New semantic-init.ts module for zero-config auto-initialization
+  - Checks for @xenova/transformers, @lancedb/lancedb, better-sqlite3 availability
+  - SmartBrowser.initialize() now auto-enables semantic matching when dependencies available
+  - Graceful fallback when dependencies unavailable (logs debug message, continues without semantic matching)
+  - New isSemanticMatchingEnabled() and getSemanticInfrastructure() methods on SmartBrowser
+  - EmbeddedStore.isAvailable() static method and createEmbeddedStore() factory function
+  - 17 tests for semantic initialization
 - Added CX-012: LLM Onboarding Spec documentation
   - Comprehensive trust contract (schema versioning compatibility rules)
   - Confidence framework (interpretation guide, source baselines, decision matrix)
