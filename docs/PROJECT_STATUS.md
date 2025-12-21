@@ -281,9 +281,9 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ---
 
-## Open PR: Angular Framework Support (I-001)
+## Recently Completed: Angular Framework Support (I-001)
 
-**Status:** PR Open - [#89](https://github.com/ogoldberg/ai-first-web-client/pull/89)
+**Status:** Complete (PR #89)
 
 **Goal:** Add Angular framework detection to Content Intelligence, enabling data extraction from Angular and Angular Universal (SSR) applications.
 
@@ -291,12 +291,14 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 - Angular Universal TransferState extraction (serverApp-state, transfer-state, ng-state)
 - Angular app detection via indicators (app-root, ng-version, zone.js, ngh attributes)
-- Recursive title extraction from nested data structures
+- Recursive title extraction with cycle detection for nested data structures
+- Optimized RegExp creation for Angular state ID matching
+- Debug logging for JSON parse failures
 - 8 comprehensive test cases covering all extraction scenarios
 
-| ID    | Task                      | Priority | Effort | Status  |
-|-------|---------------------------|----------|--------|---------|
-| I-001 | Angular framework support | Medium   | M      | PR Open |
+| ID    | Task                      | Priority | Effort | Status   |
+|-------|---------------------------|----------|--------|----------|
+| I-001 | Angular framework support | Medium   | M      | Complete |
 
 ---
 
