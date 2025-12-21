@@ -801,6 +801,143 @@ Use this when starting fresh to get basic capabilities quickly.`,
       },
 
       // ============================================
+      // SKILL SHARING & PORTABILITY (F-012)
+      // ============================================
+      {
+        name: 'export_skills',
+        description: `Export learned skills as a portable skill pack.
+
+Creates a JSON skill pack containing:
+- Learned browsing skills (navigation, extraction, form filling)
+- Anti-patterns (what NOT to do on specific sites)
+- Workflows (composed skill sequences)
+- Metadata (domains covered, verticals, success rates)
+
+Filter by:
+- Domain patterns (*.gov, github.com, etc.)
+- Verticals (government, ecommerce, documentation, developer, etc.)
+- Performance thresholds (min success rate, min usage)
+
+Use this to share skills with other instances or backup learned patterns.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            domainPatterns: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'Filter by domain patterns (e.g., ["*.gov", "github.com"])',
+            },
+            verticals: {
+              type: 'array',
+              items: {
+                type: 'string',
+                enum: ['government', 'ecommerce', 'documentation', 'social', 'news', 'developer', 'finance', 'travel', 'healthcare', 'education', 'general'],
+              },
+              description: 'Filter by domain vertical categories',
+            },
+            includeAntiPatterns: {
+              type: 'boolean',
+              description: 'Include anti-patterns in export (default: true)',
+            },
+            includeWorkflows: {
+              type: 'boolean',
+              description: 'Include workflows in export (default: true)',
+            },
+            minSuccessRate: {
+              type: 'number',
+              description: 'Minimum success rate (0-1) to include skill',
+            },
+            minUsageCount: {
+              type: 'number',
+              description: 'Minimum times used to include skill',
+            },
+            packName: {
+              type: 'string',
+              description: 'Name for the skill pack',
+            },
+            packDescription: {
+              type: 'string',
+              description: 'Description of the skill pack',
+            },
+          },
+        },
+      },
+      {
+        name: 'import_skills',
+        description: `Import skills from a skill pack.
+
+Imports skills, anti-patterns, and workflows from a JSON skill pack.
+
+Conflict resolution options:
+- skip: Skip if similar skill exists (default)
+- overwrite: Replace existing skill
+- merge: Combine metrics from both
+- rename: Import with new ID
+
+Can filter imported skills by domain or vertical.
+Optionally reset metrics on imported skills for fresh start.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            skillPackJson: {
+              type: 'string',
+              description: 'The skill pack JSON string to import',
+            },
+            conflictResolution: {
+              type: 'string',
+              enum: ['skip', 'overwrite', 'merge', 'rename'],
+              description: 'How to handle conflicts (default: skip)',
+            },
+            domainFilter: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'Only import skills matching these domain patterns',
+            },
+            verticalFilter: {
+              type: 'array',
+              items: {
+                type: 'string',
+                enum: ['government', 'ecommerce', 'documentation', 'social', 'news', 'developer', 'finance', 'travel', 'healthcare', 'education', 'general'],
+              },
+              description: 'Only import skills from these verticals',
+            },
+            importAntiPatterns: {
+              type: 'boolean',
+              description: 'Import anti-patterns (default: true)',
+            },
+            importWorkflows: {
+              type: 'boolean',
+              description: 'Import workflows (default: true)',
+            },
+            resetMetrics: {
+              type: 'boolean',
+              description: 'Reset usage metrics on imported skills',
+            },
+            namePrefix: {
+              type: 'string',
+              description: 'Prefix to add to imported skill names',
+            },
+          },
+          required: ['skillPackJson'],
+        },
+      },
+      {
+        name: 'get_skill_pack_stats',
+        description: `Get statistics about the current skill pack.
+
+Returns:
+- Total counts (skills, anti-patterns, workflows)
+- Success metrics (total success count, avg success rate)
+- Breakdown by domain vertical (government, ecommerce, etc.)
+
+Use this to understand what skills are available before exporting.`,
+        inputSchema: {
+          type: 'object',
+          properties: {},
+        },
+      },
+
+      // ============================================
       // DEPRECATED TOOLS (Backward Compatibility)
       // These tools are deprecated and will be removed in a future version.
       // Users should migrate to smart_browse for browsing operations.
@@ -2325,6 +2462,65 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           message: `Bootstrapped ${bootstrapped} skills from templates`,
           totalSkills: proceduralMemory.getStats().totalSkills,
           templates: ['cookie_banner_dismiss', 'pagination_navigate', 'form_extraction', 'table_extraction'],
+        });
+      }
+
+      // ============================================
+      // SKILL SHARING & PORTABILITY (F-012)
+      // ============================================
+      case 'export_skills': {
+        const proceduralMemory = smartBrowser.getProceduralMemory();
+        const pack = proceduralMemory.exportSkillPack({
+          domainPatterns: args.domainPatterns as string[] | undefined,
+          verticals: args.verticals as import('./types/index.js').SkillVertical[] | undefined,
+          includeAntiPatterns: args.includeAntiPatterns as boolean | undefined,
+          includeWorkflows: args.includeWorkflows as boolean | undefined,
+          minSuccessRate: args.minSuccessRate as number | undefined,
+          minUsageCount: args.minUsageCount as number | undefined,
+          packName: args.packName as string | undefined,
+          packDescription: args.packDescription as string | undefined,
+        });
+
+        return jsonResponse({
+          skillPack: pack,
+          serialized: proceduralMemory.serializeSkillPack(pack),
+        });
+      }
+
+      case 'import_skills': {
+        const proceduralMemory = smartBrowser.getProceduralMemory();
+        const result = await proceduralMemory.importSkillPack(
+          args.skillPackJson as string,
+          {
+            conflictResolution: args.conflictResolution as import('./types/index.js').SkillConflictResolution | undefined,
+            domainFilter: args.domainFilter as string[] | undefined,
+            verticalFilter: args.verticalFilter as import('./types/index.js').SkillVertical[] | undefined,
+            importAntiPatterns: args.importAntiPatterns as boolean | undefined,
+            importWorkflows: args.importWorkflows as boolean | undefined,
+            resetMetrics: args.resetMetrics as boolean | undefined,
+            namePrefix: args.namePrefix as string | undefined,
+          }
+        );
+
+        if (!result.success) {
+          return errorResponse(result.errors.join('; '));
+        }
+
+        return jsonResponse({
+          ...result,
+          message: `Imported ${result.skillsImported} skills, ${result.antiPatternsImported} anti-patterns, ${result.workflowsImported} workflows`,
+        });
+      }
+
+      case 'get_skill_pack_stats': {
+        const proceduralMemory = smartBrowser.getProceduralMemory();
+        const stats = proceduralMemory.getSkillPackStats();
+
+        return jsonResponse({
+          ...stats,
+          verticalBreakdown: Object.entries(stats.byVertical)
+            .filter(([, count]) => count > 0)
+            .map(([vertical, count]) => ({ vertical, count })),
         });
       }
 
