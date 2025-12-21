@@ -1714,15 +1714,16 @@ export class LearningEngine {
   /**
    * Persist a high-confidence anti-pattern
    * Called by ApiPatternRegistry when an anti-pattern is created
+   * @returns true if the anti-pattern was persisted, false if not eligible
    */
-  persistAntiPattern(antiPattern: AntiPattern): void {
+  persistAntiPattern(antiPattern: AntiPattern): boolean {
     if (!this.shouldPersistAntiPattern(antiPattern)) {
       log.debug('Anti-pattern not eligible for persistence', {
         id: antiPattern.id,
         category: antiPattern.failureCategory,
         failureCount: antiPattern.failureCount,
       });
-      return;
+      return false;
     }
 
     // Check if we already have this anti-pattern
@@ -1745,6 +1746,7 @@ export class LearningEngine {
 
     this.antiPatterns.set(antiPattern.id, antiPattern);
     this.save();
+    return true;
   }
 
   /**
@@ -1752,16 +1754,9 @@ export class LearningEngine {
    */
   getPersistedAntiPatterns(): AntiPattern[] {
     const now = Date.now();
-    const active: AntiPattern[] = [];
-
-    for (const antiPattern of this.antiPatterns.values()) {
-      // Filter out expired anti-patterns
-      if (antiPattern.expiresAt === 0 || antiPattern.expiresAt > now) {
-        active.push(antiPattern);
-      }
-    }
-
-    return active;
+    return [...this.antiPatterns.values()].filter(
+      (antiPattern) => antiPattern.expiresAt === 0 || antiPattern.expiresAt > now
+    );
   }
 
   /**
@@ -1781,18 +1776,11 @@ export class LearningEngine {
    */
   getAntiPatternsForDomain(domain: string): AntiPattern[] {
     const now = Date.now();
-    const result: AntiPattern[] = [];
-
-    for (const antiPattern of this.antiPatterns.values()) {
-      if (antiPattern.expiresAt !== 0 && antiPattern.expiresAt <= now) {
-        continue; // Expired
-      }
-      if (antiPattern.domains.includes(domain)) {
-        result.push(antiPattern);
-      }
-    }
-
-    return result;
+    return [...this.antiPatterns.values()].filter(
+      (antiPattern) =>
+        (antiPattern.expiresAt === 0 || antiPattern.expiresAt > now) &&
+        antiPattern.domains.includes(domain)
+    );
   }
 
   /**
@@ -1834,10 +1822,14 @@ export class LearningEngine {
       // Severe failures downgrade faster
       const downgradeThreshold = isSevereFailure ? 2 : 5;
 
+      const MEDIUM_TO_LOW_DOWNGRADE_MULTIPLIER = 2;
       if (pattern.failureCount >= downgradeThreshold) {
         if (pattern.confidence === 'high') {
           pattern.confidence = 'medium';
-        } else if (pattern.confidence === 'medium' && pattern.failureCount >= downgradeThreshold * 2) {
+        } else if (
+          pattern.confidence === 'medium' &&
+          pattern.failureCount >= downgradeThreshold * MEDIUM_TO_LOW_DOWNGRADE_MULTIPLIER
+        ) {
           pattern.confidence = 'low';
         }
       }
@@ -2166,9 +2158,7 @@ export class LearningEngine {
     // Subscribe to pattern learning events
     const unsubscribe = registry.subscribe((event: PatternLearningEvent) => {
       if (event.type === 'anti_pattern_created') {
-        // Persist the anti-pattern if it meets criteria
-        if (this.shouldPersistAntiPattern(event.antiPattern)) {
-          this.persistAntiPattern(event.antiPattern);
+        if (this.persistAntiPattern(event.antiPattern)) {
           log.info('Persisted anti-pattern from registry', {
             antiPatternId: event.antiPattern.id,
             domain: event.antiPattern.domains[0],
