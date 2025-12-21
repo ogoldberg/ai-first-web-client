@@ -36,6 +36,12 @@ import type {
   SkillExplanation,
   SkillFeedback,
   ExtendedSkillPreconditions,
+  SkillPack,
+  SkillPackMetadata,
+  SkillExportOptions,
+  SkillImportOptions,
+  SkillImportResult,
+  SkillVertical,
 } from '../types/index.js';
 
 // Default configuration
@@ -1327,6 +1333,415 @@ export class ProceduralMemory {
       logger.proceduralMemory.error('Failed to import skills', { error });
       return 0;
     }
+  }
+
+  // ============================================
+  // SKILL SHARING & PORTABILITY (F-012)
+  // ============================================
+
+  /**
+   * Domain patterns for vertical classification
+   */
+  private static readonly VERTICAL_PATTERNS: Record<SkillVertical, RegExp[]> = {
+    government: [/\.gov(\.[a-z]{2})?$/, /government/, /\.gob\./, /public.*service/i],
+    ecommerce: [/shop/, /store/, /cart/, /amazon/, /ebay/, /etsy/, /shopify/],
+    documentation: [/docs\./, /wiki/, /\.io\/docs/, /readme/, /gitbook/, /notion/],
+    social: [/twitter/, /facebook/, /reddit/, /linkedin/, /instagram/, /discord/],
+    news: [/news/, /blog/, /medium\.com/, /substack/, /\.press/],
+    developer: [/github/, /gitlab/, /npm/, /pypi/, /stackoverflow/, /dev\.to/],
+    finance: [/bank/, /finance/, /trading/, /crypto/, /\.fin\./],
+    travel: [/booking/, /airbnb/, /expedia/, /hotels/, /airline/],
+    healthcare: [/health/, /medical/, /hospital/, /pharma/, /clinic/],
+    education: [/\.edu/, /coursera/, /udemy/, /school/, /university/, /learn/],
+    general: [/.*/], // Catch-all
+  };
+
+  /**
+   * Infer vertical from domain
+   */
+  private inferVertical(domain: string): SkillVertical {
+    for (const [vertical, patterns] of Object.entries(ProceduralMemory.VERTICAL_PATTERNS)) {
+      if (vertical === 'general') continue; // Skip catch-all
+      if (patterns.some(pattern => pattern.test(domain))) {
+        return vertical as SkillVertical;
+      }
+    }
+    return 'general';
+  }
+
+  /**
+   * Check if domain matches a pattern (glob-like)
+   */
+  private matchesDomainPattern(domain: string, pattern: string): boolean {
+    // Convert glob pattern to regex
+    const regexPattern = pattern
+      .replace(/\./g, '\\.')
+      .replace(/\*/g, '.*')
+      .replace(/\?/g, '.');
+    const regex = new RegExp(`^${regexPattern}$`, 'i');
+    return regex.test(domain);
+  }
+
+  /**
+   * Export skills as a portable skill pack
+   */
+  exportSkillPack(options: SkillExportOptions = {}): SkillPack {
+    const {
+      domainPatterns,
+      verticals,
+      includeAntiPatterns = true,
+      includeWorkflows = true,
+      minSuccessRate = 0,
+      minUsageCount = 0,
+      packName = 'Skill Pack',
+      packDescription = 'Exported skill pack',
+    } = options;
+
+    // Filter skills
+    let filteredSkills = this.getAllSkills();
+
+    // Filter by domain patterns
+    if (domainPatterns && domainPatterns.length > 0) {
+      filteredSkills = filteredSkills.filter(skill => {
+        const skillDomain = skill.sourceDomain || skill.preconditions.domainPatterns?.[0] || '';
+        return domainPatterns.some(pattern => this.matchesDomainPattern(skillDomain, pattern));
+      });
+    }
+
+    // Filter by verticals
+    if (verticals && verticals.length > 0) {
+      filteredSkills = filteredSkills.filter(skill => {
+        const skillDomain = skill.sourceDomain || skill.preconditions.domainPatterns?.[0] || '';
+        const skillVertical = this.inferVertical(skillDomain);
+        return verticals.includes(skillVertical);
+      });
+    }
+
+    // Filter by performance
+    filteredSkills = filteredSkills.filter(skill => {
+      if (skill.metrics.timesUsed < minUsageCount) return false;
+      if (skill.metrics.timesUsed > 0) {
+        const successRate = skill.metrics.successCount / skill.metrics.timesUsed;
+        if (successRate < minSuccessRate) return false;
+      }
+      return true;
+    });
+
+    // Collect domains and verticals from filtered skills
+    const domains = new Set<string>();
+    const inferredVerticals = new Set<SkillVertical>();
+    for (const skill of filteredSkills) {
+      const domain = skill.sourceDomain || skill.preconditions.domainPatterns?.[0];
+      if (domain) {
+        domains.add(domain);
+        inferredVerticals.add(this.inferVertical(domain));
+      }
+    }
+
+    // Filter anti-patterns
+    let filteredAntiPatterns: AntiPattern[] = [];
+    if (includeAntiPatterns) {
+      filteredAntiPatterns = this.getAllAntiPatterns().filter(ap => {
+        const apDomain = ap.sourceDomain || ap.preconditions.domainPatterns?.[0] || '';
+        if (domainPatterns && domainPatterns.length > 0) {
+          return domainPatterns.some(pattern => this.matchesDomainPattern(apDomain, pattern));
+        }
+        if (verticals && verticals.length > 0) {
+          return verticals.includes(this.inferVertical(apDomain));
+        }
+        return true;
+      });
+    }
+
+    // Filter workflows (include if any of their skills are in the export)
+    let filteredWorkflows: SkillWorkflow[] = [];
+    if (includeWorkflows) {
+      const skillIds = new Set(filteredSkills.map(s => s.id));
+      filteredWorkflows = this.getAllWorkflows().filter(wf =>
+        wf.skillIds.some(id => skillIds.has(id))
+      );
+    }
+
+    // Calculate stats
+    const totalSuccessCount = filteredSkills.reduce((sum, s) => sum + s.metrics.successCount, 0);
+    const totalUses = filteredSkills.reduce((sum, s) => sum + s.metrics.timesUsed, 0);
+    const avgSuccessRate = totalUses > 0 ? totalSuccessCount / totalUses : 0;
+
+    // Create metadata
+    const metadata: SkillPackMetadata = {
+      id: crypto.randomUUID(),
+      name: packName,
+      description: packDescription,
+      version: '1.0.0',
+      createdAt: Date.now(),
+      verticals: Array.from(inferredVerticals),
+      domains: Array.from(domains),
+      stats: {
+        skillCount: filteredSkills.length,
+        antiPatternCount: filteredAntiPatterns.length,
+        workflowCount: filteredWorkflows.length,
+        totalSuccessCount,
+        avgSuccessRate,
+      },
+      compatibility: {
+        minVersion: '0.5.0',
+        schemaVersion: '1.0',
+      },
+    };
+
+    const pack: SkillPack = {
+      metadata,
+      skills: filteredSkills,
+      antiPatterns: filteredAntiPatterns,
+      workflows: filteredWorkflows,
+    };
+
+    logger.proceduralMemory.info(`Exported skill pack: ${packName}`, {
+      skillCount: filteredSkills.length,
+      antiPatternCount: filteredAntiPatterns.length,
+      workflowCount: filteredWorkflows.length,
+    });
+
+    return pack;
+  }
+
+  /**
+   * Serialize a skill pack to JSON string
+   */
+  serializeSkillPack(pack: SkillPack, pretty: boolean = true): string {
+    return JSON.stringify(pack, null, pretty ? 2 : 0);
+  }
+
+  /**
+   * Import skills from a skill pack with advanced options
+   */
+  async importSkillPack(
+    packJson: string,
+    options: SkillImportOptions = {}
+  ): Promise<SkillImportResult> {
+    const {
+      conflictResolution = 'skip',
+      domainFilter,
+      verticalFilter,
+      importAntiPatterns = true,
+      importWorkflows = true,
+      resetMetrics = false,
+      namePrefix,
+    } = options;
+
+    const result: SkillImportResult = {
+      success: true,
+      skillsImported: 0,
+      skillsSkipped: 0,
+      skillsMerged: 0,
+      antiPatternsImported: 0,
+      workflowsImported: 0,
+      errors: [],
+      warnings: [],
+    };
+
+    try {
+      const pack: SkillPack = JSON.parse(packJson);
+
+      // Validate pack structure
+      if (!pack.metadata || !pack.skills) {
+        result.success = false;
+        result.errors.push('Invalid skill pack: missing metadata or skills');
+        return result;
+      }
+
+      // Check compatibility
+      const [minMajor, minMinor] = pack.metadata.compatibility.minVersion.split('.').map(Number);
+      const [currentMajor, currentMinor] = '0.5.0'.split('.').map(Number);
+      if (currentMajor < minMajor || (currentMajor === minMajor && currentMinor < minMinor)) {
+        result.warnings.push(
+          `Pack requires version ${pack.metadata.compatibility.minVersion}, current is 0.5.0`
+        );
+      }
+
+      // Filter and import skills
+      for (const skill of pack.skills) {
+        // Apply domain filter
+        if (domainFilter && domainFilter.length > 0) {
+          const skillDomain = skill.sourceDomain || skill.preconditions.domainPatterns?.[0] || '';
+          if (!domainFilter.some(pattern => this.matchesDomainPattern(skillDomain, pattern))) {
+            continue;
+          }
+        }
+
+        // Apply vertical filter
+        if (verticalFilter && verticalFilter.length > 0) {
+          const skillDomain = skill.sourceDomain || skill.preconditions.domainPatterns?.[0] || '';
+          if (!verticalFilter.includes(this.inferVertical(skillDomain))) {
+            continue;
+          }
+        }
+
+        // Check for conflicts
+        const existing = this.findSimilarSkill(skill.embedding);
+        const similarity = existing
+          ? this.cosineSimilarity(skill.embedding, existing.embedding)
+          : 0;
+        const hasConflict = similarity > this.config.mergeThreshold;
+
+        if (hasConflict && existing) {
+          switch (conflictResolution) {
+            case 'skip':
+              result.skillsSkipped++;
+              continue;
+
+            case 'overwrite':
+              // Delete existing and add new
+              this.skills.delete(existing.id);
+              break;
+
+            case 'merge':
+              // Merge metrics
+              existing.metrics.successCount += skill.metrics.successCount;
+              existing.metrics.failureCount += skill.metrics.failureCount;
+              existing.metrics.timesUsed += skill.metrics.timesUsed;
+              existing.updatedAt = Date.now();
+              result.skillsMerged++;
+              continue;
+
+            case 'rename':
+              // Generate new ID
+              skill.id = crypto.randomUUID();
+              break;
+          }
+        }
+
+        // Prepare skill for import
+        const importedSkill = { ...skill };
+
+        if (resetMetrics) {
+          importedSkill.metrics = {
+            successCount: 0,
+            failureCount: 0,
+            avgDuration: skill.metrics.avgDuration,
+            lastUsed: Date.now(),
+            timesUsed: 0,
+          };
+        }
+
+        if (namePrefix) {
+          importedSkill.name = `${namePrefix}${skill.name}`;
+        }
+
+        importedSkill.updatedAt = Date.now();
+
+        // Add skill
+        this.skills.set(importedSkill.id, importedSkill);
+        await this.addSkillToVectorStore(importedSkill);
+        result.skillsImported++;
+      }
+
+      // Import anti-patterns
+      if (importAntiPatterns && pack.antiPatterns) {
+        for (const ap of pack.antiPatterns) {
+          // Apply same filters as skills
+          if (domainFilter && domainFilter.length > 0) {
+            const apDomain = ap.sourceDomain || ap.preconditions.domainPatterns?.[0] || '';
+            if (!domainFilter.some(pattern => this.matchesDomainPattern(apDomain, pattern))) {
+              continue;
+            }
+          }
+
+          if (verticalFilter && verticalFilter.length > 0) {
+            const apDomain = ap.sourceDomain || ap.preconditions.domainPatterns?.[0] || '';
+            if (!verticalFilter.includes(this.inferVertical(apDomain))) {
+              continue;
+            }
+          }
+
+          // Check for existing
+          if (!this.antiPatterns.has(ap.id)) {
+            this.antiPatterns.set(ap.id, ap);
+            result.antiPatternsImported++;
+          }
+        }
+      }
+
+      // Import workflows
+      if (importWorkflows && pack.workflows) {
+        const importedSkillIds = new Set(
+          Array.from(this.skills.keys())
+        );
+
+        for (const wf of pack.workflows) {
+          // Only import if all referenced skills exist
+          const hasAllSkills = wf.skillIds.every(id => importedSkillIds.has(id));
+          if (hasAllSkills && !this.workflows.has(wf.id)) {
+            this.workflows.set(wf.id, wf);
+            result.workflowsImported++;
+          } else if (!hasAllSkills) {
+            result.warnings.push(`Workflow ${wf.name} skipped: missing required skills`);
+          }
+        }
+      }
+
+      await this.save();
+
+      logger.proceduralMemory.info('Imported skill pack', {
+        packName: pack.metadata.name,
+        skillsImported: result.skillsImported,
+        skillsSkipped: result.skillsSkipped,
+        skillsMerged: result.skillsMerged,
+        antiPatternsImported: result.antiPatternsImported,
+        workflowsImported: result.workflowsImported,
+      });
+
+    } catch (error) {
+      result.success = false;
+      result.errors.push(
+        `Failed to import skill pack: ${error instanceof Error ? error.message : String(error)}`
+      );
+      logger.proceduralMemory.error('Failed to import skill pack', { error });
+    }
+
+    return result;
+  }
+
+  /**
+   * Get skill pack statistics for the current instance
+   */
+  getSkillPackStats(): SkillPackMetadata['stats'] & { byVertical: Record<SkillVertical, number> } {
+    const skills = this.getAllSkills();
+    const antiPatterns = this.getAllAntiPatterns();
+    const workflows = this.getAllWorkflows();
+
+    const totalSuccessCount = skills.reduce((sum, s) => sum + s.metrics.successCount, 0);
+    const totalUses = skills.reduce((sum, s) => sum + s.metrics.timesUsed, 0);
+
+    // Count by vertical
+    const byVertical: Record<SkillVertical, number> = {
+      government: 0,
+      ecommerce: 0,
+      documentation: 0,
+      social: 0,
+      news: 0,
+      developer: 0,
+      finance: 0,
+      travel: 0,
+      healthcare: 0,
+      education: 0,
+      general: 0,
+    };
+
+    for (const skill of skills) {
+      const domain = skill.sourceDomain || skill.preconditions.domainPatterns?.[0] || '';
+      const vertical = this.inferVertical(domain);
+      byVertical[vertical]++;
+    }
+
+    return {
+      skillCount: skills.length,
+      antiPatternCount: antiPatterns.length,
+      workflowCount: workflows.length,
+      totalSuccessCount,
+      avgSuccessRate: totalUses > 0 ? totalSuccessCount / totalUses : 0,
+      byVertical,
+    };
   }
 
   /**

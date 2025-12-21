@@ -667,6 +667,149 @@ export interface ExtendedSkillPreconditions extends SkillPreconditions {
 }
 
 // ============================================
+// SKILL SHARING & PORTABILITY (F-012)
+// ============================================
+
+/**
+ * Domain vertical categories for skill organization
+ */
+export type SkillVertical =
+  | 'government'      // gov, .gov.*, public services
+  | 'ecommerce'       // shopping, retail, marketplaces
+  | 'documentation'   // docs, wikis, knowledge bases
+  | 'social'          // social media, forums, communities
+  | 'news'            // news sites, blogs, articles
+  | 'developer'       // dev tools, APIs, code hosting
+  | 'finance'         // banking, fintech, trading
+  | 'travel'          // booking, airlines, hotels
+  | 'healthcare'      // medical, health services
+  | 'education'       // schools, courses, learning
+  | 'general';        // catch-all for unclassified
+
+/**
+ * Metadata for an exported skill pack
+ */
+export interface SkillPackMetadata {
+  // Pack identifier
+  id: string;
+  // Human-readable name
+  name: string;
+  // Description of what this pack contains
+  description: string;
+  // Version of this pack (semver)
+  version: string;
+  // When this pack was created
+  createdAt: number;
+  // Source instance identifier (optional)
+  sourceInstance?: string;
+  // Domain verticals covered
+  verticals: SkillVertical[];
+  // Domains covered by skills in this pack
+  domains: string[];
+  // Statistics
+  stats: {
+    skillCount: number;
+    antiPatternCount: number;
+    workflowCount: number;
+    totalSuccessCount: number;
+    avgSuccessRate: number;
+  };
+  // Compatibility info
+  compatibility: {
+    // Minimum version required to import
+    minVersion: string;
+    // Schema version of the export format
+    schemaVersion: string;
+  };
+}
+
+/**
+ * A portable skill pack for sharing/importing
+ */
+export interface SkillPack {
+  // Pack metadata
+  metadata: SkillPackMetadata;
+  // Exported skills
+  skills: BrowsingSkill[];
+  // Exported anti-patterns (what NOT to do)
+  antiPatterns: AntiPattern[];
+  // Exported workflows (skill compositions)
+  workflows: SkillWorkflow[];
+}
+
+/**
+ * Options for exporting skills
+ */
+export interface SkillExportOptions {
+  // Filter by domain patterns (glob-like matching)
+  domainPatterns?: string[];
+  // Filter by vertical category
+  verticals?: SkillVertical[];
+  // Include anti-patterns in export
+  includeAntiPatterns?: boolean;
+  // Include workflows in export
+  includeWorkflows?: boolean;
+  // Minimum success rate to include (0-1)
+  minSuccessRate?: number;
+  // Minimum usage count to include
+  minUsageCount?: number;
+  // Pack name for the export
+  packName?: string;
+  // Pack description
+  packDescription?: string;
+}
+
+/**
+ * Conflict resolution strategy for skill import
+ */
+export type SkillConflictResolution =
+  | 'skip'       // Skip if similar skill exists
+  | 'overwrite'  // Replace existing with imported
+  | 'merge'      // Merge metrics from both
+  | 'rename';    // Import with new ID
+
+/**
+ * Options for importing skills
+ */
+export interface SkillImportOptions {
+  // How to handle conflicts with existing skills
+  conflictResolution?: SkillConflictResolution;
+  // Filter which skills to import by domain
+  domainFilter?: string[];
+  // Filter which skills to import by vertical
+  verticalFilter?: SkillVertical[];
+  // Import anti-patterns
+  importAntiPatterns?: boolean;
+  // Import workflows
+  importWorkflows?: boolean;
+  // Reset metrics on imported skills
+  resetMetrics?: boolean;
+  // Prefix to add to imported skill names
+  namePrefix?: string;
+}
+
+/**
+ * Result of a skill import operation
+ */
+export interface SkillImportResult {
+  success: boolean;
+  // Number of skills imported
+  skillsImported: number;
+  // Number of skills skipped (conflicts)
+  skillsSkipped: number;
+  // Number of skills merged
+  skillsMerged: number;
+  // Number of anti-patterns imported
+  antiPatternsImported: number;
+  // Number of workflows imported
+  workflowsImported: number;
+  // Any errors encountered
+  errors: string[];
+  // Warnings (non-fatal issues)
+  warnings: string[];
+}
+
+// ============================================
 // TIERED RENDERING TYPES
 // ============================================
 
