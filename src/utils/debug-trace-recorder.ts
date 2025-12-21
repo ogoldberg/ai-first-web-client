@@ -845,7 +845,7 @@ export function createDebugTrace(
         }
       : undefined,
     errors: (data.errors ?? []).map(e => ({
-      type: (e.type as TraceError['type']) || 'unknown',
+      type: ['timeout', 'network', 'selector', 'validation', 'bot_challenge', 'rate_limit', 'auth', 'unknown'].includes(e.type) ? (e.type as TraceError['type']) : 'unknown',
       message: e.message,
       stack: e.stack,
       recoveryAttempted: false,

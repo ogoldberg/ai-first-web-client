@@ -2486,8 +2486,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           domain: args.domain as string | undefined,
           urlPattern: args.urlPattern as string | undefined,
           success: args.success as boolean | undefined,
-          errorType: args.errorType as any,
-          tier: args.tier as any,
+          errorType: args.errorType as ('timeout' | 'network' | 'selector' | 'validation' | 'bot_challenge' | 'rate_limit' | 'auth' | 'unknown') | undefined,
+          tier: args.tier as ('intelligence' | 'lightweight' | 'playwright') | undefined,
           limit: (args.limit as number) ?? 20,
           offset: args.offset as number | undefined,
         });
