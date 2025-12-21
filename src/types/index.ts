@@ -451,6 +451,8 @@ export interface ProceduralMemoryConfig {
   maxFeedbackLogSize?: number;
   // Threshold for auto-rollback on negative feedback (default: 0.3)
   autoRollbackThreshold?: number;
+  // Path to the storage directory (optional, for backwards compatibility)
+  storagePath?: string;
 }
 
 /**
