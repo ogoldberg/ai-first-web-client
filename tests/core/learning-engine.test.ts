@@ -990,4 +990,189 @@ describe('LearningEngine', () => {
       expect(entry?.domainGroup).toBeUndefined();
     });
   });
+
+  // ============================================
+  // ANTI-PATTERN FEEDBACK LOOPS (LI-002)
+  // ============================================
+  describe('Anti-Pattern Feedback Loops', () => {
+    it('should persist anti-pattern when criteria met', async () => {
+      const antiPattern = {
+        id: 'ap-test-1',
+        urlPattern: /^https:\/\/api\.test\.com\/v1/,
+        failureCategory: 'auth_required' as const,
+        domains: ['api.test.com'],
+        confidence: 0.95,
+        failureCount: 10,
+        createdAt: Date.now(),
+        lastTriggered: Date.now(),
+        expiresAt: 0, // Never expires
+        sourcePatternId: 'pattern-123',
+      };
+
+      engine.persistAntiPattern(antiPattern);
+      await engine.flush();
+
+      const stats = engine.getAntiPatternStats();
+      expect(stats.total).toBe(1);
+      expect(stats.active).toBe(1);
+      expect(stats.byCategory.auth_required).toBe(1);
+      expect(stats.byDomain['api.test.com']).toBe(1);
+    });
+
+    it('should not persist anti-pattern with insufficient failures', () => {
+      const antiPattern = {
+        id: 'ap-test-2',
+        urlPattern: /^https:\/\/api\.test\.com\/v1/,
+        failureCategory: 'rate_limited' as const,
+        domains: ['api.test.com'],
+        confidence: 0.5,
+        failureCount: 2, // Below threshold
+        createdAt: Date.now(),
+        lastTriggered: Date.now(),
+        expiresAt: 0,
+      };
+
+      const shouldPersist = engine['shouldPersistAntiPattern'](antiPattern);
+      expect(shouldPersist).toBe(false);
+    });
+
+    it('should persist and reload anti-patterns across restarts', async () => {
+      const antiPattern = {
+        id: 'ap-persist-test',
+        urlPattern: /^https:\/\/api\.example\.com/,
+        failureCategory: 'wrong_endpoint' as const,
+        domains: ['api.example.com'],
+        confidence: 0.9,
+        failureCount: 8,
+        createdAt: Date.now(),
+        lastTriggered: Date.now(),
+        expiresAt: 0,
+        sourcePatternId: 'pattern-456',
+      };
+
+      engine.persistAntiPattern(antiPattern);
+      await engine.flush();
+
+      // Create new engine instance pointing to same file
+      const engine2 = new LearningEngine(filePath);
+      await engine2.initialize();
+
+      const stats = engine2.getAntiPatternStats();
+      expect(stats.total).toBe(1);
+      expect(stats.byDomain['api.example.com']).toBe(1);
+
+      await engine2.flush();
+    });
+
+    it('should not load expired anti-patterns', async () => {
+      const expiredAntiPattern = {
+        id: 'ap-expired',
+        urlPattern: /^https:\/\/api\.expired\.com/,
+        failureCategory: 'auth_required' as const,
+        domains: ['api.expired.com'],
+        confidence: 0.9,
+        failureCount: 10,
+        createdAt: Date.now() - 1000000,
+        lastTriggered: Date.now() - 1000000,
+        expiresAt: Date.now() - 100, // Already expired
+      };
+
+      engine.persistAntiPattern(expiredAntiPattern);
+      await engine.flush();
+
+      // Create new engine instance - should not load expired pattern
+      const engine2 = new LearningEngine(filePath);
+      await engine2.initialize();
+
+      const stats = engine2.getAntiPatternStats();
+      expect(stats.total).toBe(0);
+
+      await engine2.flush();
+    });
+
+    it('should record pattern failure and downgrade confidence', () => {
+      // First create an API pattern
+      engine.learnApiPattern('api.test.com', {
+        endpoint: '/api/v1/users',
+        method: 'GET',
+        confidence: 'high',
+        canBypass: true,
+      });
+
+      // Record failures
+      engine.recordPatternFailure(
+        'api.test.com',
+        '/api/v1/users',
+        'auth_required',
+        'Authentication failed'
+      );
+      engine.recordPatternFailure(
+        'api.test.com',
+        '/api/v1/users',
+        'auth_required',
+        'Token expired'
+      );
+
+      const entry = engine.getEntry('api.test.com');
+      const pattern = entry?.apiPatterns.find(p => p.endpoint === '/api/v1/users');
+
+      // After 2 severe failures, confidence should downgrade from 'high' to 'medium'
+      expect(pattern?.confidence).toBe('medium');
+      expect(pattern?.failureCount).toBe(2);
+    });
+
+    it('should get anti-patterns for domain', () => {
+      const antiPattern1 = {
+        id: 'ap-domain-1',
+        urlPattern: /^https:\/\/api\.domain\.com/,
+        failureCategory: 'auth_required' as const,
+        domains: ['api.domain.com'],
+        confidence: 0.9,
+        failureCount: 10,
+        createdAt: Date.now(),
+        lastTriggered: Date.now(),
+        expiresAt: 0,
+      };
+
+      const antiPattern2 = {
+        id: 'ap-domain-2',
+        urlPattern: /^https:\/\/other\.domain\.com/,
+        failureCategory: 'wrong_endpoint' as const,
+        domains: ['other.domain.com'],
+        confidence: 0.85,
+        failureCount: 8,
+        createdAt: Date.now(),
+        lastTriggered: Date.now(),
+        expiresAt: 0,
+      };
+
+      engine.persistAntiPattern(antiPattern1);
+      engine.persistAntiPattern(antiPattern2);
+
+      const domainPatterns = engine.getAntiPatternsForDomain('api.domain.com');
+      expect(domainPatterns.length).toBe(1);
+      expect(domainPatterns[0].id).toBe('ap-domain-1');
+    });
+
+    it('should clear persisted anti-pattern', () => {
+      const antiPattern = {
+        id: 'ap-clear-test',
+        urlPattern: /^https:\/\/api\.clear\.com/,
+        failureCategory: 'auth_required' as const,
+        domains: ['api.clear.com'],
+        confidence: 0.9,
+        failureCount: 10,
+        createdAt: Date.now(),
+        lastTriggered: Date.now(),
+        expiresAt: 0,
+      };
+
+      engine.persistAntiPattern(antiPattern);
+      expect(engine.getAntiPatternStats().total).toBe(1);
+
+      const cleared = engine.clearPersistedAntiPattern('ap-clear-test');
+      expect(cleared).toBe(true);
+      expect(engine.getAntiPatternStats().total).toBe(0);
+    });
+  });
 });

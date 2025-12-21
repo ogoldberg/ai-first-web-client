@@ -557,3 +557,17 @@ export function getFailureSummary(counts: FailureCounts): string {
   }
   return parts.length > 0 ? parts.join(', ') : 'No failures';
 }
+
+/**
+ * Helper function to add an anti-pattern to a pattern registry.
+ * Used by LearningEngine to load persisted anti-patterns.
+ * @param registry The ApiPatternRegistry to add the anti-pattern to
+ * @param antiPattern The anti-pattern to add
+ * @returns true if added, false if already exists or expired
+ */
+export function addAntiPatternToRegistry(
+  registry: import('./api-pattern-learner.js').ApiPatternRegistry,
+  antiPattern: AntiPattern
+): boolean {
+  return registry.importAntiPattern(antiPattern);
+}
