@@ -141,6 +141,238 @@ describe('ContentIntelligence', () => {
     });
   });
 
+  describe('Angular Framework Extraction', () => {
+    it('should extract content from Angular Universal transfer state', async () => {
+      const transferState = {
+        title: 'Angular Article',
+        description: 'This is an Angular Universal page with enough content to pass the minimum length validation. Angular Universal uses TransferState to pass server data to the client. This enables efficient hydration of the application state without making additional API calls. The content must be at least 100 characters to pass the content validation check in the extraction pipeline.',
+        author: 'Angular Developer',
+      };
+
+      const html = `
+        <!DOCTYPE html>
+        <html>
+        <head><title>Angular Page</title></head>
+        <body>
+          <app-root ng-version="17.0.0" _nghost-ng-c1234567890>
+            <div _ngcontent-ng-c1234567890>Content here</div>
+          </app-root>
+          <script id="serverApp-state" type="application/json">${JSON.stringify(transferState)}</script>
+          <script src="runtime.abc123.js"></script>
+          <script src="polyfills.def456.js"></script>
+          <script src="main.ghi789.js"></script>
+        </body>
+        </html>
+      `;
+
+      mockFetch.mockResolvedValue(createHtmlResponse(html));
+
+      const result = await intelligence.extract('https://example.com/angular-page', {
+        forceStrategy: 'framework:angular',
+      });
+
+      expect(result.meta.strategy).toBe('framework:angular');
+      expect(result.meta.confidence).toBe('high');
+      expect(result.content.text).toContain('Angular Universal');
+      expect(result.content.structured).toBeDefined();
+    });
+
+    it('should extract content from transfer-state script id', async () => {
+      const transferState = {
+        pageTitle: 'Transfer State Test',
+        body: 'This content comes from Angular transfer-state with a different script ID. The content needs to be long enough for the minimum validation threshold to pass. Adding more text to ensure extraction succeeds. We need at least 100 characters for the content validation to pass successfully.',
+      };
+
+      const html = `
+        <!DOCTYPE html>
+        <html>
+        <head><title>Angular App</title></head>
+        <body>
+          <app-root ng-version="16.2.0">
+            <router-outlet></router-outlet>
+          </app-root>
+          <script id="transfer-state" type="application/json">${JSON.stringify(transferState)}</script>
+          <script src="zone.min.js"></script>
+        </body>
+        </html>
+      `;
+
+      mockFetch.mockResolvedValue(createHtmlResponse(html));
+
+      const result = await intelligence.extract('https://example.com/transfer-state', {
+        forceStrategy: 'framework:angular',
+      });
+
+      expect(result.meta.strategy).toBe('framework:angular');
+      expect(result.meta.confidence).toBe('high');
+      expect(result.content.text).toContain('Angular transfer-state');
+    });
+
+    it('should extract title from nested objects', async () => {
+      const transferState = {
+        page: {
+          data: {
+            title: 'Nested Title Found',
+          },
+        },
+        description: 'Angular page content with nested title that should be discovered by the recursive title extraction. This content is long enough to pass the minimum character validation. Adding more words to meet the threshold. The minimum content length is 100 characters.',
+      };
+
+      const html = `
+        <!DOCTYPE html>
+        <html>
+        <head><title>Angular</title></head>
+        <body>
+          <app-root ng-version="17.1.0"></app-root>
+          <script id="ng-state" type="application/json">${JSON.stringify(transferState)}</script>
+        </body>
+        </html>
+      `;
+
+      mockFetch.mockResolvedValue(createHtmlResponse(html));
+
+      const result = await intelligence.extract('https://example.com/nested-title', {
+        forceStrategy: 'framework:angular',
+      });
+
+      expect(result.meta.strategy).toBe('framework:angular');
+      expect(result.content.title).toBe('Nested Title Found');
+    });
+
+    it('should detect Angular app indicators without transfer state', async () => {
+      // When Angular is detected but there's no transfer state data,
+      // it should fall through to other strategies
+      const html = `
+        <!DOCTYPE html>
+        <html>
+        <head><title>Angular SPA</title></head>
+        <body>
+          <app-root ng-version="17.0.0" _nghost-ng-c0123456789>
+            <div _ngcontent-ng-c0123456789>
+              <h1>Welcome to Our Angular Application</h1>
+              <p>This is an Angular client-side rendered application. It does not have server-side transfer state, so the framework extraction will not find data to extract. The fallback strategies should handle this case appropriately. This application demonstrates modern Angular development practices.</p>
+              <p>Additional paragraph content to ensure sufficient length for the fallback extraction strategy to succeed with the minimum content requirements. The static HTML parser should be able to extract meaningful content from these paragraphs when framework extraction fails.</p>
+              <p>Even more content is needed to meet the 500 character minimum threshold for successful extraction. This ensures that the test properly validates the fallback behavior when Angular Universal transfer state is not available in the document.</p>
+              <p>Angular applications can run entirely on the client side without server-side rendering. In such cases, the content is dynamically generated by JavaScript after the initial page load. This test verifies that the system correctly falls back to static parsing.</p>
+            </div>
+          </app-root>
+          <script src="runtime.abc123.js"></script>
+          <script src="zone.js"></script>
+          <script src="main.def456.js"></script>
+        </body>
+        </html>
+      `;
+
+      mockFetch.mockResolvedValue(createHtmlResponse(html));
+
+      const result = await intelligence.extract('https://example.com/angular-spa');
+
+      // Should fall back to static parsing since no transfer state
+      expect(result.meta.strategy).not.toBe('framework:angular');
+      expect(result.error).toBeUndefined();
+      // framework:nextjs is the chain entry point that triggers all framework extraction
+      // (including Angular) - Angular is only recorded when forceStrategy is used
+      expect(result.meta.strategiesAttempted).toContain('framework:nextjs');
+    });
+
+    it('should detect Angular via zone.js indicator', async () => {
+      const transferState = {
+        headline: 'Zone.js Detection',
+        description: 'This Angular app is detected through zone.js script inclusion. Zone.js is a core dependency of Angular that provides change detection. This content meets the minimum length requirement for extraction. We are adding more text to exceed 100 characters.',
+      };
+
+      const html = `
+        <!DOCTYPE html>
+        <html>
+        <head><title>Angular Zone</title></head>
+        <body>
+          <div id="root"></div>
+          <script id="serverApp-state" type="application/json">${JSON.stringify(transferState)}</script>
+          <script src="zone.js"></script>
+        </body>
+        </html>
+      `;
+
+      mockFetch.mockResolvedValue(createHtmlResponse(html));
+
+      const result = await intelligence.extract('https://example.com/zone-app', {
+        forceStrategy: 'framework:angular',
+      });
+
+      expect(result.meta.strategy).toBe('framework:angular');
+      expect(result.content.title).toBe('Zone.js Detection');
+    });
+
+    it('should handle Angular hydration (ngh) attributes', async () => {
+      const transferState = {
+        name: 'Hydrated Angular App',
+        description: 'Angular 17+ uses new hydration with ngh attributes on elements. This is a newer approach to Angular Universal that improves performance. The content here is long enough for extraction validation. Adding more text to exceed the 100 character minimum.',
+      };
+
+      const html = `
+        <!DOCTYPE html>
+        <html>
+        <head><title>Hydrated App</title></head>
+        <body>
+          <app-root ngh="abc123">
+            <div ngh="def456">Hydrated content</div>
+          </app-root>
+          <script ngh type="application/json">${JSON.stringify(transferState)}</script>
+        </body>
+        </html>
+      `;
+
+      mockFetch.mockResolvedValue(createHtmlResponse(html));
+
+      const result = await intelligence.extract('https://example.com/hydrated', {
+        forceStrategy: 'framework:angular',
+      });
+
+      expect(result.meta.strategy).toBe('framework:angular');
+      expect(result.content.text).toContain('Angular 17+');
+    });
+
+    it('should handle insufficient Angular content gracefully', async () => {
+      const transferState = {
+        title: 'Short',
+        content: 'Too short', // Not enough content
+      };
+
+      const html = `
+        <!DOCTYPE html>
+        <html>
+        <head><title>Angular</title></head>
+        <body>
+          <app-root ng-version="17.0.0"></app-root>
+          <script id="serverApp-state" type="application/json">${JSON.stringify(transferState)}</script>
+          <main>
+            <p>Fallback content when Angular transfer state has insufficient data. This content will be extracted by the static parsing strategy instead. More text is needed to meet the minimum length requirement. The system should gracefully handle this scenario and fall back to alternative extraction methods.</p>
+            <p>Additional paragraph for content length. The static parser will extract this when Angular extraction fails due to short content. This ensures proper fallback behavior in the content intelligence system when framework-specific extraction cannot find sufficient data.</p>
+            <p>Third paragraph with extra content to ensure successful fallback extraction meets the validation threshold. The content extraction pipeline tries multiple strategies in sequence, and this test verifies that behavior works correctly when earlier strategies fail to extract meaningful content.</p>
+            <p>Fourth paragraph providing even more content to guarantee the minimum character threshold is exceeded. Testing edge cases like insufficient content in transfer state helps ensure robust handling of real-world scenarios where data may be incomplete.</p>
+          </main>
+        </body>
+        </html>
+      `;
+
+      mockFetch.mockResolvedValue(createHtmlResponse(html));
+
+      const result = await intelligence.extract('https://example.com/short-angular');
+
+      // Should fall back since Angular content is too short
+      expect(result.meta.strategy).not.toBe('framework:angular');
+      expect(result.error).toBeUndefined();
+    });
+
+    it('should include framework:angular in available strategies', () => {
+      const strategies = ContentIntelligence.getAvailableStrategies();
+      const angularStrategy = strategies.find(s => s.strategy === 'framework:angular');
+
+      expect(angularStrategy).toBeDefined();
+      expect(angularStrategy?.available).toBe(true);
+    });
+  });
+
   describe('Structured Data Extraction', () => {
     it('should extract content from JSON-LD', async () => {
       const jsonLd = {
