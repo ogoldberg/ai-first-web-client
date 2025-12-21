@@ -135,6 +135,35 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 
 ---
 
+## P2: Learning System Integration & Validation (New Initiative)
+
+**Goal:** Complete integration of existing learning components and validate effectiveness. The learning system is sophisticated but needs wiring and real-world validation.
+
+**Context:** Evaluation concluded that the learning system is already advanced (~75% maturity) with temporal decay, skill versioning, cross-domain transfer, anti-patterns, and vector embeddings. However, components aren't fully integrated, and there's no way to measure effectiveness. Focus on finishing what's built rather than adding complexity.
+
+| ID | Task | Effort | Status | Notes |
+|----|------|--------|--------|-------|
+| LI-001 | Enable semantic matching by default | S | Not Started | SemanticPatternMatcher (V-003) exists but requires explicit initialization. Auto-initialize when VectorStore available, graceful fallback when not. |
+| LI-002 | Wire feedback loops for anti-patterns | M | Not Started | FailureLearning creates anti-patterns, but they expire after suppression window. Persist high-confidence anti-patterns to LearningEngine. Feed pattern failures back to improve matching. |
+| LI-003 | Add learning effectiveness metrics | M | Not Started | Track: pattern hit rate, confidence accuracy (predicted vs actual success), tier optimization savings, skill reuse rate. New MCP tool: `get_learning_effectiveness`. |
+| LI-004 | Real-world pattern validation suite | L | Not Started | Create test suite that runs against real sites (like T-008 live tests). Validate learned patterns actually work. Track regression over time. |
+| LI-005 | Dynamic domain group learning | M | Not Started | Domain groups are hardcoded in heuristics-config.ts. Learn groups from successful cross-domain transfers. Suggest new groupings based on pattern similarity. |
+| LI-006 | Semantic skill retrieval integration | S | Not Started | ProceduralMemory has 64-dim embeddings but uses custom cosine similarity. Wire to VectorStore for consistent semantic search. |
+
+**Success Criteria:**
+- Semantic matching enabled by default with zero-config
+- Pattern failures feed back to improve future matching
+- Dashboard showing learning effectiveness over time
+- Validated patterns with real-world test coverage
+- Domain groups can expand based on observed patterns
+
+**Non-Goals (Evaluated and Rejected):**
+- Adding ML/neural network capabilities (jax-js, TensorFlow.js) - overkill for heuristic pattern matching
+- Training models on browsing data - LLM does the reasoning, system just caches patterns
+- Complex NLP for content understanding - current structured data extraction is sufficient
+
+---
+
 ## P2: Medium Priority (Plan For)
 
 ### Debugging & Observability

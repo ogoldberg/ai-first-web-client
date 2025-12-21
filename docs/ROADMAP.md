@@ -126,6 +126,50 @@
 
 ---
 
+## Phase 2.5: Learning System Integration & Validation
+
+**Goal**: Complete integration of existing learning components and measure effectiveness
+
+**Context**: The learning system is already sophisticated (~75% maturity) but needs integration polish and validation. This phase focuses on wiring components together and proving they work, not adding new capabilities.
+
+### Sprint 2.5.1: Integration Polish (1 week)
+
+| Task | Priority | Effort | Status |
+|------|----------|--------|--------|
+| LI-001 Enable semantic matching by default | High | 1 day | Not Started |
+| LI-006 Wire ProceduralMemory to VectorStore | Medium | 1 day | Not Started |
+| LI-002 Persist anti-patterns to LearningEngine | Medium | 2 days | Not Started |
+
+**Success Criteria**:
+- Semantic search works out of the box
+- Skill retrieval uses shared vector infrastructure
+- Anti-patterns persist beyond suppression window
+
+### Sprint 2.5.2: Effectiveness Measurement (1 week)
+
+| Task | Priority | Effort | Status |
+|------|----------|--------|--------|
+| LI-003 Add learning effectiveness metrics | High | 2 days | Not Started |
+| LI-004 Real-world pattern validation suite | High | 3 days | Not Started |
+
+**Success Criteria**:
+- Can measure pattern hit rate and accuracy
+- Regression tests validate patterns against live sites
+- Dashboard shows learning trends over time
+
+### Sprint 2.5.3: Self-Improvement (1 week)
+
+| Task | Priority | Effort | Status |
+|------|----------|--------|--------|
+| LI-005 Dynamic domain group learning | Medium | 2 days | Not Started |
+| LI-002b Feedback loop from failures to patterns | Low | 2 days | Not Started |
+
+**Success Criteria**:
+- Domain groups can expand based on observed patterns
+- Failed patterns improve future matching
+
+---
+
 ## Phase 3: Enhanced Intelligence (6 weeks)
 
 **Goal**: Make the learning system more powerful

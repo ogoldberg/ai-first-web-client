@@ -280,9 +280,24 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ---
 
-## Current Task: None (backlog ready)
+## Current Task: Learning System Integration & Validation
 
-**Status:** Ready for next task
+**Status:** Ready for Phase 2.5
+
+**Next Initiative:** Complete integration of existing learning components and validate effectiveness. The learning system has advanced features (temporal decay, skill versioning, cross-domain transfer, anti-patterns, vector embeddings) but needs wiring and real-world validation.
+
+| ID | Task | Priority | Effort |
+|----|------|----------|--------|
+| LI-001 | Enable semantic matching by default | High | S |
+| LI-002 | Wire feedback loops for anti-patterns | Medium | M |
+| LI-003 | Add learning effectiveness metrics | High | M |
+| LI-004 | Real-world pattern validation suite | High | L |
+| LI-005 | Dynamic domain group learning | Medium | M |
+| LI-006 | Semantic skill retrieval integration | Medium | S |
+
+**Evaluated and Rejected:**
+- Adding ML/neural network capabilities (jax-js, TensorFlow.js) - overkill for heuristic pattern matching
+- Training models on browsing data - LLM does reasoning, system caches patterns
 
 **Recently completed:**
 
