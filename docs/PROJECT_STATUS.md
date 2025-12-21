@@ -4,7 +4,7 @@
 **Version:** 0.5.0
 **Current Phase:** Production Readiness (Phase 2)
 **Total Code:** ~16,000 lines TypeScript
-**Tests:** 1778 passing + 44 live tests
+**Tests:** 1797 passing + 44 live tests
 
 ---
 
@@ -286,6 +286,7 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 **Recently completed:**
 
+- CX-011: Domain Capability Summary - DONE
 - CX-010: Config-driven Heuristics - DONE
 - V-004: Extended Features (Skill similarity, error matching, content dedup, analytics) - DONE
 - V-003: Query Integration (SemanticPatternMatcher + LearningEngine integration) - DONE
@@ -318,6 +319,15 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for ful
 
 ### v0.5.0 (2025-12-20)
 
+- Added CX-011: Domain Capability Summary
+  - New get_domain_capabilities MCP tool for LLM-friendly domain analysis
+  - getDomainCapabilities() method on SmartBrowser
+  - Boolean capability flags: canBypassBrowser, hasLearnedPatterns, hasActiveSession, hasSkills, hasPagination, hasContentSelectors
+  - Confidence assessment with level (high/medium/low/unknown), score, and basis explanation
+  - Performance info: preferred tier, avg response time, success rate
+  - Actionable recommendations based on domain state
+  - Detailed counts: patterns, skills, selectors, validators, pagination, failures
+  - 19 tests for domain capability summary
 - Added CX-010: Config-driven Heuristics
   - New heuristics-config.ts module for externalized domain/tier configuration
   - Domain groups (spanish_gov, us_gov, eu_gov) loaded from config instead of hardcoded
