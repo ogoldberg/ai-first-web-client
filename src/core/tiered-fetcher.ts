@@ -35,6 +35,11 @@ import type { NetworkRequest, ApiPattern, TierAttempt, TierValidationDetails } f
 import { logger } from '../utils/logger.js';
 import { performanceTracker, type TimingBreakdown } from '../utils/performance-tracker.js';
 import { validateUrlOrThrow } from '../utils/url-safety.js';
+import {
+  isBrowserRequired,
+  getContentMarkerPatterns,
+  getIncompleteMarkerPatterns,
+} from '../utils/heuristics-config.js';
 
 export type RenderTier = 'intelligence' | 'lightweight' | 'playwright';
 
@@ -119,50 +124,7 @@ export interface TieredFetchResult {
   };
 }
 
-// Domain patterns that are known to be static
-const KNOWN_STATIC_DOMAINS = [
-  /\.gov$/,           // Government sites
-  /\.gov\.\w{2}$/,    // International gov sites
-  /\.edu$/,           // Educational sites
-  /docs\./,           // Documentation sites
-  /wiki/,             // Wiki sites
-  /github\.io$/,      // GitHub pages
-  /readthedocs/,      // ReadTheDocs
-  /\.org$/,           // Many org sites
-  /blog\./,           // Blog subdomains
-];
-
-// Domain patterns that need full browser
-const KNOWN_BROWSER_REQUIRED = [
-  /twitter\.com/,
-  /x\.com/,
-  /instagram\.com/,
-  /facebook\.com/,
-  /linkedin\.com/,
-  /tiktok\.com/,
-  /youtube\.com/,
-  /reddit\.com/,
-  /discord\.com/,
-];
-
-// Content markers that indicate the page rendered properly
-const CONTENT_MARKERS = [
-  /<article/i,
-  /<main/i,
-  /class="content/i,
-  /id="content/i,
-  /<h1/i,
-  /<p[>\s]/i,
-];
-
-// Markers that indicate JavaScript hasn't finished rendering
-const INCOMPLETE_MARKERS = [
-  /loading\.\.\./i,
-  /please wait/i,
-  /<div id="(root|app|__next)">\s*<\/div>/i,
-  /class="skeleton/i,
-  /class="loading/i,
-];
+// Tier routing rules are loaded from heuristics-config.ts (CX-010)
 
 export interface DomainPreference {
   domain: string;
@@ -508,7 +470,7 @@ export class TieredFetcher {
     }
 
     // Check known browser-required domains (social media, etc.)
-    if (KNOWN_BROWSER_REQUIRED.some(pattern => pattern.test(domain))) {
+    if (isBrowserRequired(domain)) {
       // If Playwright not available, try lightweight instead
       return playwrightAvailable ? 'playwright' : 'lightweight';
     }
@@ -561,11 +523,12 @@ export class TieredFetcher {
     const minLength = options.minContentLength || DEFAULT_FETCH_OPTIONS.minContentLength;
 
     // Check for content markers (semantic HTML elements)
-    const hasSemanticMarkers = CONTENT_MARKERS.some(marker => marker.test(html));
+    const contentMarkerPatterns = getContentMarkerPatterns();
+    const hasSemanticMarkers = contentMarkerPatterns.some(marker => marker.test(html));
 
     // Check for incomplete markers
     const incompleteMarkers: string[] = [];
-    for (const marker of INCOMPLETE_MARKERS) {
+    for (const marker of getIncompleteMarkerPatterns()) {
       if (marker.test(html)) {
         incompleteMarkers.push(marker.source);
       }

@@ -41,6 +41,7 @@ import {
   recordDecay,
 } from '../types/provenance.js';
 import { logger } from '../utils/logger.js';
+import { getDomainGroups } from '../utils/heuristics-config.js';
 import type {
   SemanticPatternMatcher,
   SimilarPattern,
@@ -57,107 +58,6 @@ const DEFAULT_DECAY_CONFIG: ConfidenceDecayConfig = {
   archiveAfterDays: 90,
 };
 
-// Pre-configured domain groups
-const DOMAIN_GROUPS: DomainGroup[] = [
-  {
-    name: 'spanish_gov',
-    domains: [
-      'boe.es',
-      'extranjeria.inclusion.gob.es',
-      'agenciatributaria.es',
-      'seg-social.es',
-      'mites.gob.es',
-      'inclusion.gob.es',
-      'exteriores.gob.es',
-      'policia.es',
-    ],
-    sharedPatterns: {
-      cookieBannerSelectors: [
-        '.aceptar-cookies',
-        '#aceptarCookies',
-        '.acepto-cookies',
-        '[data-cookies-accept]',
-        '.cookie-accept-btn',
-      ],
-      contentSelectors: [
-        '#contenido',
-        '.contenido-principal',
-        '#main-content',
-        'article.content',
-        '.documento-contenido',
-      ],
-      navigationSelectors: [
-        '.navegacion-principal',
-        '#menu-principal',
-        'nav.main-nav',
-      ],
-      commonAuthType: 'none',
-      language: 'es',
-    },
-    lastUpdated: Date.now(),
-  },
-  {
-    name: 'us_gov',
-    domains: [
-      'uscis.gov',
-      'irs.gov',
-      'state.gov',
-      'ssa.gov',
-      'dhs.gov',
-      'travel.state.gov',
-      'cbp.gov',
-    ],
-    sharedPatterns: {
-      cookieBannerSelectors: [
-        '#cookie-consent-accept',
-        '.usa-banner__button',
-        '[data-analytics="cookie-accept"]',
-      ],
-      contentSelectors: [
-        'main#main-content',
-        '.usa-layout-docs__main',
-        'article.content',
-        '#content',
-      ],
-      navigationSelectors: [
-        '.usa-nav',
-        '#nav-primary',
-        'nav[aria-label="Primary navigation"]',
-      ],
-      commonAuthType: 'none',
-      language: 'en',
-    },
-    lastUpdated: Date.now(),
-  },
-  {
-    name: 'eu_gov',
-    domains: [
-      'ec.europa.eu',
-      'europa.eu',
-      'europarl.europa.eu',
-    ],
-    sharedPatterns: {
-      cookieBannerSelectors: [
-        '#cookie-consent-banner .accept',
-        '.cck-actions-accept',
-        '[data-ecl-cookie-consent-accept]',
-      ],
-      contentSelectors: [
-        '.ecl-page-body',
-        'main.ecl-container',
-        '#main-content',
-        'article.ecl-article',
-      ],
-      navigationSelectors: [
-        '.ecl-menu',
-        '.ecl-navigation-menu',
-      ],
-      commonAuthType: 'none',
-      language: 'en',
-    },
-    lastUpdated: Date.now(),
-  },
-];
 
 /** Serialized format of the learning engine data */
 interface LearningEngineData {
@@ -198,8 +98,8 @@ export class LearningEngine {
     });
     this.decayConfig = decayConfig;
 
-    // Initialize domain groups
-    for (const group of DOMAIN_GROUPS) {
+    // Initialize domain groups from config
+    for (const group of getDomainGroups()) {
       this.domainGroups.set(group.name, group);
     }
   }

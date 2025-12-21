@@ -160,7 +160,7 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 |----|------|--------|----------|-------|
 | CX-005 | Budget knobs | M | Features | Add `maxLatencyMs`, `maxCostTier`, `freshness` parameters |
 | CX-009 | Tier parity learning | M | Features | Learn APIs/structure from intelligence/lightweight tiers |
-| CX-010 | Config-driven heuristics | S | Debt | Domain groups/tier rules loaded from config |
+| CX-010 | Config-driven heuristics | S | Debt | Domain groups/tier rules loaded from config (DONE) |
 | CX-011 | Domain capability summary | S | Features | Tool or response section summarizing capabilities |
 | CX-012 | LLM onboarding spec | S | Documentation | Explain confidence, error taxonomy, trust contract |
 
