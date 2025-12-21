@@ -300,6 +300,18 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ---
 
+## Currently In Progress: SLA/Support Policy Draft (GTM-005)
+
+**Status:** In Progress
+
+**Goal:** Define enterprise support and uptime targets for the hosted service.
+
+| ID      | Task                     | Priority | Effort | Status      |
+|---------|--------------------------|----------|--------|-------------|
+| GTM-005 | SLA/support policy draft | Medium   | S      | In Progress |
+
+---
+
 ## Recently Completed: Pricing & Packaging Doc (GTM-004)
 
 **Status:** Complete
