@@ -1826,6 +1826,23 @@ export class ApiPatternRegistry {
 
         updatedPattern.updatedAt = Date.now();
         await this.persist();
+
+        // Emit pattern_transferred event for domain group learning (LI-005)
+        const sourcePatternId = updatedPattern.provenance?.sourcePatternId;
+        const sourceDomain = updatedPattern.provenance?.sourceDomain;
+        const similarity = (updatedPattern.provenance?.sourceMetadata as { similarity?: number } | undefined)?.similarity ?? 0;
+
+        if (sourcePatternId && sourceDomain) {
+          this.emit({
+            type: 'pattern_transferred',
+            sourcePatternId,
+            sourceDomain,
+            targetDomain: domain,
+            transferredPatternId: patternId,
+            success,
+            similarity,
+          });
+        }
       }
     }
   }

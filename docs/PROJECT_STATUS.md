@@ -293,7 +293,7 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 | LI-002 | Wire feedback loops for anti-patterns | Medium | M | Complete |
 | LI-003 | Add learning effectiveness metrics | High | M | Completed |
 | LI-004 | Real-world pattern validation suite | High | L | Complete |
-| LI-005 | Dynamic domain group learning | Medium | M | In Progress |
+| LI-005 | Dynamic domain group learning | Medium | M | Complete |
 | LI-006 | Semantic skill retrieval integration | Medium | S | Complete (PR #78) |
 
 **Evaluated and Rejected:**
@@ -343,6 +343,17 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for ful
 
 ### v0.5.0 (2025-12-21)
 
+- Added LI-005: Dynamic domain group learning
+  - New DomainGroupLearner module that learns domain groups from successful cross-domain transfers
+  - Tracks transfer history between domains and builds relationship graph
+  - Union-Find algorithm finds connected components to form domain groups
+  - Groups auto-register with heuristics-config when confidence threshold met
+  - New pattern_transferred event type for tracking transfer outcomes
+  - Persistence via PersistentStore for surviving restarts
+  - suggestRelatedDomains() for finding domains with successful transfers
+  - mergeIntoGroup() for expanding existing groups
+  - subscribeToRegistry() for automatic learning from ApiPatternRegistry events
+  - 27 new tests covering all learning and persistence functionality
 - Added LI-002: Wire feedback loops for anti-patterns
   - LearningEngine persists high-confidence anti-patterns (MIN_FAILURES_FOR_PERSISTENCE: 5)
   - Only persists permanent failure categories: auth_required, wrong_endpoint, validation_failed

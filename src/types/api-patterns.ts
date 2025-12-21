@@ -328,6 +328,15 @@ export type PatternLearningEvent =
   | {
       type: 'anti_pattern_created';
       antiPattern: AntiPattern;
+    }
+  | {
+      type: 'pattern_transferred';
+      sourcePatternId: string;
+      sourceDomain: string;
+      targetDomain: string;
+      transferredPatternId: string;
+      success: boolean;
+      similarity: number;
     };
 
 /**
