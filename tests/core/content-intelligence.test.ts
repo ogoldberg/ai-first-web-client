@@ -373,6 +373,246 @@ describe('ContentIntelligence', () => {
     });
   });
 
+  describe('VitePress Framework Extraction', () => {
+    it('should extract content from VitePress page data', async () => {
+      const pageData = {
+        title: 'VitePress Documentation',
+        description: 'VitePress is a static site generator powered by Vue and Vite. This documentation provides comprehensive guides for building beautiful documentation sites with VitePress. Learn about themes, customization, and deployment options.',
+        frontmatter: {
+          title: 'Getting Started',
+        },
+      };
+
+      const html = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>VitePress Docs</title>
+          <meta name="generator" content="VitePress v1.0.0">
+        </head>
+        <body>
+          <div id="app" data-server-rendered="true">
+            <div class="VPNav">Navigation</div>
+            <div class="VPContent">
+              <div class="VPDoc">
+                <h1>Getting Started</h1>
+                <p>Welcome to VitePress documentation.</p>
+              </div>
+            </div>
+          </div>
+          <script id="__VP_ROUTE_DATA__" type="application/json">${JSON.stringify(pageData)}</script>
+          <script src="/assets/chunks/VitePress.abc123.js"></script>
+        </body>
+        </html>
+      `;
+
+      mockFetch.mockResolvedValue(createHtmlResponse(html));
+
+      const result = await intelligence.extract('https://example.com/vitepress-docs', {
+        forceStrategy: 'framework:vitepress',
+      });
+
+      expect(result.meta.strategy).toBe('framework:vitepress');
+      expect(result.meta.confidence).toBe('high');
+      expect(result.content.text).toContain('VitePress');
+      expect(result.content.structured).toBeDefined();
+    });
+
+    it('should detect VitePress via generator meta tag', async () => {
+      const html = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>VitePress Site</title>
+          <meta name="generator" content="VitePress v1.2.0">
+        </head>
+        <body>
+          <div class="VPDoc">
+            <h1>VitePress Documentation</h1>
+            <p>This is a VitePress powered documentation site. VitePress is built on top of Vite and Vue.js, providing an excellent developer experience for creating documentation. The build process is lightning fast thanks to Vite. This content demonstrates VitePress content extraction capabilities for documentation sites that use Vue.js under the hood.</p>
+          </div>
+        </body>
+        </html>
+      `;
+
+      mockFetch.mockResolvedValue(createHtmlResponse(html));
+
+      const result = await intelligence.extract('https://example.com/vitepress-site', {
+        forceStrategy: 'framework:vitepress',
+      });
+
+      expect(result.meta.strategy).toBe('framework:vitepress');
+    });
+
+    it('should detect VitePress via __VP_HASH_MAP__', async () => {
+      const html = `
+        <!DOCTYPE html>
+        <html>
+        <head><title>VitePress Hash</title></head>
+        <body>
+          <div class="VPContent">
+            <div class="VPDoc">
+              <h1>Hash Map Detection</h1>
+              <p>VitePress uses a hash map for efficient page routing and module loading. This approach enables instant page transitions without full page reloads. The content extraction system should detect VitePress applications through the presence of __VP_HASH_MAP__ in the page source. This ensures proper framework identification and extraction.</p>
+            </div>
+          </div>
+          <script>window.__VP_HASH_MAP__ = JSON.parse('{"index":"abc123"}')</script>
+        </body>
+        </html>
+      `;
+
+      mockFetch.mockResolvedValue(createHtmlResponse(html));
+
+      const result = await intelligence.extract('https://example.com/vitepress-hash', {
+        forceStrategy: 'framework:vitepress',
+      });
+
+      expect(result.meta.strategy).toBe('framework:vitepress');
+    });
+
+    it('should include framework:vitepress in available strategies', () => {
+      const strategies = ContentIntelligence.getAvailableStrategies();
+      const vitepressStrategy = strategies.find(s => s.strategy === 'framework:vitepress');
+
+      expect(vitepressStrategy).toBeDefined();
+      expect(vitepressStrategy?.available).toBe(true);
+    });
+  });
+
+  describe('VuePress Framework Extraction', () => {
+    it('should extract content from VuePress SSR context', async () => {
+      const ssrContext = {
+        title: 'VuePress Guide',
+        description: 'VuePress is a minimalistic static site generator with a Vue-powered theming system. This guide covers installation, configuration, and customization of VuePress sites. Learn how to create beautiful documentation with markdown and Vue components.',
+        path: '/guide/',
+      };
+
+      const html = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>VuePress</title>
+          <meta name="generator" content="VuePress v2.0.0">
+        </head>
+        <body>
+          <div id="app" data-server-rendered="true">
+            <div class="theme-default-content">
+              <h1>VuePress Guide</h1>
+              <p>Welcome to VuePress.</p>
+            </div>
+          </div>
+          <script>window.__VUEPRESS_SSR_CONTEXT__ = ${JSON.stringify(ssrContext)}</script>
+        </body>
+        </html>
+      `;
+
+      mockFetch.mockResolvedValue(createHtmlResponse(html));
+
+      const result = await intelligence.extract('https://example.com/vuepress-docs', {
+        forceStrategy: 'framework:vuepress',
+      });
+
+      expect(result.meta.strategy).toBe('framework:vuepress');
+      expect(result.meta.confidence).toBe('high');
+      expect(result.content.text).toContain('VuePress');
+      expect(result.content.structured).toBeDefined();
+    });
+
+    it('should detect VuePress via generator meta tag', async () => {
+      const html = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>VuePress Site</title>
+          <meta name="generator" content="VuePress v2.0.0-beta.60">
+        </head>
+        <body>
+          <div class="theme-default-content">
+            <h1>VuePress Documentation</h1>
+            <p>This is a VuePress powered documentation site. VuePress v2 is built on Vue 3 and Vite. It provides a great developer experience with hot module replacement and fast builds. The content here demonstrates VuePress content extraction from theme-default-content containers.</p>
+          </div>
+        </body>
+        </html>
+      `;
+
+      mockFetch.mockResolvedValue(createHtmlResponse(html));
+
+      const result = await intelligence.extract('https://example.com/vuepress-site', {
+        forceStrategy: 'framework:vuepress',
+      });
+
+      expect(result.meta.strategy).toBe('framework:vuepress');
+    });
+
+    it('should detect VuePress v1 via sidebar classes', async () => {
+      const html = `
+        <!DOCTYPE html>
+        <html>
+        <head><title>VuePress v1</title></head>
+        <body>
+          <div class="sidebar-links">
+            <a href="/guide/">Guide</a>
+          </div>
+          <div class="page">
+            <div class="content">
+              <h1>VuePress Version 1</h1>
+              <p>VuePress 1.x uses Vue 2 under the hood. It has different class names compared to VuePress 2. The sidebar-links class is a distinctive marker for VuePress v1 sites. Content extraction should work with both versions of VuePress. This paragraph provides enough content for validation.</p>
+            </div>
+            <div class="page-edit">Edit this page</div>
+          </div>
+        </body>
+        </html>
+      `;
+
+      mockFetch.mockResolvedValue(createHtmlResponse(html));
+
+      const result = await intelligence.extract('https://example.com/vuepress-v1', {
+        forceStrategy: 'framework:vuepress',
+      });
+
+      expect(result.meta.strategy).toBe('framework:vuepress');
+    });
+
+    it('should handle VuePress without SSR context gracefully', async () => {
+      // When VuePress is detected but there's no SSR context data,
+      // it should fall through to content extraction
+      const html = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>VuePress SPA</title>
+          <meta name="generator" content="VuePress v2.0.0">
+        </head>
+        <body data-server-rendered="true">
+          <div class="vp-sidebar">Sidebar</div>
+          <div class="theme-default-content">
+            <h1>Welcome to VuePress</h1>
+            <p>This VuePress site does not have SSR context data. However, the framework detection should still recognize it as a VuePress application based on the generator meta tag and CSS class patterns. The extraction will use content containers as fallback.</p>
+            <p>Additional paragraph with more content to ensure the minimum character threshold is met for successful extraction. VuePress is an excellent choice for documentation sites and blogs.</p>
+          </div>
+        </body>
+        </html>
+      `;
+
+      mockFetch.mockResolvedValue(createHtmlResponse(html));
+
+      const result = await intelligence.extract('https://example.com/vuepress-spa', {
+        forceStrategy: 'framework:vuepress',
+      });
+
+      expect(result.meta.strategy).toBe('framework:vuepress');
+      expect(result.error).toBeUndefined();
+    });
+
+    it('should include framework:vuepress in available strategies', () => {
+      const strategies = ContentIntelligence.getAvailableStrategies();
+      const vuepressStrategy = strategies.find(s => s.strategy === 'framework:vuepress');
+
+      expect(vuepressStrategy).toBeDefined();
+      expect(vuepressStrategy?.available).toBe(true);
+    });
+  });
+
   describe('Structured Data Extraction', () => {
     it('should extract content from JSON-LD', async () => {
       const jsonLd = {
