@@ -281,6 +281,18 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ---
 
+## Current Task: Usage Metering & Tier Cost Reporting (GTM-001)
+
+**Status:** In Progress
+
+**Goal:** Collect per-request tier usage and cost signals for analytics and billing.
+
+| ID      | Task                               | Priority | Effort | Status      |
+|---------|------------------------------------|----------|--------|-------------|
+| GTM-001 | Usage metering & tier cost reporting | Medium   | M      | In Progress |
+
+---
+
 ## Recently Completed: Extraction Quality Benchmarking (O-006)
 
 **Status:** Complete (PR #83)
