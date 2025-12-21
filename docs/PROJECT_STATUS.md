@@ -280,9 +280,11 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ---
 
-## Current Task: None (backlog ready)
+## Current Task: CX-012 (LLM Onboarding Spec)
 
-**Status:** Ready for next task
+**Status:** In Progress
+
+**Task:** Document confidence levels, error taxonomy, and trust contract for LLM clients.
 
 **Recently completed:**
 
