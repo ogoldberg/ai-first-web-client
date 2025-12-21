@@ -64,6 +64,12 @@ import {
   createDebugTrace,
   getDebugTraceRecorder,
 } from '../utils/debug-trace-recorder.js';
+import { convertToHar } from '../utils/har-converter.js';
+import type {
+  Har,
+  HarExportOptions,
+  HarExportResult,
+} from '../types/har.js';
 
 // Procedural memory thresholds
 const SKILL_APPLICATION_THRESHOLD = 0.8;  // Minimum similarity to auto-apply a skill
@@ -2134,6 +2140,107 @@ export class SmartBrowser {
       logger.smartBrowser.error('Screenshot capture failed', { url, error: message });
 
       return this.createScreenshotErrorResponse(url, options, startTime, message);
+    } finally {
+      // Ensure page is always closed to prevent resource leaks
+      if (page) {
+        await page.close();
+      }
+    }
+  }
+
+  /**
+   * Create an error response for HAR export
+   */
+  private createHarErrorResponse(
+    url: string,
+    startTime: number,
+    errorMessage: string
+  ): HarExportResult {
+    return {
+      success: false,
+      url,
+      finalUrl: url,
+      title: '',
+      entriesCount: 0,
+      timestamp: new Date().toISOString(),
+      durationMs: Date.now() - startTime,
+      error: errorMessage,
+    };
+  }
+
+  /**
+   * Export HAR (HTTP Archive) for a URL
+   *
+   * This method navigates to the URL using Playwright (required for network capture)
+   * and exports the network traffic in HAR 1.2 format.
+   *
+   * @param url - The URL to browse and capture network traffic
+   * @param options - HAR export options
+   * @returns HAR export result with network data
+   */
+  async exportHar(
+    url: string,
+    options: HarExportOptions & {
+      sessionProfile?: string;
+      waitForSelector?: string;
+    } = {}
+  ): Promise<HarExportResult> {
+    const startTime = Date.now();
+
+    // SSRF Protection: Validate URL before any processing
+    validateUrlOrThrow(url);
+
+    // Check if Playwright is available
+    if (!BrowserManager.isPlaywrightAvailable()) {
+      const error = BrowserManager.getPlaywrightError();
+      return this.createHarErrorResponse(
+        url,
+        startTime,
+        `HAR export requires Playwright. ${error || 'Install with: npm install playwright && npx playwright install chromium'}`
+      );
+    }
+
+    let page: Page | undefined;
+    try {
+      // Navigate to the page using BrowserManager with network capture
+      const browseResult = await this.browserManager.browse(url, {
+        profile: options.sessionProfile,
+        waitFor: 'networkidle',
+        captureNetwork: true,
+      });
+      page = browseResult.page;
+
+      // Wait for specific element if requested
+      if (options.waitForSelector) {
+        await page.waitForSelector(options.waitForSelector, { timeout: TIMEOUTS.SELECTOR_WAIT });
+      }
+
+      // Get page info
+      const finalUrl = page.url();
+      const title = await page.title();
+
+      // Convert network requests to HAR format
+      const har = convertToHar(browseResult.network, {
+        includeResponseBodies: options.includeResponseBodies ?? true,
+        maxBodySize: options.maxBodySize,
+        pageTitle: title || options.pageTitle || 'Page',
+      });
+
+      return {
+        success: true,
+        har,
+        url,
+        finalUrl,
+        title,
+        entriesCount: har.log.entries.length,
+        timestamp: new Date().toISOString(),
+        durationMs: Date.now() - startTime,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.smartBrowser.error('HAR export failed', { url, error: message });
+
+      return this.createHarErrorResponse(url, startTime, message);
     } finally {
       // Ensure page is always closed to prevent resource leaks
       if (page) {

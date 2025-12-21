@@ -380,6 +380,65 @@ Returns base64-encoded PNG image with metadata (URL, title, viewport, timing).`,
       },
 
       // ============================================
+      // HAR EXPORT
+      // ============================================
+      {
+        name: 'export_har',
+        description: `Export HAR (HTTP Archive) file for network debugging.
+
+This tool navigates to a URL and captures all network traffic, returning it in HAR 1.2 format.
+Useful for:
+- Network debugging and analysis
+- Performance profiling
+- Identifying slow requests
+- Capturing API call patterns
+- Debugging authentication flows
+
+**Requirements:**
+- Requires Playwright to be installed (full browser rendering)
+- Cannot use intelligence or lightweight tiers
+
+**Options:**
+- includeResponseBodies: Include response body content (default: true)
+- maxBodySize: Maximum size for response bodies (default: 1MB)
+- pageTitle: Custom title for the HAR page entry
+- waitForSelector: Wait for element before capturing
+- sessionProfile: Use authenticated session
+
+Returns HAR 1.2 JSON with all network requests, responses, and timings.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            url: {
+              type: 'string',
+              description: 'URL to browse and capture network traffic',
+            },
+            includeResponseBodies: {
+              type: 'boolean',
+              description: 'Include response body content in HAR (default: true)',
+            },
+            maxBodySize: {
+              type: 'number',
+              description: 'Maximum size in bytes for response bodies (default: 1MB)',
+            },
+            pageTitle: {
+              type: 'string',
+              description: 'Custom title for the HAR page entry',
+            },
+            waitForSelector: {
+              type: 'string',
+              description: 'CSS selector to wait for before capturing HAR',
+            },
+            sessionProfile: {
+              type: 'string',
+              description: 'Session profile for authenticated pages (default: "default")',
+            },
+          },
+          required: ['url'],
+        },
+      },
+
+      // ============================================
       // LEARNING MANAGEMENT
       // ============================================
       {
@@ -1731,6 +1790,34 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           image: result.image,
           mimeType: result.mimeType,
           viewport: result.viewport,
+          timestamp: result.timestamp,
+          durationMs: result.durationMs,
+        });
+      }
+
+      // ============================================
+      // HAR EXPORT
+      // ============================================
+      case 'export_har': {
+        const result = await smartBrowser.exportHar(args.url as string, {
+          includeResponseBodies: args.includeResponseBodies as boolean | undefined,
+          maxBodySize: args.maxBodySize as number | undefined,
+          pageTitle: args.pageTitle as string | undefined,
+          waitForSelector: args.waitForSelector as string | undefined,
+          sessionProfile: args.sessionProfile as string | undefined,
+        });
+
+        if (!result.success) {
+          return errorResponse(result.error || 'HAR export failed');
+        }
+
+        // Return HAR data with metadata
+        return jsonResponse({
+          url: result.url,
+          finalUrl: result.finalUrl,
+          title: result.title,
+          har: result.har,
+          entriesCount: result.entriesCount,
           timestamp: result.timestamp,
           durationMs: result.durationMs,
         });
