@@ -254,6 +254,45 @@ Use this to understand how well the browser knows a domain before browsing.`,
           required: ['domain'],
         },
       },
+      {
+        name: 'get_domain_capabilities',
+        description: `Get comprehensive capability summary for a domain (CX-011).
+
+Returns an LLM-friendly summary of what the browser can do for a domain:
+
+**Capabilities** (boolean flags):
+- canBypassBrowser: Can make direct API calls without rendering
+- hasLearnedPatterns: Has discovered API patterns
+- hasActiveSession: Has saved authentication
+- hasSkills: Has learned procedural skills
+- hasPagination: Can navigate paginated content
+- hasContentSelectors: Has learned content extraction patterns
+
+**Confidence**:
+- level: high/medium/low/unknown
+- score: 0.0-1.0 success rate
+- basis: Explanation of confidence assessment
+
+**Performance**:
+- preferredTier: intelligence/lightweight/playwright
+- avgResponseTimeMs: Average response time
+- successRate: Overall success rate
+
+**Recommendations**:
+- Actionable suggestions for best results
+
+Use this before browsing to understand domain capabilities and choose optimal strategies.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            domain: {
+              type: 'string',
+              description: 'Domain to check (e.g., "boe.es", "uscis.gov")',
+            },
+          },
+          required: ['domain'],
+        },
+      },
 
       // ============================================
       // LEARNING MANAGEMENT
@@ -1173,6 +1212,11 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           ...intelligence,
           recommendations: getRecommendations(intelligence),
         });
+      }
+
+      case 'get_domain_capabilities': {
+        const capabilities = await smartBrowser.getDomainCapabilities(args.domain as string);
+        return jsonResponse(capabilities);
       }
 
       // ============================================

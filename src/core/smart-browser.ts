@@ -1330,6 +1330,161 @@ export class SmartBrowser {
     };
   }
 
+  /**
+   * Get comprehensive capability summary for a domain (CX-011)
+   *
+   * This provides an LLM-friendly summary of what the system can do
+   * for a given domain, helping the LLM make informed decisions.
+   */
+  async getDomainCapabilities(domain: string): Promise<{
+    domain: string;
+    capabilities: {
+      canBypassBrowser: boolean;
+      hasLearnedPatterns: boolean;
+      hasActiveSession: boolean;
+      hasSkills: boolean;
+      hasPagination: boolean;
+      hasContentSelectors: boolean;
+    };
+    confidence: {
+      level: 'high' | 'medium' | 'low' | 'unknown';
+      score: number;
+      basis: string;
+    };
+    performance: {
+      preferredTier: string;
+      avgResponseTimeMs: number | null;
+      successRate: number;
+    };
+    recommendations: string[];
+    details: {
+      apiPatternCount: number;
+      skillCount: number;
+      selectorCount: number;
+      validatorCount: number;
+      paginationPatternCount: number;
+      recentFailureCount: number;
+      domainGroup: string | null;
+    };
+  }> {
+    const entry = this.learningEngine.getEntry(domain);
+    const group = this.learningEngine.getDomainGroup(domain);
+    const tierPref = this.tieredFetcher.getDomainPreference(domain);
+    const skillsByDomain = this.proceduralMemory.getSkillsByDomain();
+    const skills = skillsByDomain.get(domain) ?? [];
+    const hasSession = this.sessionManager.hasSession(domain);
+
+    // Calculate capabilities
+    const apiPatternCount = entry?.apiPatterns.length ?? 0;
+    const bypassablePatterns = entry?.apiPatterns.filter(
+      p => p.confidence === 'high' || p.confidence === 'medium'
+    ).length ?? 0;
+    const canBypassBrowser = bypassablePatterns > 0;
+    const hasLearnedPatterns = apiPatternCount > 0;
+    const hasSkills = skills.length > 0;
+    const hasPagination = entry
+      ? Object.keys(entry.paginationPatterns as Record<string, unknown>).length > 0
+      : false;
+    const selectorCount = entry?.selectorChains.reduce((sum, c) => sum + c.selectors.length, 0) ?? 0;
+    const hasContentSelectors = selectorCount > 0;
+    const validatorCount = entry?.validators.length ?? 0;
+    const recentFailureCount = entry?.recentFailures.length ?? 0;
+
+    // Calculate confidence level
+    const successRate = entry?.overallSuccessRate ?? 1.0;
+    let confidenceLevel: 'high' | 'medium' | 'low' | 'unknown';
+    let confidenceBasis: string;
+
+    if (!entry) {
+      confidenceLevel = 'unknown';
+      confidenceBasis = 'No prior interactions with this domain';
+    } else if (successRate >= 0.9 && apiPatternCount >= 2) {
+      confidenceLevel = 'high';
+      confidenceBasis = `${apiPatternCount} patterns with ${Math.round(successRate * 100)}% success rate`;
+    } else if (successRate >= 0.7 || apiPatternCount >= 1) {
+      confidenceLevel = 'medium';
+      confidenceBasis = `${apiPatternCount} patterns with ${Math.round(successRate * 100)}% success rate`;
+    } else {
+      confidenceLevel = 'low';
+      confidenceBasis = `Limited patterns (${apiPatternCount}) or low success rate (${Math.round(successRate * 100)}%)`;
+    }
+
+    // Performance info
+    const preferredTier = tierPref?.preferredTier ?? 'intelligence';
+    const avgResponseTimeMs = tierPref?.avgResponseTime ?? null;
+
+    // Build recommendations
+    const recommendations: string[] = [];
+
+    if (canBypassBrowser) {
+      recommendations.push('API patterns available - can bypass browser rendering for faster access');
+    }
+
+    if (hasSession) {
+      recommendations.push('Active session available - authenticated requests supported');
+    } else if (entry?.apiPatterns.some(p => p.authType === 'cookie')) {
+      recommendations.push('Authentication required - save a session first for authenticated access');
+    }
+
+    if (hasSkills) {
+      recommendations.push(`${skills.length} skill(s) available for automated workflows`);
+    }
+
+    if (hasPagination) {
+      recommendations.push('Pagination patterns learned - can navigate multi-page content');
+    }
+
+    if (group) {
+      recommendations.push(`Part of ${group.name} domain group - shared patterns may apply`);
+    }
+
+    if (recentFailureCount > 0) {
+      recommendations.push(`${recentFailureCount} recent failure(s) - may need alternative approach`);
+    }
+
+    if (preferredTier === 'playwright') {
+      recommendations.push('Full browser required - this domain needs JavaScript rendering');
+    }
+
+    if (recommendations.length === 0) {
+      recommendations.push('New domain - will learn patterns as you browse');
+    }
+
+    return {
+      domain,
+      capabilities: {
+        canBypassBrowser,
+        hasLearnedPatterns,
+        hasActiveSession: hasSession,
+        hasSkills,
+        hasPagination,
+        hasContentSelectors,
+      },
+      confidence: {
+        level: confidenceLevel,
+        score: successRate,
+        basis: confidenceBasis,
+      },
+      performance: {
+        preferredTier,
+        avgResponseTimeMs,
+        successRate,
+      },
+      recommendations,
+      details: {
+        apiPatternCount,
+        skillCount: skills.length,
+        selectorCount,
+        validatorCount,
+        paginationPatternCount: hasPagination
+          ? Object.keys(entry!.paginationPatterns as Record<string, unknown>).length
+          : 0,
+        recentFailureCount,
+        domainGroup: group?.name ?? null,
+      },
+    };
+  }
+
   // ============================================
   // PROCEDURAL MEMORY / SKILL METHODS
   // ============================================
