@@ -55,7 +55,9 @@ describeIf('Live Pattern Validation', () => {
   afterAll(async () => {
     // Clean up temp directory
     if (tempDir) {
-      await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+      await fs.rm(tempDir, { recursive: true, force: true }).catch((err) => {
+        console.warn(`Failed to clean up temp directory ${tempDir}:`, err);
+      });
     }
   });
 
@@ -210,12 +212,22 @@ describeIf('Live Pattern Validation', () => {
   // ============================================
   describe('Learned Pattern Application', () => {
     let testRegistry: ApiPatternRegistry;
+    let testDir: string;
 
     beforeEach(async () => {
       // Create fresh registry for each test
-      const testDir = await fs.mkdtemp(path.join(os.tmpdir(), 'pattern-test-'));
+      testDir = await fs.mkdtemp(path.join(os.tmpdir(), 'pattern-test-'));
       testRegistry = new ApiPatternRegistry({ storagePath: testDir });
       await testRegistry.initialize();
+    });
+
+    afterEach(async () => {
+      // Clean up temp directory
+      if (testDir) {
+        await fs.rm(testDir, { recursive: true, force: true }).catch((err) => {
+          console.warn(`Failed to clean up temp directory ${testDir}:`, err);
+        });
+      }
     });
 
     it('should successfully apply a learned registry-lookup pattern', async () => {
@@ -411,11 +423,21 @@ describeIf('Live Pattern Validation', () => {
   // ============================================
   describe('Pattern Metrics and Staleness', () => {
     let testRegistry: ApiPatternRegistry;
+    let testDir: string;
 
     beforeEach(async () => {
-      const testDir = await fs.mkdtemp(path.join(os.tmpdir(), 'pattern-metrics-'));
+      testDir = await fs.mkdtemp(path.join(os.tmpdir(), 'pattern-metrics-'));
       testRegistry = new ApiPatternRegistry({ storagePath: testDir });
       await testRegistry.initialize();
+    });
+
+    afterEach(async () => {
+      // Clean up temp directory
+      if (testDir) {
+        await fs.rm(testDir, { recursive: true, force: true }).catch((err) => {
+          console.warn(`Failed to clean up temp directory ${testDir}:`, err);
+        });
+      }
     });
 
     it('should track success metrics for patterns', () => {
@@ -591,7 +613,9 @@ describeIf('Live Pattern Validation', () => {
       expect(found!.lastUsed).toBeDefined();
       expect(typeof found!.createdAt).toBe('number');
 
-      await fs.rm(testDir, { recursive: true, force: true }).catch(() => {});
+      await fs.rm(testDir, { recursive: true, force: true }).catch((err) => {
+        console.warn(`Failed to clean up temp directory ${testDir}:`, err);
+      });
     });
 
     it('should support getting patterns by domain', () => {
@@ -603,8 +627,19 @@ describeIf('Live Pattern Validation', () => {
         return acc;
       }, {} as Record<string, LearnedApiPattern[]>);
 
-      // Verify we can group patterns by domain
-      expect(typeof byDomain).toBe('object');
+      // Verify we can group patterns by domain with meaningful assertions
+      expect(byDomain).toBeDefined();
+      expect(Object.keys(byDomain).length).toBeGreaterThanOrEqual(0);
+
+      // Verify the structure is correct - each domain key should map to an array of patterns
+      for (const [domain, domainPatterns] of Object.entries(byDomain)) {
+        expect(typeof domain).toBe('string');
+        expect(Array.isArray(domainPatterns)).toBe(true);
+        // Each pattern in the array should have the matching domain
+        for (const pattern of domainPatterns) {
+          expect(pattern.domain).toBe(domain);
+        }
+      }
     });
   });
 });
