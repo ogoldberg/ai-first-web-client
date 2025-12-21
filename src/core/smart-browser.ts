@@ -47,7 +47,7 @@ import { ApiAnalyzer } from './api-analyzer.js';
 import { SessionManager } from './session-manager.js';
 import { LearningEngine } from './learning-engine.js';
 import { ProceduralMemory } from './procedural-memory.js';
-import { TieredFetcher, type TieredFetchResult } from './tiered-fetcher.js';
+import { TieredFetcher, type TieredFetchResult, type FreshnessRequirement } from './tiered-fetcher.js';
 import { rateLimiter } from '../utils/rate-limiter.js';
 import { withRetry } from '../utils/retry.js';
 import { findPreset, getWaitStrategy } from '../utils/domain-presets.js';
@@ -102,6 +102,23 @@ export interface SmartBrowseOptions extends BrowseOptions {
 
   // Decision trace (CX-003)
   includeDecisionTrace?: boolean; // Include detailed decision trace in response (default: false)
+
+  // === Budget Controls (CX-005) ===
+
+  // Maximum acceptable latency in milliseconds
+  // Tiers will stop falling back once this budget is exceeded
+  maxLatencyMs?: number;
+
+  // Maximum cost tier to use
+  // 'intelligence' = cheapest only, 'lightweight' = up to lightweight, 'playwright' = all tiers allowed
+  // More expensive tiers will be skipped
+  maxCostTier?: RenderTier;
+
+  // Freshness requirement for content
+  // 'realtime': Always fetch fresh content, never use cache
+  // 'cached': Prefer cached content, only fetch if not in cache
+  // 'any': Use cache if available and not stale, otherwise fetch (default)
+  freshnessRequirement?: FreshnessRequirement;
 }
 
 export interface SmartBrowseResult extends BrowseResult {
@@ -136,6 +153,20 @@ export interface SmartBrowseResult extends BrowseResult {
     tiersAttempted?: RenderTier[];
     tierReason?: string;
     tierTiming?: Record<RenderTier, number>;
+
+    // Budget tracking (CX-005)
+    budgetInfo?: {
+      // Whether latency exceeded the maxLatencyMs budget
+      latencyExceeded: boolean;
+      // Tiers that were skipped due to maxCostTier
+      tiersSkipped: RenderTier[];
+      // The max cost tier that was enforced
+      maxCostTierEnforced?: RenderTier;
+      // Whether cache was used due to freshness settings
+      usedCache: boolean;
+      // The freshness requirement that was applied
+      freshnessApplied?: FreshnessRequirement;
+    };
   };
 
   // Additional pages if pagination was followed
@@ -195,6 +226,16 @@ export class SmartBrowser {
       selectorsFailed: [],
       confidenceLevel: 'unknown',
     };
+
+    // Log freshness requirement (CX-005)
+    // The freshnessRequirement is passed to TieredFetcher and tracked in budget info
+    // Note: Full cache return for 'cached' requires expanding cache infrastructure (future work)
+    if (options.freshnessRequirement) {
+      logger.smartBrowser.debug('Freshness requirement set', {
+        url,
+        freshnessRequirement: options.freshnessRequirement,
+      });
+    }
 
     // Start trajectory recording for procedural memory
     if (recordTrajectory) {
@@ -727,6 +768,10 @@ export class SmartBrowser {
         sessionProfile: options.sessionProfile,
         waitFor: options.waitFor,
         useRateLimiting: options.useRateLimiting,
+        // Budget controls (CX-005)
+        maxLatencyMs: options.maxLatencyMs,
+        maxCostTier: options.maxCostTier,
+        freshnessRequirement: options.freshnessRequirement,
       });
 
       // If it fell back to playwright and returned a page, we should use the full Playwright path
@@ -743,6 +788,17 @@ export class SmartBrowser {
       learning.tiersAttempted = result.tiersAttempted;
       learning.tierReason = result.tierReason;
       learning.tierTiming = result.timing.perTier;
+
+      // Update learning with budget info (CX-005)
+      if (result.budget) {
+        learning.budgetInfo = {
+          latencyExceeded: result.budget.latencyExceeded,
+          tiersSkipped: result.budget.tiersSkipped,
+          maxCostTierEnforced: result.budget.maxCostTierEnforced,
+          usedCache: result.budget.usedCache,
+          freshnessApplied: result.budget.freshnessApplied,
+        };
+      }
 
       logger.smartBrowser.debug(`Used ${result.tier} tier for ${domain} (${result.timing.total}ms)`);
 

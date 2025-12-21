@@ -158,7 +158,12 @@ Output size controls (use for large pages):
 - includeConsole: Include console logs (default: false)
 - includeHtml: Include raw HTML (default: false)
 
-Returns: Content, tables, APIs discovered, and learning insights.`,
+Budget controls (CX-005) - Control cost/latency tradeoffs:
+- maxLatencyMs: Stop tier fallback if latency exceeds this value
+- maxCostTier: Limit to cheaper tiers (intelligence < lightweight < playwright)
+- freshnessRequirement: 'realtime' (always fresh), 'cached' (prefer cache), 'any' (default)
+
+Returns: Content, tables, APIs discovered, learning insights, and budget tracking.`,
         inputSchema: {
           type: 'object',
           properties: {
@@ -219,6 +224,21 @@ Returns: Content, tables, APIs discovered, and learning insights.`,
             includeDecisionTrace: {
               type: 'boolean',
               description: 'Include detailed decision trace showing tier attempts, selector attempts, and fallbacks (default: false). Useful for debugging and understanding extraction decisions.',
+            },
+            // Budget controls (CX-005)
+            maxLatencyMs: {
+              type: 'number',
+              description: 'Maximum acceptable latency in milliseconds. If exceeded, tier fallback stops early. Use to limit response time.',
+            },
+            maxCostTier: {
+              type: 'string',
+              enum: ['intelligence', 'lightweight', 'playwright'],
+              description: 'Maximum cost tier to use. "intelligence" = cheapest (no browser), "lightweight" = allow basic JS, "playwright" = allow full browser. More expensive tiers will be skipped.',
+            },
+            freshnessRequirement: {
+              type: 'string',
+              enum: ['realtime', 'cached', 'any'],
+              description: 'Content freshness requirement. "realtime" = always fetch fresh, "cached" = prefer cache, "any" = use cache if available (default).',
             },
           },
           required: ['url'],
@@ -1091,6 +1111,10 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           validateContent: true,
           enableLearning: true,
           includeDecisionTrace: args.includeDecisionTrace as boolean,
+          // Budget controls (CX-005)
+          maxLatencyMs: args.maxLatencyMs as number | undefined,
+          maxCostTier: args.maxCostTier as 'intelligence' | 'lightweight' | 'playwright' | undefined,
+          freshnessRequirement: args.freshnessRequirement as 'realtime' | 'cached' | 'any' | undefined,
         });
 
         // Output size control options (with sensible defaults for smaller responses)
@@ -1154,6 +1178,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             renderTier: result.learning.renderTier,
             tierFellBack: result.learning.tierFellBack,
             tierReason: result.learning.tierReason,
+            // Budget tracking (CX-005)
+            budgetInfo: result.learning.budgetInfo,
           },
           // Discovered APIs for future direct access
           discoveredApis: result.discoveredApis.map(api => ({

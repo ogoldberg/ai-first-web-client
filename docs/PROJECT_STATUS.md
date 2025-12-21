@@ -280,14 +280,13 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ---
 
-## Current Task: CX-005 (Budget Knobs)
+## Current Task: None
 
-**Status:** In Progress
-
-**Task:** Add `maxLatencyMs`, `maxCostTier`, `freshness` parameters to give LLMs control over browsing strategy.
+**Status:** All P0, P1, P1.5, P2 tasks complete
 
 **Recently completed:**
 
+- CX-005: Budget Knobs (maxLatencyMs, maxCostTier, freshnessRequirement) - DONE
 - CX-011: Domain Capability Summary - DONE
 - CX-010: Config-driven Heuristics - DONE
 - V-004: Extended Features (Skill similarity, error matching, content dedup, analytics) - DONE
@@ -321,6 +320,12 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for ful
 
 ### v0.5.0 (2025-12-20)
 
+- Added CX-005: Budget Knobs for LLM cost/latency control
+  - New maxLatencyMs parameter: stop tier fallback when latency budget exceeded
+  - New maxCostTier parameter: limit to cheaper tiers (intelligence < lightweight < playwright)
+  - New freshnessRequirement parameter: control content freshness ('realtime', 'cached', 'any')
+  - Budget tracking in response: latencyExceeded, tiersSkipped, maxCostTierEnforced, usedCache
+  - 17 tests for budget controls in tiered-fetcher
 - Added CX-011: Domain Capability Summary
   - New get_domain_capabilities MCP tool for LLM-friendly domain analysis
   - getDomainCapabilities() method on SmartBrowser

@@ -466,4 +466,169 @@ describe('TieredFetcher', () => {
       expect(result.tiersAttempted[0]).toBe('playwright');
     });
   });
+
+  // ============================================
+  // Budget Controls (CX-005)
+  // ============================================
+  describe('budget controls (CX-005)', () => {
+    describe('maxCostTier', () => {
+      it('should skip expensive tiers when maxCostTier=intelligence', async () => {
+        // Make intelligence tier fail
+        vi.spyOn(mockContentIntelligence, 'extract').mockRejectedValue(new Error('Intelligence tier failed'));
+        vi.spyOn(mockLightweightRenderer, 'render').mockResolvedValue(createLightweightResult());
+
+        // With maxCostTier=intelligence, lightweight should be skipped
+        await expect(
+          fetcher.fetch('https://example.com', { maxCostTier: 'intelligence' })
+        ).rejects.toThrow();
+
+        // Only intelligence should have been attempted
+        expect(mockContentIntelligence.extract).toHaveBeenCalled();
+        expect(mockLightweightRenderer.render).not.toHaveBeenCalled();
+      });
+
+      it('should allow lightweight tier when maxCostTier=lightweight', async () => {
+        // Make intelligence tier fail
+        vi.spyOn(mockContentIntelligence, 'extract').mockRejectedValue(new Error('Intelligence tier failed'));
+        vi.spyOn(mockLightweightRenderer, 'render').mockResolvedValue(createLightweightResult());
+
+        const result = await fetcher.fetch('https://example.com', { maxCostTier: 'lightweight' });
+
+        // Should fall back to lightweight but not playwright
+        expect(result.tier).toBe('lightweight');
+        expect(mockBrowserManager.browse).not.toHaveBeenCalled();
+      });
+
+      it('should skip playwright when maxCostTier=lightweight', async () => {
+        // Make intelligence and lightweight tiers fail
+        vi.spyOn(mockContentIntelligence, 'extract').mockRejectedValue(new Error('Intelligence failed'));
+        vi.spyOn(mockLightweightRenderer, 'render').mockRejectedValue(new Error('Lightweight failed'));
+
+        // With maxCostTier=lightweight, playwright should be skipped
+        await expect(
+          fetcher.fetch('https://example.com', { maxCostTier: 'lightweight' })
+        ).rejects.toThrow();
+
+        expect(mockBrowserManager.browse).not.toHaveBeenCalled();
+      });
+
+      it('should track tiersSkipped in budget info', async () => {
+        vi.spyOn(mockContentIntelligence, 'extract').mockResolvedValue(createContentResult());
+
+        const result = await fetcher.fetch('https://example.com', { maxCostTier: 'intelligence' });
+
+        expect(result.budget).toBeDefined();
+        expect(result.budget!.tiersSkipped).toContain('lightweight');
+        expect(result.budget!.tiersSkipped).toContain('playwright');
+        expect(result.budget!.maxCostTierEnforced).toBe('intelligence');
+      });
+
+      it('should allow all tiers when maxCostTier=playwright', async () => {
+        vi.spyOn(mockContentIntelligence, 'extract').mockResolvedValue(createContentResult());
+
+        const result = await fetcher.fetch('https://example.com', { maxCostTier: 'playwright' });
+
+        // No tiers should be skipped
+        expect(result.budget?.tiersSkipped).toHaveLength(0);
+      });
+
+      it('should use all tiers when no maxCostTier set', async () => {
+        vi.spyOn(mockContentIntelligence, 'extract').mockResolvedValue(createContentResult());
+
+        const result = await fetcher.fetch('https://example.com');
+
+        // No tiers should be skipped
+        expect(result.budget?.tiersSkipped).toHaveLength(0);
+      });
+    });
+
+    describe('maxLatencyMs', () => {
+      it('should track latencyExceeded in budget info when exceeded', async () => {
+        // Simulate slow extraction
+        vi.spyOn(mockContentIntelligence, 'extract').mockImplementation(async () => {
+          await new Promise(resolve => setTimeout(resolve, 100));
+          return createContentResult();
+        });
+
+        const result = await fetcher.fetch('https://example.com', { maxLatencyMs: 50 });
+
+        expect(result.budget?.latencyExceeded).toBe(true);
+      });
+
+      it('should not mark latencyExceeded when within budget', async () => {
+        vi.spyOn(mockContentIntelligence, 'extract').mockResolvedValue(createContentResult());
+
+        const result = await fetcher.fetch('https://example.com', { maxLatencyMs: 5000 });
+
+        expect(result.budget?.latencyExceeded).toBe(false);
+      });
+
+      it('should stop tier fallback when latency budget exceeded', async () => {
+        // Make intelligence fail slowly
+        vi.spyOn(mockContentIntelligence, 'extract').mockImplementation(async () => {
+          await new Promise(resolve => setTimeout(resolve, 100));
+          throw new Error('Intelligence failed slowly');
+        });
+        vi.spyOn(mockLightweightRenderer, 'render').mockResolvedValue(createLightweightResult());
+
+        // With maxLatencyMs=50, should stop before trying lightweight
+        await expect(
+          fetcher.fetch('https://example.com', { maxLatencyMs: 50 })
+        ).rejects.toThrow();
+
+        // Lightweight should not have been attempted due to latency budget exceeded
+        expect(mockLightweightRenderer.render).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('freshnessRequirement', () => {
+      it('should track freshnessApplied in budget info', async () => {
+        vi.spyOn(mockContentIntelligence, 'extract').mockResolvedValue(createContentResult());
+
+        const result = await fetcher.fetch('https://example.com', { freshnessRequirement: 'realtime' });
+
+        expect(result.budget?.freshnessApplied).toBe('realtime');
+        expect(result.budget?.usedCache).toBe(false);
+      });
+
+      it('should default usedCache to false (cache is at higher level)', async () => {
+        vi.spyOn(mockContentIntelligence, 'extract').mockResolvedValue(createContentResult());
+
+        const result = await fetcher.fetch('https://example.com');
+
+        expect(result.budget?.usedCache).toBe(false);
+      });
+    });
+
+    describe('budget info structure', () => {
+      it('should include complete budget info when budget options set', async () => {
+        vi.spyOn(mockContentIntelligence, 'extract').mockResolvedValue(createContentResult());
+
+        const result = await fetcher.fetch('https://example.com', {
+          maxLatencyMs: 5000,
+          maxCostTier: 'lightweight',
+          freshnessRequirement: 'any',
+        });
+
+        expect(result.budget).toEqual({
+          latencyExceeded: false,
+          tiersSkipped: ['playwright'],
+          maxCostTierEnforced: 'lightweight',
+          usedCache: false,
+          freshnessApplied: 'any',
+        });
+      });
+
+      it('should include budget info even with no budget options', async () => {
+        vi.spyOn(mockContentIntelligence, 'extract').mockResolvedValue(createContentResult());
+
+        const result = await fetcher.fetch('https://example.com');
+
+        expect(result.budget).toBeDefined();
+        expect(result.budget!.latencyExceeded).toBe(false);
+        expect(result.budget!.tiersSkipped).toHaveLength(0);
+        expect(result.budget!.usedCache).toBe(false);
+      });
+    });
+  });
 });
