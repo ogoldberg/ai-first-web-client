@@ -538,11 +538,19 @@ export class ExtractionBenchmark {
     let sampleRowsMatch = true;
 
     if (expected.tables) {
+      // Create mutable copy to track which tables have been matched
+      const availableTables = [...tables];
+
       for (const expectedTable of expected.tables) {
         // Find matching table by id, caption, or headers
-        const matchingTable = this.findMatchingTable(tables, expectedTable);
+        const matchingTable = this.findMatchingTable(availableTables, expectedTable);
         if (matchingTable) {
           matchedTables++;
+          // Remove matched table to prevent double-matching
+          const matchIndex = availableTables.indexOf(matchingTable);
+          if (matchIndex >= 0) {
+            availableTables.splice(matchIndex, 1);
+          }
 
           // Header accuracy
           if (expectedTable.headers) {
@@ -702,16 +710,17 @@ export class ExtractionBenchmark {
       if (byCaption) return byCaption;
     }
 
-    // Match by headers
+    // Match by headers (all expected headers must be present)
     if (expected.headers && expected.headers.length > 0) {
       const byHeaders = tables.find(t =>
-        expected.headers!.some(h => t.headers.some(th => th.toLowerCase().includes(h.toLowerCase())))
+        expected.headers!.every(h => t.headers.some(th => th.toLowerCase().includes(h.toLowerCase())))
       );
       if (byHeaders) return byHeaders;
     }
 
-    // Return first table if no specific criteria
-    return tables[0];
+    // Return first table as a last resort only if it's the only one
+    // (forces test author to be specific when multiple tables exist)
+    return tables.length === 1 ? tables[0] : undefined;
   }
 
   /**
