@@ -290,7 +290,7 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 |----|------|----------|--------|--------|
 | LI-001 | Enable semantic matching by default | High | S | Completed |
 | LI-002 | Wire feedback loops for anti-patterns | Medium | M | Not Started |
-| LI-003 | Add learning effectiveness metrics | High | M | In Progress |
+| LI-003 | Add learning effectiveness metrics | High | M | Completed |
 | LI-004 | Real-world pattern validation suite | High | L | Not Started |
 | LI-005 | Dynamic domain group learning | Medium | M | Not Started |
 | LI-006 | Semantic skill retrieval integration | Medium | S | Not Started |
@@ -301,6 +301,7 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 **Recently completed:**
 
+- LI-003: Add learning effectiveness metrics - DONE
 - LI-001: Enable semantic matching by default - DONE
 - CX-012: LLM Onboarding Spec - DONE
 - CX-009: Tier Parity Learning - DONE
@@ -338,6 +339,11 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for ful
 
 ### v0.5.0 (2025-12-21)
 
+- Added LI-003: Add learning effectiveness metrics
+  - New learning-effectiveness.ts module with comprehensive metrics
+  - Tracks pattern hit rate, confidence accuracy, tier optimization, skill reuse
+  - New MCP tool: get_learning_effectiveness
+  - Health score (0-100) with actionable insights
 - Added LI-001: Enable semantic matching by default
   - New semantic-init.ts module for zero-config auto-initialization
   - Checks for @xenova/transformers, @lancedb/lancedb, better-sqlite3 availability
