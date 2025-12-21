@@ -40,6 +40,7 @@ import {
   type ClassificationContext,
 } from './types/errors.js';
 import { UrlSafetyError } from './utils/url-safety.js';
+import { getUsageMeter, type UsageQueryOptions } from './utils/usage-meter.js';
 
 /**
  * Create a versioned JSON response for MCP tools
@@ -1286,6 +1287,125 @@ for debugging or used to replay operations.`,
         description: `Clear all recorded debug traces.
 
 Use with caution - this permanently deletes all stored traces.`,
+        inputSchema: {
+          type: 'object',
+          properties: {},
+        },
+      },
+
+      // ============================================
+      // USAGE METERING (GTM-001)
+      // ============================================
+      {
+        name: 'get_usage_summary',
+        description: `Get usage and cost summary for the LLM Browser.
+
+Returns comprehensive usage statistics including:
+- Total requests and cost units
+- Success rate and average cost per request
+- Breakdown by tier (intelligence, lightweight, playwright)
+- Top domains by cost and request count
+- Fallback rate (how often requests fell back to heavier tiers)
+
+Cost units reflect computational cost:
+- Intelligence tier: 1 unit (fastest, no browser)
+- Lightweight tier: 5 units (simple JS execution)
+- Playwright tier: 25 units (full browser rendering)
+
+Use period filters to focus on recent usage or get all-time totals.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            period: {
+              type: 'string',
+              enum: ['hour', 'day', 'week', 'month', 'all'],
+              description: 'Time period to summarize (default: all)',
+            },
+            domain: {
+              type: 'string',
+              description: 'Filter to specific domain',
+            },
+            tier: {
+              type: 'string',
+              enum: ['intelligence', 'lightweight', 'playwright'],
+              description: 'Filter to specific tier',
+            },
+            tenantId: {
+              type: 'string',
+              description: 'Filter to specific tenant (for multi-tenant deployments)',
+            },
+          },
+        },
+      },
+      {
+        name: 'get_usage_by_period',
+        description: `Get usage breakdown by time period.
+
+Returns usage aggregates for each period (hourly or daily),
+allowing you to see trends over time.
+
+Each period includes:
+- Request count and total cost units
+- Success rate
+- Tier breakdown
+- Fallback rate`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            granularity: {
+              type: 'string',
+              enum: ['hour', 'day'],
+              description: 'Time granularity for periods (default: day)',
+            },
+            periods: {
+              type: 'number',
+              description: 'Number of periods to return (default: 7 for days, 24 for hours)',
+            },
+            domain: {
+              type: 'string',
+              description: 'Filter to specific domain',
+            },
+          },
+        },
+      },
+      {
+        name: 'get_cost_breakdown',
+        description: `Get detailed cost breakdown by tier.
+
+Returns cost analysis including:
+- Total cost units
+- Cost per tier with percentages
+- Estimated monthly cost (based on current period usage)
+- Recommendations for cost optimization
+
+Useful for understanding where computational resources are being spent
+and identifying opportunities to optimize.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            period: {
+              type: 'string',
+              enum: ['hour', 'day', 'week', 'month', 'all'],
+              description: 'Time period for breakdown (default: day)',
+            },
+            domain: {
+              type: 'string',
+              description: 'Filter to specific domain',
+            },
+          },
+        },
+      },
+      {
+        name: 'reset_usage_meters',
+        description: `Reset all usage meters.
+
+Clears all recorded usage events. Use with caution - this permanently
+deletes all usage history.
+
+Useful for:
+- Starting fresh after a testing period
+- Clearing data before a new billing period
+- Resetting after configuration changes`,
         inputSchema: {
           type: 'object',
           properties: {},
@@ -2619,6 +2739,129 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         });
       }
 
+      // ============================================
+      // USAGE METERING (GTM-001)
+      // ============================================
+
+      case 'get_usage_summary': {
+        const usageMeter = getUsageMeter();
+        await usageMeter.initialize();
+
+        const options: UsageQueryOptions = {
+          period: (args.period as 'hour' | 'day' | 'week' | 'month' | 'all') || 'all',
+          domain: args.domain as string | undefined,
+          tier: args.tier as ('intelligence' | 'lightweight' | 'playwright') | undefined,
+          tenantId: args.tenantId as string | undefined,
+        };
+
+        const summary = await usageMeter.getSummary(options);
+
+        // Calculate success rate from currentPeriod counts
+        const periodSuccessRate = summary.currentPeriod.requestCount > 0
+          ? summary.currentPeriod.successCount / summary.currentPeriod.requestCount
+          : 0;
+
+        return jsonResponse({
+          schemaVersion: addSchemaVersion({}).schemaVersion,
+          period: options.period,
+          totalRequests: summary.totalRequests,
+          totalCostUnits: summary.totalCostUnits,
+          successRate: Math.round(summary.successRate * 100) / 100,
+          avgCostPerRequest: Math.round(summary.avgCostPerRequest * 100) / 100,
+          currentPeriod: {
+            requestCount: summary.currentPeriod.requestCount,
+            totalCostUnits: summary.currentPeriod.totalCostUnits,
+            successRate: Math.round(periodSuccessRate * 100) / 100,
+            fallbackRate: Math.round(summary.currentPeriod.fallbackRate * 100) / 100,
+            byTier: summary.currentPeriod.byTier,
+            topDomainsByCost: summary.currentPeriod.topDomainsByCost.slice(0, 5),
+            topDomainsByRequests: summary.currentPeriod.topDomainsByRequests.slice(0, 5),
+          },
+          filters: {
+            domain: options.domain,
+            tier: options.tier,
+            tenantId: options.tenantId,
+          },
+        });
+      }
+
+      case 'get_usage_by_period': {
+        const usageMeter = getUsageMeter();
+        await usageMeter.initialize();
+
+        // Only 'hour' and 'day' are supported granularities
+        const rawGranularity = args.granularity as string || 'day';
+        const granularity: 'hour' | 'day' = rawGranularity === 'hour' ? 'hour' : 'day';
+        const periods = (args.periods as number) || (granularity === 'hour' ? 24 : 7);
+        const domain = args.domain as string | undefined;
+
+        const periodData = await usageMeter.getUsageByPeriod(granularity, { periods, domain });
+
+        return jsonResponse({
+          schemaVersion: addSchemaVersion({}).schemaVersion,
+          granularity,
+          periods: periodData.map(p => {
+            const successRate = p.requestCount > 0 ? p.successCount / p.requestCount : 0;
+            return {
+              periodStart: new Date(p.periodStart).toISOString(),
+              periodEnd: new Date(p.periodEnd).toISOString(),
+              requestCount: p.requestCount,
+              totalCostUnits: p.totalCostUnits,
+              successRate: Math.round(successRate * 100) / 100,
+              fallbackRate: Math.round(p.fallbackRate * 100) / 100,
+              byTier: p.byTier,
+            };
+          }),
+        });
+      }
+
+      case 'get_cost_breakdown': {
+        const usageMeter = getUsageMeter();
+        await usageMeter.initialize();
+
+        const period = (args.period as 'hour' | 'day' | 'week' | 'month' | 'all') || 'day';
+        const domain = args.domain as string | undefined;
+
+        const breakdown = await usageMeter.getCostBreakdown({ period, domain });
+
+        return jsonResponse({
+          schemaVersion: addSchemaVersion({}).schemaVersion,
+          period,
+          total: breakdown.total,
+          estimatedMonthlyCost: Math.round(breakdown.estimatedMonthlyCost * 100) / 100,
+          byTier: {
+            intelligence: {
+              cost: breakdown.byTier.intelligence.cost,
+              percentage: Math.round(breakdown.byTier.intelligence.percentage * 100),
+              requests: breakdown.byTier.intelligence.requests,
+            },
+            lightweight: {
+              cost: breakdown.byTier.lightweight.cost,
+              percentage: Math.round(breakdown.byTier.lightweight.percentage * 100),
+              requests: breakdown.byTier.lightweight.requests,
+            },
+            playwright: {
+              cost: breakdown.byTier.playwright.cost,
+              percentage: Math.round(breakdown.byTier.playwright.percentage * 100),
+              requests: breakdown.byTier.playwright.requests,
+            },
+          },
+          recommendations: generateCostRecommendations(breakdown),
+        });
+      }
+
+      case 'reset_usage_meters': {
+        const usageMeter = getUsageMeter();
+        await usageMeter.initialize();
+        await usageMeter.reset();
+
+        return jsonResponse({
+          schemaVersion: addSchemaVersion({}).schemaVersion,
+          success: true,
+          message: 'Usage meters reset',
+        });
+      }
+
       default:
         throw new Error(`Unknown tool: ${name}`);
     }
@@ -2675,6 +2918,52 @@ function getRecommendations(intelligence: Awaited<ReturnType<typeof smartBrowser
 
   if (intelligence.paginationPatterns > 0) {
     recommendations.push('Pagination patterns learned - use followPagination for multi-page content');
+  }
+
+  return recommendations;
+}
+
+/**
+ * Generate cost optimization recommendations
+ */
+function generateCostRecommendations(breakdown: {
+  total: number;
+  byTier: {
+    intelligence: { cost: number; percentage: number; requests: number };
+    lightweight: { cost: number; percentage: number; requests: number };
+    playwright: { cost: number; percentage: number; requests: number };
+  };
+}): string[] {
+  const recommendations: string[] = [];
+
+  // Check if Playwright usage is high
+  if (breakdown.byTier.playwright.percentage > 0.5) {
+    recommendations.push(
+      'Over 50% of cost is from Playwright tier - consider investigating if some sites could use lighter tiers'
+    );
+  }
+
+  // Check if fallback is common
+  const totalRequests =
+    breakdown.byTier.intelligence.requests +
+    breakdown.byTier.lightweight.requests +
+    breakdown.byTier.playwright.requests;
+
+  if (totalRequests > 10 && breakdown.byTier.playwright.requests > breakdown.byTier.intelligence.requests) {
+    recommendations.push(
+      'More Playwright requests than Intelligence - learning may help optimize tier selection over time'
+    );
+  }
+
+  // Check if intelligence tier is underutilized
+  if (breakdown.byTier.intelligence.percentage < 0.2 && totalRequests > 10) {
+    recommendations.push(
+      'Low Intelligence tier usage - ensure Content Intelligence is enabled for compatible sites'
+    );
+  }
+
+  if (recommendations.length === 0) {
+    recommendations.push('Cost distribution looks healthy - tier selection is working efficiently');
   }
 
   return recommendations;
