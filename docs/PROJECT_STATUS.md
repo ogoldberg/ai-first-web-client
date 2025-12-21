@@ -280,9 +280,11 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ---
 
-## Current Task: None
+## Current Task: CX-009 (Tier Parity Learning)
 
-**Status:** All P0, P1, P1.5, P2 tasks complete
+**Status:** In Progress
+
+**Task:** Enable API pattern learning from intelligence and lightweight tiers (not just Playwright).
 
 **Recently completed:**
 
