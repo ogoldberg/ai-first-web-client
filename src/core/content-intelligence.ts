@@ -70,6 +70,7 @@ export type ExtractionStrategy =
   | 'framework:nuxt'
   | 'framework:gatsby'
   | 'framework:remix'
+  | 'framework:angular'
   | 'structured:jsonld'
   | 'structured:opengraph'
   | 'api:predicted'
@@ -374,6 +375,7 @@ export class ContentIntelligence {
       'framework:nuxt': () => this.tryFrameworkExtraction(url, opts),
       'framework:gatsby': () => this.tryFrameworkExtraction(url, opts),
       'framework:remix': () => this.tryFrameworkExtraction(url, opts),
+      'framework:angular': () => this.tryFrameworkExtraction(url, opts),
       'structured:jsonld': () => this.tryStructuredData(url, opts),
       'structured:opengraph': () => this.tryStructuredData(url, opts),
       'api:predicted': () => this.tryPredictedAPI(url, opts),
@@ -448,6 +450,12 @@ export class ContentIntelligence {
     const remixData = this.extractRemixData(html);
     if (remixData) {
       return this.buildResult(url, url, 'framework:remix', remixData, 'high');
+    }
+
+    // Try Angular / Angular Universal
+    const angularData = this.extractAngularData(html);
+    if (angularData) {
+      return this.buildResult(url, url, 'framework:angular', angularData, 'high');
     }
 
     return null;
@@ -543,6 +551,133 @@ export class ContentIntelligence {
     }
 
     return null;
+  }
+
+  private extractAngularData(html: string): { title: string; text: string; structured?: unknown } | null {
+    // Angular Universal (SSR) uses TransferState to pass data from server to client
+    // The data is stored in a script tag with type="application/json"
+    // Common IDs: serverApp-state, transfer-state, ng-state, or just a script with ngh attribute
+
+    // First, find all application/json script tags and check their IDs
+    const angularStateIds = ['serverApp-state', 'transfer-state', 'ng-state'];
+    const scriptTagRegex = /<script([^>]*)type\s*=\s*["']application\/json["']([^>]*)>([^<]*)<\/script>/gi;
+
+    // Use matchAll to iterate through all matches
+    const scriptMatches = [...html.matchAll(scriptTagRegex)];
+    for (const scriptMatch of scriptMatches) {
+      const beforeType = scriptMatch[1];
+      const afterType = scriptMatch[2];
+      const content = scriptMatch[3];
+      const attributes = beforeType + afterType;
+
+      // Check if this is an Angular state script
+      const idRegex = new RegExp(`id\\s*=\\s*["']?(?:${angularStateIds.join('|')})["']?`, 'i');
+      const isAngularState = idRegex.test(attributes);
+
+      // Also check for ngh attribute (Angular 17+ hydration)
+      const hasNghAttribute = /\bngh\b/i.test(attributes);
+
+      if (isAngularState || hasNghAttribute) {
+        try {
+          const data = JSON.parse(content.trim());
+          const text = this.extractTextFromObject(data);
+          if (text.length > 50) {
+            const title = this.extractTitleFromObject(data);
+            return { title, text, structured: data };
+          }
+        } catch (error) {
+          // Invalid JSON, continue to next match
+          logger.intelligence.debug('Failed to parse Angular state JSON', { error });
+        }
+      }
+    }
+
+    // Check for Angular app indicators
+    const hasAngularIndicators = this.detectAngularApp(html);
+    if (!hasAngularIndicators) {
+      return null;
+    }
+
+    // Try to extract initial state from various Angular patterns
+    // Some Angular apps use window.__initialState or similar
+    const statePatterns = [
+      /window\.__(?:INITIAL_STATE|STATE|APP_STATE)__\s*=\s*({[\s\S]*?});?\s*<\/script>/s,
+      /window\.(?:initialState|appState|state)\s*=\s*({[\s\S]*?});?\s*<\/script>/s,
+    ];
+
+    for (const pattern of statePatterns) {
+      const match = html.match(pattern);
+      if (match) {
+        try {
+          const data = JSON.parse(match[1]);
+          const text = this.extractTextFromObject(data);
+          if (text.length > 50) {
+            const title = this.extractTitleFromObject(data);
+            return { title, text, structured: data };
+          }
+        } catch (error) {
+          // Invalid JSON, continue
+          logger.intelligence.debug('Failed to parse Angular window state JSON', { error });
+        }
+      }
+    }
+
+    return null;
+  }
+
+  private detectAngularApp(html: string): boolean {
+    // Check for Angular-specific indicators
+    const angularIndicators = [
+      // Angular root component
+      /<app-root[^>]*>/i,
+      // ng-version attribute (Angular adds this to root elements)
+      /ng-version=["'][^"']+["']/i,
+      // Angular content attributes (added by ViewEncapsulation)
+      /_ngcontent-[a-z0-9-]+/i,
+      /_nghost-[a-z0-9-]+/i,
+      // Angular hydration
+      /ngh(?:=["'][^"']*["']|\s|>)/i,
+      // Angular Zone.js script
+      /zone(?:\.min)?\.js/i,
+      // Angular runtime script
+      /runtime(?:\.[a-f0-9]+)?\.js/i,
+      // Angular main bundle with hash
+      /main\.[a-f0-9]+\.js/i,
+      // Angular polyfills bundle
+      /polyfills(?:\.[a-f0-9]+)?\.js/i,
+    ];
+
+    return angularIndicators.some(indicator => indicator.test(html));
+  }
+
+  private extractTitleFromObject(obj: unknown, visited = new Set<unknown>()): string {
+    // Try to find a title from common property names
+    if (typeof obj !== 'object' || obj === null) return '';
+
+    // Cycle detection to prevent infinite recursion
+    if (visited.has(obj)) {
+      return '';
+    }
+    visited.add(obj);
+
+    const record = obj as Record<string, unknown>;
+    const titleKeys = ['title', 'name', 'headline', 'heading', 'pageTitle', 'documentTitle'];
+
+    for (const key of titleKeys) {
+      if (typeof record[key] === 'string' && record[key]) {
+        return record[key] as string;
+      }
+    }
+
+    // Recursively search for title in nested objects
+    for (const value of Object.values(record)) {
+      if (typeof value === 'object' && value !== null) {
+        const found = this.extractTitleFromObject(value, visited);
+        if (found) return found;
+      }
+    }
+
+    return '';
   }
 
   // ============================================
@@ -4046,6 +4181,7 @@ export class ContentIntelligence {
       { strategy: 'framework:nuxt', available: true },
       { strategy: 'framework:gatsby', available: true },
       { strategy: 'framework:remix', available: true },
+      { strategy: 'framework:angular', available: true },
       { strategy: 'structured:jsonld', available: true },
       { strategy: 'structured:opengraph', available: true },
       { strategy: 'api:predicted', available: true },
