@@ -280,9 +280,11 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ---
 
-## Current Task: Next from backlog
+## Current Task: CX-010 (Config-driven heuristics)
 
-**Status:** Complete
+**Status:** In Progress
+
+**Goal:** Move domain groups and tier rules from hardcoded constants to external config
 
 **Previously V-004:** Skill similarity search, error pattern matching, content dedup, analytics - DONE
 
