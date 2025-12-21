@@ -161,7 +161,7 @@
 
 | Task | Priority | Effort | Status |
 |------|----------|--------|--------|
-| LI-005 Dynamic domain group learning | Medium | 3 days | Not Started |
+| LI-005 Dynamic domain group learning | Medium | 2 days | Not Started |
 | Feedback loop from failures to patterns | Low | 2 days | Not Started |
 
 **Success Criteria**:
