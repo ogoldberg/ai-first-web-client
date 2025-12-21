@@ -571,10 +571,8 @@ export class ContentIntelligence {
       const attributes = beforeType + afterType;
 
       // Check if this is an Angular state script
-      const isAngularState = angularStateIds.some(id => {
-        const idRegex = new RegExp(`id\\s*=\\s*["']?${id}["']?`, 'i');
-        return idRegex.test(attributes);
-      });
+      const idRegex = new RegExp(`id\\s*=\\s*["']?(?:${angularStateIds.join('|')})["']?`, 'i');
+      const isAngularState = idRegex.test(attributes);
 
       // Also check for ngh attribute (Angular 17+ hydration)
       const hasNghAttribute = /\bngh\b/i.test(attributes);
@@ -587,8 +585,9 @@ export class ContentIntelligence {
             const title = this.extractTitleFromObject(data);
             return { title, text, structured: data };
           }
-        } catch {
+        } catch (error) {
           // Invalid JSON, continue to next match
+          logger.intelligence.debug('Failed to parse Angular state JSON', { error });
         }
       }
     }
@@ -616,8 +615,9 @@ export class ContentIntelligence {
             const title = this.extractTitleFromObject(data);
             return { title, text, structured: data };
           }
-        } catch {
+        } catch (error) {
           // Invalid JSON, continue
+          logger.intelligence.debug('Failed to parse Angular window state JSON', { error });
         }
       }
     }
@@ -647,18 +647,18 @@ export class ContentIntelligence {
       /polyfills(?:\.[a-f0-9]+)?\.js/i,
     ];
 
-    for (const indicator of angularIndicators) {
-      if (indicator.test(html)) {
-        return true;
-      }
-    }
-
-    return false;
+    return angularIndicators.some(indicator => indicator.test(html));
   }
 
-  private extractTitleFromObject(obj: unknown): string {
+  private extractTitleFromObject(obj: unknown, visited = new Set<unknown>()): string {
     // Try to find a title from common property names
     if (typeof obj !== 'object' || obj === null) return '';
+
+    // Cycle detection to prevent infinite recursion
+    if (visited.has(obj)) {
+      return '';
+    }
+    visited.add(obj);
 
     const record = obj as Record<string, unknown>;
     const titleKeys = ['title', 'name', 'headline', 'heading', 'pageTitle', 'documentTitle'];
@@ -672,7 +672,7 @@ export class ContentIntelligence {
     // Recursively search for title in nested objects
     for (const value of Object.values(record)) {
       if (typeof value === 'object' && value !== null) {
-        const found = this.extractTitleFromObject(value);
+        const found = this.extractTitleFromObject(value, visited);
         if (found) return found;
       }
     }
