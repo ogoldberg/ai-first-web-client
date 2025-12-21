@@ -281,6 +281,18 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ---
 
+## Currently In Progress: Hosted Alpha Checklist (GTM-003)
+
+**Status:** In Progress
+
+**Goal:** Document infrastructure, auth, rate limiting, logging, and onboarding requirements for a hosted alpha deployment.
+
+| ID      | Task                    | Priority | Effort | Status      |
+|---------|-------------------------|----------|--------|-------------|
+| GTM-003 | Hosted alpha checklist  | Medium   | S      | In Progress |
+
+---
+
 ## Recently Completed: Basic Analytics Dashboard (GTM-002)
 
 **Status:** Complete (PR #85)
