@@ -179,7 +179,7 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 |----|------|--------|----------|-------|
 | GTM-001 | Usage metering & tier cost reporting | M | Features | Collect per-request tier usage and cost signals (DONE) |
 | GTM-002 | Basic analytics dashboard | M | Features | DONE (PR #85) |
-| GTM-003 | Hosted alpha checklist | S | Documentation | Infra, auth, rate limiting, logging, onboarding |
+| GTM-003 | Hosted alpha checklist | S | Documentation | Infra, auth, rate limiting, logging, onboarding (DONE) |
 | GTM-004 | Pricing & packaging doc | S | Documentation | Public-facing pricing tiers and usage model |
 | GTM-005 | SLA/support policy draft | S | Documentation | Define enterprise support and uptime targets |
 
