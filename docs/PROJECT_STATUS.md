@@ -281,23 +281,25 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ---
 
-## In Progress: Screenshot Capture on Demand (F-005)
+## Recently Completed: Screenshot Capture on Demand (F-005)
 
-**Status:** In Progress
+**Status:** Complete (PR #91)
 
 **Goal:** Add screenshot capture functionality for visual debugging, allowing LLM clients to capture screenshots of rendered pages on demand.
 
-**Implementation Plan:**
+**Implementation:**
 
-- Add screenshot method to SmartBrowser with configurable options (fullPage, viewport, element selector)
-- Create new MCP tool `capture_screenshot` returning base64-encoded image data
-- Support for both Playwright and lightweight renderer paths
+- SmartBrowser.captureScreenshot() method with configurable options (fullPage, viewport, element selector)
+- New MCP tool `capture_screenshot` returning base64-encoded PNG image data
+- ScreenshotOptions and ScreenshotResult interfaces for clean API
+- Proper resource cleanup with try...finally pattern
+- Uses TIMEOUTS.SELECTOR_WAIT constant for consistency
 - Include metadata (timestamp, URL, viewport dimensions) with screenshots
-- Comprehensive test coverage
+- 10 comprehensive test cases
 
-| ID    | Task                         | Priority | Effort | Status      |
-|-------|------------------------------|----------|--------|-------------|
-| F-005 | Screenshot capture on demand | Medium   | M      | In Progress |
+| ID    | Task                         | Priority | Effort | Status   |
+|-------|------------------------------|----------|--------|----------|
+| F-005 | Screenshot capture on demand | Medium   | M      | Complete |
 
 ---
 
