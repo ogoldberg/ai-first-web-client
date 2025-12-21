@@ -281,6 +281,28 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ---
 
+## In Progress: Skill Sharing + Portability (F-012)
+
+**Status:** In Progress
+
+**Goal:** Enable export/import of skill packs by domain vertical (gov, ecommerce, docs), allowing users to share learned skills across instances and domains.
+
+**Implementation Plan:**
+
+- Add skill export method to ProceduralMemory with domain/vertical filtering
+- Add skill import method with conflict resolution (skip, overwrite, merge)
+- Create new MCP tools `export_skills` and `import_skills`
+- Support JSON format for skill pack interchange
+- Include skill metadata (domain, version, confidence) in exports
+- Validate imported skills for compatibility
+- Comprehensive test coverage
+
+| ID    | Task                        | Priority | Effort | Status      |
+|-------|-----------------------------| ---------|--------|-------------|
+| F-012 | Skill sharing + portability | Medium   | M      | In Progress |
+
+---
+
 ## Recently Completed: HAR File Export (F-006)
 
 **Status:** Complete (PR #92)
