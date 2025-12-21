@@ -147,7 +147,7 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 | LI-002 | Wire feedback loops for anti-patterns | M | Complete | FailureLearning creates anti-patterns, LearningEngine persists high-confidence ones. Pattern failures feed back via recordPatternFailure(). Registry subscription, ContentIntelligence wiring via wireToContentIntelligence(). 11 new tests. |
 | LI-003 | Add learning effectiveness metrics | M | Complete (PR #77) | Track: pattern hit rate, confidence accuracy (predicted vs actual success), tier optimization savings, skill reuse rate. New MCP tool: `get_learning_effectiveness`. |
 | LI-004 | Real-world pattern validation suite | L | Complete | Live test suite (32 tests) for validating bootstrap patterns, learned pattern application, cross-domain transfer, pattern metrics, and regression tracking infrastructure. Run with LIVE_TESTS=true. |
-| LI-005 | Dynamic domain group learning | M | Not Started | Domain groups are hardcoded in heuristics-config.ts. Learn groups from successful cross-domain transfers. Suggest new groupings based on pattern similarity. |
+| LI-005 | Dynamic domain group learning | M | Complete | Domain groups are hardcoded in heuristics-config.ts. Learn groups from successful cross-domain transfers. Suggest new groupings based on pattern similarity. |
 | LI-006 | Semantic skill retrieval integration | S | Complete (PR #78) | ProceduralMemory has 64-dim embeddings but uses custom cosine similarity. Wire to VectorStore for consistent semantic search. |
 
 **Success Criteria:**
