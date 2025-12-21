@@ -281,15 +281,21 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ---
 
-## Current Task: Usage Metering & Tier Cost Reporting (GTM-001)
+## Recently Completed: Usage Metering & Tier Cost Reporting (GTM-001)
 
-**Status:** In Progress
+**Status:** Complete (PR #84)
 
 **Goal:** Collect per-request tier usage and cost signals for analytics and billing.
 
-| ID      | Task                               | Priority | Effort | Status      |
-|---------|------------------------------------|----------|--------|-------------|
-| GTM-001 | Usage metering & tier cost reporting | Medium   | M      | In Progress |
+| ID      | Task                               | Priority | Effort | Status   |
+|---------|------------------------------------|----------|--------|----------|
+| GTM-001 | Usage metering & tier cost reporting | Medium   | M      | Complete |
+
+**Implementation:**
+- UsageMeter utility for tracking per-request tier usage and cost
+- Cost units per tier (intelligence=1, lightweight=5, playwright=25)
+- Aggregation by domain, tier, and time period
+- MCP tools: get_usage_summary, get_usage_by_period, get_cost_breakdown, reset_usage_meters
 
 ---
 

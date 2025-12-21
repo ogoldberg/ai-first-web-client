@@ -177,7 +177,7 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 
 | ID | Task | Effort | Category | Notes |
 |----|------|--------|----------|-------|
-| GTM-001 | Usage metering & tier cost reporting | M | Features | Collect per-request tier usage and cost signals |
+| GTM-001 | Usage metering & tier cost reporting | M | Features | Collect per-request tier usage and cost signals (DONE) |
 | GTM-002 | Basic analytics dashboard | M | Features | Aggregate latency, tier usage, success rate |
 | GTM-003 | Hosted alpha checklist | S | Documentation | Infra, auth, rate limiting, logging, onboarding |
 | GTM-004 | Pricing & packaging doc | S | Documentation | Public-facing pricing tiers and usage model |
