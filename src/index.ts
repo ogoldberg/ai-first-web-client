@@ -32,6 +32,7 @@ import { BrowseTool } from './tools/browse-tool.js';
 import { ApiCallTool } from './tools/api-call-tool.js';
 import { AuthWorkflow } from './core/auth-workflow.js';
 import { logger } from './utils/logger.js';
+import { computeLearningEffectiveness } from './core/learning-effectiveness.js';
 import { addSchemaVersion } from './types/schema-version.js';
 import {
   buildStructuredError,
@@ -330,6 +331,42 @@ Shows:
 - Recent learning events
 
 Use this to understand the browser's overall intelligence level.`,
+        inputSchema: {
+          type: 'object',
+          properties: {},
+        },
+      },
+      {
+        name: 'get_learning_effectiveness',
+        description: `Get comprehensive learning effectiveness metrics (LI-003).
+
+Shows how well the learning system is performing:
+
+**Pattern Effectiveness**:
+- Hit rate: How often discovered patterns are successfully used
+- Confidence accuracy: High/medium/low confidence patterns and their actual success rates
+- Bypassable patterns: Patterns that can skip browser rendering
+
+**Confidence Accuracy**:
+- Overall accuracy: How well predicted confidence matches actual success
+- Confidence gap: Over/under-confident patterns
+- Calibration by level: Accuracy at each confidence tier
+
+**Tier Optimization**:
+- First tier success rate: How often the first tier choice is correct
+- Time saved: Milliseconds saved by intelligent tier selection
+- Tier distribution: Usage counts for intelligence/lightweight/playwright
+
+**Skill Effectiveness**:
+- Reuse rate: How often learned skills are reused
+- Success rate: Average skill execution success
+- Anti-patterns: Things learned NOT to do
+
+**Health Score**: 0-100 overall learning health
+
+**Insights**: Actionable recommendations for improvement
+
+Use this to assess learning ROI and identify areas for improvement.`,
         inputSchema: {
           type: 'object',
           properties: {},
@@ -1266,6 +1303,97 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             domain: e.domain,
             timestamp: new Date(e.timestamp).toISOString(),
           })),
+        });
+      }
+
+      case 'get_learning_effectiveness': {
+        const learningEngine = smartBrowser.getLearningEngine();
+        const tieredFetcher = smartBrowser.getTieredFetcher();
+        const proceduralMemory = smartBrowser.getProceduralMemory();
+
+        // Helper for percent formatting
+        const formatPercent = (value: number): string => `${Math.round(value * 100)}%`;
+        const formatPercentDecimal = (value: number): string => `${(value * 100).toFixed(1)}%`;
+
+        const report = await computeLearningEffectiveness(
+          learningEngine,
+          tieredFetcher,
+          proceduralMemory
+        );
+
+        return jsonResponse({
+          generatedAt: new Date(report.generatedAt).toISOString(),
+          healthScore: report.healthScore,
+          patterns: {
+            totalDiscovered: report.patterns.totalDiscovered,
+            patternsUsed: report.patterns.patternsUsed,
+            hitRate: formatPercent(report.patterns.hitRate),
+            bypassablePatterns: report.patterns.bypassablePatterns,
+            recentlyFailedPatterns: report.patterns.recentlyFailedPatterns,
+            byConfidence: {
+              high: {
+                count: report.patterns.byConfidence.high.count,
+                successRate: formatPercent(report.patterns.byConfidence.high.successRate),
+              },
+              medium: {
+                count: report.patterns.byConfidence.medium.count,
+                successRate: formatPercent(report.patterns.byConfidence.medium.successRate),
+              },
+              low: {
+                count: report.patterns.byConfidence.low.count,
+                successRate: formatPercent(report.patterns.byConfidence.low.successRate),
+              },
+            },
+          },
+          confidence: {
+            overallAccuracy: formatPercent(report.confidence.overallAccuracy),
+            highConfidenceAccuracy: formatPercent(report.confidence.highConfidenceAccuracy),
+            mediumConfidenceAccuracy: formatPercent(report.confidence.mediumConfidenceAccuracy),
+            lowConfidenceAccuracy: formatPercent(report.confidence.lowConfidenceAccuracy),
+            confidenceGap: formatPercentDecimal(report.confidence.confidenceGap),
+            overConfidentPatterns: report.confidence.overConfidentPatterns,
+            underConfidentPatterns: report.confidence.underConfidentPatterns,
+          },
+          tiers: {
+            firstTierSuccessRate: formatPercent(report.tiers.firstTierSuccessRate),
+            timeSavedMs: Math.round(report.tiers.timeSavedMs),
+            optimizationRatio: formatPercent(report.tiers.optimizationRatio),
+            tierDistribution: {
+              intelligence: report.tiers.tierDistribution.intelligence.count,
+              lightweight: report.tiers.tierDistribution.lightweight.count,
+              playwright: report.tiers.tierDistribution.playwright.count,
+            },
+          },
+          skills: {
+            totalSkills: report.skills.totalSkills,
+            reusedSkills: report.skills.reusedSkills,
+            reuseRate: formatPercent(report.skills.reuseRate),
+            avgSuccessRate: formatPercent(report.skills.avgSuccessRate),
+            highPerformingSkills: report.skills.highPerformingSkills,
+            antiPatterns: report.skills.antiPatterns,
+          },
+          selectors: {
+            totalSelectors: report.selectors.totalSelectors,
+            highPrioritySelectors: report.selectors.highPrioritySelectors,
+            avgSuccessRate: formatPercent(report.selectors.avgSuccessRate),
+            avgFallbackChainLength: report.selectors.avgFallbackChainLength.toFixed(1),
+          },
+          domains: {
+            totalDomains: report.domains.totalDomains,
+            domainsWithPatterns: report.domains.domainsWithPatterns,
+            domainsWithSelectors: report.domains.domainsWithSelectors,
+            highSuccessDomains: report.domains.highSuccessDomains,
+            avgDomainSuccessRate: formatPercent(report.domains.avgDomainSuccessRate),
+            crossDomainBeneficiaries: report.domains.crossDomainBeneficiaries,
+          },
+          trend24h: {
+            recentEvents: report.trend24h.recentEvents,
+            newPatterns: report.trend24h.newPatterns,
+            verifications: report.trend24h.verifications,
+            failures: report.trend24h.failures,
+            eventsPerHour: report.trend24h.eventsPerHour.toFixed(1),
+          },
+          insights: report.insights,
         });
       }
 
