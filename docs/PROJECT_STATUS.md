@@ -281,6 +281,18 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ---
 
+## In Progress: Angular Framework Support (I-001)
+
+**Status:** In Progress
+
+**Goal:** Add Angular framework detection to Content Intelligence, enabling data extraction from Angular and Angular Universal (SSR) applications.
+
+| ID    | Task                      | Priority | Effort | Status      |
+|-------|---------------------------|----------|--------|-------------|
+| I-001 | Angular framework support | Medium   | M      | In Progress |
+
+---
+
 ## Recently Completed: Hosted Alpha Checklist (GTM-003)
 
 **Status:** Complete
