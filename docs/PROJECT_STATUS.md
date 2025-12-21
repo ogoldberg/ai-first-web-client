@@ -280,9 +280,11 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ---
 
-## Current Task: None
+## Current Task: CX-005 (Budget Knobs)
 
-**Status:** All P0, P1, P1.5, P2 tasks complete
+**Status:** In Progress
+
+**Task:** Add `maxLatencyMs`, `maxCostTier`, `freshness` parameters to give LLMs control over browsing strategy.
 
 **Recently completed:**
 
