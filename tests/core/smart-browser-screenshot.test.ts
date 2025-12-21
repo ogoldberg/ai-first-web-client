@@ -209,7 +209,8 @@ describe('SmartBrowser Screenshot Capture', () => {
         waitForSelector: '.dynamic-content',
       });
 
-      expect(mockPage.waitForSelector).toHaveBeenCalledWith('.dynamic-content', { timeout: 10000 });
+      // Uses TIMEOUTS.SELECTOR_WAIT (5000ms) instead of hardcoded value
+      expect(mockPage.waitForSelector).toHaveBeenCalledWith('.dynamic-content', { timeout: 5000 });
     });
 
     it('should use session profile for authenticated pages', async () => {

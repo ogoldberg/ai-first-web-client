@@ -69,6 +69,10 @@ import {
 const SKILL_APPLICATION_THRESHOLD = 0.8;  // Minimum similarity to auto-apply a skill
 const MIN_SUCCESS_TEXT_LENGTH = 100;       // Minimum extracted text length for successful trajectory
 
+// Default viewport dimensions for screenshots
+const DEFAULT_VIEWPORT_WIDTH = 1920;
+const DEFAULT_VIEWPORT_HEIGHT = 1080;
+
 // Common cookie consent selectors (enhanced with learning)
 const DEFAULT_COOKIE_SELECTORS = [
   '[class*="cookie"] button[class*="accept"]',
@@ -189,6 +193,34 @@ export interface SmartBrowseResult extends BrowseResult {
     url: string;
     content: { html: string; markdown: string; text: string };
   }>;
+}
+
+/**
+ * Options for screenshot capture
+ */
+export interface ScreenshotOptions {
+  fullPage?: boolean;
+  element?: string;
+  waitForSelector?: string;
+  sessionProfile?: string;
+  width?: number;
+  height?: number;
+}
+
+/**
+ * Result of a screenshot capture operation
+ */
+export interface ScreenshotResult {
+  success: boolean;
+  image?: string; // base64 encoded PNG
+  mimeType: 'image/png';
+  url: string;
+  finalUrl: string;
+  title: string;
+  viewport: { width: number; height: number };
+  timestamp: string;
+  durationMs: number;
+  error?: string;
 }
 
 export class SmartBrowser {
@@ -1995,6 +2027,31 @@ export class SmartBrowser {
   }
 
   /**
+   * Create an error response for screenshot capture
+   */
+  private createScreenshotErrorResponse(
+    url: string,
+    options: ScreenshotOptions,
+    startTime: number,
+    errorMessage: string
+  ): ScreenshotResult {
+    return {
+      success: false,
+      mimeType: 'image/png',
+      url,
+      finalUrl: url,
+      title: '',
+      viewport: {
+        width: options.width ?? DEFAULT_VIEWPORT_WIDTH,
+        height: options.height ?? DEFAULT_VIEWPORT_HEIGHT,
+      },
+      timestamp: new Date().toISOString(),
+      durationMs: Date.now() - startTime,
+      error: errorMessage,
+    };
+  }
+
+  /**
    * Capture a screenshot of a URL
    *
    * This method navigates to the URL using Playwright (required for screenshots)
@@ -2007,26 +2064,8 @@ export class SmartBrowser {
    */
   async captureScreenshot(
     url: string,
-    options: {
-      fullPage?: boolean;
-      element?: string;
-      waitForSelector?: string;
-      sessionProfile?: string;
-      width?: number;
-      height?: number;
-    } = {}
-  ): Promise<{
-    success: boolean;
-    image?: string; // base64 encoded PNG
-    mimeType: 'image/png';
-    url: string;
-    finalUrl: string;
-    title: string;
-    viewport: { width: number; height: number };
-    timestamp: string;
-    durationMs: number;
-    error?: string;
-  }> {
+    options: ScreenshotOptions = {}
+  ): Promise<ScreenshotResult> {
     const startTime = Date.now();
 
     // SSRF Protection: Validate URL before any processing
@@ -2035,52 +2074,49 @@ export class SmartBrowser {
     // Check if Playwright is available
     if (!BrowserManager.isPlaywrightAvailable()) {
       const error = BrowserManager.getPlaywrightError();
-      return {
-        success: false,
-        mimeType: 'image/png',
+      return this.createScreenshotErrorResponse(
         url,
-        finalUrl: url,
-        title: '',
-        viewport: { width: options.width ?? 1920, height: options.height ?? 1080 },
-        timestamp: new Date().toISOString(),
-        durationMs: Date.now() - startTime,
-        error: `Screenshot capture requires Playwright. ${error || 'Install with: npm install playwright && npx playwright install chromium'}`,
-      };
+        options,
+        startTime,
+        `Screenshot capture requires Playwright. ${error || 'Install with: npm install playwright && npx playwright install chromium'}`
+      );
     }
 
+    let page: Page | undefined;
     try {
       // Navigate to the page using BrowserManager
-      const { page } = await this.browserManager.browse(url, {
+      const browseResult = await this.browserManager.browse(url, {
         profile: options.sessionProfile,
         waitFor: 'networkidle',
       });
+      page = browseResult.page;
 
       // Set viewport if custom dimensions specified
       if (options.width || options.height) {
         await page.setViewportSize({
-          width: options.width ?? 1920,
-          height: options.height ?? 1080,
+          width: options.width ?? DEFAULT_VIEWPORT_WIDTH,
+          height: options.height ?? DEFAULT_VIEWPORT_HEIGHT,
         });
       }
 
       // Wait for specific element if requested
       if (options.waitForSelector) {
-        await page.waitForSelector(options.waitForSelector, { timeout: 10000 });
+        await page.waitForSelector(options.waitForSelector, { timeout: TIMEOUTS.SELECTOR_WAIT });
       }
 
       // Get page info
       const finalUrl = page.url();
       const title = await page.title();
-      const viewport = page.viewportSize() ?? { width: 1920, height: 1080 };
+      const viewport = page.viewportSize() ?? {
+        width: DEFAULT_VIEWPORT_WIDTH,
+        height: DEFAULT_VIEWPORT_HEIGHT,
+      };
 
       // Capture screenshot
       const imageBase64 = await this.browserManager.screenshotBase64(page, {
         fullPage: options.fullPage ?? true,
         element: options.element,
       });
-
-      // Close the page
-      await page.close();
 
       return {
         success: true,
@@ -2097,17 +2133,12 @@ export class SmartBrowser {
       const message = error instanceof Error ? error.message : String(error);
       logger.smartBrowser.error('Screenshot capture failed', { url, error: message });
 
-      return {
-        success: false,
-        mimeType: 'image/png',
-        url,
-        finalUrl: url,
-        title: '',
-        viewport: { width: options.width ?? 1920, height: options.height ?? 1080 },
-        timestamp: new Date().toISOString(),
-        durationMs: Date.now() - startTime,
-        error: message,
-      };
+      return this.createScreenshotErrorResponse(url, options, startTime, message);
+    } finally {
+      // Ensure page is always closed to prevent resource leaks
+      if (page) {
+        await page.close();
+      }
     }
   }
 
