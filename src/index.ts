@@ -2792,7 +2792,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         // Only 'hour' and 'day' are supported granularities
         const rawGranularity = args.granularity as string || 'day';
         const granularity: 'hour' | 'day' = rawGranularity === 'hour' ? 'hour' : 'day';
-        const periods = (args.periods as number) || 7;
+        const periods = (args.periods as number) || (granularity === 'hour' ? 24 : 7);
         const domain = args.domain as string | undefined;
 
         const periodData = await usageMeter.getUsageByPeriod(granularity, { periods, domain });

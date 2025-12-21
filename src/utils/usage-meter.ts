@@ -546,7 +546,7 @@ export class UsageMeter {
       await this.initialize();
     }
 
-    const numPeriods = options.periods ?? (period === 'hour' ? 24 : 30);
+    const numPeriods = options.periods ?? (period === 'hour' ? 24 : 7);
     const periodMs = period === 'hour' ? 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
     const now = Date.now();
 
