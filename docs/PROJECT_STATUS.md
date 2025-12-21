@@ -281,15 +281,15 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ---
 
-## Current Task: Debug/Replay Trace Recording (O-005)
+## Recently Completed: Debug/Replay Trace Recording (O-005)
 
-**Status:** In Progress
+**Status:** Complete (PR #82)
 
 **Goal:** Add debug/replay trace recording capability for failure reproduction. This enables recording tier decisions, selectors tried, and validation reasons to persistent storage for later analysis and debugging.
 
-| ID    | Task                         | Priority | Effort | Status      |
-|-------|------------------------------|----------|--------|-------------|
-| O-005 | Debug/replay trace recording | Medium   | M      | In Progress |
+| ID    | Task                         | Priority | Effort | Status   |
+|-------|------------------------------|----------|--------|----------|
+| O-005 | Debug/replay trace recording | Medium   | M      | Complete |
 
 ---
 
@@ -351,6 +351,14 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for ful
 
 ### v0.5.0 (2025-12-21)
 
+- Added O-005: Debug/replay trace recording
+  - New DebugTraceRecorder utility for recording browse/API call traces
+  - Records tier decisions, selectors tried, validation reasons, errors
+  - Configurable retention policies (max traces, max age)
+  - Query API for filtering traces by domain, URL pattern, success/failure, error type, tier
+  - Integration with SmartBrowser for automatic recording
+  - 7 new MCP tools: get_debug_traces, get_trace_details, export_trace, clear_debug_traces, get_trace_stats, search_trace_errors, replay_trace
+  - 18 new tests for debug trace recorder
 - Added LI-005: Dynamic domain group learning
   - New DomainGroupLearner module that learns domain groups from successful cross-domain transfers
   - Tracks transfer history between domains and builds relationship graph
