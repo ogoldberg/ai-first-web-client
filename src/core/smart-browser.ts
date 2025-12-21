@@ -1995,6 +1995,123 @@ export class SmartBrowser {
   }
 
   /**
+   * Capture a screenshot of a URL
+   *
+   * This method navigates to the URL using Playwright (required for screenshots)
+   * and captures a screenshot. Screenshots are not available when using
+   * intelligence or lightweight rendering tiers.
+   *
+   * @param url - The URL to screenshot
+   * @param options - Screenshot options
+   * @returns Screenshot result with base64 image data and metadata
+   */
+  async captureScreenshot(
+    url: string,
+    options: {
+      fullPage?: boolean;
+      element?: string;
+      waitForSelector?: string;
+      sessionProfile?: string;
+      width?: number;
+      height?: number;
+    } = {}
+  ): Promise<{
+    success: boolean;
+    image?: string; // base64 encoded PNG
+    mimeType: 'image/png';
+    url: string;
+    finalUrl: string;
+    title: string;
+    viewport: { width: number; height: number };
+    timestamp: string;
+    durationMs: number;
+    error?: string;
+  }> {
+    const startTime = Date.now();
+
+    // SSRF Protection: Validate URL before any processing
+    validateUrlOrThrow(url);
+
+    // Check if Playwright is available
+    if (!BrowserManager.isPlaywrightAvailable()) {
+      const error = BrowserManager.getPlaywrightError();
+      return {
+        success: false,
+        mimeType: 'image/png',
+        url,
+        finalUrl: url,
+        title: '',
+        viewport: { width: options.width ?? 1920, height: options.height ?? 1080 },
+        timestamp: new Date().toISOString(),
+        durationMs: Date.now() - startTime,
+        error: `Screenshot capture requires Playwright. ${error || 'Install with: npm install playwright && npx playwright install chromium'}`,
+      };
+    }
+
+    try {
+      // Navigate to the page using BrowserManager
+      const { page } = await this.browserManager.browse(url, {
+        profile: options.sessionProfile,
+        waitFor: 'networkidle',
+      });
+
+      // Set viewport if custom dimensions specified
+      if (options.width || options.height) {
+        await page.setViewportSize({
+          width: options.width ?? 1920,
+          height: options.height ?? 1080,
+        });
+      }
+
+      // Wait for specific element if requested
+      if (options.waitForSelector) {
+        await page.waitForSelector(options.waitForSelector, { timeout: 10000 });
+      }
+
+      // Get page info
+      const finalUrl = page.url();
+      const title = await page.title();
+      const viewport = page.viewportSize() ?? { width: 1920, height: 1080 };
+
+      // Capture screenshot
+      const imageBase64 = await this.browserManager.screenshotBase64(page, {
+        fullPage: options.fullPage ?? true,
+        element: options.element,
+      });
+
+      // Close the page
+      await page.close();
+
+      return {
+        success: true,
+        image: imageBase64,
+        mimeType: 'image/png',
+        url,
+        finalUrl,
+        title,
+        viewport,
+        timestamp: new Date().toISOString(),
+        durationMs: Date.now() - startTime,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.smartBrowser.error('Screenshot capture failed', { url, error: message });
+
+      return {
+        success: false,
+        mimeType: 'image/png',
+        url,
+        finalUrl: url,
+        title: '',
+        viewport: { width: options.width ?? 1920, height: options.height ?? 1080 },
+        timestamp: new Date().toISOString(),
+        durationMs: Date.now() - startTime,
+        error: message,
+      };
+    }
+  }
+
+  /**
    * Enable debug trace recording globally
    */
   enableDebugRecording(): void {

@@ -281,9 +281,29 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ---
 
-## Open PR: Vue.js Framework Support (I-002)
+## In Progress: Screenshot Capture on Demand (F-005)
 
-**Status:** PR Open - [#90](https://github.com/ogoldberg/ai-first-web-client/pull/90)
+**Status:** In Progress
+
+**Goal:** Add screenshot capture functionality for visual debugging, allowing LLM clients to capture screenshots of rendered pages on demand.
+
+**Implementation Plan:**
+
+- Add screenshot method to SmartBrowser with configurable options (fullPage, viewport, element selector)
+- Create new MCP tool `capture_screenshot` returning base64-encoded image data
+- Support for both Playwright and lightweight renderer paths
+- Include metadata (timestamp, URL, viewport dimensions) with screenshots
+- Comprehensive test coverage
+
+| ID    | Task                         | Priority | Effort | Status      |
+|-------|------------------------------|----------|--------|-------------|
+| F-005 | Screenshot capture on demand | Medium   | M      | In Progress |
+
+---
+
+## Recently Completed: Vue.js Framework Support (I-002)
+
+**Status:** Complete (PR #90)
 
 **Goal:** Add Vue.js ecosystem framework detection to Content Intelligence, enabling data extraction from VitePress and VuePress sites.
 
@@ -292,12 +312,12 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 - VitePress (Vue 3 SSG) detection via generator meta, __VP_HASH_MAP__, VPDoc classes
 - VuePress (Vue 2/3 SSG) detection via generator meta, __VUEPRESS_SSR_CONTEXT__, theme classes
 - Support for both VuePress v1 and v2 patterns
-- HTML content fallback extraction with stripHtmlTags helper
+- Comprehensive JavaScript string escape handling for embedded JSON
 - 9 comprehensive test cases covering all extraction scenarios
 
-| ID    | Task                     | Priority | Effort | Status  |
-|-------|--------------------------|----------|--------|---------|
-| I-002 | Vue.js framework support | Medium   | M      | PR Open |
+| ID    | Task                     | Priority | Effort | Status   |
+|-------|--------------------------|----------|--------|----------|
+| I-002 | Vue.js framework support | Medium   | M      | Complete |
 
 ---
 

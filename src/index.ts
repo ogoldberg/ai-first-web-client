@@ -318,6 +318,68 @@ Use this before browsing to understand domain capabilities and choose optimal st
       },
 
       // ============================================
+      // SCREENSHOT CAPTURE
+      // ============================================
+      {
+        name: 'capture_screenshot',
+        description: `Capture a screenshot of a webpage for visual debugging.
+
+This tool navigates to a URL and captures a screenshot, returning the image as base64-encoded PNG.
+Useful for:
+- Debugging rendering issues
+- Verifying page content visually
+- Capturing evidence of page state
+- Understanding layout and visual elements
+
+**Requirements:**
+- Requires Playwright to be installed (full browser rendering)
+- Cannot use intelligence or lightweight tiers
+
+**Options:**
+- fullPage: Capture entire page including scroll (default: true)
+- element: CSS selector for specific element screenshot
+- waitForSelector: Wait for element before capturing
+- width/height: Custom viewport dimensions
+- sessionProfile: Use authenticated session
+
+Returns base64-encoded PNG image with metadata (URL, title, viewport, timing).`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            url: {
+              type: 'string',
+              description: 'URL to screenshot',
+            },
+            fullPage: {
+              type: 'boolean',
+              description: 'Capture full page including scrolled content (default: true)',
+            },
+            element: {
+              type: 'string',
+              description: 'CSS selector to screenshot specific element instead of full page',
+            },
+            waitForSelector: {
+              type: 'string',
+              description: 'CSS selector to wait for before capturing screenshot',
+            },
+            sessionProfile: {
+              type: 'string',
+              description: 'Session profile for authenticated pages (default: "default")',
+            },
+            width: {
+              type: 'number',
+              description: 'Custom viewport width in pixels (default: 1920)',
+            },
+            height: {
+              type: 'number',
+              description: 'Custom viewport height in pixels (default: 1080)',
+            },
+          },
+          required: ['url'],
+        },
+      },
+
+      // ============================================
       // LEARNING MANAGEMENT
       // ============================================
       {
@@ -1640,6 +1702,38 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'get_domain_capabilities': {
         const capabilities = await smartBrowser.getDomainCapabilities(args.domain as string);
         return jsonResponse(capabilities);
+      }
+
+      // ============================================
+      // SCREENSHOT CAPTURE
+      // ============================================
+      case 'capture_screenshot': {
+        const result = await smartBrowser.captureScreenshot(args.url as string, {
+          fullPage: args.fullPage as boolean | undefined,
+          element: args.element as string | undefined,
+          waitForSelector: args.waitForSelector as string | undefined,
+          sessionProfile: args.sessionProfile as string | undefined,
+          width: args.width as number | undefined,
+          height: args.height as number | undefined,
+        });
+
+        if (!result.success) {
+          return errorResponse(result.error || 'Screenshot capture failed');
+        }
+
+        // Return image data with metadata
+        // Note: For MCP, we return the base64 image in the response
+        // LLM clients can decode and display/save the image
+        return jsonResponse({
+          url: result.url,
+          finalUrl: result.finalUrl,
+          title: result.title,
+          image: result.image,
+          mimeType: result.mimeType,
+          viewport: result.viewport,
+          timestamp: result.timestamp,
+          durationMs: result.durationMs,
+        });
       }
 
       // ============================================
