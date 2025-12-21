@@ -94,6 +94,7 @@ export interface GroupSuggestion {
   confidence: number;
   reason: string;
   evidence: {
+    totalTransfers: number;
     transferSuccesses: number;
     avgSimilarity: number;
   };
@@ -120,11 +121,24 @@ class UnionFind {
     if (!this.parent.has(x)) {
       this.parent.set(x, x);
       this.rank.set(x, 0);
+      return x;
     }
-    if (this.parent.get(x) !== x) {
-      this.parent.set(x, this.find(this.parent.get(x)!));
+
+    // Find root iteratively
+    let root = x;
+    while (this.parent.get(root) !== root) {
+      root = this.parent.get(root)!;
     }
-    return this.parent.get(x)!;
+
+    // Path compression iteratively
+    let curr = x;
+    while (this.parent.get(curr) !== root) {
+      const next = this.parent.get(curr)!;
+      this.parent.set(curr, root);
+      curr = next;
+    }
+
+    return root;
   }
 
   union(x: string, y: string): void {
@@ -163,6 +177,10 @@ export class DomainGroupLearner {
   private learnedGroups: Map<string, LearnedDomainGroup> = new Map();
   private store: PersistentStore<LearnedGroupsData>;
   private nextGroupId = 1;
+
+  // Incremental stats for O(1) getStats() performance
+  private successfulTransferCount = 0;
+  private uniqueDomains: Set<string> = new Set();
 
   constructor(filePath: string = './learned-domain-groups.json') {
     this.store = new PersistentStore<LearnedGroupsData>(filePath, {
@@ -212,6 +230,13 @@ export class DomainGroupLearner {
     };
 
     this.transfers.push(record);
+
+    // Update incremental stats
+    this.uniqueDomains.add(source);
+    this.uniqueDomains.add(target);
+    if (success) {
+      this.successfulTransferCount++;
+    }
 
     log.debug('Transfer recorded', {
       source,
@@ -322,7 +347,8 @@ export class DomainGroupLearner {
         successfulTransfers,
         totalTransfers,
         domains.length,
-        avgSimilarity
+        avgSimilarity,
+        groupRels.length
       );
 
       const suggestion: GroupSuggestion = {
@@ -330,6 +356,7 @@ export class DomainGroupLearner {
         confidence,
         reason: `${successfulTransfers} successful transfers between ${domains.length} domains`,
         evidence: {
+          totalTransfers,
           transferSuccesses: successfulTransfers,
           avgSimilarity,
         },
@@ -353,7 +380,8 @@ export class DomainGroupLearner {
     successfulTransfers: number,
     totalTransfers: number,
     domainCount: number,
-    avgSimilarity: number
+    avgSimilarity: number,
+    relationshipCount: number
   ): number {
     // Base confidence from success rate
     const successRate = totalTransfers > 0 ? successfulTransfers / totalTransfers : 0;
@@ -361,8 +389,9 @@ export class DomainGroupLearner {
     // More transfers = more confidence
     const transferFactor = Math.min(1, successfulTransfers / 10);
 
-    // More domains with connections = more confidence
-    const connectionDensity = domainCount > 1 ? successfulTransfers / (domainCount * (domainCount - 1) / 2) : 0;
+    // Graph density: (number of edges) / (number of possible edges)
+    const maxPossibleEdges = domainCount > 1 ? (domainCount * (domainCount - 1)) / 2 : 1;
+    const connectionDensity = relationshipCount / maxPossibleEdges;
 
     // Similarity adds confidence
     const similarityFactor = avgSimilarity;
@@ -417,7 +446,7 @@ export class DomainGroupLearner {
       lastUpdated: now,
       source: 'transfer_learning',
       evidence: {
-        totalTransfers: suggestion.evidence.transferSuccesses,
+        totalTransfers: suggestion.evidence.totalTransfers,
         successfulTransfers: suggestion.evidence.transferSuccesses,
         avgSimilarity: suggestion.evidence.avgSimilarity,
       },
@@ -496,15 +525,7 @@ export class DomainGroupLearner {
     learnedGroups: number;
     registeredGroups: number;
   } {
-    const domains = new Set<string>();
-    let successfulTransfers = 0;
-
-    for (const t of this.transfers) {
-      domains.add(t.sourceDomain);
-      domains.add(t.targetDomain);
-      if (t.success) successfulTransfers++;
-    }
-
+    // Use incremental counters for O(1) performance
     const relationships = this.getRelationships();
     const registeredGroups = Array.from(this.learnedGroups.values()).filter(
       (g) => g.registered
@@ -512,8 +533,8 @@ export class DomainGroupLearner {
 
     return {
       totalTransfers: this.transfers.length,
-      successfulTransfers,
-      uniqueDomains: domains.size,
+      successfulTransfers: this.successfulTransferCount,
+      uniqueDomains: this.uniqueDomains.size,
       relationships: relationships.length,
       learnedGroups: this.learnedGroups.size,
       registeredGroups,
@@ -607,6 +628,18 @@ export class DomainGroupLearner {
     if (data) {
       this.transfers = data.transfers || [];
       this.learnedGroups = new Map();
+
+      // Rebuild incremental stats from loaded transfers
+      this.successfulTransferCount = 0;
+      this.uniqueDomains.clear();
+      for (const t of this.transfers) {
+        this.uniqueDomains.add(t.sourceDomain);
+        this.uniqueDomains.add(t.targetDomain);
+        if (t.success) {
+          this.successfulTransferCount++;
+        }
+      }
+
       for (const group of data.learnedGroups || []) {
         this.learnedGroups.set(group.name, group);
         // Update nextGroupId
@@ -673,6 +706,8 @@ export class DomainGroupLearner {
     this.transfers = [];
     this.learnedGroups.clear();
     this.nextGroupId = 1;
+    this.successfulTransferCount = 0;
+    this.uniqueDomains.clear();
     this.save();
   }
 

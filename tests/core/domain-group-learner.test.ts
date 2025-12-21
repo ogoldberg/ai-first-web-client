@@ -201,21 +201,24 @@ describe('DomainGroupLearner', () => {
 
   describe('mergeIntoGroup', () => {
     it('should add new domains to an existing group', async () => {
-      // First create a group by having many transfers
-      for (let i = 0; i < 5; i++) {
-        learner.recordTransfer('a.com', 'b.com', true, { similarity: 0.9 });
+      // Create sufficient transfers to guarantee a group is formed
+      // Need high success rate, multiple relationships, and high similarity
+      for (let i = 0; i < 10; i++) {
+        learner.recordTransfer('merge-a.com', 'merge-b.com', true, { similarity: 0.95 });
+        learner.recordTransfer('merge-b.com', 'merge-a.com', true, { similarity: 0.95 });
       }
 
       const groups = learner.getLearnedGroups();
-      if (groups.length > 0) {
-        const groupName = groups[0].name;
-        const result = learner.mergeIntoGroup(groupName, ['c.com', 'd.com']);
-        expect(result).toBe(true);
+      // Ensure we have at least one group for this test to be meaningful
+      expect(groups.length).toBeGreaterThan(0);
 
-        const updatedGroup = learner.getLearnedGroups().find(g => g.name === groupName);
-        expect(updatedGroup?.domains).toContain('c.com');
-        expect(updatedGroup?.domains).toContain('d.com');
-      }
+      const groupName = groups[0].name;
+      const result = learner.mergeIntoGroup(groupName, ['merge-c.com', 'merge-d.com']);
+      expect(result).toBe(true);
+
+      const updatedGroup = learner.getLearnedGroups().find(g => g.name === groupName);
+      expect(updatedGroup?.domains).toContain('merge-c.com');
+      expect(updatedGroup?.domains).toContain('merge-d.com');
     });
 
     it('should return false for non-existent group', () => {
