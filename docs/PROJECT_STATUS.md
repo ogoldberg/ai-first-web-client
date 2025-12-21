@@ -281,6 +281,26 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ---
 
+## In Progress: HAR File Export (F-006)
+
+**Status:** In Progress
+
+**Goal:** Add HAR (HTTP Archive) file export for network debugging, allowing LLM clients to capture and export network traffic during browsing sessions.
+
+**Implementation Plan:**
+
+- Add HAR generation method to SmartBrowser/BrowserManager
+- Create new MCP tool `export_har` returning HAR JSON data
+- Support for capturing request/response headers, bodies, timing
+- Include page timing and navigation events
+- Comprehensive test coverage
+
+| ID    | Task            | Priority | Effort | Status      |
+|-------|-----------------|----------|--------|-------------|
+| F-006 | HAR file export | Medium   | M      | In Progress |
+
+---
+
 ## Recently Completed: Screenshot Capture on Demand (F-005)
 
 **Status:** Complete (PR #91)
