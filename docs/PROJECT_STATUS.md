@@ -281,6 +281,18 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ---
 
+## Current Task: Extraction Quality Benchmarking (O-006)
+
+**Status:** In Progress
+
+**Goal:** Create an offline corpus and regression suite for content extraction and table parsing quality benchmarking.
+
+| ID    | Task                            | Priority | Effort | Status      |
+|-------|---------------------------------|----------|--------|-------------|
+| O-006 | Extraction quality benchmarking | Medium   | L      | In Progress |
+
+---
+
 ## Recently Completed: Debug/Replay Trace Recording (O-005)
 
 **Status:** Complete (PR #82)
