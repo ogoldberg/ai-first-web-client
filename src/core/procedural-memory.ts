@@ -19,6 +19,8 @@
 import * as crypto from 'crypto';
 import { PersistentStore } from '../utils/persistent-store.js';
 import { logger } from '../utils/logger.js';
+import type { VectorStore, SearchResult } from '../utils/vector-store.js';
+import type { EmbeddingProvider, EmbeddingResult } from '../utils/embedding-provider.js';
 import type {
   BrowsingSkill,
   BrowsingAction,
@@ -149,12 +151,33 @@ export class ProceduralMemory {
   // User feedback
   private feedbackLog: SkillFeedback[] = [];
 
+  // VectorStore integration for semantic skill retrieval (LI-006)
+  private vectorStore: VectorStore | null = null;
+  private embeddingProvider: EmbeddingProvider | null = null;
+
   constructor(config: Partial<ProceduralMemoryConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
     this.store = new PersistentStore<ProceduralMemoryData>(this.config.filePath, {
       componentName: 'ProceduralMemory',
       debounceMs: 1000, // Batch rapid skill updates
     });
+  }
+
+  /**
+   * Set VectorStore and EmbeddingProvider for semantic skill retrieval (LI-006)
+   * When set, retrieveSkills will use semantic search instead of hash-based matching
+   */
+  setVectorStore(vectorStore: VectorStore, embeddingProvider: EmbeddingProvider): void {
+    this.vectorStore = vectorStore;
+    this.embeddingProvider = embeddingProvider;
+    logger.proceduralMemory.info('VectorStore integration enabled for semantic skill retrieval');
+  }
+
+  /**
+   * Check if VectorStore integration is available
+   */
+  hasVectorStoreIntegration(): boolean {
+    return this.vectorStore !== null && this.embeddingProvider !== null;
   }
 
   async initialize(): Promise<void> {
@@ -326,11 +349,205 @@ export class ProceduralMemory {
   }
 
   // ============================================
+  // VECTORSTORE INTEGRATION (LI-006)
+  // ============================================
+
+  /**
+   * Convert a skill to a text representation for semantic embedding
+   * Creates a descriptive text that captures the skill's key characteristics
+   */
+  private skillToText(skill: BrowsingSkill): string {
+    const parts: string[] = [];
+
+    // Skill identity
+    parts.push(`Skill: ${skill.name}`);
+    if (skill.description) {
+      parts.push(`Description: ${skill.description}`);
+    }
+
+    // Preconditions
+    if (skill.preconditions.domainPatterns?.length) {
+      parts.push(`Domain patterns: ${skill.preconditions.domainPatterns.join(', ')}`);
+    }
+    if (skill.preconditions.pageType) {
+      parts.push(`Page type: ${skill.preconditions.pageType}`);
+    }
+    if (skill.preconditions.requiredSelectors?.length) {
+      parts.push(`Required selectors: ${skill.preconditions.requiredSelectors.join(', ')}`);
+    }
+    if (skill.preconditions.contentTypeHints?.length) {
+      parts.push(`Content types: ${skill.preconditions.contentTypeHints.join(', ')}`);
+    }
+
+    // Actions
+    if (skill.actionSequence.length > 0) {
+      const actionTypes = [...new Set(skill.actionSequence.map((a: BrowsingAction) => a.type))];
+      parts.push(`Action types: ${actionTypes.join(', ')}`);
+    }
+
+    return parts.join('. ');
+  }
+
+  /**
+   * Convert a page context to text representation for semantic embedding
+   */
+  private contextToText(context: PageContext): string {
+    const parts: string[] = [];
+
+    if (context.domain) {
+      parts.push(`Domain: ${context.domain}`);
+    }
+    if (context.pageType) {
+      parts.push(`Page type: ${context.pageType}`);
+    }
+    if (context.url) {
+      // Extract path pattern without specific IDs
+      try {
+        const url = new URL(context.url);
+        const pathPattern = url.pathname.replace(/\/\d+/g, '/{id}');
+        parts.push(`URL pattern: ${pathPattern}`);
+      } catch {
+        // Invalid URL, skip
+      }
+    }
+    if (context.availableSelectors?.length) {
+      parts.push(`Available selectors: ${context.availableSelectors.slice(0, 5).join(', ')}`);
+    }
+    if (context.hasForm) {
+      parts.push('Has form');
+    }
+    if (context.hasPagination) {
+      parts.push('Has pagination');
+    }
+    if (context.hasTable) {
+      parts.push('Has table');
+    }
+
+    return parts.join('. ');
+  }
+
+  /**
+   * Add a skill to VectorStore for semantic retrieval
+   */
+  private async addSkillToVectorStore(skill: BrowsingSkill): Promise<void> {
+    if (!this.vectorStore || !this.embeddingProvider) {
+      return;
+    }
+
+    try {
+      const text = this.skillToText(skill);
+      const embeddingResult = await this.embeddingProvider.generateEmbedding(text);
+
+      await this.vectorStore.add({
+        id: skill.id,
+        vector: embeddingResult.vector,
+        model: embeddingResult.model,
+        version: 1,
+        createdAt: Date.now(),
+        entityType: 'skill',
+        domain: skill.preconditions.domainPatterns?.[0],
+        text,
+      });
+
+      logger.proceduralMemory.debug('Added skill to VectorStore', {
+        skillId: skill.id,
+        skillName: skill.name,
+      });
+    } catch (error) {
+      logger.proceduralMemory.warn('Failed to add skill to VectorStore', {
+        skillId: skill.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  /**
+   * Retrieve skills using VectorStore semantic search
+   */
+  private async retrieveSkillsFromVectorStore(
+    context: PageContext,
+    topK: number
+  ): Promise<SkillMatch[]> {
+    if (!this.vectorStore || !this.embeddingProvider) {
+      return [];
+    }
+
+    try {
+      const text = this.contextToText(context);
+      const embeddingResult = await this.embeddingProvider.generateEmbedding(text);
+
+      const results: SearchResult[] = await this.vectorStore.searchFiltered(
+        embeddingResult.vector,
+        { entityType: 'skill' },
+        { limit: topK * 2 } // Fetch extra to allow for filtering
+      );
+
+      const matches: SkillMatch[] = [];
+      for (const result of results) {
+        const skill = this.skills.get(result.id);
+        if (!skill) continue;
+
+        // Check preconditions
+        const preconditionCheck = this.checkPreconditions(skill.preconditions, context);
+
+        // Use VectorStore score (already 0-1)
+        if (result.score >= this.config.similarityThreshold || preconditionCheck.met) {
+          matches.push({
+            skill,
+            similarity: result.score,
+            preconditionsMet: preconditionCheck.met,
+            reason: preconditionCheck.reason,
+          });
+        }
+      }
+
+      // Sort by combined score
+      matches.sort((a, b) => {
+        const scoreA = a.similarity + (a.preconditionsMet ? 0.2 : 0);
+        const scoreB = b.similarity + (b.preconditionsMet ? 0.2 : 0);
+        return scoreB - scoreA;
+      });
+
+      logger.proceduralMemory.debug('Retrieved skills from VectorStore', {
+        contextDomain: context.domain,
+        matches: matches.length,
+        topK,
+      });
+
+      return matches.slice(0, topK);
+    } catch (error) {
+      logger.proceduralMemory.warn('VectorStore search failed, falling back to hash-based', {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return [];
+    }
+  }
+
+  // ============================================
   // SKILL RETRIEVAL
   // ============================================
 
   /**
    * Retrieve the most relevant skills for a given page context
+   * Uses VectorStore semantic search when available (LI-006), falls back to hash-based matching
+   */
+  async retrieveSkillsAsync(context: PageContext, topK: number = 3): Promise<SkillMatch[]> {
+    // Try VectorStore first if available
+    if (this.hasVectorStoreIntegration()) {
+      const vectorResults = await this.retrieveSkillsFromVectorStore(context, topK);
+      if (vectorResults.length > 0) {
+        return vectorResults;
+      }
+      // Fall through to hash-based if VectorStore returned no results
+    }
+
+    // Use hash-based matching as fallback
+    return this.retrieveSkills(context, topK);
+  }
+
+  /**
+   * Retrieve the most relevant skills for a given page context
+   * Uses hash-based cosine similarity (synchronous, original implementation)
    */
   retrieveSkills(context: PageContext, topK: number = 3): SkillMatch[] {
     const contextEmbedding = this.createContextEmbedding(context);
@@ -617,6 +834,10 @@ export class ProceduralMemory {
     }
 
     this.skills.set(skill.id, skill);
+
+    // Add to VectorStore for semantic retrieval (LI-006)
+    await this.addSkillToVectorStore(skill);
+
     await this.save();
   }
 
@@ -1618,6 +1839,13 @@ export class ProceduralMemory {
     };
 
     this.skills.set(skill.id, skill);
+
+    // Add to VectorStore for semantic retrieval (LI-006)
+    // Fire-and-forget to maintain sync return type
+    this.addSkillToVectorStore(skill).catch((err) => {
+      logger.proceduralMemory.warn(`Failed to add manual skill to VectorStore: ${err}`);
+    });
+
     this.save();
 
     return skill;

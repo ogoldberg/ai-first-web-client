@@ -1135,4 +1135,198 @@ describe('ProceduralMemory', () => {
       expect(byDomain.get('unknown')?.length).toBe(1);
     });
   });
+
+  // ============================================
+  // VECTORSTORE INTEGRATION TESTS (LI-006)
+  // ============================================
+  describe('VectorStore Integration (LI-006)', () => {
+    it('should report no VectorStore integration by default', () => {
+      expect(memory.hasVectorStoreIntegration()).toBe(false);
+    });
+
+    it('should set VectorStore integration', async () => {
+      // Create mock VectorStore and EmbeddingProvider
+      const mockVectorStore = {
+        add: async () => {},
+        get: async () => null,
+        searchFiltered: async () => [],
+        initialize: async () => {},
+        isUsingLanceDB: () => false,
+        getStats: async () => ({ totalRecords: 0, tableExists: false }),
+      } as any;
+
+      const mockEmbeddingProvider = {
+        generateEmbedding: async (text: string) => ({
+          vector: new Float32Array(384).fill(0.1),
+          model: 'test-model',
+        }),
+        getDimensions: () => 384,
+      } as any;
+
+      memory.setVectorStore(mockVectorStore, mockEmbeddingProvider);
+      expect(memory.hasVectorStoreIntegration()).toBe(true);
+    });
+
+    it('should add skills to VectorStore when integration is enabled', async () => {
+      const addCalls: any[] = [];
+      const mockVectorStore = {
+        add: async (record: any) => {
+          addCalls.push(record);
+        },
+        get: async () => null,
+        searchFiltered: async () => [],
+        initialize: async () => {},
+        isUsingLanceDB: () => false,
+        getStats: async () => ({ totalRecords: 0, tableExists: false }),
+      } as any;
+
+      const mockEmbeddingProvider = {
+        generateEmbedding: async (text: string) => ({
+          vector: new Float32Array(384).fill(0.1),
+          model: 'test-model',
+        }),
+        getDimensions: () => 384,
+      } as any;
+
+      memory.setVectorStore(mockVectorStore, mockEmbeddingProvider);
+
+      // Add a skill via addSkill
+      const skill = {
+        id: 'test-skill-id',
+        name: 'Test Skill',
+        description: 'A test skill for VectorStore integration',
+        preconditions: { domainPatterns: ['example.com'] },
+        actionSequence: [createTestAction('click', { selector: '.btn' })],
+        embedding: [0.1, 0.2, 0.3],
+        metrics: {
+          successCount: 0,
+          failureCount: 0,
+          avgDuration: 0,
+          lastUsed: Date.now(),
+          timesUsed: 0,
+        },
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      };
+
+      await memory.addSkill(skill);
+
+      // Wait a bit for async operations
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      expect(addCalls.length).toBe(1);
+      expect(addCalls[0].id).toBe('test-skill-id');
+      expect(addCalls[0].entityType).toBe('skill');
+      expect(addCalls[0].vector).toBeInstanceOf(Float32Array);
+    });
+
+    it('should use retrieveSkillsAsync with VectorStore when available', async () => {
+      // First add a skill to memory directly
+      const skill = memory.addManualSkill(
+        'search_skill',
+        'A searchable skill for testing',
+        { domainPatterns: ['search.com'], pageType: 'list' },
+        [createTestAction('click', { selector: '.search-btn' })]
+      );
+
+      // Wait for async VectorStore add to complete (fire-and-forget)
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      const searchResults: any[] = [];
+      const mockVectorStore = {
+        add: async () => {},
+        get: async () => null,
+        searchFiltered: async (vector: Float32Array, filter: any, options: any) => {
+          searchResults.push({ vector, filter, options });
+          return [{ id: skill.id, score: 0.9, domain: 'search.com' }];
+        },
+        initialize: async () => {},
+        isUsingLanceDB: () => true,
+        getStats: async () => ({ totalRecords: 1, tableExists: true }),
+      } as any;
+
+      const mockEmbeddingProvider = {
+        generateEmbedding: async (text: string) => ({
+          vector: new Float32Array(384).fill(0.1),
+          model: 'test-model',
+        }),
+        getDimensions: () => 384,
+      } as any;
+
+      memory.setVectorStore(mockVectorStore, mockEmbeddingProvider);
+
+      const context = createTestContext('search.com', { pageType: 'list' });
+      const matches = await memory.retrieveSkillsAsync(context, 5);
+
+      // Should have called VectorStore
+      expect(searchResults.length).toBe(1);
+      expect(searchResults[0].filter.entityType).toBe('skill');
+
+      // Should return matched skills
+      expect(matches.length).toBeGreaterThanOrEqual(1);
+      expect(matches[0].skill.id).toBe(skill.id);
+    });
+
+    it('should fallback to retrieveSkills when VectorStore not available', async () => {
+      // Without VectorStore, retrieveSkillsAsync should use hash-based embeddings
+      const skill = memory.addManualSkill(
+        'fallback_skill',
+        'A skill for fallback testing',
+        { domainPatterns: ['fallback.com'], pageType: 'list' },
+        [createTestAction('click', { selector: '.btn' })]
+      );
+
+      const context = createTestContext('fallback.com', { pageType: 'list' });
+      const matches = await memory.retrieveSkillsAsync(context, 5);
+
+      // Should still return matches using the sync method
+      expect(matches.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('should handle VectorStore errors gracefully', async () => {
+      const mockVectorStore = {
+        add: async () => {
+          throw new Error('VectorStore add failed');
+        },
+        get: async () => null,
+        searchFiltered: async () => {
+          throw new Error('VectorStore search failed');
+        },
+        initialize: async () => {},
+        isUsingLanceDB: () => false,
+        getStats: async () => ({ totalRecords: 0, tableExists: false }),
+      } as any;
+
+      const mockEmbeddingProvider = {
+        generateEmbedding: async (text: string) => ({
+          vector: new Float32Array(384).fill(0.1),
+          model: 'test-model',
+        }),
+        getDimensions: () => 384,
+      } as any;
+
+      memory.setVectorStore(mockVectorStore, mockEmbeddingProvider);
+
+      // Adding a skill should not throw even with VectorStore error
+      const skill = memory.addManualSkill(
+        'error_test_skill',
+        'A skill for error testing',
+        { domainPatterns: ['error.com'] },
+        [createTestAction('click')]
+      );
+
+      expect(skill).toBeDefined();
+      expect(skill.id).toBeTruthy();
+
+      // Wait for async error to be handled
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      // retrieveSkillsAsync should fallback gracefully
+      const context = createTestContext('error.com');
+      const matches = await memory.retrieveSkillsAsync(context, 5);
+
+      // Should still get results from sync retrieval
+      expect(matches).toBeInstanceOf(Array);
+    });
+  });
 });
