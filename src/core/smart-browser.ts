@@ -59,6 +59,11 @@ import {
   initializeSemanticInfrastructure,
   type SemanticInfrastructure,
 } from './semantic-init.js';
+import {
+  DebugTraceRecorder,
+  createDebugTrace,
+  getDebugTraceRecorder,
+} from '../utils/debug-trace-recorder.js';
 
 // Procedural memory thresholds
 const SKILL_APPLICATION_THRESHOLD = 0.8;  // Minimum similarity to auto-apply a skill
@@ -123,6 +128,12 @@ export interface SmartBrowseOptions extends BrowseOptions {
   // 'cached': Prefer cached content, only fetch if not in cache
   // 'any': Use cache if available and not stale, otherwise fetch (default)
   freshnessRequirement?: FreshnessRequirement;
+
+  // === Debug Recording (O-005) ===
+
+  // Record debug trace for this operation
+  // Trace will be stored persistently for later analysis
+  recordDebugTrace?: boolean;
 }
 
 export interface SmartBrowseResult extends BrowseResult {
@@ -186,6 +197,7 @@ export class SmartBrowser {
   private tieredFetcher: TieredFetcher;
   private currentTrajectory: BrowsingTrajectory | null = null;
   private semanticInfrastructure: SemanticInfrastructure | null = null;
+  private debugRecorder: DebugTraceRecorder;
 
   constructor(
     private browserManager: BrowserManager,
@@ -196,11 +208,13 @@ export class SmartBrowser {
     this.learningEngine = new LearningEngine();
     this.proceduralMemory = new ProceduralMemory();
     this.tieredFetcher = new TieredFetcher(browserManager, contentExtractor);
+    this.debugRecorder = getDebugTraceRecorder();
   }
 
   async initialize(): Promise<void> {
     await this.learningEngine.initialize();
     await this.proceduralMemory.initialize();
+    await this.debugRecorder.initialize();
 
     // Auto-initialize semantic matching if dependencies available (LI-001)
     const semanticResult = await initializeSemanticInfrastructure();
@@ -713,7 +727,7 @@ export class SmartBrowser {
       playwrightTierAttempts
     );
 
-    return {
+    const browseResult: SmartBrowseResult = {
       url,
       title: extractedContent.title,
       content: {
@@ -737,6 +751,21 @@ export class SmartBrowser {
       decisionTrace,
       additionalPages,
     };
+
+    // Record debug trace if enabled (O-005)
+    if (options.recordDebugTrace) {
+      await this.recordDebugTraceForResult(
+        url,
+        finalUrl,
+        learning.confidenceLevel !== 'low',
+        Date.now() - startTime,
+        browseResult,
+        decisionTrace,
+        options
+      );
+    }
+
+    return browseResult;
   }
 
   /**
@@ -923,7 +952,7 @@ export class SmartBrowser {
         result.tierAttempts
       );
 
-      return {
+      const tieredResult: SmartBrowseResult = {
         url,
         title: result.content.title,
         content: {
@@ -945,6 +974,21 @@ export class SmartBrowser {
         fieldConfidence,
         decisionTrace,
       };
+
+      // Record debug trace if enabled (O-005)
+      if (options.recordDebugTrace) {
+        await this.recordDebugTraceForResult(
+          url,
+          result.finalUrl,
+          learning.confidenceLevel !== 'low',
+          result.timing.total,
+          tieredResult,
+          decisionTrace,
+          options
+        );
+      }
+
+      return tieredResult;
     } catch (error) {
       logger.smartBrowser.error(`Tiered fetching error: ${error}`);
       throw error;
@@ -1866,5 +1910,108 @@ export class SmartBrowser {
    */
   getSemanticInfrastructure(): SemanticInfrastructure | null {
     return this.semanticInfrastructure;
+  }
+
+  // ============================================
+  // DEBUG TRACE RECORDING (O-005)
+  // ============================================
+
+  /**
+   * Get the debug trace recorder for direct access
+   */
+  getDebugRecorder(): DebugTraceRecorder {
+    return this.debugRecorder;
+  }
+
+  /**
+   * Record a debug trace for a browse result
+   */
+  private async recordDebugTraceForResult(
+    url: string,
+    finalUrl: string,
+    success: boolean,
+    durationMs: number,
+    result: SmartBrowseResult,
+    decisionTrace: DecisionTrace | undefined,
+    options: SmartBrowseOptions
+  ): Promise<void> {
+    try {
+      // Build the trace with decision trace always included for recording
+      // (even if not requested in response)
+      const traceForRecording = decisionTrace ?? this.buildDecisionTraceIfRequested(
+        { ...options, includeDecisionTrace: true },
+        result.content.html,
+        finalUrl,
+        result.learning.tiersAttempted?.map(tier => ({
+          tier,
+          success: tier === result.learning.renderTier,
+          durationMs: result.learning.tierTiming?.[tier] ?? 0,
+        })) ?? []
+      );
+
+      const debugTrace = createDebugTrace(url, finalUrl, success, durationMs, {
+        decisionTrace: traceForRecording,
+        network: result.network,
+        validation: result.learning.validationResult,
+        content: {
+          text: result.content.text,
+          markdown: result.content.markdown,
+          tables: result.tables?.length ?? 0,
+          apis: result.discoveredApis.length,
+        },
+        skills: result.learning.skillsMatched
+          ? {
+              matched: result.learning.skillsMatched.map(s => s.skill.name),
+              applied: result.learning.skillApplied,
+              trajectoryRecorded: result.learning.trajectoryRecorded ?? false,
+            }
+          : undefined,
+        anomaly: result.learning.anomalyDetected
+          ? {
+              type: result.learning.anomalyType ?? 'unknown',
+              action: result.learning.anomalyAction ?? 'none',
+              confidence: 0.8,
+            }
+          : undefined,
+        options: options as Record<string, unknown>,
+        sessionProfile: options.sessionProfile,
+        tier: result.learning.renderTier,
+        fellBack: result.learning.tierFellBack,
+        tiersAttempted: result.learning.tiersAttempted,
+        budget: result.learning.budgetInfo
+          ? {
+              maxLatencyMs: options.maxLatencyMs,
+              maxCostTier: options.maxCostTier,
+              latencyExceeded: result.learning.budgetInfo.latencyExceeded,
+              tiersSkipped: result.learning.budgetInfo.tiersSkipped,
+            }
+          : undefined,
+      });
+
+      await this.debugRecorder.record(debugTrace);
+    } catch (error) {
+      logger.smartBrowser.error(`Failed to record debug trace (non-fatal): ${error}`);
+    }
+  }
+
+  /**
+   * Enable debug trace recording globally
+   */
+  enableDebugRecording(): void {
+    this.debugRecorder.enable();
+  }
+
+  /**
+   * Disable debug trace recording globally
+   */
+  disableDebugRecording(): void {
+    this.debugRecorder.disable();
+  }
+
+  /**
+   * Check if debug trace recording is enabled
+   */
+  isDebugRecordingEnabled(): boolean {
+    return this.debugRecorder.getConfig().enabled;
   }
 }

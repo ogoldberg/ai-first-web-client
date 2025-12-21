@@ -1120,6 +1120,177 @@ Shows which domains have auth configured and what types.`,
           properties: {},
         },
       },
+
+      // ============================================
+      // DEBUG TRACE RECORDING (O-005)
+      // ============================================
+      {
+        name: 'get_debug_traces',
+        description: `Query recorded debug traces for failure analysis and replay.
+
+Debug traces capture comprehensive information about browse operations:
+- Tier decisions (which tiers were tried and why)
+- Selector attempts (which selectors succeeded/failed)
+- Network activity (API requests, failures)
+- Validation results
+- Errors encountered
+- Skills applied
+- Anomalies detected
+
+Use this to debug failures and understand what happened during a browse operation.
+
+Traces are stored persistently and can be exported for sharing.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            domain: {
+              type: 'string',
+              description: 'Filter by domain (e.g., "example.com")',
+            },
+            urlPattern: {
+              type: 'string',
+              description: 'Filter by URL pattern (regex)',
+            },
+            success: {
+              type: 'boolean',
+              description: 'Filter by success/failure status',
+            },
+            errorType: {
+              type: 'string',
+              enum: ['timeout', 'network', 'selector', 'validation', 'bot_challenge', 'rate_limit', 'auth', 'unknown'],
+              description: 'Filter by error type',
+            },
+            tier: {
+              type: 'string',
+              enum: ['intelligence', 'lightweight', 'playwright'],
+              description: 'Filter by final tier used',
+            },
+            limit: {
+              type: 'number',
+              description: 'Maximum results to return (default: 20)',
+            },
+            offset: {
+              type: 'number',
+              description: 'Offset for pagination',
+            },
+          },
+        },
+      },
+      {
+        name: 'get_debug_trace',
+        description: `Get a specific debug trace by ID.
+
+Returns the full trace with all captured data for detailed analysis.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            id: {
+              type: 'string',
+              description: 'The trace ID to retrieve',
+            },
+          },
+          required: ['id'],
+        },
+      },
+      {
+        name: 'get_debug_trace_stats',
+        description: `Get statistics about recorded debug traces.
+
+Shows:
+- Total traces stored
+- Traces by domain
+- Traces by tier
+- Success/failure counts
+- Storage size
+- Oldest/newest trace timestamps`,
+        inputSchema: {
+          type: 'object',
+          properties: {},
+        },
+      },
+      {
+        name: 'configure_debug_recording',
+        description: `Configure debug trace recording.
+
+Control when and how traces are recorded:
+- Enable/disable globally
+- Set domains to always or never record
+- Record only failures
+- Set retention limits (max traces, max age)
+
+Recording is disabled by default to avoid overhead. Enable it when debugging.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            enabled: {
+              type: 'boolean',
+              description: 'Enable/disable recording globally',
+            },
+            onlyRecordFailures: {
+              type: 'boolean',
+              description: 'Only record failed operations',
+            },
+            alwaysRecordDomain: {
+              type: 'string',
+              description: 'Add a domain to always-record list',
+            },
+            neverRecordDomain: {
+              type: 'string',
+              description: 'Add a domain to never-record list',
+            },
+            maxTraces: {
+              type: 'number',
+              description: 'Maximum traces to retain (default: 1000)',
+            },
+            maxAgeHours: {
+              type: 'number',
+              description: 'Maximum age of traces in hours (default: 168 = 7 days)',
+            },
+          },
+        },
+      },
+      {
+        name: 'export_debug_traces',
+        description: `Export debug traces for sharing or replay.
+
+Exports the specified traces to a portable format that can be shared
+for debugging or used to replay operations.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            ids: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'List of trace IDs to export',
+            },
+          },
+          required: ['ids'],
+        },
+      },
+      {
+        name: 'delete_debug_trace',
+        description: `Delete a debug trace by ID.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            id: {
+              type: 'string',
+              description: 'The trace ID to delete',
+            },
+          },
+          required: ['id'],
+        },
+      },
+      {
+        name: 'clear_debug_traces',
+        description: `Clear all recorded debug traces.
+
+Use with caution - this permanently deletes all stored traces.`,
+        inputSchema: {
+          type: 'object',
+          properties: {},
+        },
+      },
     ],
   };
 });
@@ -2303,6 +2474,148 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return jsonResponse({
           totalDomains: configuredDomains.length,
           domains: configuredDomains,
+        });
+      }
+
+      // ============================================
+      // DEBUG TRACE RECORDING (O-005)
+      // ============================================
+      case 'get_debug_traces': {
+        const debugRecorder = smartBrowser.getDebugRecorder();
+        const traces = await debugRecorder.query({
+          domain: args.domain as string | undefined,
+          urlPattern: args.urlPattern as string | undefined,
+          success: args.success as boolean | undefined,
+          errorType: args.errorType as ('timeout' | 'network' | 'selector' | 'validation' | 'bot_challenge' | 'rate_limit' | 'auth' | 'unknown') | undefined,
+          tier: args.tier as ('intelligence' | 'lightweight' | 'playwright') | undefined,
+          limit: (args.limit as number) ?? 20,
+          offset: args.offset as number | undefined,
+        });
+
+        return jsonResponse({
+          schemaVersion: addSchemaVersion({}).schemaVersion,
+          count: traces.length,
+          traces: traces.map(t => ({
+            id: t.id,
+            timestamp: new Date(t.timestamp).toISOString(),
+            url: t.url,
+            domain: t.domain,
+            success: t.success,
+            durationMs: t.durationMs,
+            tier: t.tiers.finalTier,
+            fellBack: t.tiers.fellBack,
+            errorCount: t.errors.length,
+            contentLength: t.content.textLength,
+          })),
+        });
+      }
+
+      case 'get_debug_trace': {
+        const debugRecorder = smartBrowser.getDebugRecorder();
+        const trace = await debugRecorder.getTrace(args.id as string);
+
+        if (!trace) {
+          return jsonResponse({
+            schemaVersion: addSchemaVersion({}).schemaVersion,
+            error: `Trace not found: ${args.id}`,
+          });
+        }
+
+        return jsonResponse({
+          schemaVersion: addSchemaVersion({}).schemaVersion,
+          trace,
+        });
+      }
+
+      case 'get_debug_trace_stats': {
+        const debugRecorder = smartBrowser.getDebugRecorder();
+        const stats = await debugRecorder.getStats();
+
+        return jsonResponse({
+          schemaVersion: addSchemaVersion({}).schemaVersion,
+          ...stats,
+          oldestTrace: stats.oldestTrace ? new Date(stats.oldestTrace).toISOString() : null,
+          newestTrace: stats.newestTrace ? new Date(stats.newestTrace).toISOString() : null,
+          storageSizeMB: Math.round(stats.storageSizeBytes / 1024 / 1024 * 100) / 100,
+        });
+      }
+
+      case 'configure_debug_recording': {
+        const debugRecorder = smartBrowser.getDebugRecorder();
+
+        if (args.enabled !== undefined) {
+          if (args.enabled) {
+            debugRecorder.enable();
+          } else {
+            debugRecorder.disable();
+          }
+        }
+
+        if (args.alwaysRecordDomain) {
+          debugRecorder.alwaysRecord(args.alwaysRecordDomain as string);
+        }
+
+        if (args.neverRecordDomain) {
+          debugRecorder.neverRecord(args.neverRecordDomain as string);
+        }
+
+        if (args.onlyRecordFailures !== undefined || args.maxTraces !== undefined || args.maxAgeHours !== undefined) {
+          debugRecorder.updateConfig({
+            onlyRecordFailures: args.onlyRecordFailures as boolean | undefined,
+            maxTraces: args.maxTraces as number | undefined,
+            maxAgeHours: args.maxAgeHours as number | undefined,
+          });
+        }
+
+        const config = debugRecorder.getConfig();
+        return jsonResponse({
+          schemaVersion: addSchemaVersion({}).schemaVersion,
+          message: 'Configuration updated',
+          config: {
+            enabled: config.enabled,
+            onlyRecordFailures: config.onlyRecordFailures,
+            alwaysRecordDomains: config.alwaysRecordDomains,
+            neverRecordDomains: config.neverRecordDomains,
+            maxTraces: config.maxTraces,
+            maxAgeHours: config.maxAgeHours,
+          },
+        });
+      }
+
+      case 'export_debug_traces': {
+        const debugRecorder = smartBrowser.getDebugRecorder();
+        const ids = args.ids as string[];
+        const exportData = await debugRecorder.exportTraces(ids);
+
+        return jsonResponse({
+          schemaVersion: addSchemaVersion({}).schemaVersion,
+          exportedAt: new Date(exportData.exportedAt).toISOString(),
+          traceCount: exportData.traces.length,
+          traces: exportData.traces,
+        });
+      }
+
+      case 'delete_debug_trace': {
+        const debugRecorder = smartBrowser.getDebugRecorder();
+        const deleted = await debugRecorder.deleteTrace(args.id as string);
+
+        return jsonResponse({
+          schemaVersion: addSchemaVersion({}).schemaVersion,
+          success: deleted,
+          id: args.id,
+          message: deleted ? 'Trace deleted' : 'Trace not found',
+        });
+      }
+
+      case 'clear_debug_traces': {
+        const debugRecorder = smartBrowser.getDebugRecorder();
+        const count = await debugRecorder.clearAll();
+
+        return jsonResponse({
+          schemaVersion: addSchemaVersion({}).schemaVersion,
+          success: true,
+          deletedCount: count,
+          message: `Deleted ${count} traces`,
         });
       }
 
