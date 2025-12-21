@@ -4,6 +4,7 @@
  * Converts NetworkRequest[] to HAR (HTTP Archive) format
  */
 
+import { createRequire } from 'module';
 import type { NetworkRequest } from '../types/index.js';
 import type {
   Har,
@@ -19,8 +20,9 @@ import type {
   HarExportOptions,
 } from '../types/har.js';
 
-// Package version for HAR creator info
-const PACKAGE_VERSION = '0.5.0';
+// Load package version dynamically for HAR creator info
+const require = createRequire(import.meta.url);
+const { version: PACKAGE_VERSION } = require('../../package.json');
 
 /**
  * Parse query string from URL
@@ -49,13 +51,13 @@ function convertHeaders(headers: Record<string, string>): HarHeader[] {
 }
 
 /**
- * Calculate approximate size of headers
+ * Calculate byte size of headers (HAR spec requires bytes, not characters)
  */
 function calculateHeadersSize(headers: Record<string, string>): number {
   let size = 0;
   for (const [name, value] of Object.entries(headers)) {
-    // Format: "Name: Value\r\n"
-    size += name.length + 2 + value.length + 2;
+    // Format: "Name: Value\r\n" - use Buffer.from for accurate byte size
+    size += Buffer.from(name).length + 2 + Buffer.from(value).length + 2;
   }
   return size;
 }
@@ -101,7 +103,8 @@ function convertToHarEntry(
           '... [truncated]';
       }
 
-      responseSize = responseText.length;
+      // HAR spec requires size in bytes, not characters
+      responseSize = Buffer.from(responseText).length;
     } catch {
       // Failed to stringify response
     }
