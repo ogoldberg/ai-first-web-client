@@ -51,6 +51,14 @@ const TIER_ALIASES: Record<string, RenderTier> = {
   'playwright': 'playwright',
 };
 
+/**
+ * Freshness requirement for content
+ * - 'realtime': Always fetch fresh content, never use cache
+ * - 'cached': Prefer cached content, only fetch if not in cache
+ * - 'any': Use cache if available and not stale, otherwise fetch
+ */
+export type FreshnessRequirement = 'realtime' | 'cached' | 'any';
+
 export interface TieredFetchOptions {
   // Force a specific tier (skip auto-detection)
   forceTier?: RenderTier;
@@ -70,6 +78,21 @@ export interface TieredFetchOptions {
   waitForSelector?: string;
   // Apply rate limiting
   useRateLimiting?: boolean;
+
+  // === Budget Controls (CX-005) ===
+
+  // Maximum acceptable latency in milliseconds
+  // If the current tier exceeds this, skip remaining tiers
+  maxLatencyMs?: number;
+
+  // Maximum cost tier to use
+  // 'intelligence' = cheapest only, 'lightweight' = allow lightweight, 'playwright' = allow all
+  // Tiers more expensive than this will be skipped
+  maxCostTier?: RenderTier;
+
+  // Freshness requirement for content
+  // Controls whether cached content is acceptable
+  freshnessRequirement?: FreshnessRequirement;
 }
 
 // Default options for fetch
@@ -122,9 +145,42 @@ export interface TieredFetchResult {
     contentComplete: boolean;
     playwrightAvailable: boolean;
   };
+
+  // Budget tracking (CX-005)
+  budget?: {
+    // Whether latency exceeded the maxLatencyMs budget
+    latencyExceeded: boolean;
+    // Tiers that were skipped due to maxCostTier
+    tiersSkipped: RenderTier[];
+    // The max cost tier that was enforced
+    maxCostTierEnforced?: RenderTier;
+    // Whether cache was used due to freshness settings
+    usedCache: boolean;
+    // The freshness requirement that was applied
+    freshnessApplied?: FreshnessRequirement;
+  };
 }
 
 // Tier routing rules are loaded from heuristics-config.ts (CX-010)
+
+// Tier cost ordering (CX-005): lower index = cheaper
+// Used to filter out expensive tiers based on maxCostTier
+const TIER_COST_ORDER: RenderTier[] = ['intelligence', 'lightweight', 'playwright'];
+
+/**
+ * Get the cost index for a tier (lower = cheaper)
+ */
+function getTierCostIndex(tier: RenderTier): number {
+  return TIER_COST_ORDER.indexOf(tier);
+}
+
+/**
+ * Check if a tier is within budget based on maxCostTier
+ */
+function isTierWithinBudget(tier: RenderTier, maxCostTier?: RenderTier): boolean {
+  if (!maxCostTier) return true;
+  return getTierCostIndex(tier) <= getTierCostIndex(maxCostTier);
+}
 
 export interface DomainPreference {
   domain: string;
@@ -184,10 +240,11 @@ export class TieredFetcher {
     // Determine starting tier
     const startTier = options.forceTier || this.determineStartingTier(domain, url);
 
-    // Try tiers in order
-    const tierOrder = this.getTierOrder(startTier);
+    // Try tiers in order, respecting maxCostTier budget (CX-005)
+    const { tiers: tierOrder, skipped: tiersSkipped } = this.getTierOrder(startTier, options.maxCostTier);
     let lastError: Error | null = null;
     let fellBack = false;
+    let latencyExceeded = false;
 
     for (const tier of tierOrder) {
       const tierStart = Date.now();
@@ -232,6 +289,16 @@ export class TieredFetcher {
             tiersAttempted,
           });
 
+          // Check latency budget (CX-005)
+          if (options.maxLatencyMs && timing.total > options.maxLatencyMs) {
+            latencyExceeded = true;
+            logger.tieredFetcher.info('Latency budget exceeded', {
+              maxLatencyMs: options.maxLatencyMs,
+              actualLatencyMs: timing.total,
+              tier,
+            });
+          }
+
           return {
             ...result,
             tier,
@@ -255,6 +322,14 @@ export class TieredFetcher {
               contentComplete: true,
               playwrightAvailable: BrowserManager.isPlaywrightAvailable(),
             },
+            // Budget tracking (CX-005)
+            budget: {
+              latencyExceeded,
+              tiersSkipped,
+              maxCostTierEnforced: options.maxCostTier,
+              usedCache: false, // Cache handling is at SmartBrowser level
+              freshnessApplied: options.freshnessRequirement,
+            },
           };
         }
 
@@ -270,6 +345,19 @@ export class TieredFetcher {
 
         fellBack = true;
         lastError = new Error(validation.reason || 'Content validation failed');
+
+        // Check latency budget before trying next tier (CX-005)
+        const elapsedSoFar = Date.now() - startTime;
+        if (options.maxLatencyMs && elapsedSoFar > options.maxLatencyMs) {
+          latencyExceeded = true;
+          logger.tieredFetcher.info('Latency budget exceeded, stopping tier fallback', {
+            maxLatencyMs: options.maxLatencyMs,
+            elapsedMs: elapsedSoFar,
+            currentTier: tier,
+            remainingTiers: tierOrder.slice(tierOrder.indexOf(tier) + 1),
+          });
+          break;
+        }
       } catch (error) {
         const tierDuration = Date.now() - tierStart;
         timing.perTier[tier] = tierDuration;
@@ -284,6 +372,19 @@ export class TieredFetcher {
 
         fellBack = true;
         lastError = error instanceof Error ? error : new Error(String(error));
+
+        // Check latency budget before trying next tier (CX-005)
+        const elapsedSoFar = Date.now() - startTime;
+        if (options.maxLatencyMs && elapsedSoFar > options.maxLatencyMs) {
+          latencyExceeded = true;
+          logger.tieredFetcher.info('Latency budget exceeded after error, stopping tier fallback', {
+            maxLatencyMs: options.maxLatencyMs,
+            elapsedMs: elapsedSoFar,
+            currentTier: tier,
+            error: lastError.message,
+          });
+          break;
+        }
         // Continue to next tier
       }
     }
@@ -480,35 +581,80 @@ export class TieredFetcher {
   }
 
   /**
-   * Get the order of tiers to try
+   * Get the order of tiers to try, respecting budget constraints
+   * @param startTier - The tier to start from
+   * @param maxCostTier - Maximum cost tier allowed (CX-005)
+   * @returns Object containing tier order and any skipped tiers
    */
-  private getTierOrder(startTier: RenderTier): RenderTier[] {
+  private getTierOrder(startTier: RenderTier, maxCostTier?: RenderTier): { tiers: RenderTier[]; skipped: RenderTier[] } {
     // Normalize legacy tier name
     const tier = TIER_ALIASES[startTier] || startTier;
 
     // Check if Playwright is available - skip that tier if not
     const playwrightAvailable = BrowserManager.isPlaywrightAvailable();
 
+    // Build initial tier list based on starting tier
+    let allTiers: RenderTier[];
     switch (tier) {
       case 'intelligence':
-        return playwrightAvailable
+        allTiers = playwrightAvailable
           ? ['intelligence', 'lightweight', 'playwright']
           : ['intelligence', 'lightweight'];
+        break;
       case 'lightweight':
-        return playwrightAvailable
+        allTiers = playwrightAvailable
           ? ['lightweight', 'playwright']
           : ['lightweight'];
+        break;
       case 'playwright':
         if (!playwrightAvailable) {
           logger.tieredFetcher.warn('Playwright tier requested but Playwright is not available', { fallback: 'lightweight' });
-          return ['lightweight'];
+          allTiers = ['lightweight'];
+        } else {
+          allTiers = ['playwright'];
         }
-        return ['playwright'];
+        break;
       default:
-        return playwrightAvailable
+        allTiers = playwrightAvailable
           ? ['intelligence', 'lightweight', 'playwright']
           : ['intelligence', 'lightweight'];
     }
+
+    // Filter out tiers that exceed maxCostTier budget (CX-005)
+    if (maxCostTier) {
+      const skipped: RenderTier[] = [];
+      const tiers: RenderTier[] = [];
+
+      for (const t of allTiers) {
+        if (isTierWithinBudget(t, maxCostTier)) {
+          tiers.push(t);
+        } else {
+          skipped.push(t);
+        }
+      }
+
+      if (tiers.length === 0) {
+        // No tiers within budget - log warning and use cheapest available
+        logger.tieredFetcher.warn('No tiers available within budget', {
+          maxCostTier,
+          allTiers,
+          fallback: 'intelligence',
+        });
+        return { tiers: ['intelligence'], skipped };
+      }
+
+      if (skipped.length > 0) {
+        logger.tieredFetcher.info('Budget constraint applied', {
+          maxCostTier,
+          allowedTiers: tiers,
+          skippedTiers: skipped,
+        });
+      }
+
+      return { tiers, skipped };
+    }
+
+    return { tiers: allTiers, skipped: [] };
   }
 
   /**
