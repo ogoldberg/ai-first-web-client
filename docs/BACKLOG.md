@@ -162,7 +162,7 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 | CX-009 | Tier parity learning | M | Features | Learn APIs/structure from intelligence/lightweight tiers (DONE) |
 | CX-010 | Config-driven heuristics | S | Debt | Domain groups/tier rules loaded from config (DONE) |
 | CX-011 | Domain capability summary | S | Features | Tool or response section summarizing capabilities (DONE) |
-| CX-012 | LLM onboarding spec | S | Documentation | Explain confidence, error taxonomy, trust contract |
+| CX-012 | LLM onboarding spec | S | Documentation | Explain confidence, error taxonomy, trust contract (DONE) |
 
 ### Features
 
@@ -246,6 +246,7 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 
 | ID | Task | Completed | Notes |
 |----|------|-----------|-------|
+| CX-012 | LLM Onboarding Spec | 2025-12-21 | Comprehensive LLM client onboarding document. Covers trust contract (schema versioning), confidence framework (interpretation guide, source baselines, decision matrix), error recovery protocol (categories, codes, recommended actions, retry decision tree), pattern lifecycle (sources, decay, trust assessment), response structure reference, decision transparency (tier and selector traces), and budget/performance controls. New doc: LLM_ONBOARDING_SPEC.md. |
 | CX-009 | Tier Parity Learning | 2025-12-21 | Enable API pattern learning from lightweight tier with confidence degradation. Enhanced LightweightRenderer network tracking with request/response headers and bodies. Added tier-aware API analysis with confidence degradation (lightweight: -1 level, intelligence: -2 levels). Wired TieredFetcher to discover APIs from lightweight tier. 23 tests. |
 | CX-008 | Memory Isolation + Shared Pool | 2025-12-20 | Multi-tenant support with TenantStore (namespace-prefixed isolation), SharedPatternPool (opt-in pattern sharing), and MultiTenantStore (tenant lifecycle). Tenant config: sharePatterns, consumeShared. Usage tracking, attribution, statistics. LLM_BROWSER_TENANT_ID env var. 64 tests. |
 | CX-007 | Embedded Store Migration | 2025-12-20 | SQLite-based persistence layer with EmbeddedStore class. ACID transactions, concurrent reads (WAL mode), namespaced storage, JSON fallback. SqlitePersistentStore adapter for gradual migration from PersistentStore. Auto-migration from JSON files. 66 tests. |
