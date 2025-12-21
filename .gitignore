@@ -15,6 +15,7 @@ dist/
 
 # Runtime data (user-specific)
 sessions/
+data/
 knowledge-base.json
 procedural-memory.json
 learning-engine.json

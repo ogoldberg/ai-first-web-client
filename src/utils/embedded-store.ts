@@ -130,6 +130,21 @@ export class EmbeddedStore {
   }
 
   /**
+   * Check if better-sqlite3 is available
+   *
+   * This is a static method that can be called before instantiation
+   * to determine if SQLite will be available.
+   */
+  static async isAvailable(): Promise<boolean> {
+    try {
+      await import('better-sqlite3');
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
    * Initialize the store (must be called before use)
    */
   async initialize(): Promise<void> {
@@ -763,4 +778,17 @@ export class NamespacedStore<T> {
   count(): number {
     return this.store.count(this.namespace);
   }
+}
+
+/**
+ * Create a new EmbeddedStore instance
+ *
+ * Use this factory when you need a separate store instance
+ * (e.g., for semantic infrastructure with its own database).
+ * For shared access, use getEmbeddedStore() instead.
+ */
+export function createEmbeddedStore(
+  config: Partial<EmbeddedStoreConfig> = {}
+): EmbeddedStore {
+  return new EmbeddedStore(config);
 }

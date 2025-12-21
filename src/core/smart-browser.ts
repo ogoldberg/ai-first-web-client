@@ -55,6 +55,10 @@ import { pageCache, ContentCache } from '../utils/cache.js';
 import { TIMEOUTS } from '../utils/timeouts.js';
 import { logger } from '../utils/logger.js';
 import { validateUrlOrThrow, type UrlSafetyConfig } from '../utils/url-safety.js';
+import {
+  initializeSemanticInfrastructure,
+  type SemanticInfrastructure,
+} from './semantic-init.js';
 
 // Procedural memory thresholds
 const SKILL_APPLICATION_THRESHOLD = 0.8;  // Minimum similarity to auto-apply a skill
@@ -181,6 +185,7 @@ export class SmartBrowser {
   private proceduralMemory: ProceduralMemory;
   private tieredFetcher: TieredFetcher;
   private currentTrajectory: BrowsingTrajectory | null = null;
+  private semanticInfrastructure: SemanticInfrastructure | null = null;
 
   constructor(
     private browserManager: BrowserManager,
@@ -196,6 +201,18 @@ export class SmartBrowser {
   async initialize(): Promise<void> {
     await this.learningEngine.initialize();
     await this.proceduralMemory.initialize();
+
+    // Auto-initialize semantic matching if dependencies available (LI-001)
+    const semanticResult = await initializeSemanticInfrastructure();
+    if (semanticResult.success && semanticResult.infrastructure) {
+      this.semanticInfrastructure = semanticResult.infrastructure;
+      this.learningEngine.setSemanticMatcher(semanticResult.infrastructure.matcher);
+      logger.smartBrowser.info('Semantic pattern matching enabled');
+    } else {
+      logger.smartBrowser.debug('Semantic pattern matching disabled', {
+        reason: semanticResult.message,
+      });
+    }
   }
 
   /**
@@ -1827,5 +1844,27 @@ export class SmartBrowser {
       discoveredApis: apiConfidences.length > 0 ? apiConfidences : undefined,
       overall,
     };
+  }
+
+  /**
+   * Check if semantic pattern matching is enabled
+   *
+   * Returns true if semantic infrastructure was successfully initialized.
+   * When enabled, the LearningEngine will use semantic similarity search
+   * as a fallback when exact pattern matching fails.
+   */
+  isSemanticMatchingEnabled(): boolean {
+    return this.semanticInfrastructure !== null;
+  }
+
+  /**
+   * Get the semantic infrastructure (if initialized)
+   *
+   * Returns the semantic infrastructure components, or null if not initialized.
+   * Use this to access the EmbeddedStore for pattern storage or VectorStore
+   * for direct embedding operations.
+   */
+  getSemanticInfrastructure(): SemanticInfrastructure | null {
+    return this.semanticInfrastructure;
   }
 }
