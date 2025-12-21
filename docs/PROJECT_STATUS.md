@@ -300,15 +300,27 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ---
 
-## Currently In Progress: SLA/Support Policy Draft (GTM-005)
+## Recently Completed: SLA/Support Policy Draft (GTM-005)
 
-**Status:** In Progress
+**Status:** Complete
 
 **Goal:** Define enterprise support and uptime targets for the hosted service.
 
-| ID      | Task                     | Priority | Effort | Status      |
-|---------|--------------------------|----------|--------|-------------|
-| GTM-005 | SLA/support policy draft | Medium   | S      | In Progress |
+| ID      | Task                     | Priority | Effort | Status   |
+|---------|--------------------------|----------|--------|----------|
+| GTM-005 | SLA/support policy draft | Medium   | S      | Complete |
+
+**Implementation:**
+- New comprehensive SLA/support policy document: `docs/SLA_SUPPORT_POLICY.md`
+- Uptime commitments by tier (99.0% Starter, 99.5% Team, 99.9% Enterprise)
+- Service credit schedule for Enterprise
+- Support response times by tier and priority level
+- Issue priority definitions (P1-P4) with response expectations
+- Escalation procedures (internal and customer)
+- Scheduled maintenance windows and notification policies
+- Incident communication timeline and post-incident reports
+- Data retention, backup, and recovery policies
+- Security incident response timeline
 
 ---
 
