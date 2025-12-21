@@ -453,9 +453,6 @@ export interface ProceduralMemoryConfig {
   autoRollbackThreshold?: number;
   // Path to the storage directory (optional, for backwards compatibility)
   storagePath?: string;
-  // Enable VectorStore for semantic skill retrieval (LI-006)
-  // When true and VectorStore is available, uses semantic search instead of hash-based matching
-  useVectorStore?: boolean;
 }
 
 /**

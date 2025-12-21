@@ -1211,9 +1211,6 @@ describe('ProceduralMemory', () => {
 
       await memory.addSkill(skill);
 
-      // Wait a bit for async operations
-      await new Promise(resolve => setTimeout(resolve, 50));
-
       expect(addCalls.length).toBe(1);
       expect(addCalls[0].id).toBe('test-skill-id');
       expect(addCalls[0].entityType).toBe('skill');

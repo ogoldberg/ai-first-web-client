@@ -406,8 +406,11 @@ export class ProceduralMemory {
         const url = new URL(context.url);
         const pathPattern = url.pathname.replace(/\/\d+/g, '/{id}');
         parts.push(`URL pattern: ${pathPattern}`);
-      } catch {
-        // Invalid URL, skip
+      } catch (error) {
+        logger.proceduralMemory.debug('Invalid URL in contextToText, skipping URL pattern', {
+          url: context.url,
+          error: error instanceof Error ? error.message : String(error),
+        });
       }
     }
     if (context.availableSelectors?.length) {
@@ -1842,8 +1845,11 @@ export class ProceduralMemory {
 
     // Add to VectorStore for semantic retrieval (LI-006)
     // Fire-and-forget to maintain sync return type
-    this.addSkillToVectorStore(skill).catch((err) => {
-      logger.proceduralMemory.warn(`Failed to add manual skill to VectorStore: ${err}`);
+    this.addSkillToVectorStore(skill).catch((error) => {
+      logger.proceduralMemory.warn('Failed to add manual skill to VectorStore', {
+        skillId: skill.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
     });
 
     this.save();
