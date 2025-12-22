@@ -27,7 +27,11 @@ import { ContentExtractor } from './utils/content-extractor.js';
 import { ApiAnalyzer } from './core/api-analyzer.js';
 import { SessionManager } from './core/session-manager.js';
 import { LearningEngine } from './core/learning-engine.js';
-import { SmartBrowser } from './core/smart-browser.js';
+import {
+  SmartBrowser,
+  type DomainCapabilitiesSummary,
+  type DomainKnowledgeSummary,
+} from './core/smart-browser.js';
 import { BrowseTool } from './tools/browse-tool.js';
 import { ApiCallTool } from './tools/api-call-tool.js';
 import { AuthWorkflow } from './core/auth-workflow.js';
@@ -254,6 +258,11 @@ Returns: Content, tables, APIs discovered, learning insights, and budget trackin
               enum: ['realtime', 'cached', 'any'],
               description: 'Content freshness requirement. "realtime" = always fetch fresh, "cached" = prefer cache, "any" = use cache if available (default).',
             },
+            // Domain insights (TC-002)
+            includeInsights: {
+              type: 'boolean',
+              description: 'Include domain capabilities and knowledge summary in response (default: true). Set to false to reduce response size.',
+            },
           },
           required: ['url'],
         },
@@ -366,7 +375,9 @@ Returns: Array of results with per-URL status, timing, and content.`,
       // ============================================
       {
         name: 'get_domain_intelligence',
-        description: `Get intelligence summary for a domain.
+        description: `[DEPRECATED - Use smart_browse with includeInsights=true instead. Domain insights are now automatically included in browse responses.]
+
+Get intelligence summary for a domain.
 
 Shows what the browser has learned about a domain:
 - Known API patterns
@@ -392,7 +403,9 @@ Use this to understand how well the browser knows a domain before browsing.`,
       },
       {
         name: 'get_domain_capabilities',
-        description: `Get comprehensive capability summary for a domain (CX-011).
+        description: `[DEPRECATED - Use smart_browse with includeInsights=true instead. Domain capabilities are now automatically included in browse responses.]
+
+Get comprehensive capability summary for a domain (CX-011).
 
 Returns an LLM-friendly summary of what the browser can do for a domain:
 
@@ -556,7 +569,9 @@ Returns HAR 1.2 JSON with all network requests, responses, and timings.`,
       // ============================================
       {
         name: 'get_learning_stats',
-        description: `Get comprehensive statistics about the browser's learning.
+        description: `[DEPRECATED - Domain-specific insights are now included in smart_browse responses. This global stats tool will be moved to a debug/admin interface.]
+
+Get comprehensive statistics about the browser's learning.
 
 Shows:
 - Total domains with learned patterns
@@ -574,7 +589,9 @@ Use this to understand the browser's overall intelligence level.`,
       },
       {
         name: 'get_learning_effectiveness',
-        description: `Get comprehensive learning effectiveness metrics (LI-003).
+        description: `[DEPRECATED - Domain-specific insights are now included in smart_browse responses. This comprehensive metrics tool will be moved to a debug/admin interface.]
+
+Get comprehensive learning effectiveness metrics (LI-003).
 
 Shows how well the learning system is performing:
 
@@ -1327,6 +1344,36 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           contentOutput.html = result.content.html;
         }
 
+        // Extract domain for insights
+        const includeInsights = args.includeInsights !== false; // Default: true
+        const domain = new URL(result.url).hostname;
+
+        // Fetch domain insights if requested (TC-002)
+        let domainCapabilities: DomainCapabilitiesSummary | undefined;
+        let domainKnowledge: DomainKnowledgeSummary | undefined;
+
+        if (includeInsights) {
+          try {
+            const [capabilities, intelligence] = await Promise.all([
+              smartBrowser.getDomainCapabilities(domain),
+              smartBrowser.getDomainIntelligence(domain),
+            ]);
+
+            // Use capabilities directly - same structure as DomainCapabilitiesSummary
+            domainCapabilities = capabilities.capabilities;
+
+            domainKnowledge = {
+              patternCount: intelligence.knownPatterns,
+              successRate: intelligence.successRate,
+              recommendedWaitStrategy: intelligence.recommendedWaitStrategy,
+              recommendations: capabilities.recommendations.slice(0, 3),
+            };
+          } catch (error) {
+            // Don't fail the browse if insights fail - log and continue
+            logger.server.warn('Failed to fetch domain insights', { domain, error });
+          }
+        }
+
         // Format result for LLM consumption
         const formattedResult: Record<string, unknown> = {
           url: result.url,
@@ -1354,6 +1401,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             tierReason: result.learning.tierReason,
             // Budget tracking (CX-005)
             budgetInfo: result.learning.budgetInfo,
+            // Domain insights (TC-002)
+            domainCapabilities,
+            domainKnowledge,
           },
           // Discovered APIs for future direct access
           discoveredApis: result.discoveredApis.map(api => ({
@@ -1536,12 +1586,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           domain: args.domain,
           ...intelligence,
           recommendations: getRecommendations(intelligence),
+          deprecation_notice: 'This tool is deprecated. Domain insights are now automatically included in smart_browse responses with includeInsights=true (default).',
         });
       }
 
       case 'get_domain_capabilities': {
         const capabilities = await smartBrowser.getDomainCapabilities(args.domain as string);
-        return jsonResponse(capabilities);
+        return jsonResponse({
+          ...capabilities,
+          deprecation_notice: 'This tool is deprecated. Domain capabilities are now automatically included in smart_browse responses with includeInsights=true (default).',
+        });
       }
 
       // ============================================
@@ -1625,6 +1679,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             domain: e.domain,
             timestamp: new Date(e.timestamp).toISOString(),
           })),
+          deprecation_notice: 'This tool is deprecated. Domain-specific insights are now included in smart_browse responses. This global stats tool will be moved to a debug/admin interface.',
         });
       }
 
@@ -1716,6 +1771,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             eventsPerHour: report.trend24h.eventsPerHour.toFixed(1),
           },
           insights: report.insights,
+          deprecation_notice: 'This tool is deprecated. Domain-specific insights are now included in smart_browse responses. This comprehensive metrics tool will be moved to a debug/admin interface.',
         });
       }
 
