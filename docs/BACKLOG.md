@@ -185,7 +185,7 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 | ID | Task | Effort | Status | Notes |
 |----|------|--------|--------|-------|
 | TC-001 | Consolidate 6 auth tools into 1 | M | PR #102 | Merge get_api_auth_status, configure_api_auth, complete_oauth, get_auth_guidance, delete_api_auth, list_configured_auth into single `api_auth` tool with actions |
-| TC-002 | Auto-embed domain insights in smart_browse | M | Not Started | Remove get_domain_intelligence, get_domain_capabilities, get_learning_stats, get_learning_effectiveness - include insights in browse response metadata |
+| TC-002 | Auto-embed domain insights in smart_browse | M | PR #103 | Remove get_domain_intelligence, get_domain_capabilities, get_learning_stats, get_learning_effectiveness - include insights in browse response metadata |
 | TC-003 | Auto-apply skills (remove skill_management) | L | Not Started | Skills should be automatically applied based on URL patterns. Remove manual skill_management tool. Add skill application trace to browse response |
 | TC-004 | Move debug tools to DEBUG_MODE | S | Not Started | Hide capture_screenshot, export_har, debug_traces behind LLM_BROWSER_DEBUG_MODE env var |
 | TC-005 | Remove analytics tools from MCP | M | Not Started | Remove get_performance_metrics, usage_analytics, get_analytics_dashboard, get_system_status. Create separate admin interface or web dashboard |

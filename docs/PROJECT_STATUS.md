@@ -290,7 +290,7 @@ All 10 phases complete:
 | Priority | Initiative | Status |
 |----------|-----------|--------|
 | P0 | Consolidate 6 auth tools → 1 | PR #102 |
-| P0 | Auto-embed domain insights in smart_browse | Not Started |
+| P0 | Auto-embed domain insights in smart_browse | PR #103 |
 | P0 | Auto-apply skills (remove skill_management) | Not Started |
 | P1 | Move debug tools to DEBUG_MODE | Not Started |
 | P1 | Remove analytics/infrastructure tools from MCP | Not Started |
