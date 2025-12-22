@@ -191,7 +191,7 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 | TC-005 | Remove analytics tools from MCP | M | Complete | Hide get_performance_metrics, usage_analytics, get_analytics_dashboard, get_system_status behind LLM_BROWSER_ADMIN_MODE env var |
 | TC-006 | Remove infrastructure tools | S | Complete | Hide get_browser_providers, tier_management behind LLM_BROWSER_ADMIN_MODE env var |
 | TC-007 | Auto-track content or add flag | S | Complete | Hide content_tracking behind ADMIN_MODE; use smart_browse with checkForChanges flag instead |
-| TC-008 | Deprecation warnings for old tools | S | Not Started | Add warnings to deprecated tools with migration guidance. Keep working for 2-3 releases |
+| TC-008 | Hide deprecated tools behind ADMIN_MODE | S | Complete | Hide 11 deprecated tools behind ADMIN_MODE (domain intelligence, learning, skills, old auth) |
 | TC-009 | Update documentation for 5-tool interface | M | Not Started | Rewrite docs to focus on core tools only. Move debug/admin tools to "Advanced" section |
 | TC-010 | Measure LLM tool selection improvement | S | Not Started | Track metrics: tool selection accuracy, first-browse success rate, user confusion indicators |
 
