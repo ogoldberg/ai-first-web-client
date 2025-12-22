@@ -280,9 +280,9 @@ All 10 phases complete:
 
 ### Phase 5: Interface Simplification & Expansion - NEXT
 
-**Problem:** 25 MCP tools overwhelm LLMs. Need multiple interfaces for different use cases.
+**Problem:** 25 MCP tools overwhelm LLMs. Need multiple interfaces for different use cases. Competitive analysis revealed critical gaps vs Browserbase, Firecrawl, Skyvern.
 
-**Four Parallel Initiatives:**
+**Five Parallel Initiatives:**
 
 #### 1. MCP Tool Consolidation (TC-001 to TC-010)
 **Goal:** 25 tools → 5-6 core tools
@@ -337,6 +337,19 @@ All 10 phases complete:
 | P2 | Beta program launch | Not Started |
 
 **Benefits:** Platform-agnostic access, primary revenue stream
+
+#### 5. Competitive Gap Resolution (GAP-001 to GAP-025)
+**Goal:** Match competitor features before SDK/API launch
+
+| Priority | Initiative | Status |
+|----------|-----------|--------|
+| P0 | CAPTCHA handling + enhanced stealth | Not Started |
+| P0 | Schema extraction DSL + LLM-guided selectors | Not Started |
+| P0 | Audit logging + data encryption | Not Started |
+| P1 | Proxy infrastructure + SOC 2 readiness | Not Started |
+| P1 | Computer vision element detection | Not Started |
+
+**Benefits:** Competitive parity with Browserbase, Firecrawl, Skyvern. Enables enterprise sales
 
 ---
 

@@ -335,6 +335,135 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 
 ---
 
+## P1.5: Competitive Gap Resolution (New Initiative)
+
+**Goal:** Address critical feature gaps identified in competitive analysis to ensure competitive parity before SDK and API launches.
+
+**Context:** Market research (Dec 2025) revealed competitors (Browserbase, Firecrawl, Skyvern, ScrapeGraphAI) have features that are table stakes for enterprise and power users. Without these, SDK and API launches will struggle against established players.
+
+**Success Criteria:**
+- Anti-bot success rate >90% (matches Browserbase, Firecrawl)
+- Schema-based extraction for common use cases (matches Firecrawl)
+- Computer vision fallback for selector failures (matches Skyvern)
+- Enterprise-ready compliance (SOC 2) before API launch
+- Proxy infrastructure for scale scraping
+
+**Dependencies:**
+- Must complete before SDK-010 (SDK publish) and API-017 (API beta)
+- Some tasks can run parallel with SDK extraction
+
+**Competitive Context:**
+- **Browserbase:** Has CAPTCHA solving, proxies, SOC 2 compliance
+- **Firecrawl:** Has schema-first extraction, proven anti-bot
+- **Skyvern:** Has computer vision element detection
+- **ScrapeGraphAI:** Has adaptive schema extraction
+
+| ID | Task | Effort | Status | Priority | Notes |
+|----|------|--------|--------|----------|-------|
+| **Anti-Bot & Stealth** |
+| GAP-001 | Implement CAPTCHA detection and handling | M | Not Started | P0 | Detect CAPTCHA presence (hCaptcha, reCAPTCHA, Cloudflare). Integrate solver service (2Captcha, Anti-Captcha) or add manual callback option. Competitive: Browserbase, Firecrawl have this built-in |
+| GAP-002 | Enhanced browser fingerprinting evasion | L | Not Started | P0 | Beyond basic stealth: canvas fingerprint randomization, WebGL noise, audio context spoofing, timezone/locale consistency, plugin enumeration blocking. Use proven libraries (puppeteer-extra-plugin-stealth equivalents for Playwright) |
+| GAP-003 | Behavioral patterns (human-like delays) | M | Not Started | P1 | Random mouse movements, realistic typing speeds, scroll behavior, click delays. Make automation look human. Competitive: Advanced scrapers use this |
+| GAP-004 | User-Agent rotation and management | S | Not Started | P1 | Maintain pool of recent real UA strings, rotate per domain/session, match with corresponding browser fingerprint (don't mix Chrome UA with Firefox fingerprint) |
+| GAP-005 | Add anti-bot success rate metrics | S | Not Started | P1 | Track: CAPTCHA encounter rate, block detection rate, successful extraction rate by domain. Dashboard for monitoring. Prove >90% success claim |
+| **Schema-Based Extraction** |
+| GAP-006 | Design schema extraction DSL | M | Not Started | P0 | JSON schema format: `{ "title": "h1.product-title", "price": ".price", "reviews": "[data-review]" }` with LLM assistance to map fields to selectors. Competitive: Firecrawl's approach |
+| GAP-007 | Implement LLM-guided selector generation | L | Not Started | P0 | Given desired fields + page HTML, use LLM to generate selectors. Cache successful mappings. Learn from failures. Falls back to manual if confidence low |
+| GAP-008 | Add schema validation and feedback | M | Not Started | P1 | Validate extracted data matches expected types (number, date, URL, etc.). Provide confidence scores per field. Allow user feedback to improve |
+| GAP-009 | Create common schema templates | M | Not Started | P1 | Pre-built schemas: product (title, price, reviews), article (title, author, date, content), job (title, company, salary, location). Bootstrap pattern library |
+| **Computer Vision Element Detection** |
+| GAP-010 | Integrate screenshot-based element detection | L | Not Started | P1 | Fallback when selectors fail: Take screenshot, use vision model (GPT-4V, Claude Vision, or open-source) to locate elements by description ("the blue login button"). Competitive: Skyvern's core approach |
+| GAP-011 | Visual selector stability scoring | M | Not Started | P2 | Score selectors by visual stability: Does element look the same across pages? Use for confidence adjustment. Prefer visually stable elements |
+| GAP-012 | Layout change detection via vision | M | Not Started | P2 | Compare screenshots over time to detect layout changes. Trigger re-learning when significant shift detected. Auto-alert on pattern degradation |
+| **Proxy Infrastructure** |
+| GAP-013 | Design proxy provider integration | M | Not Started | P1 | Abstract proxy interface supporting: BrightData, Oxylabs, Smartproxy, SOCKS5. Configuration per domain/tenant. Rotation policies |
+| GAP-014 | Implement residential proxy support | L | Not Started | P1 | Integration with at least one residential proxy provider. Required for scale scraping. Automatic rotation, geo-targeting, session persistence |
+| GAP-015 | Add proxy health monitoring | M | Not Started | P1 | Track: proxy speed, success rate, ban detection. Auto-remove bad proxies from pool. Dashboard showing proxy performance |
+| GAP-016 | Cost-aware proxy selection | M | Not Started | P2 | Choose proxy tier based on importance: datacenter (cheap) for non-critical, residential (expensive) for anti-bot sites. Let users configure policy |
+| **Enterprise Compliance** |
+| GAP-017 | SOC 2 Type I readiness assessment | L | Not Started | P1 | Required before API launch. Audit current security controls against SOC 2 framework. Identify gaps in: access control, encryption, logging, change management |
+| GAP-018 | Implement audit logging | M | Not Started | P0 | Immutable audit trail: all API access, pattern changes, session access, admin actions. Required for SOC 2. Queryable for compliance reports |
+| GAP-019 | Data encryption at rest | M | Not Started | P0 | Already have session encryption (S-003). Extend to: patterns, skills, audit logs. Use KMS for key management (AWS KMS, GCP KMS, or Vault) |
+| GAP-020 | Access control and RBAC | L | Not Started | P1 | Role-based access: admin, developer, read-only. Permissions per tenant. Required for enterprise API offering. Integrate with SSO (SAML, OAuth) |
+| GAP-021 | Penetration testing and remediation | XL | Not Started | P1 | Third-party pentest before API launch. Address findings. Generate report for customers. Ongoing quarterly pentests |
+| GAP-022 | SOC 2 Type II certification | XL | Not Started | P2 | After 6+ months of Type I controls. Full audit. Expensive ($20-50k) but required for large enterprise deals |
+| **Performance & Reliability** |
+| GAP-023 | Add retry strategies for anti-bot scenarios | M | Not Started | P0 | Smart retries: exponential backoff for rate limits, CAPTCHA solver retry, proxy rotation on block, user-agent switch on detection. Don't waste requests |
+| GAP-024 | Implement request rate limiting by domain | M | Not Started | P0 | Respect robots.txt, common rate limits (Google: 1 req/s, most sites: 2-5 req/s). Per-domain configuration. Prevent IP bans |
+| GAP-025 | Add circuit breaker for blocked domains | M | Not Started | P1 | Auto-pause scraping on domain when block detected. Exponential backoff before retry. Prevent cascading bans across tenants |
+
+**Total Tasks:** 25 gap-resolution tasks
+
+**Effort Breakdown:**
+- P0: 8 tasks (3S, 3M, 2L) ≈ 3-4 weeks
+- P1: 14 tasks (2S, 6M, 5L, 1XL) ≈ 6-8 weeks
+- P2: 3 tasks (2M, 1XL) ≈ 2-4 weeks (post-launch)
+
+**Strategic Phasing:**
+
+**Phase A: SDK Pre-Launch (Weeks 1-4)** - Run parallel with SDK-001 to SDK-008
+- GAP-001: CAPTCHA handling (P0)
+- GAP-002: Enhanced stealth (P0)
+- GAP-006: Schema extraction DSL (P0)
+- GAP-007: LLM-guided selectors (P0)
+- GAP-018: Audit logging (P0)
+- GAP-019: Data encryption (P0)
+- GAP-023: Smart retries (P0)
+- GAP-024: Rate limiting (P0)
+
+**Result:** SDK launch with competitive anti-bot and schema extraction
+
+**Phase B: API Pre-Launch (Weeks 5-10)** - Run parallel with API-001 to API-010
+- GAP-013: Proxy integration (P1)
+- GAP-014: Residential proxies (P1)
+- GAP-017: SOC 2 readiness (P1)
+- GAP-020: RBAC (P1)
+- GAP-021: Penetration testing (P1)
+- GAP-010: Computer vision (P1)
+
+**Result:** API launch with enterprise-grade security and scaling
+
+**Phase C: Post-Launch Hardening (Months 4-6)**
+- GAP-022: SOC 2 Type II (P2)
+- GAP-011: Visual stability (P2)
+- GAP-012: Layout change detection (P2)
+
+**Result:** Enterprise sales-ready
+
+**Key Competitive Advantages After Completion:**
+
+✅ **vs Browserbase:**
+- Matching: CAPTCHA solving, proxies, SOC 2
+- Better: Learning patterns (they don't have), local-first option
+
+✅ **vs Firecrawl:**
+- Matching: Schema extraction, anti-bot
+- Better: Interactive browsing, session management, cross-domain learning
+
+✅ **vs Skyvern:**
+- Matching: Visual element detection (fallback)
+- Better: Faster (tiered rendering), API discovery, SDK access
+
+✅ **vs ScrapeGraphAI:**
+- Matching: Adaptive schema extraction
+- Better: More than scraping (full browsing), MCP integration, hosted option
+
+**Budget Impact:**
+- CAPTCHA solver service: ~$100-500/month (2Captcha)
+- Proxy provider: ~$500-2000/month (BrightData starter)
+- SOC 2 Type I audit: ~$10-15k one-time
+- Penetration testing: ~$5-10k per test
+- SOC 2 Type II: ~$20-50k one-time + annual
+
+**Total Year 1:** ~$50-80k for full competitive parity
+
+**ROI Justification:**
+- Enterprise API deals: $20k+ ARR each
+- Need 3-4 deals to break even
+- Without these features: Can't compete for enterprise
+
+---
+
 ## P2: Medium Priority (Plan For)
 
 ### Debugging & Observability
