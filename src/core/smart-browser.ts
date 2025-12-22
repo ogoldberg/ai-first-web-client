@@ -192,6 +192,24 @@ export interface SmartBrowseResult extends BrowseResult {
       // The freshness requirement that was applied
       freshnessApplied?: FreshnessRequirement;
     };
+
+    // Domain capabilities summary (TC-002)
+    domainCapabilities?: {
+      canBypassBrowser: boolean;
+      hasLearnedPatterns: boolean;
+      hasActiveSession: boolean;
+      hasSkills: boolean;
+      hasPagination: boolean;
+      hasContentSelectors: boolean;
+    };
+
+    // Domain knowledge summary (TC-002)
+    domainKnowledge?: {
+      patternCount: number;
+      successRate: number;
+      recommendedWaitStrategy: string;
+      recommendations: string[];
+    };
   };
 
   // Additional pages if pagination was followed
