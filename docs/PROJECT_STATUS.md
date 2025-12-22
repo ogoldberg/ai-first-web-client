@@ -247,9 +247,17 @@ ai-first-web-client/
 
 See [BACKLOG.md](BACKLOG.md) for the detailed task backlog with priorities and effort estimates.
 
-### Phase 3: API Learning System - IN PROGRESS
+### Strategic Direction: Multi-Interface Architecture
 
-Building a **Generalized API Learning Layer** that shifts from hardcoded site-specific handlers to learned patterns. See [API_LEARNING_PLAN.md](API_LEARNING_PLAN.md) for the full plan.
+**Key Insight:** One interface (MCP) cannot optimally serve both use cases (scraping and research). Moving to hybrid architecture with SDK foundation and multiple interface layers.
+
+**Target Use Cases:**
+1. **Research/Exploration** → Skills (easiest) or simplified MCP (flexible)
+2. **Scraping/Automation** → SDK (direct) or hosted API (managed)
+
+### Phase 3: API Learning System - COMPLETE ✅
+
+Built a **Generalized API Learning Layer** that shifts from hardcoded site-specific handlers to learned patterns. See [API_LEARNING_PLAN.md](API_LEARNING_PLAN.md) for the full plan.
 
 | Phase | Goal | Status |
 |-------|------|--------|
@@ -260,24 +268,75 @@ Building a **Generalized API Learning Layer** that shifts from hardcoded site-sp
 | 5. OpenAPI Discovery | Auto-detect and use API specifications | Complete |
 | 6. Failure Learning | Learn from mistakes, build anti-patterns | Complete |
 
-### Phase 4: API Documentation Discovery - IN PROGRESS
+### Phase 4: API Documentation Discovery - COMPLETE ✅
 
-Building a **Documentation-First Discovery Layer** that leverages existing API documentation. See [API_DOCUMENTATION_DISCOVERY_PLAN.md](API_DOCUMENTATION_DISCOVERY_PLAN.md) for the full plan.
+Built a **Documentation-First Discovery Layer** that leverages existing API documentation. See [API_DOCUMENTATION_DISCOVERY_PLAN.md](API_DOCUMENTATION_DISCOVERY_PLAN.md) for the full plan.
 
-Note: "Order" reflects the implementation sequence, optimized for dependencies and impact.
+All 10 phases complete:
+- GraphQL Introspection, Discovery Orchestrator, OpenAPI Enhancement
+- Link Discovery, Docs Page Detection, Auth Workflow Helper
+- AsyncAPI Discovery, Alt Spec Formats, Robots/Sitemap Analysis
+- Backend Framework Fingerprinting
 
-| ID | Order | Goal | Status |
-|----|-------|------|--------|
-| D-001 | 1 | GraphQL Introspection | Complete |
-| D-008 | 2 | Discovery Orchestrator | Complete |
-| D-004 | 3 | OpenAPI Enhancement | Complete |
-| D-003 | 4 | Link Discovery | Complete |
-| D-002 | 5 | Docs Page Detection | Complete |
-| D-009 | 6 | Auth Workflow Helper | Complete |
-| D-005 | 7 | AsyncAPI Discovery | Complete |
-| D-006 | 8 | Alt Spec Formats | Complete |
-| D-007 | 9 | Robots/Sitemap Analysis | Complete |
-| D-010 | 10 | Backend Framework Fingerprinting | Complete |
+### Phase 5: Interface Simplification & Expansion - NEXT
+
+**Problem:** 25 MCP tools overwhelm LLMs. Need multiple interfaces for different use cases.
+
+**Four Parallel Initiatives:**
+
+#### 1. MCP Tool Consolidation (TC-001 to TC-010)
+**Goal:** 25 tools → 5 core tools
+
+| Priority | Initiative | Status |
+|----------|-----------|--------|
+| P0 | Consolidate 6 auth tools → 1 | Not Started |
+| P0 | Auto-embed domain insights in smart_browse | Not Started |
+| P0 | Auto-apply skills (remove skill_management) | Not Started |
+| P1 | Move debug tools to DEBUG_MODE | Not Started |
+| P1 | Remove analytics/infrastructure tools from MCP | Not Started |
+
+**Target Tools:**
+1. `smart_browse` - Intelligent browsing with auto-learning
+2. `execute_api_call` - Direct API calls
+3. `api_auth` - Consolidated authentication (action-based)
+4. `session_management` - Session/cookie management
+5. `batch_browse` - Batch operations (optional)
+
+#### 2. SDK Extraction (SDK-001 to SDK-012)
+**Goal:** Extract core into `@llm-browser/core` npm package
+
+| Priority | Initiative | Status |
+|----------|-----------|--------|
+| P0 | Audit dependencies and create package structure | Not Started |
+| P0 | Extract SmartBrowser, learning, session components | Not Started |
+| P1 | Add types, docs, examples | Not Started |
+| P1 | Refactor MCP tools as thin wrappers | Not Started |
+| P1 | Publish to npm | Not Started |
+
+**Benefits:** Enables direct programmatic use, foundation for all interfaces
+
+#### 3. Skills & Prompts (SK-001 to SK-011)
+**Goal:** 5-10 Claude skills for easiest UX
+
+| Priority | Initiative | Status |
+|----------|-----------|--------|
+| P1 | Design skill templates | Not Started |
+| P1 | Create 5 core skills (Research, Monitor, Scrape, Discover, Compare) | Not Started |
+| P2 | Test with users and submit to directory | Not Started |
+
+**Benefits:** Simplest entry point, drives MCP adoption
+
+#### 4. Hosted API Preparation (API-001 to API-017)
+**Goal:** Production-ready REST API for monetization
+
+| Priority | Initiative | Status |
+|----------|-----------|--------|
+| P1 | Design endpoints, auth, rate limiting | Not Started |
+| P1 | Implement usage metering and billing | Not Started |
+| P2 | Production infrastructure and monitoring | Not Started |
+| P2 | Beta program launch | Not Started |
+
+**Benefits:** Platform-agnostic access, primary revenue stream
 
 ---
 
