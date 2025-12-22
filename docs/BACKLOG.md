@@ -30,7 +30,7 @@ Tasks are organized by priority and category. Each task includes:
 
 | ID | Task | Effort | Category | Notes |
 |----|------|--------|----------|-------|
-| T-009 | Fix bootstrap pattern tests | M | Testing | 8 failing tests in `learned-pattern-application.test.ts` - bootstrap patterns not loading correctly after initialization |
+| T-009 | Fix bootstrap pattern tests | M | Testing | 8 failing tests in `learned-pattern-application.test.ts` - bootstrap patterns not loading correctly after initialization (DONE - PR #98) |
 
 ---
 
@@ -203,13 +203,13 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 
 | ID | Task | Effort | Category | Notes |
 |----|------|--------|----------|-------|
-| F-001 | Batch browse operations | L | Features | Multiple URLs in one call |
+| F-001 | Batch browse operations | L | Features | Multiple URLs in one call (DONE - PR #97) |
 | F-002 | Parallel request handling | L | Features | Concurrent browsing |
-| F-003 | Content change detection alerts | M | Features | Notify when content changes |
+| F-003 | Content change detection alerts | M | Features | Notify when content changes (DONE - PR #94) |
 | F-004 | Skill composition (chain skills) | L | Features | Combine skills into workflows |
-| F-005 | Screenshot capture on demand | M | Features | Visual debugging |
-| F-006 | HAR file export | M | Features | Network debugging |
-| F-012 | Skill sharing + portability | M | Features | Export/import skill packs by domain vertical (gov, ecommerce, docs) |
+| F-005 | Screenshot capture on demand | M | Features | Visual debugging (DONE - PR #91) |
+| F-006 | HAR file export | M | Features | Network debugging (DONE - PR #92) |
+| F-012 | Skill sharing + portability | M | Features | Export/import skill packs by domain vertical (gov, ecommerce, docs) (DONE - PR #93) |
 
 ### Intelligence
 
