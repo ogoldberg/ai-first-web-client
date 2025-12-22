@@ -250,6 +250,108 @@ Returns: Content, tables, APIs discovered, learning insights, and budget trackin
       },
 
       // ============================================
+      // BATCH BROWSE (F-001)
+      // ============================================
+      {
+        name: 'batch_browse',
+        description: `Browse multiple URLs in a single call with controlled concurrency.
+
+Use this tool when you need to:
+- Fetch content from multiple URLs efficiently
+- Compare content across multiple pages
+- Gather data from a list of URLs
+- Crawl related pages in parallel
+
+Features:
+- Configurable concurrency (default: 3 parallel requests)
+- Per-URL and total timeout controls
+- Individual error handling (one failure doesn't stop others)
+- Shared session and pattern usage across batch
+- SSRF protection on all URLs
+
+All smart_browse options (contentType, maxChars, etc.) can be applied to each URL.
+
+Returns: Array of results with per-URL status, timing, and content.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            urls: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'Array of URLs to browse',
+            },
+            // Batch options
+            concurrency: {
+              type: 'number',
+              description: 'Maximum parallel requests (default: 3). Higher values are faster but may trigger rate limits.',
+            },
+            stopOnError: {
+              type: 'boolean',
+              description: 'Stop entire batch on first error (default: false). When false, errors are recorded but processing continues.',
+            },
+            continueOnRateLimit: {
+              type: 'boolean',
+              description: 'Continue batch when rate limited (default: true). Rate-limited URLs are marked as such.',
+            },
+            perUrlTimeoutMs: {
+              type: 'number',
+              description: 'Timeout per URL in milliseconds. Overrides default browse timeout.',
+            },
+            totalTimeoutMs: {
+              type: 'number',
+              description: 'Total batch timeout in milliseconds. Remaining URLs are skipped when exceeded.',
+            },
+            // Browse options (applied to each URL)
+            contentType: {
+              type: 'string',
+              enum: ['main_content', 'requirements', 'fees', 'timeline', 'documents', 'contact', 'table'],
+              description: 'Type of content to extract from each URL',
+            },
+            waitForSelector: {
+              type: 'string',
+              description: 'CSS selector to wait for on each page',
+            },
+            scrollToLoad: {
+              type: 'boolean',
+              description: 'Scroll to trigger lazy-loaded content on each page',
+            },
+            sessionProfile: {
+              type: 'string',
+              description: 'Session profile for authenticated access',
+            },
+            // Output controls
+            maxChars: {
+              type: 'number',
+              description: 'Maximum characters for markdown content per URL',
+            },
+            includeTables: {
+              type: 'boolean',
+              description: 'Include extracted tables (default: true)',
+            },
+            includeNetwork: {
+              type: 'boolean',
+              description: 'Include network requests (default: false)',
+            },
+            includeConsole: {
+              type: 'boolean',
+              description: 'Include console logs (default: false)',
+            },
+            // Budget controls
+            maxLatencyMs: {
+              type: 'number',
+              description: 'Maximum latency per URL in milliseconds',
+            },
+            maxCostTier: {
+              type: 'string',
+              enum: ['intelligence', 'lightweight', 'playwright'],
+              description: 'Maximum cost tier to use per URL',
+            },
+          },
+          required: ['urls'],
+        },
+      },
+
+      // ============================================
       // DOMAIN INTELLIGENCE
       // ============================================
       {
@@ -1229,6 +1331,131 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         }
 
         return jsonResponse(formattedResult);
+      }
+
+      // ============================================
+      // BATCH BROWSE (F-001)
+      // ============================================
+      case 'batch_browse': {
+        const urls = args.urls as string[];
+
+        if (!urls || !Array.isArray(urls) || urls.length === 0) {
+          return errorResponse(new Error('urls must be a non-empty array of strings'));
+        }
+
+        // Build browse options from args
+        const browseOptions = {
+          contentType: args.contentType as any,
+          waitForSelector: args.waitForSelector as string | undefined,
+          scrollToLoad: args.scrollToLoad as boolean | undefined,
+          sessionProfile: args.sessionProfile as string | undefined,
+          validateContent: true,
+          enableLearning: true,
+          maxLatencyMs: args.maxLatencyMs as number | undefined,
+          maxCostTier: args.maxCostTier as 'intelligence' | 'lightweight' | 'playwright' | undefined,
+        };
+
+        // Build batch options from args
+        const batchOptions = {
+          concurrency: args.concurrency as number | undefined,
+          stopOnError: args.stopOnError as boolean | undefined,
+          continueOnRateLimit: args.continueOnRateLimit as boolean | undefined,
+          perUrlTimeoutMs: args.perUrlTimeoutMs as number | undefined,
+          totalTimeoutMs: args.totalTimeoutMs as number | undefined,
+        };
+
+        // Output size control options
+        const maxChars = args.maxChars as number | undefined;
+        const includeTables = args.includeTables !== false;
+        const includeNetwork = args.includeNetwork === true;
+        const includeConsole = args.includeConsole === true;
+
+        const batchResults = await smartBrowser.batchBrowse(urls, browseOptions, batchOptions);
+
+        // Format each result for LLM consumption
+        const formattedResults = batchResults.map(item => {
+          const formatted: Record<string, unknown> = {
+            url: item.url,
+            status: item.status,
+            durationMs: item.durationMs,
+            index: item.index,
+          };
+
+          if (item.error) {
+            formatted.error = item.error;
+            formatted.errorCode = item.errorCode;
+          }
+
+          if (item.result) {
+            // Apply maxChars truncation
+            let markdown = item.result.content.markdown;
+            let wasTruncated = false;
+            if (maxChars && markdown.length > maxChars) {
+              markdown = markdown.substring(0, maxChars);
+              const lastSpace = markdown.lastIndexOf(' ');
+              const lastNewline = markdown.lastIndexOf('\n');
+              const breakPoint = Math.max(lastSpace, lastNewline);
+              if (breakPoint > maxChars * 0.8) {
+                markdown = markdown.substring(0, breakPoint);
+              }
+              markdown += '\n\n[Content truncated]';
+              wasTruncated = true;
+            }
+
+            formatted.title = item.result.title;
+            formatted.content = {
+              markdown,
+              textLength: item.result.content.text.length,
+              ...(wasTruncated ? { truncated: true } : {}),
+            };
+            formatted.metadata = item.result.metadata;
+            formatted.intelligence = {
+              confidenceLevel: item.result.learning.confidenceLevel,
+              renderTier: item.result.learning.renderTier,
+              tierFellBack: item.result.learning.tierFellBack,
+            };
+            formatted.discoveredApis = item.result.discoveredApis.map(api => ({
+              endpoint: api.endpoint,
+              method: api.method,
+              canBypassBrowser: api.canBypass,
+              confidence: api.confidence,
+            }));
+
+            if (includeTables && item.result.tables && item.result.tables.length > 0) {
+              formatted.tables = item.result.tables;
+            }
+
+            if (includeNetwork && item.result.network && item.result.network.length > 0) {
+              formatted.network = item.result.network.map(req => ({
+                url: req.url,
+                method: req.method,
+                status: req.status,
+                contentType: req.contentType,
+              }));
+            }
+
+            if (includeConsole && item.result.console && item.result.console.length > 0) {
+              formatted.console = item.result.console;
+            }
+          }
+
+          return formatted;
+        });
+
+        // Summary statistics
+        const summary = {
+          totalUrls: urls.length,
+          successful: batchResults.filter(r => r.status === 'success').length,
+          failed: batchResults.filter(r => r.status === 'error').length,
+          skipped: batchResults.filter(r => r.status === 'skipped').length,
+          rateLimited: batchResults.filter(r => r.status === 'rate_limited').length,
+          totalDurationMs: batchResults.reduce((sum, r) => sum + r.durationMs, 0),
+        };
+
+        return jsonResponse({
+          summary,
+          results: formattedResults,
+        });
       }
 
       // ============================================

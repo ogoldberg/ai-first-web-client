@@ -1439,6 +1439,181 @@ export class SmartBrowser {
   }
 
   /**
+   * Batch browse multiple URLs with controlled concurrency
+   *
+   * This method allows browsing multiple URLs in a single call, with:
+   * - Configurable concurrency limits
+   * - Per-URL and total timeout controls
+   * - Individual error handling (one failure doesn't stop others)
+   * - Shared session and pattern usage across batch
+   * - Progress tracking with per-URL status
+   *
+   * @param urls Array of URLs to browse
+   * @param browseOptions Options applied to each browse operation
+   * @param batchOptions Options for the batch operation itself
+   * @returns Array of results maintaining the original URL order
+   */
+  async batchBrowse(
+    urls: string[],
+    browseOptions: SmartBrowseOptions = {},
+    batchOptions: import('../types/index.js').BatchBrowseOptions = {}
+  ): Promise<import('../types/index.js').BatchBrowseItem<SmartBrowseResult>[]> {
+    const {
+      concurrency = 3,
+      stopOnError = false,
+      continueOnRateLimit = true,
+      perUrlTimeoutMs,
+      totalTimeoutMs,
+    } = batchOptions;
+
+    const batchStartTime = Date.now();
+    const results: import('../types/index.js').BatchBrowseItem<SmartBrowseResult>[] = [];
+    let stopped = false;
+
+    // Pre-validate all URLs for SSRF protection
+    const validatedUrls: { url: string; index: number; valid: boolean; error?: string }[] = [];
+    for (let i = 0; i < urls.length; i++) {
+      try {
+        validateUrlOrThrow(urls[i]);
+        validatedUrls.push({ url: urls[i], index: i, valid: true });
+      } catch (error) {
+        validatedUrls.push({
+          url: urls[i],
+          index: i,
+          valid: false,
+          error: error instanceof Error ? error.message : 'Invalid URL',
+        });
+      }
+    }
+
+    // Add invalid URL results immediately
+    for (const validated of validatedUrls.filter(v => !v.valid)) {
+      results.push({
+        url: validated.url,
+        status: 'error',
+        error: validated.error,
+        errorCode: 'INVALID_URL',
+        durationMs: 0,
+        index: validated.index,
+      });
+    }
+
+    // Process valid URLs with concurrency control
+    const validUrls = validatedUrls.filter(v => v.valid);
+    const pending: Set<Promise<void>> = new Set();
+
+    const processUrl = async (urlInfo: { url: string; index: number }): Promise<void> => {
+      if (stopped) {
+        results.push({
+          url: urlInfo.url,
+          status: 'skipped',
+          error: 'Batch stopped due to previous error',
+          durationMs: 0,
+          index: urlInfo.index,
+        });
+        return;
+      }
+
+      // Check total timeout
+      if (totalTimeoutMs && Date.now() - batchStartTime >= totalTimeoutMs) {
+        results.push({
+          url: urlInfo.url,
+          status: 'skipped',
+          error: 'Batch timeout exceeded',
+          durationMs: 0,
+          index: urlInfo.index,
+        });
+        return;
+      }
+
+      const urlStartTime = Date.now();
+
+      try {
+        // Apply per-URL timeout if specified
+        const effectiveOptions = { ...browseOptions };
+        if (perUrlTimeoutMs) {
+          effectiveOptions.timeout = perUrlTimeoutMs;
+        }
+
+        const result = await this.browse(urlInfo.url, effectiveOptions);
+
+        results.push({
+          url: urlInfo.url,
+          status: 'success',
+          result,
+          durationMs: Date.now() - urlStartTime,
+          index: urlInfo.index,
+        });
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        const isRateLimited = errorMessage.toLowerCase().includes('rate limit') ||
+          errorMessage.toLowerCase().includes('429');
+
+        if (isRateLimited && continueOnRateLimit) {
+          results.push({
+            url: urlInfo.url,
+            status: 'rate_limited',
+            error: errorMessage,
+            errorCode: 'RATE_LIMITED',
+            durationMs: Date.now() - urlStartTime,
+            index: urlInfo.index,
+          });
+        } else {
+          results.push({
+            url: urlInfo.url,
+            status: 'error',
+            error: errorMessage,
+            errorCode: 'BROWSE_ERROR',
+            durationMs: Date.now() - urlStartTime,
+            index: urlInfo.index,
+          });
+
+          if (stopOnError) {
+            stopped = true;
+          }
+        }
+      }
+    };
+
+    // Process URLs with controlled concurrency
+    for (const urlInfo of validUrls) {
+      if (stopped) break;
+
+      // Wait for a slot if at capacity
+      while (pending.size >= concurrency) {
+        await Promise.race(pending);
+      }
+
+      // Check total timeout before starting new request
+      if (totalTimeoutMs && Date.now() - batchStartTime >= totalTimeoutMs) {
+        break;
+      }
+
+      const promise = processUrl(urlInfo).finally(() => {
+        pending.delete(promise);
+      });
+      pending.add(promise);
+    }
+
+    // Wait for remaining requests to complete
+    await Promise.all(pending);
+
+    // Sort results by original index for consistent ordering
+    results.sort((a, b) => a.index - b.index);
+
+    logger.smartBrowser.info('Batch browse completed', {
+      totalUrls: urls.length,
+      successful: results.filter(r => r.status === 'success').length,
+      failed: results.filter(r => r.status === 'error').length,
+      skipped: results.filter(r => r.status === 'skipped').length,
+      rateLimited: results.filter(r => r.status === 'rate_limited').length,
+      totalDurationMs: Date.now() - batchStartTime,
+    });
+
+    return results;
+  }
+
+  /**
    * Get intelligence summary for a domain
    */
   async getDomainIntelligence(domain: string): Promise<{

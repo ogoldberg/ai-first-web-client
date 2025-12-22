@@ -826,6 +826,51 @@ export interface SkillImportResult {
  */
 export type RenderTier = 'intelligence' | 'lightweight' | 'playwright';
 
+// ============================================
+// BATCH BROWSE TYPES (F-001)
+// ============================================
+
+/**
+ * Status of a single URL in a batch operation
+ */
+export type BatchItemStatus = 'success' | 'error' | 'skipped' | 'rate_limited';
+
+/**
+ * Result for a single URL in a batch browse operation
+ */
+export interface BatchBrowseItem<T> {
+  // The URL that was browsed
+  url: string;
+  // Status of this item
+  status: BatchItemStatus;
+  // The result (if successful)
+  result?: T;
+  // Error message (if failed)
+  error?: string;
+  // Error code (if failed)
+  errorCode?: string;
+  // Duration in milliseconds
+  durationMs: number;
+  // Index in the original request
+  index: number;
+}
+
+/**
+ * Options for batch browse operations
+ */
+export interface BatchBrowseOptions {
+  // Maximum concurrent requests (default: 3)
+  concurrency?: number;
+  // Stop on first error (default: false)
+  stopOnError?: boolean;
+  // Continue even if rate limited (default: true, will skip rate limited URLs)
+  continueOnRateLimit?: boolean;
+  // Per-URL timeout (default: use default browse timeout)
+  perUrlTimeoutMs?: number;
+  // Total batch timeout (default: no limit)
+  totalTimeoutMs?: number;
+}
+
 /**
  * Domain-specific rendering preference
  */
