@@ -2727,5 +2727,221 @@ describe('ContentIntelligence', () => {
       expect(result.meta.strategy).toBe('api:youtube');
       expect(result.content.title).toBe('Amazing JavaScript Tutorial');
     });
+
+    // YouTube Data API v3 tests
+    describe('with YouTube Data API v3', () => {
+      const sampleDataAPIResponse = {
+        items: [{
+          snippet: {
+            title: 'Amazing JavaScript Tutorial',
+            description: 'Learn JavaScript in this comprehensive tutorial covering fundamentals to advanced topics.',
+            publishedAt: '2023-06-15T10:30:00Z',
+            channelId: 'UC123456789',
+            channelTitle: 'Code Academy',
+            tags: ['javascript', 'programming', 'tutorial'],
+            categoryId: '28',
+          },
+          statistics: {
+            viewCount: '1234567',
+            likeCount: '45678',
+            commentCount: '1234',
+          },
+          contentDetails: {
+            duration: 'PT1H23M45S',
+          },
+        }],
+      };
+
+      const createYouTubeDataAPIResponse = (data: object) => ({
+        ok: true,
+        status: 200,
+        json: () => Promise.resolve(data),
+        headers: new Headers({ 'content-type': 'application/json' }),
+      });
+
+      it('should use high confidence when YouTube Data API is available', async () => {
+        const originalEnv = process.env.YOUTUBE_API_KEY;
+        process.env.YOUTUBE_API_KEY = 'test-api-key';
+
+        try {
+          // First call is oEmbed, second call is Data API
+          mockFetch
+            .mockResolvedValueOnce(createYouTubeOEmbedResponse(sampleOEmbedResponse))
+            .mockResolvedValueOnce(createYouTubeDataAPIResponse(sampleDataAPIResponse));
+
+          const result = await intelligence.extract('https://www.youtube.com/watch?v=dQw4w9WgXcQ', {
+            minContentLength: 10,
+          });
+
+          expect(result.meta.strategy).toBe('api:youtube');
+          expect(result.meta.confidence).toBe('high');
+        } finally {
+          if (originalEnv === undefined) {
+            delete process.env.YOUTUBE_API_KEY;
+          } else {
+            process.env.YOUTUBE_API_KEY = originalEnv;
+          }
+        }
+      });
+
+      it('should include enhanced data from Data API in result', async () => {
+        const originalEnv = process.env.YOUTUBE_API_KEY;
+        process.env.YOUTUBE_API_KEY = 'test-api-key';
+
+        try {
+          mockFetch
+            .mockResolvedValueOnce(createYouTubeOEmbedResponse(sampleOEmbedResponse))
+            .mockResolvedValueOnce(createYouTubeDataAPIResponse(sampleDataAPIResponse));
+
+          const result = await intelligence.extract('https://www.youtube.com/watch?v=dQw4w9WgXcQ', {
+            minContentLength: 10,
+          });
+
+          // Check structured data includes enhanced fields
+          expect(result.content.structured?.viewCount).toBe(1234567);
+          expect(result.content.structured?.likeCount).toBe(45678);
+          expect(result.content.structured?.commentCount).toBe(1234);
+          expect(result.content.structured?.description).toContain('Learn JavaScript');
+          expect(result.content.structured?.duration).toBe('PT1H23M45S');
+          expect(result.content.structured?.tags).toEqual(['javascript', 'programming', 'tutorial']);
+          expect(result.content.structured?.publishedAt).toBe('2023-06-15T10:30:00Z');
+        } finally {
+          if (originalEnv === undefined) {
+            delete process.env.YOUTUBE_API_KEY;
+          } else {
+            process.env.YOUTUBE_API_KEY = originalEnv;
+          }
+        }
+      });
+
+      it('should format enhanced data in markdown output', async () => {
+        const originalEnv = process.env.YOUTUBE_API_KEY;
+        process.env.YOUTUBE_API_KEY = 'test-api-key';
+
+        try {
+          mockFetch
+            .mockResolvedValueOnce(createYouTubeOEmbedResponse(sampleOEmbedResponse))
+            .mockResolvedValueOnce(createYouTubeDataAPIResponse(sampleDataAPIResponse));
+
+          const result = await intelligence.extract('https://www.youtube.com/watch?v=dQw4w9WgXcQ', {
+            minContentLength: 10,
+          });
+
+          // Check markdown includes formatted statistics
+          expect(result.content.markdown).toContain('Views:');
+          expect(result.content.markdown).toContain('1,234,567');
+          expect(result.content.markdown).toContain('Likes:');
+          expect(result.content.markdown).toContain('Duration:');
+          expect(result.content.markdown).toContain('1h 23m 45s');
+          expect(result.content.markdown).toContain('Description');
+          expect(result.content.markdown).toContain('Learn JavaScript');
+        } finally {
+          if (originalEnv === undefined) {
+            delete process.env.YOUTUBE_API_KEY;
+          } else {
+            process.env.YOUTUBE_API_KEY = originalEnv;
+          }
+        }
+      });
+
+      it('should fall back gracefully when Data API fails', async () => {
+        const originalEnv = process.env.YOUTUBE_API_KEY;
+        process.env.YOUTUBE_API_KEY = 'test-api-key';
+
+        try {
+          mockFetch
+            .mockResolvedValueOnce(createYouTubeOEmbedResponse(sampleOEmbedResponse))
+            .mockResolvedValueOnce({
+              ok: false,
+              status: 403,
+              json: () => Promise.reject(new Error('Forbidden')),
+              headers: new Headers({}),
+            });
+
+          const result = await intelligence.extract('https://www.youtube.com/watch?v=dQw4w9WgXcQ', {
+            minContentLength: 10,
+          });
+
+          // Should still succeed with oEmbed data
+          expect(result.meta.strategy).toBe('api:youtube');
+          expect(result.meta.confidence).toBe('medium');
+          expect(result.content.title).toBe('Amazing JavaScript Tutorial');
+        } finally {
+          if (originalEnv === undefined) {
+            delete process.env.YOUTUBE_API_KEY;
+          } else {
+            process.env.YOUTUBE_API_KEY = originalEnv;
+          }
+        }
+      });
+
+      it('should handle Data API returning empty items array', async () => {
+        const originalEnv = process.env.YOUTUBE_API_KEY;
+        process.env.YOUTUBE_API_KEY = 'test-api-key';
+
+        try {
+          mockFetch
+            .mockResolvedValueOnce(createYouTubeOEmbedResponse(sampleOEmbedResponse))
+            .mockResolvedValueOnce(createYouTubeDataAPIResponse({ items: [] }));
+
+          const result = await intelligence.extract('https://www.youtube.com/watch?v=dQw4w9WgXcQ', {
+            minContentLength: 10,
+          });
+
+          // Should still succeed with oEmbed data only
+          expect(result.meta.strategy).toBe('api:youtube');
+          expect(result.meta.confidence).toBe('medium');
+          expect(result.content.structured?.viewCount).toBeUndefined();
+        } finally {
+          if (originalEnv === undefined) {
+            delete process.env.YOUTUBE_API_KEY;
+          } else {
+            process.env.YOUTUBE_API_KEY = originalEnv;
+          }
+        }
+      });
+
+      it('should not include warning when API key is configured', async () => {
+        const originalEnv = process.env.YOUTUBE_API_KEY;
+        process.env.YOUTUBE_API_KEY = 'test-api-key';
+
+        try {
+          mockFetch
+            .mockResolvedValueOnce(createYouTubeOEmbedResponse(sampleOEmbedResponse))
+            .mockResolvedValueOnce(createYouTubeDataAPIResponse(sampleDataAPIResponse));
+
+          const result = await intelligence.extract('https://www.youtube.com/watch?v=dQw4w9WgXcQ', {
+            minContentLength: 10,
+          });
+
+          expect(result.warnings).toEqual([]);
+        } finally {
+          if (originalEnv === undefined) {
+            delete process.env.YOUTUBE_API_KEY;
+          } else {
+            process.env.YOUTUBE_API_KEY = originalEnv;
+          }
+        }
+      });
+
+      it('should include warning when API key is not configured', async () => {
+        const originalEnv = process.env.YOUTUBE_API_KEY;
+        delete process.env.YOUTUBE_API_KEY;
+
+        try {
+          mockFetch.mockResolvedValueOnce(createYouTubeOEmbedResponse(sampleOEmbedResponse));
+
+          const result = await intelligence.extract('https://www.youtube.com/watch?v=dQw4w9WgXcQ', {
+            minContentLength: 10,
+          });
+
+          expect(result.warnings).toContain('YouTube Data API key not configured - using basic oEmbed data');
+        } finally {
+          if (originalEnv !== undefined) {
+            process.env.YOUTUBE_API_KEY = originalEnv;
+          }
+        }
+      });
+    });
   });
 });

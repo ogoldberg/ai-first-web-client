@@ -4277,6 +4277,16 @@ export class ContentIntelligence {
   // STRATEGY: YouTube API Extraction
   // ============================================
 
+  // YouTube hostnames for URL detection
+  private static readonly YOUTUBE_HOSTS = new Set([
+    'youtube.com',
+    'www.youtube.com',
+    'm.youtube.com',
+    'youtu.be',
+    'www.youtube-nocookie.com',
+    'youtube-nocookie.com',
+  ]);
+
   /**
    * Check if URL is a YouTube URL
    * Matches youtube.com, youtu.be, and youtube-nocookie.com
@@ -4285,14 +4295,7 @@ export class ContentIntelligence {
     try {
       const parsed = new URL(url);
       const hostname = parsed.hostname.toLowerCase();
-      return (
-        hostname === 'youtube.com' ||
-        hostname === 'www.youtube.com' ||
-        hostname === 'm.youtube.com' ||
-        hostname === 'youtu.be' ||
-        hostname === 'www.youtube-nocookie.com' ||
-        hostname === 'youtube-nocookie.com'
-      );
+      return ContentIntelligence.YOUTUBE_HOSTS.has(hostname);
     } catch {
       return false;
     }
@@ -4302,39 +4305,7 @@ export class ContentIntelligence {
    * Check if URL is a YouTube video (not a channel, playlist, or other page)
    */
   private isYouTubeVideo(url: string): boolean {
-    try {
-      const parsed = new URL(url);
-      const hostname = parsed.hostname.toLowerCase();
-
-      // youtu.be URLs are always videos (youtu.be/VIDEO_ID)
-      if (hostname === 'youtu.be') {
-        return parsed.pathname.length > 1;
-      }
-
-      // youtube.com/watch?v=VIDEO_ID
-      if (parsed.pathname === '/watch' && parsed.searchParams.has('v')) {
-        return true;
-      }
-
-      // youtube.com/v/VIDEO_ID (embed format)
-      if (parsed.pathname.startsWith('/v/')) {
-        return true;
-      }
-
-      // youtube.com/embed/VIDEO_ID
-      if (parsed.pathname.startsWith('/embed/')) {
-        return true;
-      }
-
-      // youtube.com/shorts/VIDEO_ID
-      if (parsed.pathname.startsWith('/shorts/')) {
-        return true;
-      }
-
-      return false;
-    } catch {
-      return false;
-    }
+    return this.getYouTubeVideoId(url) !== null;
   }
 
   /**
@@ -4480,7 +4451,6 @@ export class ContentIntelligence {
         headers: {
           ...opts.headers,
           Accept: 'application/json',
-          'User-Agent': opts.userAgent || 'Mozilla/5.0 (compatible; ContentIntelligence/1.0)',
         },
       });
 
@@ -4514,7 +4484,6 @@ export class ContentIntelligence {
         headers: {
           ...opts.headers,
           Accept: 'application/json',
-          'User-Agent': opts.userAgent || 'Mozilla/5.0 (compatible; ContentIntelligence/1.0)',
         },
       });
 
@@ -4611,7 +4580,7 @@ export class ContentIntelligence {
 
       // Published date
       if (enhanced.publishedAt) {
-        const publishDate = new Date(enhanced.publishedAt).toLocaleDateString();
+        const publishDate = new Date(enhanced.publishedAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
         lines.push(`Published: ${publishDate}`);
         markdownLines.push(`- **Published:** ${publishDate}`);
         markdownLines.push('');
