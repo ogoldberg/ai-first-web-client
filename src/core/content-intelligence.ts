@@ -34,6 +34,13 @@ import type {
 import { ApiPatternRegistry } from './api-pattern-learner.js';
 import { discoverGraphQL, isLikelyGraphQL, type GraphQLDiscoveryResult, type GraphQLQueryPattern } from './graphql-introspection.js';
 import { classifyFailure } from './failure-learning.js';
+import {
+  redditHandler,
+  hackerNewsHandler,
+  gitHubHandler,
+  type FetchFunction,
+  type SiteHandlerOptions,
+} from './site-handlers/index.js';
 
 // Create a require function for ESM compatibility
 const require = createRequire(import.meta.url);
@@ -1093,160 +1100,6 @@ export class ContentIntelligence {
   }
 
   // ============================================
-  // STRATEGY: Reddit API Extraction
-  // ============================================
-
-  /**
-   * Check if URL is a Reddit URL
-   */
-  private isRedditUrl(url: string): boolean {
-    try {
-      const parsed = new URL(url);
-      return /^(www\.|old\.)?reddit\.com$/i.test(parsed.hostname);
-    } catch {
-      return false;
-    }
-  }
-
-  /**
-   * Convert Reddit URL to JSON API URL
-   */
-  private getRedditJsonUrl(url: string): string {
-    const parsed = new URL(url);
-    // Remove trailing slash if present, then add .json
-    let path = parsed.pathname.replace(/\/$/, '');
-    // Don't double-add .json
-    if (!path.endsWith('.json')) {
-      path += '.json';
-    }
-    return `${parsed.origin}${path}${parsed.search}`;
-  }
-
-  /**
-   * Format Reddit JSON data into readable text/markdown
-   */
-  private formatRedditData(data: unknown): { title: string; text: string; markdown: string; structured: unknown } {
-    const lines: string[] = [];
-    const markdownLines: string[] = [];
-    let title = '';
-
-    // Handle Listing (subreddit posts)
-    if (this.isRedditListing(data)) {
-      const listing = data as { kind: string; data: { children: Array<{ kind: string; data: Record<string, unknown> }> } };
-      title = 'Reddit Posts';
-
-      for (const child of listing.data.children) {
-        if (child.kind === 't3') { // Post
-          const post = child.data;
-          const postTitle = String(post.title || '');
-          const author = String(post.author || 'unknown');
-          const score = post.score || 0;
-          const url = String(post.url || '');
-          const selftext = String(post.selftext || '');
-          const subreddit = String(post.subreddit || '');
-          const numComments = post.num_comments || 0;
-
-          // Text format
-          lines.push(`[${score}] ${postTitle}`);
-          lines.push(`  by u/${author} in r/${subreddit}`);
-          if (selftext) {
-            lines.push(`  ${selftext.substring(0, 200)}${selftext.length > 200 ? '...' : ''}`);
-          }
-          if (url && !url.includes('reddit.com')) {
-            lines.push(`  Link: ${url}`);
-          }
-          lines.push(`  ${numComments} comments`);
-          lines.push('');
-
-          // Markdown format
-          markdownLines.push(`## ${postTitle}`);
-          markdownLines.push(`**Score:** ${score} | **Author:** u/${author} | **Subreddit:** r/${subreddit}`);
-          if (selftext) {
-            markdownLines.push('');
-            markdownLines.push(selftext.substring(0, 500) + (selftext.length > 500 ? '...' : ''));
-          }
-          if (url && !url.includes('reddit.com')) {
-            markdownLines.push(`[External Link](${url})`);
-          }
-          markdownLines.push(`*${numComments} comments*`);
-          markdownLines.push('---');
-          markdownLines.push('');
-        }
-      }
-    }
-    // Handle post detail (array with post and comments)
-    else if (Array.isArray(data) && data.length >= 1) {
-      const postListing = data[0] as { data?: { children?: Array<{ data?: Record<string, unknown> }> } };
-      if (postListing?.data?.children?.[0]?.data) {
-        const post = postListing.data.children[0].data;
-        title = String(post.title || 'Reddit Post');
-        const author = String(post.author || 'unknown');
-        const score = post.score || 0;
-        const selftext = String(post.selftext || '');
-        const subreddit = String(post.subreddit || '');
-
-        lines.push(title);
-        lines.push(`by u/${author} in r/${subreddit} | Score: ${score}`);
-        lines.push('');
-        if (selftext) {
-          lines.push(selftext);
-          lines.push('');
-        }
-
-        markdownLines.push(`# ${title}`);
-        markdownLines.push(`**Author:** u/${author} | **Subreddit:** r/${subreddit} | **Score:** ${score}`);
-        markdownLines.push('');
-        if (selftext) {
-          markdownLines.push(selftext);
-          markdownLines.push('');
-        }
-
-        // Add comments if present
-        if (data.length >= 2) {
-          const commentsListing = data[1] as { data?: { children?: Array<{ kind: string; data?: Record<string, unknown> }> } };
-          if (commentsListing?.data?.children) {
-            lines.push('--- Comments ---');
-            markdownLines.push('## Comments');
-            markdownLines.push('');
-
-            for (const comment of commentsListing.data.children.slice(0, 10)) {
-              if (comment.kind === 't1' && comment.data) {
-                const commentAuthor = String(comment.data.author || 'unknown');
-                const commentBody = String(comment.data.body || '');
-                const commentScore = comment.data.score || 0;
-
-                lines.push(`[${commentScore}] u/${commentAuthor}:`);
-                lines.push(`  ${commentBody.substring(0, 300)}${commentBody.length > 300 ? '...' : ''}`);
-                lines.push('');
-
-                markdownLines.push(`**u/${commentAuthor}** (${commentScore} points)`);
-                markdownLines.push(commentBody.substring(0, 500) + (commentBody.length > 500 ? '...' : ''));
-                markdownLines.push('');
-              }
-            }
-          }
-        }
-      }
-    }
-
-    return {
-      title: title || 'Reddit Content',
-      text: lines.join('\n'),
-      markdown: markdownLines.join('\n'),
-      structured: data,
-    };
-  }
-
-  /**
-   * Check if data is a Reddit Listing
-   */
-  private isRedditListing(data: unknown): boolean {
-    if (typeof data !== 'object' || data === null) return false;
-    const obj = data as Record<string, unknown>;
-    return obj.kind === 'Listing' && typeof obj.data === 'object' && obj.data !== null;
-  }
-
-  // ============================================
   // STRATEGY: Learned API Patterns
   // ============================================
 
@@ -1897,6 +1750,7 @@ export class ContentIntelligence {
 
   // ============================================
   // STRATEGY: Site-Specific APIs (Reddit)
+  // Delegated to extracted handler in site-handlers/reddit-handler.ts
   // ============================================
 
   /**
@@ -1906,195 +1760,30 @@ export class ContentIntelligence {
     url: string,
     opts: ContentIntelligenceOptions
   ): Promise<ContentResult | null> {
-    // Only try for Reddit URLs
-    if (!this.isRedditUrl(url)) {
+    if (!redditHandler.canHandle(url)) {
       return null;
     }
 
-    const jsonUrl = this.getRedditJsonUrl(url);
-    logger.intelligence.debug(`Trying Reddit JSON API: ${jsonUrl}`);
-
-    try {
-      const response = await this.fetchWithCookies(jsonUrl, {
-        ...opts,
-        headers: {
-          ...opts.headers,
-          'Accept': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        logger.intelligence.debug(`Reddit API returned ${response.status}`);
-        return null;
-      }
-
-      const contentType = response.headers.get('content-type') || '';
-      if (!contentType.includes('application/json')) {
-        logger.intelligence.debug(`Reddit API returned non-JSON: ${contentType}`);
-        return null;
-      }
-
-      const data = await response.json();
-      const formatted = this.formatRedditData(data);
-
-      if (formatted.text.length < (opts.minContentLength || 100)) {
-        logger.intelligence.debug(`Reddit content too short: ${formatted.text.length}`);
-        return null;
-      }
-
-      logger.intelligence.info(`Reddit API extraction successful`, {
-        url: jsonUrl,
-        contentLength: formatted.text.length,
-      });
-
-      return {
-        content: {
-          title: formatted.title,
-          text: formatted.text,
-          markdown: formatted.markdown,
-          structured: formatted.structured as Record<string, unknown>,
-        },
-        meta: {
-          url,
-          finalUrl: jsonUrl,
-          strategy: 'api:reddit',
-          strategiesAttempted: [],
-          timing: 0,
-          confidence: 'high',
-        },
-        warnings: [],
-      };
-    } catch (error) {
-      logger.intelligence.debug(`Reddit API failed: ${error}`);
+    const result = await redditHandler.extract(url, this.createFetchFunction(opts), opts);
+    if (!result) {
       return null;
     }
+
+    return {
+      content: result.content,
+      meta: {
+        ...result.meta,
+        strategiesAttempted: [],
+        timing: 0,
+      },
+      warnings: result.warnings,
+    };
   }
 
   // ============================================
   // STRATEGY: HackerNews API Extraction
+  // Delegated to extracted handler in site-handlers/hackernews-handler.ts
   // ============================================
-
-  /**
-   * Check if URL is a HackerNews URL
-   */
-  private isHackerNewsUrl(url: string): boolean {
-    try {
-      const parsed = new URL(url);
-      return parsed.hostname === 'news.ycombinator.com';
-    } catch {
-      return false;
-    }
-  }
-
-  /**
-   * Extract item ID from HackerNews URL
-   */
-  private getHackerNewsItemId(url: string): string | null {
-    try {
-      const parsed = new URL(url);
-      return parsed.searchParams.get('id');
-    } catch {
-      return null;
-    }
-  }
-
-  /**
-   * Format HackerNews item data into readable text/markdown
-   */
-  private formatHackerNewsItem(item: Record<string, unknown>): { title: string; text: string; markdown: string } {
-    const lines: string[] = [];
-    const markdownLines: string[] = [];
-
-    const title = String(item.title || 'HackerNews Item');
-    const author = String(item.by || 'unknown');
-    const score = item.score || 0;
-    const itemUrl = String(item.url || '');
-    const itemText = String(item.text || '');
-    const time = item.time ? new Date(Number(item.time) * 1000).toISOString() : '';
-    const descendants = item.descendants || 0;
-    const type = String(item.type || 'story');
-
-    // Text format
-    lines.push(`[${score}] ${title}`);
-    lines.push(`by ${author} | ${time}`);
-    if (itemUrl) {
-      lines.push(`Link: ${itemUrl}`);
-    }
-    if (itemText) {
-      // HN text is HTML, strip basic tags
-      const cleanText = itemText.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-      lines.push(cleanText);
-    }
-    if (type === 'story') {
-      lines.push(`${descendants} comments`);
-    }
-
-    // Markdown format
-    markdownLines.push(`# ${title}`);
-    markdownLines.push(`**Score:** ${score} | **Author:** ${author} | **Posted:** ${time}`);
-    if (itemUrl) {
-      markdownLines.push(`[Original Link](${itemUrl})`);
-    }
-    markdownLines.push('');
-    if (itemText) {
-      const cleanText = itemText.replace(/<p>/g, '\n\n').replace(/<[^>]+>/g, '').trim();
-      markdownLines.push(cleanText);
-    }
-    if (type === 'story') {
-      markdownLines.push(`*${descendants} comments*`);
-    }
-
-    return {
-      title,
-      text: lines.join('\n'),
-      markdown: markdownLines.join('\n'),
-    };
-  }
-
-  /**
-   * Format HackerNews front page stories
-   */
-  private formatHackerNewsStories(stories: Array<Record<string, unknown>>): { title: string; text: string; markdown: string } {
-    const lines: string[] = [];
-    const markdownLines: string[] = [];
-
-    lines.push('HackerNews Top Stories');
-    lines.push('='.repeat(50));
-    markdownLines.push('# HackerNews Top Stories');
-    markdownLines.push('');
-
-    for (const story of stories) {
-      const title = String(story.title || 'Untitled');
-      const author = String(story.by || 'unknown');
-      const score = story.score || 0;
-      const itemUrl = String(story.url || '');
-      const descendants = story.descendants || 0;
-      const id = story.id;
-
-      // Text format
-      lines.push(`[${score}] ${title}`);
-      lines.push(`  by ${author} | ${descendants} comments`);
-      if (itemUrl) {
-        lines.push(`  ${itemUrl}`);
-      }
-      lines.push('');
-
-      // Markdown format
-      markdownLines.push(`## [${title}](https://news.ycombinator.com/item?id=${id})`);
-      markdownLines.push(`**Score:** ${score} | **Author:** ${author} | **Comments:** ${descendants}`);
-      if (itemUrl) {
-        markdownLines.push(`[Original Link](${itemUrl})`);
-      }
-      markdownLines.push('---');
-      markdownLines.push('');
-    }
-
-    return {
-      title: 'HackerNews Top Stories',
-      text: lines.join('\n'),
-      markdown: markdownLines.join('\n'),
-    };
-  }
 
   /**
    * Try HackerNews Firebase API
@@ -2103,319 +1792,30 @@ export class ContentIntelligence {
     url: string,
     opts: ContentIntelligenceOptions
   ): Promise<ContentResult | null> {
-    if (!this.isHackerNewsUrl(url)) {
+    if (!hackerNewsHandler.canHandle(url)) {
       return null;
     }
 
-    const HN_API_BASE = 'https://hacker-news.firebaseio.com/v0';
-
-    try {
-      // Check if this is an item page
-      const itemId = this.getHackerNewsItemId(url);
-
-      if (itemId) {
-        // Fetch single item
-        const apiUrl = `${HN_API_BASE}/item/${itemId}.json`;
-        logger.intelligence.debug(`Trying HackerNews item API: ${apiUrl}`);
-
-        const response = await this.fetchWithCookies(apiUrl, opts);
-        if (!response.ok) {
-          logger.intelligence.debug(`HackerNews API returned ${response.status}`);
-          return null;
-        }
-
-        const item = await response.json() as Record<string, unknown>;
-        if (!item || !item.id) {
-          return null;
-        }
-
-        const formatted = this.formatHackerNewsItem(item);
-
-        if (formatted.text.length < (opts.minContentLength || 100)) {
-          return null;
-        }
-
-        logger.intelligence.info(`HackerNews item API extraction successful`, {
-          itemId,
-          contentLength: formatted.text.length,
-        });
-
-        return {
-          content: {
-            title: formatted.title,
-            text: formatted.text,
-            markdown: formatted.markdown,
-            structured: item,
-          },
-          meta: {
-            url,
-            finalUrl: apiUrl,
-            strategy: 'api:hackernews',
-            strategiesAttempted: [],
-            timing: 0,
-            confidence: 'high',
-          },
-          warnings: [],
-        };
-      } else {
-        // Fetch top stories (front page)
-        const topStoriesUrl = `${HN_API_BASE}/topstories.json`;
-        logger.intelligence.debug(`Trying HackerNews top stories API: ${topStoriesUrl}`);
-
-        const response = await this.fetchWithCookies(topStoriesUrl, opts);
-        if (!response.ok) {
-          return null;
-        }
-
-        const storyIds = await response.json() as number[];
-        if (!Array.isArray(storyIds) || storyIds.length === 0) {
-          return null;
-        }
-
-        // Fetch top 20 stories in parallel
-        const top20Ids = storyIds.slice(0, 20);
-        const storyPromises = top20Ids.map(async (id) => {
-          try {
-            const storyResponse = await this.fetchWithCookies(`${HN_API_BASE}/item/${id}.json`, opts);
-            if (storyResponse.ok) {
-              return await storyResponse.json() as Record<string, unknown>;
-            }
-          } catch {
-            // Skip failed fetches
-          }
-          return null;
-        });
-
-        const stories = (await Promise.all(storyPromises)).filter(Boolean) as Array<Record<string, unknown>>;
-
-        if (stories.length === 0) {
-          return null;
-        }
-
-        const formatted = this.formatHackerNewsStories(stories);
-
-        logger.intelligence.info(`HackerNews top stories API extraction successful`, {
-          storiesCount: stories.length,
-          contentLength: formatted.text.length,
-        });
-
-        return {
-          content: {
-            title: formatted.title,
-            text: formatted.text,
-            markdown: formatted.markdown,
-            structured: { stories },
-          },
-          meta: {
-            url,
-            finalUrl: topStoriesUrl,
-            strategy: 'api:hackernews',
-            strategiesAttempted: [],
-            timing: 0,
-            confidence: 'high',
-          },
-          warnings: [],
-        };
-      }
-    } catch (error) {
-      logger.intelligence.debug(`HackerNews API failed: ${error}`);
+    const result = await hackerNewsHandler.extract(url, this.createFetchFunction(opts), opts);
+    if (!result) {
       return null;
     }
+
+    return {
+      content: result.content,
+      meta: {
+        ...result.meta,
+        strategiesAttempted: [],
+        timing: 0,
+      },
+      warnings: result.warnings,
+    };
   }
 
   // ============================================
   // STRATEGY: GitHub API Extraction
+  // Delegated to extracted handler in site-handlers/github-handler.ts
   // ============================================
-
-  /**
-   * Check if URL is a GitHub URL
-   */
-  private isGitHubUrl(url: string): boolean {
-    try {
-      const parsed = new URL(url);
-      return parsed.hostname === 'github.com';
-    } catch {
-      return false;
-    }
-  }
-
-  /**
-   * Parse GitHub URL to determine type and extract params
-   */
-  private parseGitHubUrl(url: string): { type: 'repo' | 'user' | 'issue' | 'pr' | 'unknown'; owner?: string; repo?: string; number?: string } {
-    try {
-      const parsed = new URL(url);
-      const parts = parsed.pathname.split('/').filter(Boolean);
-
-      if (parts.length === 1) {
-        // User/org page: github.com/username
-        return { type: 'user', owner: parts[0] };
-      } else if (parts.length === 2) {
-        // Repo page: github.com/owner/repo
-        return { type: 'repo', owner: parts[0], repo: parts[1] };
-      } else if (parts.length >= 4) {
-        const owner = parts[0];
-        const repo = parts[1];
-        const subType = parts[2];
-        const num = parts[3];
-
-        if (subType === 'issues' && num) {
-          return { type: 'issue', owner, repo, number: num };
-        } else if (subType === 'pull' && num) {
-          return { type: 'pr', owner, repo, number: num };
-        }
-      }
-    } catch {
-      // Invalid URL
-    }
-    return { type: 'unknown' };
-  }
-
-  /**
-   * Format GitHub repo data
-   */
-  private formatGitHubRepo(repo: Record<string, unknown>): { title: string; text: string; markdown: string } {
-    const name = String(repo.full_name || repo.name || 'Unknown Repo');
-    const description = String(repo.description || '');
-    const stars = repo.stargazers_count || 0;
-    const forks = repo.forks_count || 0;
-    const language = String(repo.language || 'Unknown');
-    const license = (repo.license as Record<string, unknown>)?.name || 'None';
-    const topics = (repo.topics as string[]) || [];
-    const defaultBranch = String(repo.default_branch || 'main');
-    const openIssues = repo.open_issues_count || 0;
-    const createdAt = String(repo.created_at || '');
-    const updatedAt = String(repo.updated_at || '');
-    const homepage = String(repo.homepage || '');
-
-    const lines: string[] = [];
-    const markdownLines: string[] = [];
-
-    // Text format
-    lines.push(name);
-    lines.push('='.repeat(name.length));
-    if (description) lines.push(description);
-    lines.push('');
-    lines.push(`Stars: ${stars} | Forks: ${forks} | Open Issues: ${openIssues}`);
-    lines.push(`Language: ${language} | License: ${license}`);
-    lines.push(`Default Branch: ${defaultBranch}`);
-    if (topics.length > 0) lines.push(`Topics: ${topics.join(', ')}`);
-    if (homepage) lines.push(`Homepage: ${homepage}`);
-    lines.push(`Created: ${createdAt} | Updated: ${updatedAt}`);
-
-    // Markdown format
-    markdownLines.push(`# ${name}`);
-    if (description) markdownLines.push(`> ${description}`);
-    markdownLines.push('');
-    markdownLines.push(`| Stars | Forks | Issues | Language | License |`);
-    markdownLines.push(`|-------|-------|--------|----------|---------|`);
-    markdownLines.push(`| ${stars} | ${forks} | ${openIssues} | ${language} | ${license} |`);
-    markdownLines.push('');
-    if (topics.length > 0) {
-      markdownLines.push(`**Topics:** ${topics.map(t => `\`${t}\``).join(' ')}`);
-    }
-    if (homepage) {
-      markdownLines.push(`**Homepage:** [${homepage}](${homepage})`);
-    }
-    markdownLines.push(`**Created:** ${createdAt} | **Updated:** ${updatedAt}`);
-
-    return {
-      title: name,
-      text: lines.join('\n'),
-      markdown: markdownLines.join('\n'),
-    };
-  }
-
-  /**
-   * Format GitHub user data
-   */
-  private formatGitHubUser(user: Record<string, unknown>): { title: string; text: string; markdown: string } {
-    const login = String(user.login || 'Unknown');
-    const name = String(user.name || login);
-    const bio = String(user.bio || '');
-    const company = String(user.company || '');
-    const location = String(user.location || '');
-    const publicRepos = user.public_repos || 0;
-    const followers = user.followers || 0;
-    const following = user.following || 0;
-    const blog = String(user.blog || '');
-    const type = String(user.type || 'User');
-
-    const lines: string[] = [];
-    const markdownLines: string[] = [];
-
-    // Text format
-    lines.push(`${name} (@${login})`);
-    lines.push('='.repeat(30));
-    if (bio) lines.push(bio);
-    lines.push('');
-    lines.push(`Type: ${type}`);
-    lines.push(`Public Repos: ${publicRepos} | Followers: ${followers} | Following: ${following}`);
-    if (company) lines.push(`Company: ${company}`);
-    if (location) lines.push(`Location: ${location}`);
-    if (blog) lines.push(`Blog: ${blog}`);
-
-    // Markdown format
-    markdownLines.push(`# ${name} (@${login})`);
-    if (bio) markdownLines.push(`> ${bio}`);
-    markdownLines.push('');
-    markdownLines.push(`| Repos | Followers | Following |`);
-    markdownLines.push(`|-------|-----------|-----------|`);
-    markdownLines.push(`| ${publicRepos} | ${followers} | ${following} |`);
-    markdownLines.push('');
-    if (company) markdownLines.push(`**Company:** ${company}`);
-    if (location) markdownLines.push(`**Location:** ${location}`);
-    if (blog) markdownLines.push(`**Blog:** [${blog}](${blog})`);
-
-    return {
-      title: `${name} (@${login})`,
-      text: lines.join('\n'),
-      markdown: markdownLines.join('\n'),
-    };
-  }
-
-  /**
-   * Format GitHub issue/PR data
-   */
-  private formatGitHubIssue(issue: Record<string, unknown>, isPR: boolean): { title: string; text: string; markdown: string } {
-    const title = String(issue.title || 'Untitled');
-    const number = issue.number;
-    const state = String(issue.state || 'unknown');
-    const author = (issue.user as Record<string, unknown>)?.login || 'unknown';
-    const body = String(issue.body || '');
-    const labels = ((issue.labels || []) as Array<Record<string, unknown>>).map(l => String(l.name)).filter(Boolean);
-    const createdAt = String(issue.created_at || '');
-    const comments = issue.comments || 0;
-
-    const lines: string[] = [];
-    const markdownLines: string[] = [];
-    const typeLabel = isPR ? 'Pull Request' : 'Issue';
-
-    // Text format
-    lines.push(`${typeLabel} #${number}: ${title}`);
-    lines.push('='.repeat(50));
-    lines.push(`State: ${state} | Author: @${author} | Comments: ${comments}`);
-    lines.push(`Created: ${createdAt}`);
-    if (labels.length > 0) lines.push(`Labels: ${labels.join(', ')}`);
-    lines.push('');
-    if (body) lines.push(body);
-
-    // Markdown format
-    markdownLines.push(`# ${typeLabel} #${number}: ${title}`);
-    markdownLines.push(`**State:** ${state} | **Author:** @${author} | **Comments:** ${comments}`);
-    markdownLines.push(`**Created:** ${createdAt}`);
-    if (labels.length > 0) {
-      markdownLines.push(`**Labels:** ${labels.map(l => `\`${l}\``).join(' ')}`);
-    }
-    markdownLines.push('');
-    if (body) markdownLines.push(body);
-
-    return {
-      title: `${typeLabel} #${number}: ${title}`,
-      text: lines.join('\n'),
-      markdown: markdownLines.join('\n'),
-    };
-  }
 
   /**
    * Try GitHub public API
@@ -2424,100 +1824,24 @@ export class ContentIntelligence {
     url: string,
     opts: ContentIntelligenceOptions
   ): Promise<ContentResult | null> {
-    if (!this.isGitHubUrl(url)) {
+    if (!gitHubHandler.canHandle(url)) {
       return null;
     }
 
-    const parsed = this.parseGitHubUrl(url);
-    if (parsed.type === 'unknown') {
+    const result = await gitHubHandler.extract(url, this.createFetchFunction(opts), opts);
+    if (!result) {
       return null;
     }
 
-    const GITHUB_API = 'https://api.github.com';
-
-    try {
-      let apiUrl: string;
-      let formatted: { title: string; text: string; markdown: string };
-      let structured: Record<string, unknown>;
-
-      const apiHeaders = {
-        ...opts.headers,
-        'Accept': 'application/vnd.github.v3+json',
-      };
-
-      if (parsed.type === 'repo' && parsed.owner && parsed.repo) {
-        apiUrl = `${GITHUB_API}/repos/${parsed.owner}/${parsed.repo}`;
-        logger.intelligence.debug(`Trying GitHub repo API: ${apiUrl}`);
-
-        const response = await this.fetchWithCookies(apiUrl, { ...opts, headers: apiHeaders });
-        if (!response.ok) {
-          logger.intelligence.debug(`GitHub API returned ${response.status}`);
-          return null;
-        }
-
-        structured = await response.json() as Record<string, unknown>;
-        formatted = this.formatGitHubRepo(structured);
-
-      } else if (parsed.type === 'user' && parsed.owner) {
-        apiUrl = `${GITHUB_API}/users/${parsed.owner}`;
-        logger.intelligence.debug(`Trying GitHub user API: ${apiUrl}`);
-
-        const response = await this.fetchWithCookies(apiUrl, { ...opts, headers: apiHeaders });
-        if (!response.ok) {
-          return null;
-        }
-
-        structured = await response.json() as Record<string, unknown>;
-        formatted = this.formatGitHubUser(structured);
-
-      } else if ((parsed.type === 'issue' || parsed.type === 'pr') && parsed.owner && parsed.repo && parsed.number) {
-        const endpoint = parsed.type === 'pr' ? 'pulls' : 'issues';
-        apiUrl = `${GITHUB_API}/repos/${parsed.owner}/${parsed.repo}/${endpoint}/${parsed.number}`;
-        logger.intelligence.debug(`Trying GitHub ${parsed.type} API: ${apiUrl}`);
-
-        const response = await this.fetchWithCookies(apiUrl, { ...opts, headers: apiHeaders });
-        if (!response.ok) {
-          return null;
-        }
-
-        structured = await response.json() as Record<string, unknown>;
-        formatted = this.formatGitHubIssue(structured, parsed.type === 'pr');
-
-      } else {
-        return null;
-      }
-
-      if (formatted.text.length < (opts.minContentLength || 100)) {
-        return null;
-      }
-
-      logger.intelligence.info(`GitHub API extraction successful`, {
-        type: parsed.type,
-        contentLength: formatted.text.length,
-      });
-
-      return {
-        content: {
-          title: formatted.title,
-          text: formatted.text,
-          markdown: formatted.markdown,
-          structured,
-        },
-        meta: {
-          url,
-          finalUrl: apiUrl,
-          strategy: 'api:github',
-          strategiesAttempted: [],
-          timing: 0,
-          confidence: 'high',
-        },
-        warnings: [],
-      };
-
-    } catch (error) {
-      logger.intelligence.debug(`GitHub API failed: ${error}`);
-      return null;
-    }
+    return {
+      content: result.content,
+      meta: {
+        ...result.meta,
+        strategiesAttempted: [],
+        timing: 0,
+      },
+      warnings: result.warnings,
+    };
   }
 
   // ============================================
@@ -5150,6 +4474,20 @@ export class ContentIntelligence {
     } finally {
       clearTimeout(timeoutId);
     }
+  }
+
+  /**
+   * Create a FetchFunction for use with site handlers
+   * This wraps fetchWithCookies to match the SiteHandler interface
+   */
+  private createFetchFunction(opts: ContentIntelligenceOptions): FetchFunction {
+    return async (url: string, handlerOpts: SiteHandlerOptions) => {
+      return this.fetchWithCookies(url, {
+        ...opts,
+        ...handlerOpts,
+        headers: { ...opts.headers, ...handlerOpts.headers },
+      });
+    };
   }
 
   private extractTextFromObject(obj: unknown, depth = 0): string {
