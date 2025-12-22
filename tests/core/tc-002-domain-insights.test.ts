@@ -4,51 +4,20 @@
  * This tests that domain capabilities and knowledge are automatically
  * included in smart_browse responses, and that deprecated tools return
  * deprecation notices.
+ *
+ * Note: The actual getDomainCapabilities and getDomainIntelligence method
+ * behavior is tested in smart-browser.test.ts. These tests focus on:
+ * - Type definitions for the new TC-002 fields
+ * - Exported types are accessible
+ * - Deprecation notice formatting
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { SmartBrowser, type SmartBrowseResult } from '../../src/core/smart-browser.js';
-
-// Mock dependencies
-vi.mock('../../src/core/browser-manager.js', () => ({
-  BrowserManager: vi.fn().mockImplementation(() => ({
-    getPage: vi.fn().mockResolvedValue({
-      goto: vi.fn().mockResolvedValue(null),
-      url: vi.fn().mockReturnValue('https://example.com'),
-      title: vi.fn().mockResolvedValue('Example'),
-      content: vi.fn().mockResolvedValue('<html><body>Test</body></html>'),
-      evaluate: vi.fn().mockResolvedValue(null),
-      close: vi.fn().mockResolvedValue(null),
-    }),
-    initialize: vi.fn().mockResolvedValue(undefined),
-  })),
-}));
-
-vi.mock('../../src/utils/content-extractor.js', () => ({
-  ContentExtractor: vi.fn().mockImplementation(() => ({
-    extract: vi.fn().mockResolvedValue({
-      html: '<html><body>Test</body></html>',
-      markdown: '# Test',
-      text: 'Test',
-      tables: [],
-    }),
-  })),
-}));
-
-vi.mock('../../src/core/api-analyzer.js', () => ({
-  ApiAnalyzer: vi.fn().mockImplementation(() => ({
-    analyze: vi.fn().mockResolvedValue([]),
-    analyzeNetworkLogs: vi.fn().mockReturnValue([]),
-  })),
-}));
-
-vi.mock('../../src/core/session-manager.js', () => ({
-  SessionManager: vi.fn().mockImplementation(() => ({
-    initialize: vi.fn().mockResolvedValue(undefined),
-    hasSession: vi.fn().mockReturnValue(false),
-    getSession: vi.fn().mockReturnValue(null),
-  })),
-}));
+import { describe, it, expect } from 'vitest';
+import type {
+  SmartBrowseResult,
+  DomainCapabilitiesSummary,
+  DomainKnowledgeSummary,
+} from '../../src/core/smart-browser.js';
 
 describe('TC-002: Auto-embed Domain Insights in smart_browse', () => {
   describe('SmartBrowseResult type', () => {
@@ -131,65 +100,80 @@ describe('TC-002: Auto-embed Domain Insights in smart_browse', () => {
     });
   });
 
-  describe('getDomainCapabilities', () => {
-    it('should return capability flags for a domain', async () => {
-      // This test verifies the getDomainCapabilities method exists and returns the expected structure
-      // The actual implementation is tested in smart-browser.test.ts
-      const expectedStructure = {
-        domain: 'example.com',
-        capabilities: {
-          canBypassBrowser: false,
-          hasLearnedPatterns: false,
-          hasActiveSession: false,
-          hasSkills: false,
-          hasPagination: false,
-          hasContentSelectors: false,
-        },
-        confidence: {
-          level: 'unknown',
-          score: 1.0,
-          basis: 'No prior interactions with this domain',
-        },
-        performance: {
-          preferredTier: 'intelligence',
-          avgResponseTimeMs: null,
-          successRate: 1.0,
-        },
-        recommendations: ['New domain - will learn patterns as you browse'],
-        details: {
-          apiPatternCount: 0,
-          skillCount: 0,
-          selectorCount: 0,
-          validatorCount: 0,
-          paginationPatternCount: 0,
-          recentFailureCount: 0,
-          domainGroup: null,
-        },
+  describe('DomainCapabilitiesSummary type', () => {
+    it('should have all required capability flags', () => {
+      const capabilities: DomainCapabilitiesSummary = {
+        canBypassBrowser: true,
+        hasLearnedPatterns: false,
+        hasActiveSession: false,
+        hasSkills: true,
+        hasPagination: false,
+        hasContentSelectors: true,
       };
 
-      expect(expectedStructure.capabilities.canBypassBrowser).toBe(false);
-      expect(expectedStructure.confidence.level).toBe('unknown');
-      expect(expectedStructure.recommendations).toContain('New domain - will learn patterns as you browse');
+      expect(capabilities.canBypassBrowser).toBe(true);
+      expect(capabilities.hasLearnedPatterns).toBe(false);
+      expect(capabilities.hasActiveSession).toBe(false);
+      expect(capabilities.hasSkills).toBe(true);
+      expect(capabilities.hasPagination).toBe(false);
+      expect(capabilities.hasContentSelectors).toBe(true);
+    });
+
+    it('should enforce all fields are boolean', () => {
+      const capabilities: DomainCapabilitiesSummary = {
+        canBypassBrowser: false,
+        hasLearnedPatterns: false,
+        hasActiveSession: false,
+        hasSkills: false,
+        hasPagination: false,
+        hasContentSelectors: false,
+      };
+
+      // All values should be boolean
+      Object.values(capabilities).forEach(value => {
+        expect(typeof value).toBe('boolean');
+      });
     });
   });
 
-  describe('getDomainIntelligence', () => {
-    it('should return intelligence summary for a domain', async () => {
-      // This test verifies the getDomainIntelligence method returns the expected structure
-      const expectedStructure = {
-        knownPatterns: 0,
-        selectorChains: 0,
-        validators: 0,
-        paginationPatterns: 0,
-        recentFailures: 0,
-        successRate: 1.0,
-        domainGroup: null,
+  describe('DomainKnowledgeSummary type', () => {
+    it('should have all required fields', () => {
+      const knowledge: DomainKnowledgeSummary = {
+        patternCount: 10,
+        successRate: 0.95,
         recommendedWaitStrategy: 'networkidle',
-        shouldUseSession: false,
+        recommendations: ['Use API directly', 'Bypass browser rendering'],
       };
 
-      expect(expectedStructure.successRate).toBe(1.0);
-      expect(expectedStructure.recommendedWaitStrategy).toBe('networkidle');
+      expect(knowledge.patternCount).toBe(10);
+      expect(knowledge.successRate).toBe(0.95);
+      expect(knowledge.recommendedWaitStrategy).toBe('networkidle');
+      expect(knowledge.recommendations).toEqual(['Use API directly', 'Bypass browser rendering']);
+    });
+
+    it('should accept various wait strategies', () => {
+      const strategies = ['networkidle', 'preset', 'domcontentloaded', 'load'];
+
+      strategies.forEach(strategy => {
+        const knowledge: DomainKnowledgeSummary = {
+          patternCount: 0,
+          successRate: 1.0,
+          recommendedWaitStrategy: strategy,
+          recommendations: [],
+        };
+        expect(knowledge.recommendedWaitStrategy).toBe(strategy);
+      });
+    });
+
+    it('should accept empty recommendations array', () => {
+      const knowledge: DomainKnowledgeSummary = {
+        patternCount: 0,
+        successRate: 1.0,
+        recommendedWaitStrategy: 'networkidle',
+        recommendations: [],
+      };
+
+      expect(knowledge.recommendations).toEqual([]);
     });
   });
 

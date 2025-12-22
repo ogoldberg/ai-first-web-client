@@ -27,7 +27,11 @@ import { ContentExtractor } from './utils/content-extractor.js';
 import { ApiAnalyzer } from './core/api-analyzer.js';
 import { SessionManager } from './core/session-manager.js';
 import { LearningEngine } from './core/learning-engine.js';
-import { SmartBrowser } from './core/smart-browser.js';
+import {
+  SmartBrowser,
+  type DomainCapabilitiesSummary,
+  type DomainKnowledgeSummary,
+} from './core/smart-browser.js';
 import { BrowseTool } from './tools/browse-tool.js';
 import { ApiCallTool } from './tools/api-call-tool.js';
 import { AuthWorkflow } from './core/auth-workflow.js';
@@ -1277,20 +1281,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         const domain = new URL(result.url).hostname;
 
         // Fetch domain insights if requested (TC-002)
-        let domainCapabilities: {
-          canBypassBrowser: boolean;
-          hasLearnedPatterns: boolean;
-          hasActiveSession: boolean;
-          hasSkills: boolean;
-          hasPagination: boolean;
-          hasContentSelectors: boolean;
-        } | undefined;
-        let domainKnowledge: {
-          patternCount: number;
-          successRate: number;
-          recommendedWaitStrategy: string;
-          recommendations: string[];
-        } | undefined;
+        let domainCapabilities: DomainCapabilitiesSummary | undefined;
+        let domainKnowledge: DomainKnowledgeSummary | undefined;
 
         if (includeInsights) {
           try {

@@ -146,6 +146,30 @@ export interface SmartBrowseOptions extends BrowseOptions {
   recordDebugTrace?: boolean;
 }
 
+/**
+ * Domain capabilities summary (TC-002)
+ * Extracted for use in smart_browse response and standalone exports
+ */
+export interface DomainCapabilitiesSummary {
+  canBypassBrowser: boolean;
+  hasLearnedPatterns: boolean;
+  hasActiveSession: boolean;
+  hasSkills: boolean;
+  hasPagination: boolean;
+  hasContentSelectors: boolean;
+}
+
+/**
+ * Domain knowledge summary (TC-002)
+ * Extracted for use in smart_browse response and standalone exports
+ */
+export interface DomainKnowledgeSummary {
+  patternCount: number;
+  successRate: number;
+  recommendedWaitStrategy: string;
+  recommendations: string[];
+}
+
 export interface SmartBrowseResult extends BrowseResult {
   // Field-level confidence (CX-002)
   fieldConfidence?: BrowseFieldConfidence;
@@ -194,22 +218,10 @@ export interface SmartBrowseResult extends BrowseResult {
     };
 
     // Domain capabilities summary (TC-002)
-    domainCapabilities?: {
-      canBypassBrowser: boolean;
-      hasLearnedPatterns: boolean;
-      hasActiveSession: boolean;
-      hasSkills: boolean;
-      hasPagination: boolean;
-      hasContentSelectors: boolean;
-    };
+    domainCapabilities?: DomainCapabilitiesSummary;
 
     // Domain knowledge summary (TC-002)
-    domainKnowledge?: {
-      patternCount: number;
-      successRate: number;
-      recommendedWaitStrategy: string;
-      recommendations: string[];
-    };
+    domainKnowledge?: DomainKnowledgeSummary;
   };
 
   // Additional pages if pagination was followed
