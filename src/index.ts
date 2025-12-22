@@ -78,13 +78,14 @@ const DEBUG_MODE = getModeFlag('LLM_BROWSER_DEBUG_MODE');
 const DEBUG_TOOLS = ['capture_screenshot', 'export_har', 'debug_traces'];
 
 /**
- * TC-005/TC-006: Admin mode flag
- * When false, analytics and infrastructure tools are hidden from tool list
+ * TC-005/TC-006/TC-007: Admin mode flag
+ * When false, analytics, infrastructure, and content tracking tools are hidden from tool list
  * Set LLM_BROWSER_ADMIN_MODE=1 or LLM_BROWSER_ADMIN_MODE=true to enable
  *
  * Hidden tools:
  * - Analytics: get_performance_metrics, usage_analytics, get_analytics_dashboard, get_system_status
  * - Infrastructure: get_browser_providers, tier_management
+ * - Content tracking: content_tracking (use smart_browse with checkForChanges instead)
  */
 const ADMIN_MODE = getModeFlag('LLM_BROWSER_ADMIN_MODE');
 
@@ -100,6 +101,8 @@ const ADMIN_TOOLS = [
   // TC-006: Infrastructure tools
   'get_browser_providers',
   'tier_management',
+  // TC-007: Content tracking tool (use smart_browse with checkForChanges instead)
+  'content_tracking',
 ];
 
 /**
