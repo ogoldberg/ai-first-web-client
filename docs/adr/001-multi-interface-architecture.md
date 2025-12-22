@@ -52,7 +52,7 @@ From GTM plan, 3 of 4 target customer segments need more than MCP:
 │  All intelligence: SmartBrowser, Learning,      │
 │  API Discovery, Sessions, Content Extraction    │
 │  - Zero interface dependencies                  │
-│  - Standalone TypeScript library               │
+│  - Standalone TypeScript library                │
 │  - Published to npm                             │
 └──────────────────────────────────────────────────┘
                         ↑
@@ -169,7 +169,7 @@ From GTM plan, 3 of 4 target customer segments need more than MCP:
 
 **Phase 1: MCP Consolidation (Weeks 1-2)**
 - Tasks: TC-001 to TC-010
-- Outcome: 25 tools → 5-6 tools
+- Outcome: 25 tools → 5 tools
 - Benefit: Immediate improvement for research use case
 
 **Phase 2: SDK Extraction (Weeks 3-5)**
@@ -240,7 +240,7 @@ From GTM plan, 3 of 4 target customer segments need more than MCP:
 - Conversion rate: Skills → MCP → SDK → API
 
 **Technical:**
-- MCP tool count: 25 → 5-6 ✅
+- MCP tool count: 25 → 5 ✅
 - SDK test coverage: >80%
 - API uptime: >99.5%
 - Support tickets re: "which tool to use" (expect decrease)

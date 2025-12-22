@@ -36,7 +36,7 @@ Moving from **MCP-only (25 tools)** to **multi-interface architecture** with SDK
 ### Four Initiatives
 
 #### 1. MCP Tool Consolidation (TC-001 to TC-010)
-**What:** 25 tools → 5-6 core tools
+**What:** 25 tools → 5 core tools
 **Why:** Eliminate choice paralysis for researchers
 **When:** Weeks 1-2 (immediate)
 
@@ -86,7 +86,7 @@ curl -X POST api.llm-browser.com/browse \
 ## Benefits by Stakeholder
 
 ### For Research Users
-- ✅ 76% fewer tools (25 → 6)
+- ✅ 80% fewer tools (25 → 5)
 - ✅ Skills = just describe what you want
 - ✅ No coding required
 - ✅ Auto-learning, no manual management
@@ -164,7 +164,7 @@ curl -X POST api.llm-browser.com/browse \
 - Conversion funnel: Skills → MCP → SDK → API
 
 **Technical:**
-- Tool count: 25 → 5-6 ✅
+- Tool count: 25 → 5 ✅
 - SDK test coverage: >80%
 - API uptime: >99.5%
 
@@ -195,7 +195,7 @@ A: Yes for interfaces, but SDK centralizes intelligence. Test once, wrap many ti
 ## Timeline Summary
 
 ```
-Week 1-2:  MCP Consolidation (25→6 tools)
+Week 1-2:  MCP Consolidation (25→5 tools)
 Week 3-5:  SDK Extraction + Publish
 Week 5:    Skills Creation + Submit
 Week 6-10: Hosted API + Beta Launch

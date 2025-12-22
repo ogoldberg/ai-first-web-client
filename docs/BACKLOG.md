@@ -172,12 +172,12 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 
 ## P1.5: MCP Tool Consolidation (New Initiative)
 
-**Goal:** Reduce tool count from 25 to 5-6 core tools to eliminate LLM choice paralysis and simplify the user experience.
+**Goal:** Reduce tool count from 25 to 5 core tools to eliminate LLM choice paralysis and simplify the user experience.
 
 **Context:** Current 25-tool interface overwhelms LLMs with too many choices. For the two main use cases (scraping and research), users need 3-5 tools max. Most complexity should be automatic or hidden in debug mode.
 
 **Success Criteria:**
-- Tool count: 25 → 5-6 (76% reduction)
+- Tool count: 25 → 5 (80% reduction)
 - Clear mental model: "browse, call API, configure auth"
 - Learning intelligence auto-applied, not manually queried
 - Developer/analytics tools separated from user-facing tools
