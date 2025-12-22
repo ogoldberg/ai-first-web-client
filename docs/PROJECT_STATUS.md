@@ -310,6 +310,26 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ---
 
+## In Progress: Batch Browse Operations (F-001)
+
+**Status:** In Progress
+
+**Goal:** Enable browsing multiple URLs in a single call for improved LLM workflow efficiency.
+
+**Planned Implementation:**
+
+- New `batch_browse` MCP tool accepting array of URLs
+- Parallel execution with configurable concurrency limits
+- Aggregated results with per-URL status and content
+- Shared session and pattern usage across batch
+- Progress reporting for long-running batches
+
+| ID    | Task                    | Priority | Effort | Status      |
+|-------|-------------------------|----------|--------|-------------|
+| F-001 | Batch browse operations | Medium   | L      | In Progress |
+
+---
+
 ## Recently Completed: Content Change Detection Alerts (F-003)
 
 **Status:** Complete (PR #94)
