@@ -42,6 +42,7 @@ import {
 import { UrlSafetyError } from './utils/url-safety.js';
 import { getUsageMeter, type UsageQueryOptions } from './utils/usage-meter.js';
 import { generateDashboard, getQuickStatus } from './utils/analytics-dashboard.js';
+import { getContentChangeTracker } from './utils/content-change-tracker.js';
 
 /**
  * Create a versioned JSON response for MCP tools
@@ -1222,6 +1223,168 @@ Use this to:
               description: 'Maximum domains to return in rankings (default: 20)',
             },
           },
+        },
+      },
+
+      // ============================================
+      // CONTENT CHANGE TRACKING (F-003)
+      // ============================================
+      {
+        name: 'track_url_for_changes',
+        description: `Start tracking a URL for content changes.
+
+Stores a fingerprint of the current content for future comparison.
+This enables detecting when website content changes between visits.
+
+Use cases:
+- Monitor government websites for policy updates
+- Track pricing pages for changes
+- Detect regulatory document updates
+- Monitor competitor content changes
+
+Options:
+- label: Human-readable label for the tracked URL
+- tags: Array of tags for categorization (e.g., ['government', 'visa'])
+
+The browser will remember the content fingerprint and can compare
+on future visits using check_content_changes.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            url: {
+              type: 'string',
+              description: 'The URL to browse and start tracking',
+            },
+            label: {
+              type: 'string',
+              description: 'Optional label for this tracked URL',
+            },
+            tags: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'Optional tags for categorization',
+            },
+          },
+          required: ['url'],
+        },
+      },
+      {
+        name: 'check_content_changes',
+        description: `Check if a tracked URL's content has changed.
+
+Browses the URL, compares to stored fingerprint, and reports changes.
+Returns detailed information about what changed:
+- Overall significance (low, medium, high)
+- Summary of changes
+- Character and word count differences
+- Structure changes
+
+If the URL is not being tracked, it will be automatically tracked
+for future comparisons.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            url: {
+              type: 'string',
+              description: 'The URL to check for changes',
+            },
+          },
+          required: ['url'],
+        },
+      },
+      {
+        name: 'list_tracked_urls',
+        description: `List all URLs being tracked for content changes.
+
+Returns information about each tracked URL:
+- URL and domain
+- When tracking started
+- Last check time
+- Number of checks and detected changes
+- Labels and tags
+
+Supports filtering by:
+- domain: Filter to a specific domain
+- tags: Filter by tags
+- hasChanges: Only show URLs that have changed (true) or not (false)`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            domain: {
+              type: 'string',
+              description: 'Filter to a specific domain',
+            },
+            tags: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'Filter by tags',
+            },
+            hasChanges: {
+              type: 'boolean',
+              description: 'Only show URLs with/without changes',
+            },
+            limit: {
+              type: 'number',
+              description: 'Maximum URLs to return (default: 50)',
+            },
+          },
+        },
+      },
+      {
+        name: 'get_change_history',
+        description: `Get the history of content changes for tracked URLs.
+
+Returns a chronological list of detected changes including:
+- URL and timestamp
+- Change significance
+- Summary of what changed
+- Fingerprint comparison data
+
+Can filter by URL to get history for a specific page.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            url: {
+              type: 'string',
+              description: 'Filter to a specific URL (optional)',
+            },
+            limit: {
+              type: 'number',
+              description: 'Maximum entries to return (default: 50)',
+            },
+          },
+        },
+      },
+      {
+        name: 'untrack_url',
+        description: `Stop tracking a URL for content changes.
+
+Removes the URL from tracking and deletes its stored fingerprint.
+Historical change records are preserved.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            url: {
+              type: 'string',
+              description: 'The URL to stop tracking',
+            },
+          },
+          required: ['url'],
+        },
+      },
+      {
+        name: 'get_change_tracker_stats',
+        description: `Get statistics about content change tracking.
+
+Returns:
+- Total tracked URLs
+- URLs with detected changes
+- Total changes detected
+- Changes by significance level
+- Recent changes`,
+        inputSchema: {
+          type: 'object',
+          properties: {},
         },
       },
 
@@ -2861,6 +3024,198 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             avgTime: `${Math.round(d.overall.avg)}ms`,
             p95: `${Math.round(d.overall.p95)}ms`,
             preferredTier: d.preferredTier,
+          })),
+        });
+      }
+
+      // ============================================
+      // CONTENT CHANGE TRACKING (F-003)
+      // ============================================
+      case 'track_url_for_changes': {
+        const tracker = getContentChangeTracker();
+        const url = args.url as string;
+
+        // Browse the URL to get current content
+        const result = await smartBrowser.browse(url, {
+          validateContent: true,
+          enableLearning: true,
+        });
+
+        // Track the URL with the content
+        const tracked = await tracker.trackUrl(url, result.content.markdown, {
+          label: args.label as string | undefined,
+          tags: args.tags as string[] | undefined,
+        });
+
+        return jsonResponse({
+          message: 'URL is now being tracked for content changes',
+          url: tracked.url,
+          domain: tracked.domain,
+          fingerprint: {
+            hash: tracked.fingerprint.hash.substring(0, 12) + '...',
+            textLength: tracked.fingerprint.textLength,
+            wordCount: tracked.fingerprint.wordCount,
+          },
+          trackedSince: new Date(tracked.trackedSince).toISOString(),
+          label: tracked.label,
+          tags: tracked.tags,
+          pageTitle: result.title,
+        });
+      }
+
+      case 'check_content_changes': {
+        const tracker = getContentChangeTracker();
+        const url = args.url as string;
+
+        // Browse the URL to get current content
+        const result = await smartBrowser.browse(url, {
+          validateContent: true,
+          enableLearning: true,
+        });
+
+        // Check for changes
+        const checkResult = await tracker.checkForChanges(url, result.content.markdown);
+
+        if (checkResult.isFirstCheck || !checkResult.isTracked) {
+          // Auto-track if not tracked
+          const tracked = await tracker.trackUrl(url, result.content.markdown);
+          return jsonResponse({
+            message: 'URL was not tracked - now tracking for future comparisons',
+            url: tracked.url,
+            isTracked: true,
+            isFirstCheck: true,
+            hasChanged: false,
+            fingerprint: {
+              hash: tracked.fingerprint.hash.substring(0, 12) + '...',
+              textLength: tracked.fingerprint.textLength,
+              wordCount: tracked.fingerprint.wordCount,
+            },
+            pageTitle: result.title,
+          });
+        }
+
+        const response: Record<string, unknown> = {
+          url,
+          isTracked: true,
+          hasChanged: checkResult.hasChanged,
+          checkCount: checkResult.trackedUrl?.checkCount,
+          changeCount: checkResult.trackedUrl?.changeCount,
+          lastChecked: checkResult.trackedUrl?.lastChecked
+            ? new Date(checkResult.trackedUrl.lastChecked).toISOString()
+            : undefined,
+          pageTitle: result.title,
+        };
+
+        if (checkResult.hasChanged && checkResult.changeReport) {
+          response.changeDetails = {
+            significance: checkResult.changeReport.overallSignificance,
+            summary: checkResult.changeReport.summary,
+            previousFingerprint: {
+              textLength: checkResult.changeReport.oldFingerprint.textLength,
+              wordCount: checkResult.changeReport.oldFingerprint.wordCount,
+            },
+            newFingerprint: {
+              textLength: checkResult.changeReport.newFingerprint.textLength,
+              wordCount: checkResult.changeReport.newFingerprint.wordCount,
+            },
+            textLengthDiff:
+              checkResult.changeReport.newFingerprint.textLength -
+              checkResult.changeReport.oldFingerprint.textLength,
+            wordCountDiff:
+              checkResult.changeReport.newFingerprint.wordCount -
+              checkResult.changeReport.oldFingerprint.wordCount,
+          };
+        }
+
+        return jsonResponse(response);
+      }
+
+      case 'list_tracked_urls': {
+        const tracker = getContentChangeTracker();
+        const urls = await tracker.listTrackedUrls({
+          domain: args.domain as string | undefined,
+          tags: args.tags as string[] | undefined,
+          hasChanges: args.hasChanges as boolean | undefined,
+          limit: (args.limit as number) || 50,
+        });
+
+        return jsonResponse({
+          count: urls.length,
+          trackedUrls: urls.map(u => ({
+            url: u.url,
+            domain: u.domain,
+            label: u.label,
+            tags: u.tags,
+            trackedSince: new Date(u.trackedSince).toISOString(),
+            lastChecked: new Date(u.lastChecked).toISOString(),
+            checkCount: u.checkCount,
+            changeCount: u.changeCount,
+            hasChanges: u.changeCount > 0,
+            fingerprint: {
+              textLength: u.fingerprint.textLength,
+              wordCount: u.fingerprint.wordCount,
+            },
+          })),
+        });
+      }
+
+      case 'get_change_history': {
+        const tracker = getContentChangeTracker();
+        const history = await tracker.getChangeHistory(
+          args.url as string | undefined,
+          (args.limit as number) || 50
+        );
+
+        return jsonResponse({
+          count: history.length,
+          changes: history.map(r => ({
+            url: r.url,
+            timestamp: new Date(r.timestamp).toISOString(),
+            significance: r.significance,
+            summary: r.summary,
+            sectionsAdded: r.sectionsAdded,
+            sectionsRemoved: r.sectionsRemoved,
+            sectionsModified: r.sectionsModified,
+            previousLength: r.previousFingerprint.textLength,
+            newLength: r.newFingerprint.textLength,
+            lengthChange: r.newFingerprint.textLength - r.previousFingerprint.textLength,
+          })),
+        });
+      }
+
+      case 'untrack_url': {
+        const tracker = getContentChangeTracker();
+        const url = args.url as string;
+        const wasTracked = await tracker.untrackUrl(url);
+
+        if (!wasTracked) {
+          return jsonResponse({
+            message: 'URL was not being tracked',
+            url,
+            untracked: false,
+          });
+        }
+
+        return jsonResponse({
+          message: 'URL is no longer being tracked',
+          url,
+          untracked: true,
+        });
+      }
+
+      case 'get_change_tracker_stats': {
+        const tracker = getContentChangeTracker();
+        const stats = await tracker.getStats();
+
+        return jsonResponse({
+          totalTracked: stats.totalTracked,
+          urlsWithChanges: stats.urlsWithChanges,
+          totalChanges: stats.totalChanges,
+          changesBySignificance: stats.changesBySignificance,
+          recentChanges: stats.recentChanges.map(c => ({
+            url: c.url,
+            timestamp: new Date(c.timestamp).toISOString(),
+            significance: c.significance,
           })),
         });
       }
