@@ -310,23 +310,29 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ---
 
-## In Progress: Batch Browse Operations (F-001)
+## Recently Completed: Batch Browse Operations (F-001)
 
-**Status:** In Progress
+**Status:** Complete
 
 **Goal:** Enable browsing multiple URLs in a single call for improved LLM workflow efficiency.
 
-**Planned Implementation:**
+**Implementation:**
 
 - New `batch_browse` MCP tool accepting array of URLs
-- Parallel execution with configurable concurrency limits
-- Aggregated results with per-URL status and content
+- SmartBrowser.batchBrowse() method with controlled concurrency
+- Configurable concurrency (default: 3 parallel requests)
+- Per-URL and total timeout controls
+- Individual error handling (one failure doesn't stop others)
+- Rate limiting detection with separate status
+- SSRF protection on all URLs (pre-validation)
+- Results maintain original URL order
 - Shared session and pattern usage across batch
-- Progress reporting for long-running batches
+- Output controls (maxChars, includeTables, includeNetwork, etc.)
+- 23 comprehensive tests
 
-| ID    | Task                    | Priority | Effort | Status      |
-|-------|-------------------------|----------|--------|-------------|
-| F-001 | Batch browse operations | Medium   | L      | In Progress |
+| ID    | Task                    | Priority | Effort | Status   |
+|-------|-------------------------|----------|--------|----------|
+| F-001 | Batch browse operations | Medium   | L      | Complete |
 
 ---
 
