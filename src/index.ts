@@ -631,9 +631,16 @@ Use this to assess learning ROI and identify areas for improvement.`,
       // ============================================
       {
         name: 'skill_management',
-        description: `Manage learned browsing skills (procedural memory).
+        description: `[DEPRECATED] Manage learned browsing skills (procedural memory).
 
-Actions:
+NOTE: This tool is deprecated as of TC-003. Skills are now automatically applied
+during smart_browse operations when a matching skill is found. The browse response
+includes a skillExecutionTrace field with details about any skill that was applied.
+
+For most use cases, you no longer need to call this tool - just use smart_browse
+and skills will be applied automatically.
+
+Actions (deprecated, kept for advanced use cases):
 - stats: Get skill statistics (total, by domain, success rates, most used)
 - progress: Comprehensive learning progress (skills, anti-patterns, coverage)
 - find: Find applicable skills for a URL
@@ -1779,6 +1786,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       // PROCEDURAL MEMORY (Skills) - Consolidated Handler
       // ============================================
       case 'skill_management': {
+        // TC-003: Log deprecation warning
+        logger.server.warn(
+          '[DEPRECATED] skill_management tool is deprecated. ' +
+          'Skills are now automatically applied during smart_browse operations. ' +
+          'Use smart_browse and check skillExecutionTrace in the response.'
+        );
         const proceduralMemory = smartBrowser.getProceduralMemory();
         const action = args.action as string;
 

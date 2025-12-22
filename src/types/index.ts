@@ -430,6 +430,47 @@ export interface SkillMatch {
 }
 
 /**
+ * Result of executing a skill's action (TC-003)
+ */
+export interface SkillActionResult {
+  type: BrowsingAction['type'];
+  selector?: string;
+  success: boolean;
+  duration: number;
+  error?: string;
+}
+
+/**
+ * Trace of skill execution for debugging and learning (TC-003)
+ */
+export interface SkillExecutionTrace {
+  // ID of the executed skill
+  skillId: string;
+  // Human-readable name of the skill
+  skillName: string;
+  // Why this skill was selected
+  matchReason: string;
+  // Similarity score (0-1)
+  similarity: number;
+  // Overall success of skill execution
+  success: boolean;
+  // Total execution time in ms
+  totalDuration: number;
+  // Results of individual actions
+  actionResults: SkillActionResult[];
+  // Number of actions executed (may be less than total if stopped early)
+  actionsExecuted: number;
+  // Total actions in the skill
+  totalActions: number;
+  // Error message if skill failed
+  error?: string;
+  // Whether fallback skills were tried
+  usedFallback: boolean;
+  // ID of the fallback skill that succeeded (if any)
+  fallbackSkillId?: string;
+}
+
+/**
  * Configuration for the procedural memory system
  */
 export interface ProceduralMemoryConfig {

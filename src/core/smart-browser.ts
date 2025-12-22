@@ -25,6 +25,9 @@ import type {
   BrowsingTrajectory,
   PageContext,
   SkillMatch,
+  SkillExecutionTrace,
+  SkillActionResult,
+  BrowsingSkill,
   RenderTier,
   BrowseFieldConfidence,
   FieldConfidence,
@@ -191,6 +194,7 @@ export interface SmartBrowseResult extends BrowseResult {
     // Procedural memory insights
     skillsMatched?: SkillMatch[];
     skillApplied?: string;
+    skillExecutionTrace?: SkillExecutionTrace;  // TC-003: Detailed execution trace
     trajectoryRecorded?: boolean;
     // Anomaly detection results
     anomalyDetected?: boolean;
@@ -591,6 +595,37 @@ export class SmartBrowser {
       } catch (contextError) {
         logger.smartBrowser.error(`Page context detection failed (non-fatal): ${contextError}`);
         // Continue without skill matching - non-critical feature
+      }
+    }
+
+    // TC-003: Auto-apply matched skills
+    if (useSkills && learning.skillsMatched && learning.skillsMatched.length > 0) {
+      const bestMatch = learning.skillsMatched[0];
+      if (bestMatch.preconditionsMet && bestMatch.similarity > SKILL_APPLICATION_THRESHOLD) {
+        try {
+          logger.smartBrowser.info(`Auto-applying skill: ${bestMatch.skill.name}`);
+          const skillTrace = await this.executeSkillWithFallbacks(
+            page,
+            bestMatch,
+            learning.skillsMatched
+          );
+          learning.skillExecutionTrace = skillTrace;
+          learning.skillApplied = skillTrace.success
+            ? (skillTrace.usedFallback && skillTrace.fallbackSkillId
+                ? `${bestMatch.skill.name} (fallback: ${skillTrace.fallbackSkillId})`
+                : bestMatch.skill.name)
+            : undefined;
+
+          // Re-fetch page content after skill execution (actions may have changed the page)
+          if (skillTrace.success && skillTrace.actionsExecuted > 0) {
+            html = await page.content();
+            finalUrl = page.url();
+            logger.smartBrowser.debug(`Post-skill HTML length: ${html.length} chars`);
+          }
+        } catch (skillError) {
+          logger.smartBrowser.error(`Skill execution failed (non-fatal): ${skillError}`);
+          // Continue without skill execution - non-critical feature
+        }
       }
     }
 
@@ -2008,6 +2043,244 @@ export class SmartBrowser {
       pageType: 'unknown',
     };
     return this.proceduralMemory.retrieveSkills(pageContext, topK);
+  }
+
+  // ============================================
+  // SKILL AUTO-APPLICATION (TC-003)
+  // ============================================
+
+  /**
+   * Execute a single action on the page
+   * Returns the result of the action execution
+   */
+  private async executeAction(
+    page: Page,
+    action: BrowsingAction
+  ): Promise<SkillActionResult> {
+    const startTime = Date.now();
+    const result: SkillActionResult = {
+      type: action.type,
+      selector: action.selector,
+      success: false,
+      duration: 0,
+    };
+
+    try {
+      switch (action.type) {
+        case 'navigate':
+          if (action.url) {
+            await page.goto(action.url, {
+              waitUntil: action.waitFor === 'networkidle' ? 'networkidle' : 'load',
+              timeout: TIMEOUTS.PAGE_LOAD,
+            });
+            result.success = true;
+          }
+          break;
+
+        case 'click':
+          if (action.selector) {
+            await page.waitForSelector(action.selector, { timeout: TIMEOUTS.SELECTOR_WAIT });
+            await page.click(action.selector);
+            result.success = true;
+          }
+          break;
+
+        case 'fill':
+          if (action.selector && action.value !== undefined) {
+            await page.waitForSelector(action.selector, { timeout: TIMEOUTS.SELECTOR_WAIT });
+            await page.fill(action.selector, action.value);
+            result.success = true;
+          }
+          break;
+
+        case 'select':
+          if (action.selector && action.value !== undefined) {
+            await page.waitForSelector(action.selector, { timeout: TIMEOUTS.SELECTOR_WAIT });
+            await page.selectOption(action.selector, action.value);
+            result.success = true;
+          }
+          break;
+
+        case 'scroll':
+          await page.evaluate(() => {
+            window.scrollTo(0, document.body.scrollHeight);
+          });
+          // Wait for any lazy-loaded content
+          await this.delay(500);
+          result.success = true;
+          break;
+
+        case 'wait':
+          if (action.waitFor === 'selector' && action.selector) {
+            await page.waitForSelector(action.selector, { timeout: TIMEOUTS.SELECTOR_WAIT });
+          } else if (action.waitFor === 'networkidle') {
+            await page.waitForLoadState('networkidle', { timeout: TIMEOUTS.PAGE_LOAD });
+          } else {
+            await page.waitForLoadState('load', { timeout: TIMEOUTS.PAGE_LOAD });
+          }
+          result.success = true;
+          break;
+
+        case 'extract':
+          // Extract action is informational - always succeeds
+          result.success = true;
+          break;
+
+        case 'dismiss_banner':
+          if (action.selector) {
+            try {
+              await page.waitForSelector(action.selector, { timeout: 2000 });
+              await page.click(action.selector);
+              result.success = true;
+            } catch {
+              // Banner might not be present, which is fine
+              result.success = true;
+            }
+          }
+          break;
+
+        default:
+          logger.smartBrowser.warn(`Unknown action type: ${action.type}`);
+          result.success = false;
+          result.error = `Unknown action type: ${action.type}`;
+      }
+    } catch (error) {
+      result.success = false;
+      result.error = error instanceof Error ? error.message : String(error);
+      logger.smartBrowser.debug(`Action ${action.type} failed: ${result.error}`);
+    }
+
+    result.duration = Date.now() - startTime;
+    return result;
+  }
+
+  /**
+   * Execute a skill's action sequence on the page (TC-003)
+   * Auto-applies matched skills to automate browsing workflows
+   */
+  async executeSkillActions(
+    page: Page,
+    skill: BrowsingSkill,
+    match: SkillMatch
+  ): Promise<SkillExecutionTrace> {
+    const startTime = Date.now();
+    const actionResults: SkillActionResult[] = [];
+    let actionsExecuted = 0;
+    let overallSuccess = true;
+    let errorMessage: string | undefined;
+
+    logger.smartBrowser.info(`Executing skill: ${skill.name} (${skill.actionSequence.length} actions)`);
+
+    // Skip navigate action if we're already on the target page
+    // (we've already navigated in the browse flow)
+    const actionsToExecute = skill.actionSequence.filter((action, index) => {
+      // Skip the first navigate action since we're already on the page
+      if (index === 0 && action.type === 'navigate') {
+        logger.smartBrowser.debug('Skipping initial navigate action (already on page)');
+        return false;
+      }
+      return true;
+    });
+
+    for (const action of actionsToExecute) {
+      const result = await this.executeAction(page, action);
+      actionResults.push(result);
+      actionsExecuted++;
+
+      // Record action in trajectory for learning
+      this.recordAction({
+        ...action,
+        timestamp: Date.now(),
+        success: result.success,
+        duration: result.duration,
+      });
+
+      if (!result.success) {
+        // For critical actions (click, fill, select), stop on failure
+        if (['click', 'fill', 'select'].includes(action.type)) {
+          overallSuccess = false;
+          errorMessage = result.error || `Action ${action.type} failed`;
+          logger.smartBrowser.warn(`Skill execution stopped: ${errorMessage}`);
+          break;
+        }
+        // For non-critical actions (scroll, wait), continue
+        logger.smartBrowser.debug(`Non-critical action ${action.type} failed, continuing`);
+      }
+    }
+
+    const totalDuration = Date.now() - startTime;
+
+    // Record skill execution in procedural memory
+    await this.proceduralMemory.recordSkillExecution(skill.id, overallSuccess, totalDuration);
+
+    const trace: SkillExecutionTrace = {
+      skillId: skill.id,
+      skillName: skill.name,
+      matchReason: match.reason || `Similarity: ${(match.similarity * 100).toFixed(0)}%`,
+      similarity: match.similarity,
+      success: overallSuccess,
+      totalDuration,
+      actionResults,
+      actionsExecuted,
+      totalActions: skill.actionSequence.length,
+      error: errorMessage,
+      usedFallback: false,
+    };
+
+    logger.smartBrowser.info(
+      `Skill execution ${overallSuccess ? 'succeeded' : 'failed'}: ${skill.name} ` +
+      `(${actionsExecuted}/${skill.actionSequence.length} actions, ${totalDuration}ms)`
+    );
+
+    return trace;
+  }
+
+  /**
+   * Execute a skill with fallback chain support (TC-003)
+   * Tries the primary skill first, then falls back to alternative skills if available
+   */
+  async executeSkillWithFallbacks(
+    page: Page,
+    primaryMatch: SkillMatch,
+    allMatches: SkillMatch[]
+  ): Promise<SkillExecutionTrace> {
+    // Try primary skill first
+    let trace = await this.executeSkillActions(page, primaryMatch.skill, primaryMatch);
+
+    if (trace.success) {
+      return trace;
+    }
+
+    // Try fallback skills from the matched list
+    for (let i = 1; i < allMatches.length && !trace.success; i++) {
+      const fallbackMatch = allMatches[i];
+
+      // Only try if preconditions are met
+      if (!fallbackMatch.preconditionsMet) {
+        continue;
+      }
+
+      logger.smartBrowser.info(`Trying fallback skill: ${fallbackMatch.skill.name}`);
+
+      const fallbackTrace = await this.executeSkillActions(page, fallbackMatch.skill, fallbackMatch);
+
+      if (fallbackTrace.success) {
+        // Create combined trace showing fallback was used
+        trace = {
+          ...trace,
+          success: true,
+          usedFallback: true,
+          fallbackSkillId: fallbackMatch.skill.id,
+          totalDuration: trace.totalDuration + fallbackTrace.totalDuration,
+          actionResults: [...trace.actionResults, ...fallbackTrace.actionResults],
+          actionsExecuted: trace.actionsExecuted + fallbackTrace.actionsExecuted,
+          error: undefined,
+        };
+        break;
+      }
+    }
+
+    return trace;
   }
 
   // ============================================
