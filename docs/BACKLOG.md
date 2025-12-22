@@ -26,6 +26,12 @@ Tasks are organized by priority and category. Each task includes:
 | S-001 | Add URL safety policy controls | M | Security | Block private IP ranges (RFC1918), link-local, metadata endpoints, `file://`. Secure defaults with opt-out (DONE) |
 | S-002 | Redact secrets in logs | S | Security | Use Pino's `redact` option for `authorization`, `cookie`, token-like strings, localStorage (DONE) |
 
+### Testing
+
+| ID | Task | Effort | Category | Notes |
+|----|------|--------|----------|-------|
+| T-009 | Fix bootstrap pattern tests | M | Testing | 8 failing tests in `learned-pattern-application.test.ts` - bootstrap patterns not loading correctly after initialization |
+
 ---
 
 ## P1: High Priority (Do Soon)
