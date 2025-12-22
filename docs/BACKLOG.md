@@ -227,7 +227,7 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 
 | ID | Task | Effort | Status | Notes |
 |----|------|--------|--------|-------|
-| SDK-001 | Audit core dependencies and interfaces | S | Not Started | Identify what belongs in SDK vs wrappers. Document current coupling between core and MCP |
+| SDK-001 | Audit core dependencies and interfaces | S | In Progress | Identify what belongs in SDK vs wrappers. Document current coupling between core and MCP |
 | SDK-002 | Create @llm-browser/core package structure | S | Not Started | Set up monorepo or separate package. package.json, tsconfig.json, build setup |
 | SDK-003 | Extract SmartBrowser as SDK entry point | M | Not Started | Clean public API: browse(), executeApi(), initialize(), getDomainInsights(), etc. |
 | SDK-004 | Extract learning components to SDK | M | Not Started | LearningEngine, ProceduralMemory, ApiPatternRegistry. Ensure zero MCP dependencies |
