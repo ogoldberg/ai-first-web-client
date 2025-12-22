@@ -59,13 +59,18 @@ import { generateDashboard, getQuickStatus } from './utils/analytics-dashboard.j
 import { getContentChangeTracker } from './utils/content-change-tracker.js';
 
 /**
+ * Helper to read boolean mode flags from environment variables
+ * Accepts '1' or 'true' (case-insensitive) as truthy values
+ */
+const getModeFlag = (envVar: string): boolean =>
+  ['1', 'true'].includes((process.env[envVar] || '').toLowerCase());
+
+/**
  * TC-004: Debug mode flag
  * When false, debug tools (capture_screenshot, export_har, debug_traces) are hidden from tool list
  * Set LLM_BROWSER_DEBUG_MODE=1 or LLM_BROWSER_DEBUG_MODE=true to enable
  */
-const DEBUG_MODE = ['1', 'true'].includes(
-  (process.env.LLM_BROWSER_DEBUG_MODE || '').toLowerCase()
-);
+const DEBUG_MODE = getModeFlag('LLM_BROWSER_DEBUG_MODE');
 
 /**
  * List of tool names that require DEBUG_MODE to be enabled
@@ -81,9 +86,7 @@ const DEBUG_TOOLS = ['capture_screenshot', 'export_har', 'debug_traces'];
  * - Analytics: get_performance_metrics, usage_analytics, get_analytics_dashboard, get_system_status
  * - Infrastructure: get_browser_providers, tier_management
  */
-const ADMIN_MODE = ['1', 'true'].includes(
-  (process.env.LLM_BROWSER_ADMIN_MODE || '').toLowerCase()
-);
+const ADMIN_MODE = getModeFlag('LLM_BROWSER_ADMIN_MODE');
 
 /**
  * List of tool names that require ADMIN_MODE to be enabled
