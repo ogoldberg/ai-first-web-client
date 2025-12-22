@@ -73,6 +73,33 @@ const DEBUG_MODE = ['1', 'true'].includes(
 const DEBUG_TOOLS = ['capture_screenshot', 'export_har', 'debug_traces'];
 
 /**
+ * TC-005/TC-006: Admin mode flag
+ * When false, analytics and infrastructure tools are hidden from tool list
+ * Set LLM_BROWSER_ADMIN_MODE=1 or LLM_BROWSER_ADMIN_MODE=true to enable
+ *
+ * Hidden tools:
+ * - Analytics: get_performance_metrics, usage_analytics, get_analytics_dashboard, get_system_status
+ * - Infrastructure: get_browser_providers, tier_management
+ */
+const ADMIN_MODE = ['1', 'true'].includes(
+  (process.env.LLM_BROWSER_ADMIN_MODE || '').toLowerCase()
+);
+
+/**
+ * List of tool names that require ADMIN_MODE to be enabled
+ */
+const ADMIN_TOOLS = [
+  // TC-005: Analytics tools
+  'get_performance_metrics',
+  'usage_analytics',
+  'get_analytics_dashboard',
+  'get_system_status',
+  // TC-006: Infrastructure tools
+  'get_browser_providers',
+  'tier_management',
+];
+
+/**
  * Create a versioned JSON response for MCP tools
  * All successful responses include schemaVersion for client compatibility
  */
@@ -1296,7 +1323,12 @@ Use this for quick health checks. For detailed analytics, use get_analytics_dash
         },
       },
     // TC-004: Filter out debug tools if DEBUG_MODE is disabled
-    ].filter(tool => DEBUG_MODE || !DEBUG_TOOLS.includes(tool.name)),
+    // TC-005/TC-006: Filter out admin tools if ADMIN_MODE is disabled
+    ].filter(tool => {
+      if (!DEBUG_MODE && DEBUG_TOOLS.includes(tool.name)) return false;
+      if (!ADMIN_MODE && ADMIN_TOOLS.includes(tool.name)) return false;
+      return true;
+    }),
   };
 });
 
@@ -1308,6 +1340,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     return errorResponse(
       `${name} is a debug tool and requires LLM_BROWSER_DEBUG_MODE=1 to be set. ` +
       'Debug tools are hidden by default to reduce cognitive load for LLMs.'
+    );
+  }
+
+  // TC-005/TC-006: Block admin tools if ADMIN_MODE is disabled (safety check)
+  if (!ADMIN_MODE && ADMIN_TOOLS.includes(name)) {
+    return errorResponse(
+      `${name} is an admin tool and requires LLM_BROWSER_ADMIN_MODE=1 to be set. ` +
+      'Admin tools (analytics, infrastructure) are hidden by default to reduce cognitive load for LLMs.'
     );
   }
 

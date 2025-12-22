@@ -293,7 +293,7 @@ All 10 phases complete:
 | P0 | Auto-embed domain insights in smart_browse | Complete |
 | P0 | Auto-apply skills (remove skill_management) | Complete |
 | P1 | Move debug tools to DEBUG_MODE | Complete |
-| P1 | Remove analytics/infrastructure tools from MCP | In Progress |
+| P1 | Remove analytics/infrastructure tools from MCP | Complete |
 
 **Target Tools:**
 1. `smart_browse` - Intelligent browsing with auto-learning
@@ -772,6 +772,15 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for ful
 ---
 
 ## Changelog
+
+### v0.5.0 (2025-12-22)
+
+- Added TC-005/TC-006: Hide analytics and infrastructure tools behind ADMIN_MODE
+  - New LLM_BROWSER_ADMIN_MODE environment variable (set to 1 or true to enable)
+  - Analytics tools hidden by default: get_performance_metrics, usage_analytics, get_analytics_dashboard, get_system_status
+  - Infrastructure tools hidden by default: get_browser_providers, tier_management
+  - Tools remain fully functional when ADMIN_MODE is enabled
+  - Reduces cognitive load for LLMs by hiding 6 non-essential tools
 
 ### v0.5.0 (2025-12-21)
 
