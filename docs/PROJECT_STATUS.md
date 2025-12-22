@@ -4,7 +4,7 @@
 **Version:** 0.5.0
 **Current Phase:** Production Readiness (Phase 2)
 **Total Code:** ~16,000 lines TypeScript
-**Tests:** 1894 passing + 44 live tests
+**Tests:** 2161 passing + 44 live tests
 
 ---
 
@@ -281,22 +281,33 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ---
 
-## In Progress: Content Change Detection Alerts (F-003)
+## Recently Completed: Content Change Detection Alerts (F-003)
 
-**Status:** In Progress
+**Status:** Complete (PR #94)
 
 **Goal:** Detect and notify when website content changes between visits, allowing LLM clients to know if they're working with stale data.
 
-**Planned Implementation:**
+**Implementation:**
 
-- Content fingerprinting using hash-based comparison
-- Change tracking with timestamp and diff summary
-- MCP tools for checking changes and setting up alerts
-- Integration with SmartBrowser browse operations
+- ContentChangeTracker class with persistent storage using PersistentStore
+- Content fingerprinting using MD5 hash, text length, word count, and structure hash
+- Change significance classification (low, medium, high) based on content delta
+- Change history tracking with summary and fingerprint comparison
+- URL tracking with labels and tags for categorization
+- Filtering by domain, tags, and change status
+- 6 new MCP tools:
+  - `track_url_for_changes` - Start tracking a URL for changes
+  - `check_content_changes` - Check if tracked content has changed
+  - `list_tracked_urls` - List all tracked URLs with filtering
+  - `get_change_history` - Get history of detected changes
+  - `untrack_url` - Stop tracking a URL
+  - `get_change_tracker_stats` - Get tracking statistics
+- Integration with SmartBrowser for automatic content extraction
+- 33 comprehensive tests for ContentChangeTracker
 
-| ID    | Task                            | Priority | Effort | Status      |
-|-------|---------------------------------|----------|--------|-------------|
-| F-003 | Content change detection alerts | Medium   | M      | In Progress |
+| ID    | Task                            | Priority | Effort | Status   |
+|-------|---------------------------------|----------|--------|----------|
+| F-003 | Content change detection alerts | Medium   | M      | Complete |
 
 ---
 
