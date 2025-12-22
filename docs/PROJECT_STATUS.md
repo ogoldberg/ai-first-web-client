@@ -281,6 +281,25 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ---
 
+## In Progress: Content Change Detection Alerts (F-003)
+
+**Status:** In Progress
+
+**Goal:** Detect and notify when website content changes between visits, allowing LLM clients to know if they're working with stale data.
+
+**Planned Implementation:**
+
+- Content fingerprinting using hash-based comparison
+- Change tracking with timestamp and diff summary
+- MCP tools for checking changes and setting up alerts
+- Integration with SmartBrowser browse operations
+
+| ID    | Task                            | Priority | Effort | Status      |
+|-------|---------------------------------|----------|--------|-------------|
+| F-003 | Content change detection alerts | Medium   | M      | In Progress |
+
+---
+
 ## Recently Completed: Skill Sharing + Portability (F-012)
 
 **Status:** Complete (PR #93)
