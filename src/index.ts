@@ -1291,14 +1291,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
               smartBrowser.getDomainIntelligence(domain),
             ]);
 
-            domainCapabilities = {
-              canBypassBrowser: capabilities.capabilities.canBypassBrowser,
-              hasLearnedPatterns: capabilities.capabilities.hasLearnedPatterns,
-              hasActiveSession: capabilities.capabilities.hasActiveSession,
-              hasSkills: capabilities.capabilities.hasSkills,
-              hasPagination: capabilities.capabilities.hasPagination,
-              hasContentSelectors: capabilities.capabilities.hasContentSelectors,
-            };
+            // Use capabilities directly - same structure as DomainCapabilitiesSummary
+            domainCapabilities = capabilities.capabilities;
 
             domainKnowledge = {
               patternCount: intelligence.knownPatterns,

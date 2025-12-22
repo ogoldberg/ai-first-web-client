@@ -5,11 +5,16 @@
  * included in smart_browse responses, and that deprecated tools return
  * deprecation notices.
  *
- * Note: The actual getDomainCapabilities and getDomainIntelligence method
- * behavior is tested in smart-browser.test.ts. These tests focus on:
- * - Type definitions for the new TC-002 fields
- * - Exported types are accessible
- * - Deprecation notice formatting
+ * Test Strategy:
+ * - TYPE DEFINITION TESTS (this file): Verify exported types compile correctly
+ *   and have the expected structure. These are compile-time validations.
+ * - METHOD BEHAVIOR TESTS (other files):
+ *   - getDomainCapabilities: tests/core/domain-capabilities.test.ts (comprehensive)
+ *   - getDomainIntelligence: tests/e2e/browse-cycle.test.ts (integration)
+ * - DEPRECATION NOTICES (this file): Verify deprecated tools have proper notices
+ *
+ * The type tests create mock objects to verify TypeScript type definitions
+ * are correct. If the types were wrong, these tests would fail to compile.
  */
 
 import { describe, it, expect } from 'vitest';
