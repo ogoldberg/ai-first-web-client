@@ -336,6 +336,22 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ---
 
+## In Progress: Fix Bootstrap Pattern Tests (T-009)
+
+**Status:** In Progress
+
+**Goal:** Fix 8 failing tests in learned-pattern-application.test.ts where bootstrap patterns are not loading correctly after initialization.
+
+**Problem:**
+- Bootstrap patterns (json-suffix, registry-lookup, rest-resource, etc.) not matching against test URLs
+- Tests expect patterns to be auto-registered but findMatchingPatterns() returns empty
+
+| ID    | Task                         | Priority | Effort | Status      |
+|-------|------------------------------|----------|--------|-------------|
+| T-009 | Fix bootstrap pattern tests  | Critical | M      | In Progress |
+
+---
+
 ## Recently Completed: Content Change Detection Alerts (F-003)
 
 **Status:** Complete (PR #94)
