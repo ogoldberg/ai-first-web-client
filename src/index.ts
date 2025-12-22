@@ -885,7 +885,7 @@ Use cases: Monitor government sites, track pricing, detect regulatory updates.`,
       // ============================================
       {
         name: 'get_api_auth_status',
-        description: `Get authentication status for a domain's discovered APIs.
+        description: `[DEPRECATED - Use api_auth with action='status'] Get authentication status for a domain's discovered APIs.
 
 Shows:
 - Detected authentication requirements (from API documentation)
@@ -911,7 +911,7 @@ Use this before making API calls to understand what auth is needed.`,
       },
       {
         name: 'configure_api_auth',
-        description: `Configure API authentication credentials for a domain.
+        description: `[DEPRECATED - Use api_auth with action='configure'] Configure API authentication credentials for a domain.
 
 Supports multiple auth types:
 - api_key: API key in header, query param, or cookie
@@ -954,7 +954,7 @@ Credentials are stored securely and persist across sessions.`,
       },
       {
         name: 'complete_oauth',
-        description: `Complete OAuth 2.0 authorization_code flow after user authorization.
+        description: `[DEPRECATED - Use api_auth with action='complete_oauth'] Complete OAuth 2.0 authorization_code flow after user authorization.
 
 After configure_api_auth with oauth2 authorization_code flow returns a URL,
 the user visits that URL and authorizes. They receive a code.
@@ -976,7 +976,7 @@ Use this tool with that code and state to complete the flow.`,
       },
       {
         name: 'get_auth_guidance',
-        description: `Get guidance for configuring a specific auth type.
+        description: `[DEPRECATED - Use api_auth with action='guidance'] Get guidance for configuring a specific auth type.
 
 Returns:
 - Instructions for what credentials are needed
@@ -1002,7 +1002,7 @@ Use this to understand what credentials to provide before calling configure_api_
       },
       {
         name: 'delete_api_auth',
-        description: `Delete stored API authentication credentials.
+        description: `[DEPRECATED - Use api_auth with action='delete'] Delete stored API authentication credentials.
 
 Removes credentials for a domain. Can delete specific auth type or all credentials.`,
         inputSchema: {
@@ -1027,12 +1027,70 @@ Removes credentials for a domain. Can delete specific auth type or all credentia
       },
       {
         name: 'list_configured_auth',
-        description: `List all domains with configured API authentication.
+        description: `[DEPRECATED - Use api_auth with action='list'] List all domains with configured API authentication.
 
 Shows which domains have auth configured and what types.`,
         inputSchema: {
           type: 'object',
           properties: {},
+        },
+      },
+
+      // ============================================
+      // UNIFIED API AUTH TOOL (TC-001)
+      // ============================================
+      {
+        name: 'api_auth',
+        description: `Unified API authentication management. Configure, manage, and inspect authentication credentials for API access.
+
+Actions:
+- status: Check auth status for a domain (shows detected requirements, configured credentials, missing auth)
+- configure: Configure credentials for a domain (api_key, bearer, basic, oauth2, cookie)
+- complete_oauth: Complete OAuth2 authorization code flow after user authorization
+- guidance: Get help and examples for configuring authentication
+- delete: Delete stored credentials for a domain
+- list: List all domains with configured authentication
+
+This tool consolidates all auth operations into a single interface.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            action: {
+              type: 'string',
+              enum: ['status', 'configure', 'complete_oauth', 'guidance', 'delete', 'list'],
+              description: 'Action to perform',
+            },
+            domain: {
+              type: 'string',
+              description: 'Domain to operate on (required for status, configure, guidance, delete)',
+            },
+            profile: {
+              type: 'string',
+              description: 'Auth profile name (default: "default")',
+            },
+            authType: {
+              type: 'string',
+              enum: ['api_key', 'bearer', 'basic', 'oauth2', 'cookie'],
+              description: 'Authentication type (required for configure, optional for guidance/delete)',
+            },
+            credentials: {
+              type: 'object',
+              description: 'Credentials object (required for configure action). Structure depends on authType.',
+            },
+            validate: {
+              type: 'boolean',
+              description: 'Whether to validate credentials (default: true, for configure action)',
+            },
+            code: {
+              type: 'string',
+              description: 'OAuth authorization code (required for complete_oauth action)',
+            },
+            state: {
+              type: 'string',
+              description: 'OAuth state parameter (required for complete_oauth action)',
+            },
+          },
+          required: ['action'],
         },
       },
 
@@ -2608,6 +2666,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             type: auth.type,
             guidance: authWorkflow.getAuthGuidance(auth),
           })),
+          deprecation_notice: "This tool is deprecated. Use api_auth with action='status' instead.",
         });
       }
 
@@ -2685,6 +2744,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           validated: result.validated,
           error: result.error,
           nextStep: result.nextStep,
+          deprecation_notice: "This tool is deprecated. Use api_auth with action='configure' instead.",
         });
       }
 
@@ -2703,6 +2763,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           message: result.success
             ? 'OAuth authorization completed successfully. You can now make authenticated API calls.'
             : 'OAuth authorization failed. Please try again.',
+          deprecation_notice: "This tool is deprecated. Use api_auth with action='complete_oauth' instead.",
         });
       }
 
@@ -2737,6 +2798,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           domain: args.domain,
           detectedAuthTypes: status.detectedAuth.map(a => a.type),
           guidance,
+          deprecation_notice: "This tool is deprecated. Use api_auth with action='guidance' instead.",
         });
       }
 
@@ -2755,6 +2817,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
           message: deleted
             ? 'Credentials deleted successfully'
             : 'No matching credentials found',
+          deprecation_notice: "This tool is deprecated. Use api_auth with action='delete' instead.",
         });
       }
 
@@ -2764,7 +2827,223 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return jsonResponse({
           totalDomains: configuredDomains.length,
           domains: configuredDomains,
+          deprecation_notice: "This tool is deprecated. Use api_auth with action='list' instead.",
         });
+      }
+
+      // ============================================
+      // UNIFIED API AUTH TOOL (TC-001) - Consolidated Handler
+      // ============================================
+      case 'api_auth': {
+        const action = args.action as string;
+
+        switch (action) {
+          case 'status': {
+            if (!args.domain) {
+              return errorResponse("Missing required parameter 'domain' for action 'status'");
+            }
+            const status = await authWorkflow.getAuthStatus(
+              args.domain as string,
+              (args.profile as string) || 'default'
+            );
+
+            return jsonResponse({
+              domain: status.domain,
+              status: status.status,
+              message: status.message,
+              detectedAuth: status.detectedAuth,
+              configuredCredentials: status.configuredCredentials,
+              missingAuth: status.missingAuth.map(auth => ({
+                type: auth.type,
+                guidance: authWorkflow.getAuthGuidance(auth),
+              })),
+            });
+          }
+
+          case 'configure': {
+            if (!args.domain) {
+              return errorResponse("Missing required parameter 'domain' for action 'configure'");
+            }
+            if (!args.authType) {
+              return errorResponse("Missing required parameter 'authType' for action 'configure'");
+            }
+            if (!args.credentials) {
+              return errorResponse("Missing required parameter 'credentials' for action 'configure'");
+            }
+
+            const authType = args.authType as string;
+            const rawCredentials = args.credentials as Record<string, unknown>;
+
+            // Build typed credentials based on auth type
+            let typedCredentials: any;
+            switch (authType) {
+              case 'api_key':
+                typedCredentials = {
+                  type: 'api_key',
+                  in: rawCredentials.in || 'header',
+                  name: rawCredentials.name || 'X-API-Key',
+                  value: rawCredentials.value,
+                };
+                break;
+              case 'bearer':
+                typedCredentials = {
+                  type: 'bearer',
+                  token: rawCredentials.token,
+                  expiresAt: rawCredentials.expiresAt,
+                };
+                break;
+              case 'basic':
+                typedCredentials = {
+                  type: 'basic',
+                  username: rawCredentials.username,
+                  password: rawCredentials.password,
+                };
+                break;
+              case 'oauth2':
+                typedCredentials = {
+                  type: 'oauth2',
+                  flow: rawCredentials.flow || 'authorization_code',
+                  clientId: rawCredentials.clientId,
+                  clientSecret: rawCredentials.clientSecret,
+                  accessToken: rawCredentials.accessToken,
+                  refreshToken: rawCredentials.refreshToken,
+                  scopes: rawCredentials.scopes,
+                  urls: {
+                    authorizationUrl: rawCredentials.authorizationUrl,
+                    tokenUrl: rawCredentials.tokenUrl,
+                    refreshUrl: rawCredentials.refreshUrl,
+                  },
+                  username: rawCredentials.username,
+                  password: rawCredentials.password,
+                };
+                break;
+              case 'cookie':
+                typedCredentials = {
+                  type: 'cookie',
+                  name: rawCredentials.name,
+                  value: rawCredentials.value,
+                  expiresAt: rawCredentials.expiresAt,
+                };
+                break;
+              default:
+                return errorResponse(`Unknown auth type: ${authType}`);
+            }
+
+            const result = await authWorkflow.configureCredentials(
+              args.domain as string,
+              typedCredentials,
+              (args.profile as string) || 'default',
+              args.validate !== false
+            );
+
+            return jsonResponse({
+              success: result.success,
+              domain: result.domain,
+              type: result.type,
+              profile: result.profile,
+              validated: result.validated,
+              error: result.error,
+              nextStep: result.nextStep,
+            });
+          }
+
+          case 'complete_oauth': {
+            if (!args.code) {
+              return errorResponse("Missing required parameter 'code' for action 'complete_oauth'");
+            }
+            if (!args.state) {
+              return errorResponse("Missing required parameter 'state' for action 'complete_oauth'");
+            }
+
+            const result = await authWorkflow.completeOAuthFlow(
+              args.code as string,
+              args.state as string
+            );
+
+            return jsonResponse({
+              success: result.success,
+              domain: result.domain,
+              profile: result.profile,
+              validated: result.validated,
+              error: result.error,
+              message: result.success
+                ? 'OAuth authorization completed successfully. You can now make authenticated API calls.'
+                : 'OAuth authorization failed. Please try again.',
+            });
+          }
+
+          case 'guidance': {
+            if (!args.domain) {
+              return errorResponse("Missing required parameter 'domain' for action 'guidance'");
+            }
+
+            const status = await authWorkflow.getAuthStatus(args.domain as string);
+            const authType = args.authType as string | undefined;
+
+            let guidance: Array<{ type: string; guidance: ReturnType<typeof authWorkflow.getAuthGuidance> }>;
+
+            if (authType) {
+              // Get guidance for specific type
+              const authInfo = status.detectedAuth.find(a => a.type === authType) ||
+                { type: authType as any, in: 'header', name: undefined };
+              guidance = [{ type: authType, guidance: authWorkflow.getAuthGuidance(authInfo) }];
+            } else {
+              // Get guidance for all detected auth types
+              guidance = status.detectedAuth.map(auth => ({
+                type: auth.type,
+                guidance: authWorkflow.getAuthGuidance(auth),
+              }));
+
+              // If no auth detected, show guidance for common types
+              if (guidance.length === 0) {
+                guidance = [
+                  { type: 'api_key', guidance: authWorkflow.getAuthGuidance({ type: 'api_key', in: 'header' }) },
+                  { type: 'bearer', guidance: authWorkflow.getAuthGuidance({ type: 'bearer' }) },
+                ];
+              }
+            }
+
+            return jsonResponse({
+              domain: args.domain,
+              detectedAuthTypes: status.detectedAuth.map(a => a.type),
+              guidance,
+            });
+          }
+
+          case 'delete': {
+            if (!args.domain) {
+              return errorResponse("Missing required parameter 'domain' for action 'delete'");
+            }
+
+            const deleted = await authWorkflow.deleteCredentials(
+              args.domain as string,
+              args.authType as any,
+              (args.profile as string) || 'default'
+            );
+
+            return jsonResponse({
+              success: deleted,
+              domain: args.domain,
+              authType: args.authType || 'all',
+              profile: args.profile || 'default',
+              message: deleted
+                ? 'Credentials deleted successfully'
+                : 'No matching credentials found',
+            });
+          }
+
+          case 'list': {
+            const configuredDomains = authWorkflow.listConfiguredDomains();
+
+            return jsonResponse({
+              totalDomains: configuredDomains.length,
+              domains: configuredDomains,
+            });
+          }
+
+          default:
+            return errorResponse(`Unknown action: ${action}. Valid actions: status, configure, complete_oauth, guidance, delete, list`);
+        }
       }
 
       // ============================================
