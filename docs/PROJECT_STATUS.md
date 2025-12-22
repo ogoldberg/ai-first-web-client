@@ -281,15 +281,32 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ---
 
-## In Progress: Medium API Handler (I-009)
+## Recently Completed: Medium API Handler (I-009)
 
-**Status:** In Progress
+**Status:** Complete (PR #96)
 
-**Goal:** Add Medium.com API handler for extracting article content via their undocumented but discoverable API.
+**Goal:** Add Medium.com API handler for extracting article content via their undocumented `?format=json` API.
 
-| ID    | Task               | Priority | Effort | Status      |
-|-------|--------------------|----------|--------|-------------|
-| I-009 | Medium API handler | Medium   | M      | In Progress |
+**Implementation:**
+
+- Medium URL detection (medium.com, subdomains like engineering.medium.com, publications)
+- Article path detection (/@username/slug, /p/hexid, /publication/slug patterns)
+- JSON hijacking protection prefix stripping (])}while(1);</x> and variants)
+- Nested JSON structure parsing for title, subtitle, author, content
+- Paragraph type formatting:
+  - Type 3: H3 headers -> ## Markdown
+  - Type 13: H4 headers -> ### Markdown
+  - Type 6/7: Blockquotes/Pull quotes -> > Markdown
+  - Type 8/11: Code blocks/Preformatted -> ``` Markdown
+  - Type 9: Bulleted lists -> - Markdown
+  - Type 10: Ordered lists -> 1. Markdown
+  - Type 4: Image captions -> *caption* Markdown
+- Metadata extraction (reading time, claps, published date)
+- 20 comprehensive tests
+
+| ID    | Task               | Priority | Effort | Status   |
+|-------|--------------------|----------|--------|----------|
+| I-009 | Medium API handler | Medium   | M      | Complete |
 
 ---
 

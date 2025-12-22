@@ -217,7 +217,7 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 | I-006 | NPM registry API handler | S | Features | `registry.npmjs.org/package/json` (DONE) |
 | I-007 | PyPI API handler | S | Features | `pypi.org/pypi/{package}/json` (DONE) |
 | I-008 | Dev.to API handler | S | Features | `dev.to/api/articles` (DONE) |
-| I-009 | Medium API handler | M | Features | Undocumented but discoverable |
+| I-009 | Medium API handler | M | Features | Undocumented JSON API - ?format=json (DONE - PR #96) |
 | I-010 | YouTube API handler | M | Features | Requires API key configuration |
 | I-011 | OpenAPI spec discovery | L | Features | Superseded by L-006 (API Learning System Phase 5) |
 | I-012 | GraphQL introspection | L | Features | Superseded by D-001 (API Documentation Discovery) |
