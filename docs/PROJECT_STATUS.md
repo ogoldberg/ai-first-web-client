@@ -121,22 +121,55 @@ These items are tracked as CX-001 through CX-012 in `docs/BACKLOG.md` and `docs/
 
 ## MCP Tools Available
 
-| Tool | Description | Category |
-|------|-------------|----------|
-| `smart_browse` | Intelligent browsing with tier selection | Core |
-| `execute_api_call` | Direct API calls bypassing browser | Core |
-| `save_session` | Persist authentication for domain | Session |
-| `list_sessions` | View all saved sessions | Session |
-| `get_knowledge_stats` | View learning statistics | Knowledge |
-| `get_learned_patterns` | Get patterns for domain | Knowledge |
-| `record_skill` | Start recording a skill | Skills |
-| `stop_recording` | Complete skill recording | Skills |
-| `execute_skill` | Replay a recorded skill | Skills |
-| `list_skills` | View available skills | Skills |
-| `rollback_skill` | Restore previous skill version | Skills |
-| `provide_feedback` | Improve skill from user feedback | Skills |
-| `get_learning_stats` | View learning engine stats | Learning |
-| `get_domain_insights` | Get insights for domain | Learning |
+The LLM Browser exposes **5 core tools** by default (TC-001 through TC-008), designed to minimize cognitive load for LLMs.
+
+### Core Tools (Always Visible)
+
+| Tool | Description |
+|------|-------------|
+| `smart_browse` | Intelligent browsing with automatic learning and optimization |
+| `batch_browse` | Browse multiple URLs in a single call with controlled concurrency |
+| `execute_api_call` | Direct API calls using discovered patterns (bypasses browser) |
+| `session_management` | Manage sessions for authenticated access (save, list, health) |
+| `api_auth` | Configure API authentication (API keys, OAuth, bearer tokens, etc.) |
+
+### Debug Tools (LLM_BROWSER_DEBUG_MODE=1)
+
+| Tool | Description |
+|------|-------------|
+| `capture_screenshot` | Capture screenshots for visual debugging |
+| `export_har` | Export HAR files for network debugging |
+| `debug_traces` | Query and manage debug traces for failure analysis |
+
+### Admin Tools (LLM_BROWSER_ADMIN_MODE=1)
+
+| Tool | Description |
+|------|-------------|
+| `get_performance_metrics` | Comprehensive performance metrics for all tiers |
+| `usage_analytics` | Usage statistics and cost analysis |
+| `get_analytics_dashboard` | Unified analytics dashboard |
+| `get_system_status` | Quick system health check |
+| `get_browser_providers` | Information about available browser providers |
+| `tier_management` | Manage tiered rendering for domains |
+| `content_tracking` | Track and detect content changes on websites |
+
+### Deprecated Tools (LLM_BROWSER_ADMIN_MODE=1)
+
+These tools are deprecated and hidden by default. Use the consolidated alternatives:
+
+| Deprecated Tool | Use Instead |
+|-----------------|-------------|
+| `get_domain_intelligence` | `smart_browse` with `includeInsights=true` |
+| `get_domain_capabilities` | `smart_browse` with `includeInsights=true` |
+| `get_learning_stats` | Admin analytics tools |
+| `get_learning_effectiveness` | Admin analytics tools |
+| `skill_management` | Skills are auto-applied during `smart_browse` |
+| `get_api_auth_status` | `api_auth` with `action='status'` |
+| `configure_api_auth` | `api_auth` with `action='configure'` |
+| `complete_oauth` | `api_auth` with `action='complete_oauth'` |
+| `get_auth_guidance` | `api_auth` with `action='guidance'` |
+| `delete_api_auth` | `api_auth` with `action='delete'` |
+| `list_configured_auth` | `api_auth` with `action='list'` |
 
 ---
 

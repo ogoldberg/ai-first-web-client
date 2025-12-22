@@ -126,9 +126,21 @@ Skills are matched using neural embeddings (when `@xenova/transformers` is insta
 
 ## MCP Tools
 
-### Primary Tool
+The LLM Browser exposes **5 core tools** by default, designed to minimize cognitive load:
 
-**`smart_browse`** - The main tool. Automatically applies all learned intelligence.
+### Core Tools
+
+| Tool | Purpose |
+|------|---------|
+| `smart_browse` | Intelligent browsing with automatic learning and optimization |
+| `batch_browse` | Browse multiple URLs in a single call with controlled concurrency |
+| `execute_api_call` | Direct API calls using discovered patterns (bypasses browser) |
+| `session_management` | Manage sessions for authenticated access (save, list, health) |
+| `api_auth` | Configure API authentication (API keys, OAuth, bearer tokens, etc.) |
+
+### smart_browse (Primary Tool)
+
+The main tool that automatically applies all learned intelligence.
 
 ```text
 Parameters:
@@ -138,33 +150,35 @@ Parameters:
 - waitForSelector: CSS selector to wait for (SPAs)
 - scrollToLoad: Scroll to trigger lazy content
 - sessionProfile: Use saved authentication session
+- maxChars: Truncate content to this length (for large pages)
+- includeInsights: Include domain knowledge summary (default: true)
+- checkForChanges: Check if content changed since last visit
 ```
 
-### Intelligence Tools
+### batch_browse
 
-| Tool | Purpose |
-|------|---------|
-| `get_domain_intelligence` | Check what the browser knows about a domain |
-| `get_learning_stats` | Overall learning statistics |
-| `get_tiered_fetcher_stats` | Rendering tier performance |
+Browse multiple URLs efficiently with controlled concurrency.
 
-### Skill Management Tools
+```text
+Parameters:
+- urls (required): Array of URLs to browse
+- concurrency: Max parallel requests (default: 3)
+- stopOnError: Stop on first error (default: false)
+- All smart_browse options apply to each URL
+```
 
-| Tool | Purpose |
-|------|---------|
-| `get_procedural_memory_stats` | View learned skills |
-| `find_applicable_skills` | Find skills for a URL |
-| `get_skill_explanation` | Human-readable skill description |
-| `rate_skill_application` | Feedback (thumbs up/down) |
-| `bootstrap_skills` | Initialize with common templates |
+### Advanced Tools (Hidden by Default)
 
-### Session Tools
+Additional tools are available for debugging and administration:
 
-| Tool | Purpose |
-|------|---------|
-| `save_session` | Save authenticated session |
-| `list_sessions` | List saved sessions |
-| `get_session_health` | Check session validity |
+- **Debug tools** (set `LLM_BROWSER_DEBUG_MODE=1`):
+  - `capture_screenshot` - Visual debugging
+  - `export_har` - Network traffic analysis
+  - `debug_traces` - Failure analysis and replay
+
+- **Admin tools** (set `LLM_BROWSER_ADMIN_MODE=1`):
+  - Performance metrics, usage analytics, tier management
+  - Deprecated tools for backward compatibility
 
 ## Configuration
 
