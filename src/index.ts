@@ -78,14 +78,17 @@ const DEBUG_MODE = getModeFlag('LLM_BROWSER_DEBUG_MODE');
 const DEBUG_TOOLS = ['capture_screenshot', 'export_har', 'debug_traces'];
 
 /**
- * TC-005/TC-006/TC-007: Admin mode flag
- * When false, analytics, infrastructure, and content tracking tools are hidden from tool list
+ * TC-005/TC-006/TC-007/TC-008: Admin mode flag
+ * When false, admin and deprecated tools are hidden from tool list
  * Set LLM_BROWSER_ADMIN_MODE=1 or LLM_BROWSER_ADMIN_MODE=true to enable
  *
  * Hidden tools:
  * - Analytics: get_performance_metrics, usage_analytics, get_analytics_dashboard, get_system_status
  * - Infrastructure: get_browser_providers, tier_management
  * - Content tracking: content_tracking (use smart_browse with checkForChanges instead)
+ * - Deprecated: get_domain_intelligence, get_domain_capabilities, get_learning_stats,
+ *   get_learning_effectiveness, skill_management, get_api_auth_status, configure_api_auth,
+ *   complete_oauth, get_auth_guidance, delete_api_auth, list_configured_auth
  */
 const ADMIN_MODE = getModeFlag('LLM_BROWSER_ADMIN_MODE');
 
@@ -103,6 +106,18 @@ const ADMIN_TOOLS = [
   'tier_management',
   // TC-007: Content tracking tool (use smart_browse with checkForChanges instead)
   'content_tracking',
+  // TC-008: Deprecated tools (hidden, use consolidated alternatives)
+  'get_domain_intelligence',    // Use smart_browse with includeInsights
+  'get_domain_capabilities',    // Use smart_browse with includeInsights
+  'get_learning_stats',         // Use ADMIN_MODE analytics tools
+  'get_learning_effectiveness', // Use ADMIN_MODE analytics tools
+  'skill_management',           // Skills are auto-applied
+  'get_api_auth_status',        // Use api_auth with action='status'
+  'configure_api_auth',         // Use api_auth with action='configure'
+  'complete_oauth',             // Use api_auth with action='complete_oauth'
+  'get_auth_guidance',          // Use api_auth with action='guidance'
+  'delete_api_auth',            // Use api_auth with action='delete'
+  'list_configured_auth',       // Use api_auth with action='list'
 ];
 
 /**
