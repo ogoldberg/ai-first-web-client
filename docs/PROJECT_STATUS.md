@@ -84,7 +84,7 @@ These items are tracked as CX-001 through CX-012 in `docs/BACKLOG.md` and `docs/
 | Timeout Configuration | Complete | Central config (PR #14) |
 | Tier Usage Analytics | Complete | get_tier_usage_by_domain tool (PR #13) |
 | Performance Timing | Complete | PerformanceTracker utility, get_performance_metrics tool |
-| Site-Specific APIs | Complete | Reddit, HN, GitHub, Wikipedia, StackOverflow, NPM, PyPI, Dev.to |
+| Site-Specific APIs | Complete | Reddit, HN, GitHub, Wikipedia, StackOverflow, NPM, PyPI, Dev.to, Medium, YouTube |
 | Site API Live Tests | Complete | 44 tests against real endpoints (LIVE_TESTS=true) |
 | URL Safety (SSRF Protection) | Complete | Blocks RFC1918, localhost, metadata endpoints, dangerous protocols |
 
@@ -281,15 +281,32 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ---
 
-## In Progress: YouTube API Handler (I-010)
+## Recently Completed: YouTube API Handler (I-010)
 
-**Status:** In Progress
+**Status:** Complete (PR #99)
 
-**Goal:** Add YouTube Data API v3 handler for extracting video metadata and channel information, with API key configuration support.
+**Goal:** Add YouTube API handler for extracting video metadata via oEmbed API (no auth required) with optional Data API v3 enhancement (when YOUTUBE_API_KEY env var is set).
 
-| ID    | Task                | Priority | Effort | Status      |
-|-------|---------------------|----------|--------|-------------|
-| I-010 | YouTube API handler | Medium   | M      | In Progress |
+**Implementation:**
+
+- YouTube URL detection (youtube.com, youtu.be, m.youtube.com, youtube-nocookie.com)
+- Video URL patterns (/watch?v=, /embed/, /shorts/, /v/, youtu.be shortlinks)
+- Video ID extraction from all URL formats
+- oEmbed API integration (no API key required) for basic video info:
+  - Title, author/channel name, channel URL
+  - Thumbnail URL and dimensions
+  - Provider info
+- Optional YouTube Data API v3 enhancement (when YOUTUBE_API_KEY is set):
+  - Description, view count, like count, comment count
+  - Published date, duration (ISO 8601 parsing)
+  - Tags and category info
+  - Channel details
+- Confidence levels: 'high' with Data API, 'medium' with oEmbed only
+- 14 comprehensive tests
+
+| ID    | Task                | Priority | Effort | Status   |
+|-------|---------------------|----------|--------|----------|
+| I-010 | YouTube API handler | Medium   | M      | Complete |
 
 ---
 
