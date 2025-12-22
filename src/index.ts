@@ -498,473 +498,85 @@ Use this to assess learning ROI and identify areas for improvement.`,
       },
 
       // ============================================
-      // PROCEDURAL MEMORY (Skills)
+      // PROCEDURAL MEMORY (Skills) - Consolidated
       // ============================================
       {
-        name: 'get_procedural_memory_stats',
-        description: `Get statistics about learned browsing skills (procedural memory).
-
-Shows:
-- Total skills learned
-- Skills by domain
-- Average success rate
-- Most used skills
-- Recent trajectories
-
-The browser learns reusable "skills" from successful browsing sessions.
-Skills are multi-step action sequences that can be applied to similar pages.`,
-        inputSchema: {
-          type: 'object',
-          properties: {},
-        },
-      },
-      {
-        name: 'get_learning_progress',
-        description: `Get comprehensive learning progress statistics.
-
-Shows a combined view of the browser's learning state:
-- **Skills**: Total skills, success rates, top performers, recently created
-- **Anti-patterns**: Things the browser learned NOT to do
-- **Coverage**: Which domains have skills vs need them
-- **Trajectories**: Browsing session outcomes
-
-This is the most comprehensive view of the browser's learning progress.
-Use it to understand overall learning health and identify areas for improvement.`,
-        inputSchema: {
-          type: 'object',
-          properties: {},
-        },
-      },
-      {
-        name: 'find_applicable_skills',
-        description: `Find browsing skills that might be applicable for a URL.
-
-Returns skills that match the page context based on:
-- Domain patterns
-- URL patterns
-- Page type
-- Similarity to learned patterns
-
-Use this to preview what skills might be applied before browsing.`,
-        inputSchema: {
-          type: 'object',
-          properties: {
-            url: {
-              type: 'string',
-              description: 'The URL to find skills for',
-            },
-            topK: {
-              type: 'number',
-              description: 'Maximum number of skills to return (default: 3)',
-            },
-          },
-          required: ['url'],
-        },
-      },
-      {
-        name: 'get_skill_details',
-        description: `Get detailed information about a specific learned skill.
-
-Shows:
-- Skill name and description
-- Preconditions (when it applies)
-- Action sequence
-- Performance metrics
-- Source domain`,
-        inputSchema: {
-          type: 'object',
-          properties: {
-            skillId: {
-              type: 'string',
-              description: 'The ID of the skill to get details for',
-            },
-          },
-          required: ['skillId'],
-        },
-      },
-      {
-        name: 'manage_skills',
-        description: `Manage browsing skills: export, import, prune, or reset.
+        name: 'skill_management',
+        description: `Manage learned browsing skills (procedural memory).
 
 Actions:
-- export: Export all skills as JSON for backup/sharing
-- import: Import skills from JSON (merge by default)
-- prune: Remove low-performing skills
-- reset: Clear all skills (use with caution)
-- coverage: Get active learning coverage stats and suggestions
-- workflows: List detected potential workflows`,
+- stats: Get skill statistics (total, by domain, success rates, most used)
+- progress: Comprehensive learning progress (skills, anti-patterns, coverage)
+- find: Find applicable skills for a URL
+- details: Get detailed info about a specific skill
+- explain: Get human-readable explanation of a skill
+- versions: Get version history for a skill
+- rollback: Rollback a skill to a previous version
+- rate: Rate skill application (positive/negative feedback)
+- anti_patterns: Get learned anti-patterns (things to avoid)
+- dependencies: Manage skill dependencies and fallback chains
+- bootstrap: Initialize with common skill templates
+- export: Export skills as portable skill pack
+- import: Import skills from skill pack
+- pack_stats: Get statistics about current skill pack
+- manage: Export/import/prune/reset/coverage/workflows
+
+The browser learns reusable skills from successful browsing sessions.
+Skills are multi-step action sequences that can be applied to similar pages.`,
         inputSchema: {
           type: 'object',
           properties: {
             action: {
               type: 'string',
-              enum: ['export', 'import', 'prune', 'reset', 'coverage', 'workflows'],
-              description: 'The management action to perform',
+              enum: ['stats', 'progress', 'find', 'details', 'explain', 'versions', 'rollback', 'rate', 'anti_patterns', 'dependencies', 'bootstrap', 'export', 'import', 'pack_stats', 'manage'],
+              description: 'Action to perform',
             },
-            data: {
-              type: 'string',
-              description: 'JSON data for import action',
+            // For find action
+            url: { type: 'string', description: 'URL for find/rate actions' },
+            topK: { type: 'number', description: 'Max skills to return (find action, default: 3)' },
+            // For details/explain/versions/rollback/rate/dependencies actions
+            skillId: { type: 'string', description: 'Skill ID for details/explain/versions/rollback/rate/dependencies actions' },
+            targetVersion: { type: 'number', description: 'Target version for rollback action' },
+            // For rate action
+            rating: { type: 'string', enum: ['positive', 'negative'], description: 'Rating for rate action' },
+            reason: { type: 'string', description: 'Reason for rating' },
+            // For anti_patterns action
+            domain: { type: 'string', description: 'Domain filter for anti_patterns action' },
+            // For dependencies action
+            dependencyAction: { type: 'string', enum: ['add_fallbacks', 'add_prerequisites', 'get_chain'], description: 'Dependency action type' },
+            relatedSkillIds: { type: 'array', items: { type: 'string' }, description: 'Related skill IDs for dependencies' },
+            // For export action
+            domainPatterns: { type: 'array', items: { type: 'string' }, description: 'Filter by domain patterns for export' },
+            verticals: {
+              type: 'array',
+              items: { type: 'string', enum: ['government', 'ecommerce', 'documentation', 'social', 'news', 'developer', 'finance', 'travel', 'healthcare', 'education', 'general'] },
+              description: 'Filter by verticals for export/import',
             },
-            minSuccessRate: {
-              type: 'number',
-              description: 'Minimum success rate for pruning (default: 0.3)',
-            },
+            includeAntiPatterns: { type: 'boolean', description: 'Include anti-patterns in export' },
+            includeWorkflows: { type: 'boolean', description: 'Include workflows in export' },
+            minSuccessRate: { type: 'number', description: 'Min success rate for export/prune' },
+            minUsageCount: { type: 'number', description: 'Min usage count for export' },
+            packName: { type: 'string', description: 'Name for skill pack' },
+            packDescription: { type: 'string', description: 'Description for skill pack' },
+            // For import action
+            skillPackJson: { type: 'string', description: 'Skill pack JSON for import' },
+            conflictResolution: { type: 'string', enum: ['skip', 'overwrite', 'merge', 'rename'], description: 'Conflict resolution for import' },
+            domainFilter: { type: 'array', items: { type: 'string' }, description: 'Domain filter for import' },
+            importAntiPatterns: { type: 'boolean', description: 'Import anti-patterns' },
+            importWorkflows: { type: 'boolean', description: 'Import workflows' },
+            resetMetrics: { type: 'boolean', description: 'Reset metrics on import' },
+            namePrefix: { type: 'string', description: 'Prefix for imported skill names' },
+            // For manage action
+            manageAction: { type: 'string', enum: ['export', 'import', 'prune', 'reset', 'coverage', 'workflows'], description: 'Management action' },
+            data: { type: 'string', description: 'JSON data for manage import' },
           },
           required: ['action'],
         },
       },
 
       // ============================================
-      // SKILL VERSIONING & ROLLBACK
+      // API & SESSION TOOLS
       // ============================================
-      {
-        name: 'get_skill_versions',
-        description: `Get version history for a skill.
-
-Shows all recorded versions of a skill including:
-- Version number and when it was created
-- What triggered the version (merge, update, rollback)
-- Metrics snapshot at each version
-- Best performing version
-
-Use this to understand how a skill has evolved and identify the best version.`,
-        inputSchema: {
-          type: 'object',
-          properties: {
-            skillId: {
-              type: 'string',
-              description: 'The ID of the skill to get versions for',
-            },
-          },
-          required: ['skillId'],
-        },
-      },
-      {
-        name: 'rollback_skill',
-        description: `Rollback a skill to a previous version.
-
-If performance has degraded, rollback to a better-performing version.
-By default rolls back to the previous version, or specify a target version number.`,
-        inputSchema: {
-          type: 'object',
-          properties: {
-            skillId: {
-              type: 'string',
-              description: 'The ID of the skill to rollback',
-            },
-            targetVersion: {
-              type: 'number',
-              description: 'Target version number to rollback to (optional, defaults to previous)',
-            },
-          },
-          required: ['skillId'],
-        },
-      },
-
-      // ============================================
-      // USER FEEDBACK
-      // ============================================
-      {
-        name: 'rate_skill_application',
-        description: `Rate the application of a skill (thumbs up/down).
-
-Provide feedback on whether a skill worked well or not. This feedback:
-- Updates the skill's success/failure metrics
-- May trigger auto-rollback if too many negative ratings
-- Helps improve skill selection over time
-
-Use this after a skill is applied to help the browser learn.`,
-        inputSchema: {
-          type: 'object',
-          properties: {
-            skillId: {
-              type: 'string',
-              description: 'The ID of the skill that was applied',
-            },
-            rating: {
-              type: 'string',
-              enum: ['positive', 'negative'],
-              description: 'Thumbs up (positive) or down (negative)',
-            },
-            url: {
-              type: 'string',
-              description: 'The URL where the skill was applied',
-            },
-            reason: {
-              type: 'string',
-              description: 'Optional reason for the rating',
-            },
-          },
-          required: ['skillId', 'rating', 'url'],
-        },
-      },
-
-      // ============================================
-      // SKILL EXPLANATION
-      // ============================================
-      {
-        name: 'get_skill_explanation',
-        description: `Get a human-readable explanation of what a skill does.
-
-Returns:
-- Plain English summary of the skill
-- Step-by-step breakdown of actions
-- When/where the skill is applicable
-- Reliability information
-- Tips for best results`,
-        inputSchema: {
-          type: 'object',
-          properties: {
-            skillId: {
-              type: 'string',
-              description: 'The ID of the skill to explain',
-            },
-          },
-          required: ['skillId'],
-        },
-      },
-
-      // ============================================
-      // ANTI-PATTERNS
-      // ============================================
-      {
-        name: 'get_anti_patterns',
-        description: `Get learned anti-patterns (things to avoid).
-
-Anti-patterns are actions that have been learned NOT to do on specific domains.
-Shows what actions cause problems and should be avoided.
-
-Use this to understand known issues with a domain.`,
-        inputSchema: {
-          type: 'object',
-          properties: {
-            domain: {
-              type: 'string',
-              description: 'Filter anti-patterns by domain (optional)',
-            },
-          },
-        },
-      },
-
-      // ============================================
-      // SKILL DEPENDENCIES & FALLBACKS
-      // ============================================
-      {
-        name: 'manage_skill_dependencies',
-        description: `Manage skill dependencies and fallback chains.
-
-Actions:
-- add_fallbacks: Add fallback skills that run if the primary fails
-- add_prerequisites: Add skills that must run before this one
-- get_chain: Get the full dependency chain for a skill
-
-This enables building complex multi-skill workflows with error recovery.`,
-        inputSchema: {
-          type: 'object',
-          properties: {
-            action: {
-              type: 'string',
-              enum: ['add_fallbacks', 'add_prerequisites', 'get_chain'],
-              description: 'The dependency action to perform',
-            },
-            skillId: {
-              type: 'string',
-              description: 'The skill to manage dependencies for',
-            },
-            relatedSkillIds: {
-              type: 'array',
-              items: { type: 'string' },
-              description: 'Skill IDs to add as fallbacks or prerequisites',
-            },
-          },
-          required: ['action', 'skillId'],
-        },
-      },
-
-      // ============================================
-      // BOOTSTRAP
-      // ============================================
-      {
-        name: 'bootstrap_skills',
-        description: `Bootstrap procedural memory with common skill templates.
-
-Initializes the browser with basic skills for common tasks:
-- Cookie banner dismissal
-- Pagination navigation
-- Form extraction
-- Table extraction
-
-Use this when starting fresh to get basic capabilities quickly.`,
-        inputSchema: {
-          type: 'object',
-          properties: {},
-        },
-      },
-
-      // ============================================
-      // SKILL SHARING & PORTABILITY (F-012)
-      // ============================================
-      {
-        name: 'export_skills',
-        description: `Export learned skills as a portable skill pack.
-
-Creates a JSON skill pack containing:
-- Learned browsing skills (navigation, extraction, form filling)
-- Anti-patterns (what NOT to do on specific sites)
-- Workflows (composed skill sequences)
-- Metadata (domains covered, verticals, success rates)
-
-Filter by:
-- Domain patterns (*.gov, github.com, etc.)
-- Verticals (government, ecommerce, documentation, developer, etc.)
-- Performance thresholds (min success rate, min usage)
-
-Use this to share skills with other instances or backup learned patterns.`,
-        inputSchema: {
-          type: 'object',
-          properties: {
-            domainPatterns: {
-              type: 'array',
-              items: { type: 'string' },
-              description: 'Filter by domain patterns (e.g., ["*.gov", "github.com"])',
-            },
-            verticals: {
-              type: 'array',
-              items: {
-                type: 'string',
-                enum: ['government', 'ecommerce', 'documentation', 'social', 'news', 'developer', 'finance', 'travel', 'healthcare', 'education', 'general'],
-              },
-              description: 'Filter by domain vertical categories',
-            },
-            includeAntiPatterns: {
-              type: 'boolean',
-              description: 'Include anti-patterns in export (default: true)',
-            },
-            includeWorkflows: {
-              type: 'boolean',
-              description: 'Include workflows in export (default: true)',
-            },
-            minSuccessRate: {
-              type: 'number',
-              description: 'Minimum success rate (0-1) to include skill',
-            },
-            minUsageCount: {
-              type: 'number',
-              description: 'Minimum times used to include skill',
-            },
-            packName: {
-              type: 'string',
-              description: 'Name for the skill pack',
-            },
-            packDescription: {
-              type: 'string',
-              description: 'Description of the skill pack',
-            },
-          },
-        },
-      },
-      {
-        name: 'import_skills',
-        description: `Import skills from a skill pack.
-
-Imports skills, anti-patterns, and workflows from a JSON skill pack.
-
-Conflict resolution options:
-- skip: Skip if similar skill exists (default)
-- overwrite: Replace existing skill
-- merge: Combine metrics from both
-- rename: Import with new ID
-
-Can filter imported skills by domain or vertical.
-Optionally reset metrics on imported skills for fresh start.`,
-        inputSchema: {
-          type: 'object',
-          properties: {
-            skillPackJson: {
-              type: 'string',
-              description: 'The skill pack JSON string to import',
-            },
-            conflictResolution: {
-              type: 'string',
-              enum: ['skip', 'overwrite', 'merge', 'rename'],
-              description: 'How to handle conflicts (default: skip)',
-            },
-            domainFilter: {
-              type: 'array',
-              items: { type: 'string' },
-              description: 'Only import skills matching these domain patterns',
-            },
-            verticalFilter: {
-              type: 'array',
-              items: {
-                type: 'string',
-                enum: ['government', 'ecommerce', 'documentation', 'social', 'news', 'developer', 'finance', 'travel', 'healthcare', 'education', 'general'],
-              },
-              description: 'Only import skills from these verticals',
-            },
-            importAntiPatterns: {
-              type: 'boolean',
-              description: 'Import anti-patterns (default: true)',
-            },
-            importWorkflows: {
-              type: 'boolean',
-              description: 'Import workflows (default: true)',
-            },
-            resetMetrics: {
-              type: 'boolean',
-              description: 'Reset usage metrics on imported skills',
-            },
-            namePrefix: {
-              type: 'string',
-              description: 'Prefix to add to imported skill names',
-            },
-          },
-          required: ['skillPackJson'],
-        },
-      },
-      {
-        name: 'get_skill_pack_stats',
-        description: `Get statistics about the current skill pack.
-
-Returns:
-- Total counts (skills, anti-patterns, workflows)
-- Success metrics (total success count, avg success rate)
-- Breakdown by domain vertical (government, ecommerce, etc.)
-
-Use this to understand what skills are available before exporting.`,
-        inputSchema: {
-          type: 'object',
-          properties: {},
-        },
-      },
-
-      // ============================================
-      // DEPRECATED TOOLS (Backward Compatibility)
-      // These tools are deprecated and will be removed in a future version.
-      // Users should migrate to smart_browse for browsing operations.
-      // ============================================
-      {
-        name: 'browse',
-        description: `[DEPRECATED] Basic browse - use smart_browse instead.
-
-DEPRECATION WARNING: This tool is deprecated since 2025-01-01 and will be removed in a future version.
-Use "smart_browse" for better results with learning, API discovery, and tiered rendering.
-
-Browses a URL with network capture but without learning features.`,
-        inputSchema: {
-          type: 'object',
-          properties: {
-            url: { type: 'string', description: 'The URL to browse' },
-            waitFor: {
-              type: 'string',
-              enum: ['load', 'domcontentloaded', 'networkidle'],
-            },
-            timeout: { type: 'number' },
-            sessionProfile: { type: 'string' },
-          },
-          required: ['url'],
-        },
-      },
       {
         name: 'execute_api_call',
         description: `Execute a direct API call using saved session authentication.
@@ -986,71 +598,27 @@ Use after discovering an API with smart_browse.`,
           required: ['url'],
         },
       },
+      // ============================================
+      // SESSION MANAGEMENT - Consolidated
+      // ============================================
       {
-        name: 'save_session',
-        description: `Save browser session for authenticated access.
+        name: 'session_management',
+        description: `Manage browser sessions for authenticated access.
 
-Captures cookies, localStorage, sessionStorage for future requests.`,
+Actions:
+- save: Capture cookies, localStorage, sessionStorage for a domain
+- list: List all saved sessions
+- health: Check session health (expired, expiring_soon, stale, healthy)
+
+Sessions enable authenticated API calls without re-login.`,
         inputSchema: {
           type: 'object',
           properties: {
-            domain: { type: 'string', description: 'Domain to save session for' },
-            sessionProfile: { type: 'string' },
+            action: { type: 'string', enum: ['save', 'list', 'health'], description: 'Action to perform' },
+            domain: { type: 'string', description: 'Domain (save/health actions)' },
+            sessionProfile: { type: 'string', description: 'Session profile (default: "default")' },
           },
-          required: ['domain'],
-        },
-      },
-      {
-        name: 'list_sessions',
-        description: 'List all saved sessions.',
-        inputSchema: {
-          type: 'object',
-          properties: {},
-        },
-      },
-      {
-        name: 'get_session_health',
-        description: `Check the health status of saved sessions.
-
-Detects:
-- Expired sessions (auth cookies expired)
-- Expiring soon (within 24 hours)
-- Stale sessions (unused for 30+ days)
-- Healthy sessions
-
-Use this to proactively identify sessions that need re-authentication.
-Can check a specific domain or all sessions.`,
-        inputSchema: {
-          type: 'object',
-          properties: {
-            domain: {
-              type: 'string',
-              description: 'Domain to check (optional - if not provided, checks all sessions)',
-            },
-            profile: {
-              type: 'string',
-              description: 'Session profile (default: "default")',
-            },
-          },
-        },
-      },
-      {
-        name: 'get_knowledge_stats',
-        description: '[LEGACY] Use get_learning_stats instead for more detail.',
-        inputSchema: {
-          type: 'object',
-          properties: {},
-        },
-      },
-      {
-        name: 'get_learned_patterns',
-        description: '[LEGACY] Use get_domain_intelligence instead.',
-        inputSchema: {
-          type: 'object',
-          properties: {
-            domain: { type: 'string' },
-          },
-          required: ['domain'],
+          required: ['action'],
         },
       },
 
@@ -1081,98 +649,28 @@ Use this to understand your browser infrastructure options.`,
       },
 
       // ============================================
-      // TIERED RENDERING
+      // TIERED RENDERING - Consolidated
       // ============================================
       {
-        name: 'get_tiered_fetcher_stats',
-        description: `Get statistics about tiered rendering performance.
+        name: 'tier_management',
+        description: `Manage tiered rendering for domains.
 
-The browser uses a tiered approach for fetching:
-- Tier 1 (intelligence): Content Intelligence (~50-200ms)
-  - Framework data extraction (Next.js, Nuxt, Gatsby, Remix)
-  - Structured data (JSON-LD, OpenGraph)
-  - API prediction and direct calling
-  - Google Cache / Archive.org fallbacks
-  - Static HTML parsing
-- Tier 2 (lightweight): HTTP + JS execution (~200-500ms) - for simple dynamic pages
-- Tier 3 (playwright): Full browser (~2-5s) - OPTIONAL, for complex SPAs
+Actions:
+- stats: Get tiered fetcher statistics (domains by tier, response times, playwright availability)
+- set: Set preferred tier for a domain (intelligence, lightweight, playwright)
+- usage: Get tier usage analytics by domain (success/failure, response times)
 
-Playwright is OPTIONAL - if not installed, the system gracefully skips it.
-
-Shows:
-- Domains using each tier
-- Average response times per tier
-- Whether Playwright is available
-
-Use this to understand rendering efficiency.`,
-        inputSchema: {
-          type: 'object',
-          properties: {},
-        },
-      },
-      {
-        name: 'set_domain_tier',
-        description: `Manually set the preferred rendering tier for a domain.
-
-Use this to override automatic tier selection:
-- 'intelligence' for most sites (fastest, uses multiple strategies)
-- 'lightweight' for sites needing simple JS execution
-- 'playwright' for sites requiring full browser (if available)
-
-The setting persists until the browser learns differently or is reset.`,
+Tiers: intelligence (~50-200ms), lightweight (~200-500ms), playwright (~2-5s, optional).`,
         inputSchema: {
           type: 'object',
           properties: {
-            domain: {
-              type: 'string',
-              description: 'The domain to configure',
-            },
-            tier: {
-              type: 'string',
-              enum: ['intelligence', 'lightweight', 'playwright'],
-              description: 'The rendering tier to use',
-            },
+            action: { type: 'string', enum: ['stats', 'set', 'usage'], description: 'Action to perform' },
+            domain: { type: 'string', description: 'Domain (set/usage actions)' },
+            tier: { type: 'string', enum: ['intelligence', 'lightweight', 'playwright'], description: 'Tier to set (set action) or filter (usage action)' },
+            sortBy: { type: 'string', enum: ['domain', 'tier', 'successRate', 'responseTime', 'lastUsed'], description: 'Sort field (usage action)' },
+            limit: { type: 'number', description: 'Max domains (usage action, default: 50)' },
           },
-          required: ['domain', 'tier'],
-        },
-      },
-      {
-        name: 'get_tier_usage_by_domain',
-        description: `Get detailed tier usage analytics broken down by domain.
-
-Shows which rendering tier is used for each domain, including:
-- Preferred tier per domain
-- Success and failure counts
-- Average response time per domain
-- Last access timestamp
-
-This helps understand:
-- Which domains require full browser rendering
-- Which domains are optimized for fast intelligence-based fetching
-- Which domains have reliability issues (high failure counts)
-
-Options:
-- filterTier: Only show domains using a specific tier
-- sortBy: Sort by 'domain', 'tier', 'successRate', 'responseTime', or 'lastUsed'
-- limit: Maximum number of domains to return (default: 50)`,
-        inputSchema: {
-          type: 'object',
-          properties: {
-            filterTier: {
-              type: 'string',
-              enum: ['intelligence', 'lightweight', 'playwright'],
-              description: 'Filter to show only domains using this tier',
-            },
-            sortBy: {
-              type: 'string',
-              enum: ['domain', 'tier', 'successRate', 'responseTime', 'lastUsed'],
-              description: 'Sort results by this field (default: lastUsed)',
-            },
-            limit: {
-              type: 'number',
-              description: 'Maximum number of domains to return (default: 50)',
-            },
-          },
+          required: ['action'],
         },
       },
 
@@ -1230,161 +728,53 @@ Use this to:
       // CONTENT CHANGE TRACKING (F-003)
       // ============================================
       {
-        name: 'track_url_for_changes',
-        description: `Start tracking a URL for content changes.
+        name: 'content_tracking',
+        description: `Track and detect content changes on websites.
 
-Stores a fingerprint of the current content for future comparison.
-This enables detecting when website content changes between visits.
+Actions:
+- track: Start tracking a URL (browses and stores fingerprint)
+- check: Check if tracked content has changed (auto-tracks if new)
+- list: List tracked URLs with filtering
+- history: Get change history
+- untrack: Stop tracking a URL
+- stats: Get tracking statistics
 
-Use cases:
-- Monitor government websites for policy updates
-- Track pricing pages for changes
-- Detect regulatory document updates
-- Monitor competitor content changes
-
-Options:
-- label: Human-readable label for the tracked URL
-- tags: Array of tags for categorization (e.g., ['government', 'visa'])
-
-The browser will remember the content fingerprint and can compare
-on future visits using check_content_changes.`,
+Use cases: Monitor government sites, track pricing, detect regulatory updates.`,
         inputSchema: {
           type: 'object',
           properties: {
+            action: {
+              type: 'string',
+              enum: ['track', 'check', 'list', 'history', 'untrack', 'stats'],
+              description: 'Action to perform',
+            },
             url: {
               type: 'string',
-              description: 'The URL to browse and start tracking',
+              description: 'URL (required for track, check, untrack; optional filter for history)',
             },
             label: {
               type: 'string',
-              description: 'Optional label for this tracked URL',
+              description: 'Label for tracked URL (track action)',
             },
             tags: {
               type: 'array',
               items: { type: 'string' },
-              description: 'Optional tags for categorization',
+              description: 'Tags for categorization (track action) or filtering (list action)',
             },
-          },
-          required: ['url'],
-        },
-      },
-      {
-        name: 'check_content_changes',
-        description: `Check if a tracked URL's content has changed.
-
-Browses the URL, compares to stored fingerprint, and reports changes.
-Returns detailed information about what changed:
-- Overall significance (low, medium, high)
-- Summary of changes
-- Character and word count differences
-- Structure changes
-
-If the URL is not being tracked, it will be automatically tracked
-for future comparisons.`,
-        inputSchema: {
-          type: 'object',
-          properties: {
-            url: {
-              type: 'string',
-              description: 'The URL to check for changes',
-            },
-          },
-          required: ['url'],
-        },
-      },
-      {
-        name: 'list_tracked_urls',
-        description: `List all URLs being tracked for content changes.
-
-Returns information about each tracked URL:
-- URL and domain
-- When tracking started
-- Last check time
-- Number of checks and detected changes
-- Labels and tags
-
-Supports filtering by:
-- domain: Filter to a specific domain
-- tags: Filter by tags
-- hasChanges: Only show URLs that have changed (true) or not (false)`,
-        inputSchema: {
-          type: 'object',
-          properties: {
             domain: {
               type: 'string',
-              description: 'Filter to a specific domain',
-            },
-            tags: {
-              type: 'array',
-              items: { type: 'string' },
-              description: 'Filter by tags',
+              description: 'Filter by domain (list action)',
             },
             hasChanges: {
               type: 'boolean',
-              description: 'Only show URLs with/without changes',
+              description: 'Filter by change status (list action)',
             },
             limit: {
               type: 'number',
-              description: 'Maximum URLs to return (default: 50)',
+              description: 'Max results (list, history actions)',
             },
           },
-        },
-      },
-      {
-        name: 'get_change_history',
-        description: `Get the history of content changes for tracked URLs.
-
-Returns a chronological list of detected changes including:
-- URL and timestamp
-- Change significance
-- Summary of what changed
-- Fingerprint comparison data
-
-Can filter by URL to get history for a specific page.`,
-        inputSchema: {
-          type: 'object',
-          properties: {
-            url: {
-              type: 'string',
-              description: 'Filter to a specific URL (optional)',
-            },
-            limit: {
-              type: 'number',
-              description: 'Maximum entries to return (default: 50)',
-            },
-          },
-        },
-      },
-      {
-        name: 'untrack_url',
-        description: `Stop tracking a URL for content changes.
-
-Removes the URL from tracking and deletes its stored fingerprint.
-Historical change records are preserved.`,
-        inputSchema: {
-          type: 'object',
-          properties: {
-            url: {
-              type: 'string',
-              description: 'The URL to stop tracking',
-            },
-          },
-          required: ['url'],
-        },
-      },
-      {
-        name: 'get_change_tracker_stats',
-        description: `Get statistics about content change tracking.
-
-Returns:
-- Total tracked URLs
-- URLs with detected changes
-- Total changes detected
-- Changes by significance level
-- Recent changes`,
-        inputSchema: {
-          type: 'object',
-          properties: {},
+          required: ['action'],
         },
       },
 
@@ -1545,292 +935,88 @@ Shows which domains have auth configured and what types.`,
       },
 
       // ============================================
-      // DEBUG TRACE RECORDING (O-005)
+      // DEBUG TRACE RECORDING (O-005) - Consolidated
       // ============================================
       {
-        name: 'get_debug_traces',
-        description: `Query recorded debug traces for failure analysis and replay.
+        name: 'debug_traces',
+        description: `Query and manage debug traces for failure analysis and replay.
 
-Debug traces capture comprehensive information about browse operations:
-- Tier decisions (which tiers were tried and why)
-- Selector attempts (which selectors succeeded/failed)
-- Network activity (API requests, failures)
-- Validation results
-- Errors encountered
-- Skills applied
-- Anomalies detected
+Actions:
+- list: Query traces with filters (domain, urlPattern, success, errorType, tier)
+- get: Get a specific trace by ID
+- stats: Get statistics about stored traces
+- configure: Configure recording settings
+- export: Export traces for sharing
+- delete: Delete a trace by ID
+- clear: Clear all traces
 
-Use this to debug failures and understand what happened during a browse operation.
-
-Traces are stored persistently and can be exported for sharing.`,
+Debug traces capture tier decisions, selectors, network activity, validation, errors, and skills.`,
         inputSchema: {
           type: 'object',
           properties: {
-            domain: {
+            action: {
               type: 'string',
-              description: 'Filter by domain (e.g., "example.com")',
+              enum: ['list', 'get', 'stats', 'configure', 'export', 'delete', 'clear'],
+              description: 'Action to perform',
             },
-            urlPattern: {
-              type: 'string',
-              description: 'Filter by URL pattern (regex)',
-            },
-            success: {
-              type: 'boolean',
-              description: 'Filter by success/failure status',
-            },
+            // For list action
+            domain: { type: 'string', description: 'Filter by domain (list action)' },
+            urlPattern: { type: 'string', description: 'Filter by URL pattern regex (list action)' },
+            success: { type: 'boolean', description: 'Filter by success/failure (list action)' },
             errorType: {
               type: 'string',
               enum: ['timeout', 'network', 'selector', 'validation', 'bot_challenge', 'rate_limit', 'auth', 'unknown'],
-              description: 'Filter by error type',
+              description: 'Filter by error type (list action)',
             },
-            tier: {
-              type: 'string',
-              enum: ['intelligence', 'lightweight', 'playwright'],
-              description: 'Filter by final tier used',
-            },
-            limit: {
-              type: 'number',
-              description: 'Maximum results to return (default: 20)',
-            },
-            offset: {
-              type: 'number',
-              description: 'Offset for pagination',
-            },
+            tier: { type: 'string', enum: ['intelligence', 'lightweight', 'playwright'], description: 'Filter by tier (list action)' },
+            limit: { type: 'number', description: 'Max results (list action, default: 20)' },
+            offset: { type: 'number', description: 'Pagination offset (list action)' },
+            // For get/delete actions
+            id: { type: 'string', description: 'Trace ID (get/delete actions)' },
+            // For export action
+            ids: { type: 'array', items: { type: 'string' }, description: 'Trace IDs to export' },
+            // For configure action
+            enabled: { type: 'boolean', description: 'Enable/disable recording (configure action)' },
+            onlyRecordFailures: { type: 'boolean', description: 'Only record failures (configure action)' },
+            alwaysRecordDomain: { type: 'string', description: 'Domain to always record (configure action)' },
+            neverRecordDomain: { type: 'string', description: 'Domain to never record (configure action)' },
+            maxTraces: { type: 'number', description: 'Max traces to retain (configure action)' },
+            maxAgeHours: { type: 'number', description: 'Max age in hours (configure action)' },
           },
-        },
-      },
-      {
-        name: 'get_debug_trace',
-        description: `Get a specific debug trace by ID.
-
-Returns the full trace with all captured data for detailed analysis.`,
-        inputSchema: {
-          type: 'object',
-          properties: {
-            id: {
-              type: 'string',
-              description: 'The trace ID to retrieve',
-            },
-          },
-          required: ['id'],
-        },
-      },
-      {
-        name: 'get_debug_trace_stats',
-        description: `Get statistics about recorded debug traces.
-
-Shows:
-- Total traces stored
-- Traces by domain
-- Traces by tier
-- Success/failure counts
-- Storage size
-- Oldest/newest trace timestamps`,
-        inputSchema: {
-          type: 'object',
-          properties: {},
-        },
-      },
-      {
-        name: 'configure_debug_recording',
-        description: `Configure debug trace recording.
-
-Control when and how traces are recorded:
-- Enable/disable globally
-- Set domains to always or never record
-- Record only failures
-- Set retention limits (max traces, max age)
-
-Recording is disabled by default to avoid overhead. Enable it when debugging.`,
-        inputSchema: {
-          type: 'object',
-          properties: {
-            enabled: {
-              type: 'boolean',
-              description: 'Enable/disable recording globally',
-            },
-            onlyRecordFailures: {
-              type: 'boolean',
-              description: 'Only record failed operations',
-            },
-            alwaysRecordDomain: {
-              type: 'string',
-              description: 'Add a domain to always-record list',
-            },
-            neverRecordDomain: {
-              type: 'string',
-              description: 'Add a domain to never-record list',
-            },
-            maxTraces: {
-              type: 'number',
-              description: 'Maximum traces to retain (default: 1000)',
-            },
-            maxAgeHours: {
-              type: 'number',
-              description: 'Maximum age of traces in hours (default: 168 = 7 days)',
-            },
-          },
-        },
-      },
-      {
-        name: 'export_debug_traces',
-        description: `Export debug traces for sharing or replay.
-
-Exports the specified traces to a portable format that can be shared
-for debugging or used to replay operations.`,
-        inputSchema: {
-          type: 'object',
-          properties: {
-            ids: {
-              type: 'array',
-              items: { type: 'string' },
-              description: 'List of trace IDs to export',
-            },
-          },
-          required: ['ids'],
-        },
-      },
-      {
-        name: 'delete_debug_trace',
-        description: `Delete a debug trace by ID.`,
-        inputSchema: {
-          type: 'object',
-          properties: {
-            id: {
-              type: 'string',
-              description: 'The trace ID to delete',
-            },
-          },
-          required: ['id'],
-        },
-      },
-      {
-        name: 'clear_debug_traces',
-        description: `Clear all recorded debug traces.
-
-Use with caution - this permanently deletes all stored traces.`,
-        inputSchema: {
-          type: 'object',
-          properties: {},
+          required: ['action'],
         },
       },
 
       // ============================================
-      // USAGE METERING (GTM-001)
+      // USAGE METERING (GTM-001) - Consolidated
       // ============================================
       {
-        name: 'get_usage_summary',
-        description: `Get usage and cost summary for the LLM Browser.
+        name: 'usage_analytics',
+        description: `Get usage statistics and cost analysis for the LLM Browser.
 
-Returns comprehensive usage statistics including:
-- Total requests and cost units
-- Success rate and average cost per request
-- Breakdown by tier (intelligence, lightweight, playwright)
-- Top domains by cost and request count
-- Fallback rate (how often requests fell back to heavier tiers)
+Actions:
+- summary: Get comprehensive usage stats (requests, costs, success rate, tier breakdown)
+- by_period: Get usage breakdown by time period (hourly/daily trends)
+- cost_breakdown: Get detailed cost breakdown by tier with recommendations
+- reset: Reset all usage meters (use with caution)
 
-Cost units reflect computational cost:
-- Intelligence tier: 1 unit (fastest, no browser)
-- Lightweight tier: 5 units (simple JS execution)
-- Playwright tier: 25 units (full browser rendering)
-
-Use period filters to focus on recent usage or get all-time totals.`,
+Cost units: Intelligence=1, Lightweight=5, Playwright=25 units.`,
         inputSchema: {
           type: 'object',
           properties: {
-            period: {
+            action: {
               type: 'string',
-              enum: ['hour', 'day', 'week', 'month', 'all'],
-              description: 'Time period to summarize (default: all)',
+              enum: ['summary', 'by_period', 'cost_breakdown', 'reset'],
+              description: 'Action to perform',
             },
-            domain: {
-              type: 'string',
-              description: 'Filter to specific domain',
-            },
-            tier: {
-              type: 'string',
-              enum: ['intelligence', 'lightweight', 'playwright'],
-              description: 'Filter to specific tier',
-            },
-            tenantId: {
-              type: 'string',
-              description: 'Filter to specific tenant (for multi-tenant deployments)',
-            },
+            period: { type: 'string', enum: ['hour', 'day', 'week', 'month', 'all'], description: 'Time period (summary/cost_breakdown)' },
+            domain: { type: 'string', description: 'Filter by domain' },
+            tier: { type: 'string', enum: ['intelligence', 'lightweight', 'playwright'], description: 'Filter by tier (summary)' },
+            tenantId: { type: 'string', description: 'Filter by tenant (summary)' },
+            granularity: { type: 'string', enum: ['hour', 'day'], description: 'Time granularity (by_period)' },
+            periods: { type: 'number', description: 'Number of periods (by_period)' },
           },
-        },
-      },
-      {
-        name: 'get_usage_by_period',
-        description: `Get usage breakdown by time period.
-
-Returns usage aggregates for each period (hourly or daily),
-allowing you to see trends over time.
-
-Each period includes:
-- Request count and total cost units
-- Success rate
-- Tier breakdown
-- Fallback rate`,
-        inputSchema: {
-          type: 'object',
-          properties: {
-            granularity: {
-              type: 'string',
-              enum: ['hour', 'day'],
-              description: 'Time granularity for periods (default: day)',
-            },
-            periods: {
-              type: 'number',
-              description: 'Number of periods to return (default: 7 for days, 24 for hours)',
-            },
-            domain: {
-              type: 'string',
-              description: 'Filter to specific domain',
-            },
-          },
-        },
-      },
-      {
-        name: 'get_cost_breakdown',
-        description: `Get detailed cost breakdown by tier.
-
-Returns cost analysis including:
-- Total cost units
-- Cost per tier with percentages
-- Estimated monthly cost (based on current period usage)
-- Recommendations for cost optimization
-
-Useful for understanding where computational resources are being spent
-and identifying opportunities to optimize.`,
-        inputSchema: {
-          type: 'object',
-          properties: {
-            period: {
-              type: 'string',
-              enum: ['hour', 'day', 'week', 'month', 'all'],
-              description: 'Time period for breakdown (default: day)',
-            },
-            domain: {
-              type: 'string',
-              description: 'Filter to specific domain',
-            },
-          },
-        },
-      },
-      {
-        name: 'reset_usage_meters',
-        description: `Reset all usage meters.
-
-Clears all recorded usage events. Use with caution - this permanently
-deletes all usage history.
-
-Useful for:
-- Starting fresh after a testing period
-- Clearing data before a new billing period
-- Resetting after configuration changes`,
-        inputSchema: {
-          type: 'object',
-          properties: {},
+          required: ['action'],
         },
       },
 
@@ -2239,482 +1425,443 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       // ============================================
-      // PROCEDURAL MEMORY (Skills)
+      // PROCEDURAL MEMORY (Skills) - Consolidated Handler
       // ============================================
-      case 'get_procedural_memory_stats': {
-        const proceduralStats = smartBrowser.getProceduralMemoryStats();
-
-        return jsonResponse({
-          summary: {
-            totalSkills: proceduralStats.totalSkills,
-            totalTrajectories: proceduralStats.totalTrajectories,
-            avgSuccessRate: Math.round(proceduralStats.avgSuccessRate * 100) + '%',
-          },
-          skillsByDomain: proceduralStats.skillsByDomain,
-          mostUsedSkills: proceduralStats.mostUsedSkills.slice(0, 5),
-        });
-      }
-
-      case 'get_learning_progress': {
-        const proceduralMemory = smartBrowser.getProceduralMemory();
-        const learningEngine = smartBrowser.getLearningEngine();
-
-        const progress = proceduralMemory.getLearningProgress();
-        const learningStats = learningEngine.getStats();
-
-        return jsonResponse({
-          summary: {
-            totalSkills: progress.skills.total,
-            totalAntiPatterns: progress.antiPatterns.total,
-            totalApiPatterns: learningStats.totalApiPatterns,
-            coveredDomains: progress.coverage.coveredDomains,
-            trajectorySuccessRate: progress.trajectories.total > 0
-              ? Math.round((progress.trajectories.successful / progress.trajectories.total) * 100) + '%'
-              : 'N/A',
-          },
-          skills: {
-            byDomain: progress.skills.byDomain,
-            avgSuccessRate: Math.round(progress.skills.avgSuccessRate * 100) + '%',
-            topPerformers: progress.skills.topPerformers.map(s => ({
-              name: s.name,
-              successRate: Math.round(s.successRate * 100) + '%',
-              uses: s.uses,
-            })),
-            recentlyCreated: progress.skills.recentlyCreated.map(s => ({
-              name: s.name,
-              domain: s.domain,
-              createdAt: new Date(s.createdAt).toISOString(),
-            })),
-          },
-          antiPatterns: {
-            total: progress.antiPatterns.total,
-            byDomain: progress.antiPatterns.byDomain,
-          },
-          patterns: {
-            totalApiPatterns: learningStats.totalApiPatterns,
-            bypassablePatterns: learningStats.bypassablePatterns,
-            totalSelectors: learningStats.totalSelectors,
-            totalValidators: learningStats.totalValidators,
-          },
-          coverage: {
-            coveredDomains: progress.coverage.coveredDomains,
-            uncoveredDomains: progress.coverage.uncoveredDomains,
-            suggestions: progress.coverage.suggestions,
-          },
-          trajectories: {
-            total: progress.trajectories.total,
-            successful: progress.trajectories.successful,
-            failed: progress.trajectories.failed,
-          },
-        });
-      }
-
-      case 'find_applicable_skills': {
-        const skills = smartBrowser.findApplicableSkills(
-          args.url as string,
-          (args.topK as number) || 3
-        );
-
-        return jsonResponse({
-          url: args.url,
-          matchedSkills: skills.map(match => ({
-            skillId: match.skill.id,
-            name: match.skill.name,
-            description: match.skill.description,
-            similarity: Math.round(match.similarity * 100) + '%',
-            preconditionsMet: match.preconditionsMet,
-            reason: match.reason,
-            timesUsed: match.skill.metrics.timesUsed,
-            successRate: match.skill.metrics.successCount > 0
-              ? Math.round((match.skill.metrics.successCount / match.skill.metrics.timesUsed) * 100) + '%'
-              : 'N/A',
-          })),
-        });
-      }
-
-      case 'get_skill_details': {
-        const proceduralMemory = smartBrowser.getProceduralMemory();
-        const skill = proceduralMemory.getSkill(args.skillId as string);
-
-        if (!skill) {
-          return errorResponse(`Skill not found: ${args.skillId}`);
-        }
-
-        return jsonResponse({
-          id: skill.id,
-          name: skill.name,
-          description: skill.description,
-          preconditions: skill.preconditions,
-          actionSequence: skill.actionSequence.map(a => ({
-            type: a.type,
-            selector: a.selector,
-            success: a.success,
-          })),
-          metrics: {
-            successCount: skill.metrics.successCount,
-            failureCount: skill.metrics.failureCount,
-            successRate: skill.metrics.timesUsed > 0
-              ? Math.round((skill.metrics.successCount / skill.metrics.timesUsed) * 100) + '%'
-              : 'N/A',
-            avgDuration: Math.round(skill.metrics.avgDuration) + 'ms',
-            timesUsed: skill.metrics.timesUsed,
-            lastUsed: new Date(skill.metrics.lastUsed).toISOString(),
-          },
-          sourceDomain: skill.sourceDomain,
-          createdAt: new Date(skill.createdAt).toISOString(),
-        });
-      }
-
-      case 'manage_skills': {
+      case 'skill_management': {
         const proceduralMemory = smartBrowser.getProceduralMemory();
         const action = args.action as string;
 
         switch (action) {
-          case 'export': {
-            const exported = await proceduralMemory.exportMemory();
+          case 'stats': {
+            const proceduralStats = smartBrowser.getProceduralMemoryStats();
             return jsonResponse({
-              message: 'Skills exported successfully',
-              data: JSON.parse(exported),
-            });
-          }
-
-          case 'import': {
-            if (!args.data) {
-              return errorResponse('No data provided for import');
-            }
-            const imported = await proceduralMemory.importSkills(args.data as string);
-            return jsonResponse({
-              message: `Imported ${imported} skills`,
-              totalSkills: proceduralMemory.getStats().totalSkills,
-            });
-          }
-
-          case 'prune': {
-            const minRate = (args.minSuccessRate as number) || 0.3;
-            const pruned = proceduralMemory.pruneFailedSkills(minRate);
-            return jsonResponse({
-              message: `Pruned ${pruned} low-performing skills`,
-              remainingSkills: proceduralMemory.getStats().totalSkills,
-            });
-          }
-
-          case 'reset': {
-            await proceduralMemory.reset();
-            return jsonResponse({ message: 'All skills have been reset' });
-          }
-
-          case 'coverage': {
-            const coverage = proceduralMemory.getCoverageStats();
-            return jsonResponse({
-              coverage: {
-                coveredDomains: coverage.coveredDomains.length,
-                coveredPageTypes: coverage.coveredPageTypes,
-                uncoveredDomains: coverage.uncoveredDomains.slice(0, 10),
-                uncoveredPageTypes: coverage.uncoveredPageTypes,
+              summary: {
+                totalSkills: proceduralStats.totalSkills,
+                totalTrajectories: proceduralStats.totalTrajectories,
+                avgSuccessRate: Math.round(proceduralStats.avgSuccessRate * 100) + '%',
               },
-              suggestions: coverage.suggestions,
+              skillsByDomain: proceduralStats.skillsByDomain,
+              mostUsedSkills: proceduralStats.mostUsedSkills.slice(0, 5),
             });
           }
 
-          case 'workflows': {
-            const potentialWorkflows = proceduralMemory.detectPotentialWorkflows();
-            const existingWorkflows = proceduralMemory.getAllWorkflows();
+          case 'progress': {
+            const learningEngineLocal = smartBrowser.getLearningEngine();
+            const progress = proceduralMemory.getLearningProgress();
+            const learningStats = learningEngineLocal.getStats();
+
             return jsonResponse({
-              existingWorkflows: existingWorkflows.map(w => ({
-                id: w.id,
-                name: w.name,
-                skills: w.skillIds.length,
-                timesUsed: w.metrics.timesUsed,
+              summary: {
+                totalSkills: progress.skills.total,
+                totalAntiPatterns: progress.antiPatterns.total,
+                totalApiPatterns: learningStats.totalApiPatterns,
+                coveredDomains: progress.coverage.coveredDomains,
+                trajectorySuccessRate: progress.trajectories.total > 0
+                  ? Math.round((progress.trajectories.successful / progress.trajectories.total) * 100) + '%'
+                  : 'N/A',
+              },
+              skills: {
+                byDomain: progress.skills.byDomain,
+                avgSuccessRate: Math.round(progress.skills.avgSuccessRate * 100) + '%',
+                topPerformers: progress.skills.topPerformers.map(s => ({
+                  name: s.name,
+                  successRate: Math.round(s.successRate * 100) + '%',
+                  uses: s.uses,
+                })),
+                recentlyCreated: progress.skills.recentlyCreated.map(s => ({
+                  name: s.name,
+                  domain: s.domain,
+                  createdAt: new Date(s.createdAt).toISOString(),
+                })),
+              },
+              antiPatterns: {
+                total: progress.antiPatterns.total,
+                byDomain: progress.antiPatterns.byDomain,
+              },
+              patterns: {
+                totalApiPatterns: learningStats.totalApiPatterns,
+                bypassablePatterns: learningStats.bypassablePatterns,
+                totalSelectors: learningStats.totalSelectors,
+                totalValidators: learningStats.totalValidators,
+              },
+              coverage: {
+                coveredDomains: progress.coverage.coveredDomains,
+                uncoveredDomains: progress.coverage.uncoveredDomains,
+                suggestions: progress.coverage.suggestions,
+              },
+              trajectories: {
+                total: progress.trajectories.total,
+                successful: progress.trajectories.successful,
+                failed: progress.trajectories.failed,
+              },
+            });
+          }
+
+          case 'find': {
+            if (!args.url) {
+              return errorResponse('URL is required for find action');
+            }
+            const skills = smartBrowser.findApplicableSkills(
+              args.url as string,
+              (args.topK as number) || 3
+            );
+
+            return jsonResponse({
+              url: args.url,
+              matchedSkills: skills.map(match => ({
+                skillId: match.skill.id,
+                name: match.skill.name,
+                description: match.skill.description,
+                similarity: Math.round(match.similarity * 100) + '%',
+                preconditionsMet: match.preconditionsMet,
+                reason: match.reason,
+                timesUsed: match.skill.metrics.timesUsed,
+                successRate: match.skill.metrics.successCount > 0
+                  ? Math.round((match.skill.metrics.successCount / match.skill.metrics.timesUsed) * 100) + '%'
+                  : 'N/A',
               })),
-              potentialWorkflows: potentialWorkflows.slice(0, 5),
             });
           }
 
-          default:
-            return errorResponse(`Unknown action: ${action}`);
-        }
-      }
-
-      // ============================================
-      // SKILL VERSIONING & ROLLBACK
-      // ============================================
-      case 'get_skill_versions': {
-        const proceduralMemory = smartBrowser.getProceduralMemory();
-        const skillId = args.skillId as string;
-        const skill = proceduralMemory.getSkill(skillId);
-
-        if (!skill) {
-          return errorResponse(`Skill not found: ${skillId}`);
-        }
-
-        const versions = proceduralMemory.getVersionHistory(skillId);
-        const bestVersion = proceduralMemory.getBestVersion(skillId);
-
-        return jsonResponse({
-          skillId,
-          skillName: skill.name,
-          totalVersions: versions.length,
-          versions: versions.map(v => ({
-            version: v.version,
-            createdAt: new Date(v.createdAt).toISOString(),
-            changeReason: v.changeReason,
-            changeDescription: v.changeDescription,
-            successRate: Math.round(v.metricsSnapshot.successRate * 100) + '%',
-            timesUsed: v.metricsSnapshot.timesUsed,
-          })),
-          bestVersion: bestVersion ? {
-            version: bestVersion.version,
-            successRate: Math.round(bestVersion.metricsSnapshot.successRate * 100) + '%',
-          } : null,
-        });
-      }
-
-      case 'rollback_skill': {
-        const proceduralMemory = smartBrowser.getProceduralMemory();
-        const skillId = args.skillId as string;
-        const targetVersion = args.targetVersion as number | undefined;
-
-        const success = await proceduralMemory.rollbackSkill(skillId, targetVersion);
-
-        if (!success) {
-          return errorResponse('Rollback failed - check skill ID and version history');
-        }
-
-        const skill = proceduralMemory.getSkill(skillId);
-        return jsonResponse({
-          message: `Successfully rolled back skill ${skill?.name}`,
-          newSuccessRate: skill ? Math.round((skill.metrics.successCount / Math.max(skill.metrics.timesUsed, 1)) * 100) + '%' : 'N/A',
-        });
-      }
-
-      // ============================================
-      // USER FEEDBACK
-      // ============================================
-      case 'rate_skill_application': {
-        const proceduralMemory = smartBrowser.getProceduralMemory();
-        const skillId = args.skillId as string;
-        const rating = args.rating as 'positive' | 'negative';
-        const url = args.url as string;
-        const reason = args.reason as string | undefined;
-
-        const domain = new URL(url).hostname;
-        await proceduralMemory.recordFeedback(skillId, rating, { url, domain }, reason);
-
-        const feedbackSummary = proceduralMemory.getFeedbackSummary(skillId);
-        const skill = proceduralMemory.getSkill(skillId);
-
-        return jsonResponse({
-          message: `Recorded ${rating} feedback for skill ${skill?.name || skillId}`,
-          feedbackSummary: {
-            positive: feedbackSummary.positive,
-            negative: feedbackSummary.negative,
-            commonIssues: feedbackSummary.commonIssues,
-          },
-          currentSuccessRate: skill ? Math.round((skill.metrics.successCount / Math.max(skill.metrics.timesUsed, 1)) * 100) + '%' : 'N/A',
-        });
-      }
-
-      // ============================================
-      // SKILL EXPLANATION
-      // ============================================
-      case 'get_skill_explanation': {
-        const proceduralMemory = smartBrowser.getProceduralMemory();
-        const skillId = args.skillId as string;
-
-        const explanation = proceduralMemory.generateSkillExplanation(skillId);
-
-        if (!explanation) {
-          return errorResponse(`Skill not found: ${skillId}`);
-        }
-
-        return jsonResponse(explanation);
-      }
-
-      // ============================================
-      // ANTI-PATTERNS
-      // ============================================
-      case 'get_anti_patterns': {
-        const proceduralMemory = smartBrowser.getProceduralMemory();
-        const domain = args.domain as string | undefined;
-
-        const antiPatterns = domain
-          ? proceduralMemory.getAntiPatternsForDomain(domain)
-          : proceduralMemory.getAllAntiPatterns();
-
-        return jsonResponse({
-          totalAntiPatterns: antiPatterns.length,
-          antiPatterns: antiPatterns.map(ap => ({
-            id: ap.id,
-            name: ap.name,
-            description: ap.description,
-            domain: ap.sourceDomain,
-            avoidActions: ap.avoidActions,
-            occurrenceCount: ap.occurrenceCount,
-            consequences: ap.consequences,
-            lastUpdated: new Date(ap.updatedAt).toISOString(),
-          })),
-        });
-      }
-
-      // ============================================
-      // SKILL DEPENDENCIES & FALLBACKS
-      // ============================================
-      case 'manage_skill_dependencies': {
-        const proceduralMemory = smartBrowser.getProceduralMemory();
-        const action = args.action as string;
-        const skillId = args.skillId as string;
-        const relatedSkillIds = args.relatedSkillIds as string[] | undefined;
-
-        switch (action) {
-          case 'add_fallbacks': {
-            if (!relatedSkillIds || relatedSkillIds.length === 0) {
-              return errorResponse('No fallback skill IDs provided');
+          case 'details': {
+            if (!args.skillId) {
+              return errorResponse('skillId is required for details action');
             }
-            const success = await proceduralMemory.addFallbackSkills(skillId, relatedSkillIds);
-            return jsonResponse({
-              success,
-              message: success ? `Added ${relatedSkillIds.length} fallback skills` : 'Failed to add fallbacks',
-            });
-          }
-
-          case 'add_prerequisites': {
-            if (!relatedSkillIds || relatedSkillIds.length === 0) {
-              return errorResponse('No prerequisite skill IDs provided');
+            const skill = proceduralMemory.getSkill(args.skillId as string);
+            if (!skill) {
+              return errorResponse(`Skill not found: ${args.skillId}`);
             }
-            const success = await proceduralMemory.addPrerequisites(skillId, relatedSkillIds);
+
             return jsonResponse({
-              success,
-              message: success ? `Added ${relatedSkillIds.length} prerequisite skills` : 'Failed to add prerequisites (check for circular dependencies)',
+              id: skill.id,
+              name: skill.name,
+              description: skill.description,
+              preconditions: skill.preconditions,
+              actionSequence: skill.actionSequence.map(a => ({
+                type: a.type,
+                selector: a.selector,
+                success: a.success,
+              })),
+              metrics: {
+                successCount: skill.metrics.successCount,
+                failureCount: skill.metrics.failureCount,
+                successRate: skill.metrics.timesUsed > 0
+                  ? Math.round((skill.metrics.successCount / skill.metrics.timesUsed) * 100) + '%'
+                  : 'N/A',
+                avgDuration: Math.round(skill.metrics.avgDuration) + 'ms',
+                timesUsed: skill.metrics.timesUsed,
+                lastUsed: new Date(skill.metrics.lastUsed).toISOString(),
+              },
+              sourceDomain: skill.sourceDomain,
+              createdAt: new Date(skill.createdAt).toISOString(),
             });
           }
 
-          case 'get_chain': {
+          case 'explain': {
+            if (!args.skillId) {
+              return errorResponse('skillId is required for explain action');
+            }
+            const explanation = proceduralMemory.generateSkillExplanation(args.skillId as string);
+            if (!explanation) {
+              return errorResponse(`Skill not found: ${args.skillId}`);
+            }
+            return jsonResponse(explanation);
+          }
+
+          case 'versions': {
+            if (!args.skillId) {
+              return errorResponse('skillId is required for versions action');
+            }
+            const skillId = args.skillId as string;
             const skill = proceduralMemory.getSkill(skillId);
             if (!skill) {
               return errorResponse(`Skill not found: ${skillId}`);
             }
 
-            const prerequisites = proceduralMemory.getPrerequisiteSkills(skillId);
-            const fallbacks = proceduralMemory.getFallbackSkills(skillId);
+            const versions = proceduralMemory.getVersionHistory(skillId);
+            const bestVersion = proceduralMemory.getBestVersion(skillId);
 
             return jsonResponse({
-              skill: { id: skill.id, name: skill.name },
-              prerequisites: prerequisites.map(s => ({ id: s.id, name: s.name })),
-              fallbacks: fallbacks.map(s => ({ id: s.id, name: s.name })),
-              executionOrder: [
-                ...prerequisites.map(s => `[prereq] ${s.name}`),
-                `[main] ${skill.name}`,
-                ...fallbacks.map(s => `[fallback] ${s.name}`),
-              ],
+              skillId,
+              skillName: skill.name,
+              totalVersions: versions.length,
+              versions: versions.map(v => ({
+                version: v.version,
+                createdAt: new Date(v.createdAt).toISOString(),
+                changeReason: v.changeReason,
+                changeDescription: v.changeDescription,
+                successRate: Math.round(v.metricsSnapshot.successRate * 100) + '%',
+                timesUsed: v.metricsSnapshot.timesUsed,
+              })),
+              bestVersion: bestVersion ? {
+                version: bestVersion.version,
+                successRate: Math.round(bestVersion.metricsSnapshot.successRate * 100) + '%',
+              } : null,
             });
           }
 
-          default:
-            return errorResponse(`Unknown action: ${action}`);
-        }
-      }
+          case 'rollback': {
+            if (!args.skillId) {
+              return errorResponse('skillId is required for rollback action');
+            }
+            const skillId = args.skillId as string;
+            const targetVersion = args.targetVersion as number | undefined;
 
-      // ============================================
-      // BOOTSTRAP
-      // ============================================
-      case 'bootstrap_skills': {
-        const proceduralMemory = smartBrowser.getProceduralMemory();
-        const bootstrapped = await proceduralMemory.bootstrapFromTemplates();
+            const success = await proceduralMemory.rollbackSkill(skillId, targetVersion);
+            if (!success) {
+              return errorResponse('Rollback failed - check skill ID and version history');
+            }
 
-        return jsonResponse({
-          message: `Bootstrapped ${bootstrapped} skills from templates`,
-          totalSkills: proceduralMemory.getStats().totalSkills,
-          templates: ['cookie_banner_dismiss', 'pagination_navigate', 'form_extraction', 'table_extraction'],
-        });
-      }
-
-      // ============================================
-      // SKILL SHARING & PORTABILITY (F-012)
-      // ============================================
-      case 'export_skills': {
-        const proceduralMemory = smartBrowser.getProceduralMemory();
-        const pack = proceduralMemory.exportSkillPack({
-          domainPatterns: args.domainPatterns as string[] | undefined,
-          verticals: args.verticals as import('./types/index.js').SkillVertical[] | undefined,
-          includeAntiPatterns: args.includeAntiPatterns as boolean | undefined,
-          includeWorkflows: args.includeWorkflows as boolean | undefined,
-          minSuccessRate: args.minSuccessRate as number | undefined,
-          minUsageCount: args.minUsageCount as number | undefined,
-          packName: args.packName as string | undefined,
-          packDescription: args.packDescription as string | undefined,
-        });
-
-        return jsonResponse({
-          skillPack: pack,
-          serialized: proceduralMemory.serializeSkillPack(pack),
-        });
-      }
-
-      case 'import_skills': {
-        const proceduralMemory = smartBrowser.getProceduralMemory();
-        const result = await proceduralMemory.importSkillPack(
-          args.skillPackJson as string,
-          {
-            conflictResolution: args.conflictResolution as import('./types/index.js').SkillConflictResolution | undefined,
-            domainFilter: args.domainFilter as string[] | undefined,
-            verticalFilter: args.verticalFilter as import('./types/index.js').SkillVertical[] | undefined,
-            importAntiPatterns: args.importAntiPatterns as boolean | undefined,
-            importWorkflows: args.importWorkflows as boolean | undefined,
-            resetMetrics: args.resetMetrics as boolean | undefined,
-            namePrefix: args.namePrefix as string | undefined,
+            const skill = proceduralMemory.getSkill(skillId);
+            return jsonResponse({
+              message: `Successfully rolled back skill ${skill?.name}`,
+              newSuccessRate: skill ? Math.round((skill.metrics.successCount / Math.max(skill.metrics.timesUsed, 1)) * 100) + '%' : 'N/A',
+            });
           }
-        );
 
-        if (!result.success) {
-          return errorResponse(result.errors.join('; '));
+          case 'rate': {
+            if (!args.skillId || !args.rating || !args.url) {
+              return errorResponse('skillId, rating, and url are required for rate action');
+            }
+            const skillId = args.skillId as string;
+            const rating = args.rating as 'positive' | 'negative';
+            const url = args.url as string;
+            const reason = args.reason as string | undefined;
+
+            const domain = new URL(url).hostname;
+            await proceduralMemory.recordFeedback(skillId, rating, { url, domain }, reason);
+
+            const feedbackSummary = proceduralMemory.getFeedbackSummary(skillId);
+            const skill = proceduralMemory.getSkill(skillId);
+
+            return jsonResponse({
+              message: `Recorded ${rating} feedback for skill ${skill?.name || skillId}`,
+              feedbackSummary: {
+                positive: feedbackSummary.positive,
+                negative: feedbackSummary.negative,
+                commonIssues: feedbackSummary.commonIssues,
+              },
+              currentSuccessRate: skill ? Math.round((skill.metrics.successCount / Math.max(skill.metrics.timesUsed, 1)) * 100) + '%' : 'N/A',
+            });
+          }
+
+          case 'anti_patterns': {
+            const domain = args.domain as string | undefined;
+            const antiPatterns = domain
+              ? proceduralMemory.getAntiPatternsForDomain(domain)
+              : proceduralMemory.getAllAntiPatterns();
+
+            return jsonResponse({
+              totalAntiPatterns: antiPatterns.length,
+              antiPatterns: antiPatterns.map(ap => ({
+                id: ap.id,
+                name: ap.name,
+                description: ap.description,
+                domain: ap.sourceDomain,
+                avoidActions: ap.avoidActions,
+                occurrenceCount: ap.occurrenceCount,
+                consequences: ap.consequences,
+                lastUpdated: new Date(ap.updatedAt).toISOString(),
+              })),
+            });
+          }
+
+          case 'dependencies': {
+            if (!args.skillId || !args.dependencyAction) {
+              return errorResponse('skillId and dependencyAction are required for dependencies action');
+            }
+            const skillId = args.skillId as string;
+            const depAction = args.dependencyAction as string;
+            const relatedSkillIds = args.relatedSkillIds as string[] | undefined;
+
+            switch (depAction) {
+              case 'add_fallbacks': {
+                if (!relatedSkillIds || relatedSkillIds.length === 0) {
+                  return errorResponse('No fallback skill IDs provided');
+                }
+                const success = await proceduralMemory.addFallbackSkills(skillId, relatedSkillIds);
+                return jsonResponse({
+                  success,
+                  message: success ? `Added ${relatedSkillIds.length} fallback skills` : 'Failed to add fallbacks',
+                });
+              }
+
+              case 'add_prerequisites': {
+                if (!relatedSkillIds || relatedSkillIds.length === 0) {
+                  return errorResponse('No prerequisite skill IDs provided');
+                }
+                const success = await proceduralMemory.addPrerequisites(skillId, relatedSkillIds);
+                return jsonResponse({
+                  success,
+                  message: success ? `Added ${relatedSkillIds.length} prerequisite skills` : 'Failed to add prerequisites (check for circular dependencies)',
+                });
+              }
+
+              case 'get_chain': {
+                const skill = proceduralMemory.getSkill(skillId);
+                if (!skill) {
+                  return errorResponse(`Skill not found: ${skillId}`);
+                }
+
+                const prerequisites = proceduralMemory.getPrerequisiteSkills(skillId);
+                const fallbacks = proceduralMemory.getFallbackSkills(skillId);
+
+                return jsonResponse({
+                  skill: { id: skill.id, name: skill.name },
+                  prerequisites: prerequisites.map(s => ({ id: s.id, name: s.name })),
+                  fallbacks: fallbacks.map(s => ({ id: s.id, name: s.name })),
+                  executionOrder: [
+                    ...prerequisites.map(s => `[prereq] ${s.name}`),
+                    `[main] ${skill.name}`,
+                    ...fallbacks.map(s => `[fallback] ${s.name}`),
+                  ],
+                });
+              }
+
+              default:
+                return errorResponse(`Unknown dependency action: ${depAction}`);
+            }
+          }
+
+          case 'bootstrap': {
+            const bootstrapped = await proceduralMemory.bootstrapFromTemplates();
+            return jsonResponse({
+              message: `Bootstrapped ${bootstrapped} skills from templates`,
+              totalSkills: proceduralMemory.getStats().totalSkills,
+              templates: ['cookie_banner_dismiss', 'pagination_navigate', 'form_extraction', 'table_extraction'],
+            });
+          }
+
+          case 'export': {
+            const pack = proceduralMemory.exportSkillPack({
+              domainPatterns: args.domainPatterns as string[] | undefined,
+              verticals: args.verticals as import('./types/index.js').SkillVertical[] | undefined,
+              includeAntiPatterns: args.includeAntiPatterns as boolean | undefined,
+              includeWorkflows: args.includeWorkflows as boolean | undefined,
+              minSuccessRate: args.minSuccessRate as number | undefined,
+              minUsageCount: args.minUsageCount as number | undefined,
+              packName: args.packName as string | undefined,
+              packDescription: args.packDescription as string | undefined,
+            });
+
+            return jsonResponse({
+              skillPack: pack,
+              serialized: proceduralMemory.serializeSkillPack(pack),
+            });
+          }
+
+          case 'import': {
+            if (!args.skillPackJson) {
+              return errorResponse('skillPackJson is required for import action');
+            }
+            const result = await proceduralMemory.importSkillPack(
+              args.skillPackJson as string,
+              {
+                conflictResolution: args.conflictResolution as import('./types/index.js').SkillConflictResolution | undefined,
+                domainFilter: args.domainFilter as string[] | undefined,
+                verticalFilter: args.verticals as import('./types/index.js').SkillVertical[] | undefined,
+                importAntiPatterns: args.importAntiPatterns as boolean | undefined,
+                importWorkflows: args.importWorkflows as boolean | undefined,
+                resetMetrics: args.resetMetrics as boolean | undefined,
+                namePrefix: args.namePrefix as string | undefined,
+              }
+            );
+
+            if (!result.success) {
+              return errorResponse(result.errors.join('; '));
+            }
+
+            return jsonResponse({
+              ...result,
+              message: `Imported ${result.skillsImported} skills, ${result.antiPatternsImported} anti-patterns, ${result.workflowsImported} workflows`,
+            });
+          }
+
+          case 'pack_stats': {
+            const stats = proceduralMemory.getSkillPackStats();
+            return jsonResponse({
+              ...stats,
+              verticalBreakdown: Object.entries(stats.byVertical)
+                .filter(([, count]) => count > 0)
+                .map(([vertical, count]) => ({ vertical, count })),
+            });
+          }
+
+          case 'manage': {
+            const manageAction = args.manageAction as string;
+            if (!manageAction) {
+              return errorResponse('manageAction is required for manage action');
+            }
+
+            switch (manageAction) {
+              case 'export': {
+                const exported = await proceduralMemory.exportMemory();
+                return jsonResponse({
+                  message: 'Skills exported successfully',
+                  data: JSON.parse(exported),
+                });
+              }
+
+              case 'import': {
+                if (!args.data) {
+                  return errorResponse('No data provided for import');
+                }
+                const imported = await proceduralMemory.importSkills(args.data as string);
+                return jsonResponse({
+                  message: `Imported ${imported} skills`,
+                  totalSkills: proceduralMemory.getStats().totalSkills,
+                });
+              }
+
+              case 'prune': {
+                const minRate = (args.minSuccessRate as number) || 0.3;
+                const pruned = proceduralMemory.pruneFailedSkills(minRate);
+                return jsonResponse({
+                  message: `Pruned ${pruned} low-performing skills`,
+                  remainingSkills: proceduralMemory.getStats().totalSkills,
+                });
+              }
+
+              case 'reset': {
+                await proceduralMemory.reset();
+                return jsonResponse({ message: 'All skills have been reset' });
+              }
+
+              case 'coverage': {
+                const coverage = proceduralMemory.getCoverageStats();
+                return jsonResponse({
+                  coverage: {
+                    coveredDomains: coverage.coveredDomains.length,
+                    coveredPageTypes: coverage.coveredPageTypes,
+                    uncoveredDomains: coverage.uncoveredDomains.slice(0, 10),
+                    uncoveredPageTypes: coverage.uncoveredPageTypes,
+                  },
+                  suggestions: coverage.suggestions,
+                });
+              }
+
+              case 'workflows': {
+                const potentialWorkflows = proceduralMemory.detectPotentialWorkflows();
+                const existingWorkflows = proceduralMemory.getAllWorkflows();
+                return jsonResponse({
+                  existingWorkflows: existingWorkflows.map(w => ({
+                    id: w.id,
+                    name: w.name,
+                    skills: w.skillIds.length,
+                    timesUsed: w.metrics.timesUsed,
+                  })),
+                  potentialWorkflows: potentialWorkflows.slice(0, 5),
+                });
+              }
+
+              default:
+                return errorResponse(`Unknown manage action: ${manageAction}`);
+            }
+          }
+
+          default:
+            return errorResponse(`Unknown skill_management action: ${action}`);
         }
-
-        return jsonResponse({
-          ...result,
-          message: `Imported ${result.skillsImported} skills, ${result.antiPatternsImported} anti-patterns, ${result.workflowsImported} workflows`,
-        });
-      }
-
-      case 'get_skill_pack_stats': {
-        const proceduralMemory = smartBrowser.getProceduralMemory();
-        const stats = proceduralMemory.getSkillPackStats();
-
-        return jsonResponse({
-          ...stats,
-          verticalBreakdown: Object.entries(stats.byVertical)
-            .filter(([, count]) => count > 0)
-            .map(([vertical, count]) => ({ vertical, count })),
-        });
-      }
-
-      // ============================================
-      // DEPRECATED TOOLS
-      // Log deprecation warnings and include notices in responses
-      // ============================================
-      case 'browse': {
-        // Log deprecation warning
-        logger.server.warn('Deprecated tool called', {
-          tool: 'browse',
-          deprecatedSince: '2025-01-01',
-          replacement: 'smart_browse',
-          url: args.url as string,
-        });
-
-        const result = await browseTool.execute(args.url as string, {
-          waitFor: args.waitFor as any,
-          timeout: args.timeout as number,
-          sessionProfile: args.sessionProfile as string,
-        });
-
-        // Include deprecation notice in response
-        return jsonResponse({
-          _deprecation: {
-            warning: 'The "browse" tool is deprecated and will be removed in a future version.',
-            replacement: 'Use "smart_browse" instead for better results with learning and API discovery.',
-            deprecatedSince: '2025-01-01',
-          },
-          ...result,
-        });
       }
 
       case 'execute_api_call': {
@@ -2728,52 +1875,54 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return jsonResponse(result);
       }
 
-      case 'save_session': {
-        const context = await browserManager.getContext((args.sessionProfile as string) || 'default');
-        await sessionManager.saveSession(
-          args.domain as string,
-          context,
-          (args.sessionProfile as string) || 'default'
-        );
+      // ============================================
+      // SESSION MANAGEMENT - Consolidated Handler
+      // ============================================
+      case 'session_management': {
+        const action = args.action as string;
 
-        return jsonResponse({ success: true, message: `Session saved for ${args.domain}` });
-      }
+        switch (action) {
+          case 'save': {
+            if (!args.domain) {
+              return errorResponse('domain is required for save action');
+            }
+            const context = await browserManager.getContext((args.sessionProfile as string) || 'default');
+            await sessionManager.saveSession(
+              args.domain as string,
+              context,
+              (args.sessionProfile as string) || 'default'
+            );
+            return jsonResponse({ success: true, message: `Session saved for ${args.domain}` });
+          }
 
-      case 'list_sessions': {
-        const sessions = sessionManager.listSessions();
-        return jsonResponse({ sessions });
-      }
+          case 'list': {
+            const sessions = sessionManager.listSessions();
+            return jsonResponse({ sessions });
+          }
 
-      case 'get_session_health': {
-        if (args.domain) {
-          // Check specific domain
-          const health = sessionManager.getSessionHealth(
-            args.domain as string,
-            (args.profile as string) || 'default'
-          );
-          return jsonResponse(health);
-        } else {
-          // Check all sessions
-          const allHealth = sessionManager.getAllSessionHealth();
-          const summary = {
-            total: allHealth.length,
-            healthy: allHealth.filter((h) => h.status === 'healthy').length,
-            expiringSoon: allHealth.filter((h) => h.status === 'expiring_soon').length,
-            expired: allHealth.filter((h) => h.status === 'expired').length,
-            stale: allHealth.filter((h) => h.status === 'stale').length,
-          };
-          return jsonResponse({ summary, sessions: allHealth });
+          case 'health': {
+            if (args.domain) {
+              const health = sessionManager.getSessionHealth(
+                args.domain as string,
+                (args.sessionProfile as string) || 'default'
+              );
+              return jsonResponse(health);
+            } else {
+              const allHealth = sessionManager.getAllSessionHealth();
+              const summary = {
+                total: allHealth.length,
+                healthy: allHealth.filter((h) => h.status === 'healthy').length,
+                expiringSoon: allHealth.filter((h) => h.status === 'expiring_soon').length,
+                expired: allHealth.filter((h) => h.status === 'expired').length,
+                stale: allHealth.filter((h) => h.status === 'stale').length,
+              };
+              return jsonResponse({ summary, sessions: allHealth });
+            }
+          }
+
+          default:
+            return errorResponse(`Unknown session_management action: ${action}`);
         }
-      }
-
-      case 'get_knowledge_stats': {
-        const stats = learningEngine.getStats();
-        return jsonResponse(stats);
-      }
-
-      case 'get_learned_patterns': {
-        const patterns = learningEngine.getPatterns(args.domain as string);
-        return jsonResponse({ domain: args.domain, patterns });
       }
 
       // ============================================
@@ -2805,135 +1954,139 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       // ============================================
-      // TIERED RENDERING
+      // TIERED RENDERING - Consolidated Handler
       // ============================================
-      case 'get_tiered_fetcher_stats': {
+      case 'tier_management': {
         const tieredFetcher = smartBrowser.getTieredFetcher();
-        const tierStats = tieredFetcher.getStats();
+        const action = args.action as string;
 
-        return jsonResponse({
-          summary: {
-            totalDomains: tierStats.totalDomains,
-            domainsByTier: tierStats.byTier,
-            playwrightAvailable: tierStats.playwrightAvailable,
-          },
-          performance: {
-            avgResponseTimes: {
-              intelligence: Math.round(tierStats.avgResponseTimes.intelligence) + 'ms',
-              lightweight: Math.round(tierStats.avgResponseTimes.lightweight) + 'ms',
-              playwright: Math.round(tierStats.avgResponseTimes.playwright) + 'ms',
-            },
-          },
-          efficiency: {
-            intelligencePercent: tierStats.totalDomains > 0
-              ? Math.round((tierStats.byTier.intelligence / tierStats.totalDomains) * 100) + '%'
-              : '0%',
-            lightweightPercent: tierStats.totalDomains > 0
-              ? Math.round((tierStats.byTier.lightweight / tierStats.totalDomains) * 100) + '%'
-              : '0%',
-            playwrightPercent: tierStats.totalDomains > 0
-              ? Math.round((tierStats.byTier.playwright / tierStats.totalDomains) * 100) + '%'
-              : '0%',
-            message: tierStats.byTier.intelligence + tierStats.byTier.lightweight > tierStats.byTier.playwright
-              ? 'Good! Most requests are using lightweight rendering'
-              : tierStats.playwrightAvailable
-              ? 'Consider optimizing - many requests still require full browser'
-              : 'Playwright not installed - using lightweight strategies only',
-          },
-        });
-      }
-
-      case 'set_domain_tier': {
-        const tieredFetcher = smartBrowser.getTieredFetcher();
-        const domain = args.domain as string;
-        const tier = args.tier as 'intelligence' | 'lightweight' | 'playwright';
-
-        tieredFetcher.setDomainPreference(domain, tier);
-
-        return jsonResponse({
-          success: true,
-          message: `Set ${domain} to use ${tier} tier`,
-          note: tier === 'intelligence'
-            ? 'Content Intelligence - tries framework extraction, API prediction, caches, then static parsing'
-            : tier === 'lightweight'
-            ? 'Lightweight JS - executes scripts without full browser'
-            : 'Full browser - handles all pages but slowest (requires Playwright)',
-        });
-      }
-
-      case 'get_tier_usage_by_domain': {
-        const tieredFetcher = smartBrowser.getTieredFetcher();
-        const preferences = tieredFetcher.exportPreferences();
-        const filterTier = args.filterTier as string | undefined;
-        const sortBy = (args.sortBy as string) || 'lastUsed';
-        const limit = (args.limit as number) || 50;
-
-        // Filter by tier if requested
-        let filtered = preferences;
-        if (filterTier) {
-          filtered = preferences.filter(p => p.preferredTier === filterTier);
-        }
-
-        // Sort results
-        const sorted = [...filtered].sort((a, b) => {
-          switch (sortBy) {
-            case 'domain':
-              return a.domain.localeCompare(b.domain);
-            case 'tier':
-              return a.preferredTier.localeCompare(b.preferredTier);
-            case 'successRate': {
-              const rateA = a.successCount + a.failureCount > 0
-                ? a.successCount / (a.successCount + a.failureCount)
-                : 0;
-              const rateB = b.successCount + b.failureCount > 0
-                ? b.successCount / (b.successCount + b.failureCount)
-                : 0;
-              return rateB - rateA; // Higher success rate first
-            }
-            case 'responseTime':
-              return a.avgResponseTime - b.avgResponseTime; // Faster first
-            case 'lastUsed':
-            default:
-              return b.lastUsed - a.lastUsed; // Most recent first
+        switch (action) {
+          case 'stats': {
+            const tierStats = tieredFetcher.getStats();
+            return jsonResponse({
+              summary: {
+                totalDomains: tierStats.totalDomains,
+                domainsByTier: tierStats.byTier,
+                playwrightAvailable: tierStats.playwrightAvailable,
+              },
+              performance: {
+                avgResponseTimes: {
+                  intelligence: Math.round(tierStats.avgResponseTimes.intelligence) + 'ms',
+                  lightweight: Math.round(tierStats.avgResponseTimes.lightweight) + 'ms',
+                  playwright: Math.round(tierStats.avgResponseTimes.playwright) + 'ms',
+                },
+              },
+              efficiency: {
+                intelligencePercent: tierStats.totalDomains > 0
+                  ? Math.round((tierStats.byTier.intelligence / tierStats.totalDomains) * 100) + '%'
+                  : '0%',
+                lightweightPercent: tierStats.totalDomains > 0
+                  ? Math.round((tierStats.byTier.lightweight / tierStats.totalDomains) * 100) + '%'
+                  : '0%',
+                playwrightPercent: tierStats.totalDomains > 0
+                  ? Math.round((tierStats.byTier.playwright / tierStats.totalDomains) * 100) + '%'
+                  : '0%',
+                message: tierStats.byTier.intelligence + tierStats.byTier.lightweight > tierStats.byTier.playwright
+                  ? 'Good! Most requests are using lightweight rendering'
+                  : tierStats.playwrightAvailable
+                  ? 'Consider optimizing - many requests still require full browser'
+                  : 'Playwright not installed - using lightweight strategies only',
+              },
+            });
           }
-        });
 
-        // Apply limit
-        const limited = sorted.slice(0, limit);
+          case 'set': {
+            if (!args.domain || !args.tier) {
+              return errorResponse('domain and tier are required for set action');
+            }
+            const domain = args.domain as string;
+            const tier = args.tier as 'intelligence' | 'lightweight' | 'playwright';
 
-        // Format results
-        const formatted = limited.map(p => {
-          const totalAttempts = p.successCount + p.failureCount;
-          const successRate = totalAttempts > 0
-            ? Math.round((p.successCount / totalAttempts) * 100)
-            : 0;
-          return {
-            domain: p.domain,
-            tier: p.preferredTier,
-            successCount: p.successCount,
-            failureCount: p.failureCount,
-            successRate: `${successRate}%`,
-            avgResponseTime: `${Math.round(p.avgResponseTime)}ms`,
-            lastUsed: new Date(p.lastUsed).toISOString(),
-          };
-        });
+            tieredFetcher.setDomainPreference(domain, tier);
 
-        // Calculate summary by tier
-        const summary = {
-          intelligence: filtered.filter(p => p.preferredTier === 'intelligence').length,
-          lightweight: filtered.filter(p => p.preferredTier === 'lightweight').length,
-          playwright: filtered.filter(p => p.preferredTier === 'playwright').length,
-        };
+            return jsonResponse({
+              success: true,
+              message: `Set ${domain} to use ${tier} tier`,
+              note: tier === 'intelligence'
+                ? 'Content Intelligence - tries framework extraction, API prediction, caches, then static parsing'
+                : tier === 'lightweight'
+                ? 'Lightweight JS - executes scripts without full browser'
+                : 'Full browser - handles all pages but slowest (requires Playwright)',
+            });
+          }
 
-        return jsonResponse({
-          totalDomains: preferences.length,
-          filteredCount: filtered.length,
-          showing: limited.length,
-          filter: filterTier || 'none',
-          sortedBy: sortBy,
-          summary: filterTier ? undefined : summary,
-          domains: formatted,
-        });
+          case 'usage': {
+            const preferences = tieredFetcher.exportPreferences();
+            const filterTier = args.tier as string | undefined;
+            const sortBy = (args.sortBy as string) || 'lastUsed';
+            const limit = (args.limit as number) || 50;
+
+            let filtered = preferences;
+            if (filterTier) {
+              filtered = preferences.filter(p => p.preferredTier === filterTier);
+            }
+
+            const sorted = [...filtered].sort((a, b) => {
+              switch (sortBy) {
+                case 'domain':
+                  return a.domain.localeCompare(b.domain);
+                case 'tier':
+                  return a.preferredTier.localeCompare(b.preferredTier);
+                case 'successRate': {
+                  const rateA = a.successCount + a.failureCount > 0
+                    ? a.successCount / (a.successCount + a.failureCount)
+                    : 0;
+                  const rateB = b.successCount + b.failureCount > 0
+                    ? b.successCount / (b.successCount + b.failureCount)
+                    : 0;
+                  return rateB - rateA;
+                }
+                case 'responseTime':
+                  return a.avgResponseTime - b.avgResponseTime;
+                case 'lastUsed':
+                default:
+                  return b.lastUsed - a.lastUsed;
+              }
+            });
+
+            const limited = sorted.slice(0, limit);
+
+            const formatted = limited.map(p => {
+              const totalAttempts = p.successCount + p.failureCount;
+              const successRate = totalAttempts > 0
+                ? Math.round((p.successCount / totalAttempts) * 100)
+                : 0;
+              return {
+                domain: p.domain,
+                tier: p.preferredTier,
+                successCount: p.successCount,
+                failureCount: p.failureCount,
+                successRate: `${successRate}%`,
+                avgResponseTime: `${Math.round(p.avgResponseTime)}ms`,
+                lastUsed: new Date(p.lastUsed).toISOString(),
+              };
+            });
+
+            const summary = {
+              intelligence: filtered.filter(p => p.preferredTier === 'intelligence').length,
+              lightweight: filtered.filter(p => p.preferredTier === 'lightweight').length,
+              playwright: filtered.filter(p => p.preferredTier === 'playwright').length,
+            };
+
+            return jsonResponse({
+              totalDomains: preferences.length,
+              filteredCount: filtered.length,
+              showing: limited.length,
+              filter: filterTier || 'none',
+              sortedBy: sortBy,
+              summary: filterTier ? undefined : summary,
+              domains: formatted,
+            });
+          }
+
+          default:
+            return errorResponse(`Unknown tier_management action: ${action}`);
+        }
       }
 
       // ============================================
@@ -3031,193 +2184,182 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       // ============================================
       // CONTENT CHANGE TRACKING (F-003)
       // ============================================
-      case 'track_url_for_changes': {
+      case 'content_tracking': {
         const tracker = getContentChangeTracker();
-        const url = args.url as string;
+        const action = args.action as string;
+        const url = args.url as string | undefined;
 
-        // Browse the URL to get current content
-        const result = await smartBrowser.browse(url, {
-          validateContent: true,
-          enableLearning: true,
-        });
+        switch (action) {
+          case 'track': {
+            if (!url) throw new Error('url is required for track action');
+            const result = await smartBrowser.browse(url, {
+              validateContent: true,
+              enableLearning: true,
+            });
+            const tracked = await tracker.trackUrl(url, result.content.markdown, {
+              label: args.label as string | undefined,
+              tags: args.tags as string[] | undefined,
+            });
+            return jsonResponse({
+              action: 'track',
+              message: 'URL is now being tracked for content changes',
+              url: tracked.url,
+              domain: tracked.domain,
+              fingerprint: {
+                hash: tracked.fingerprint.hash.substring(0, 12) + '...',
+                textLength: tracked.fingerprint.textLength,
+                wordCount: tracked.fingerprint.wordCount,
+              },
+              trackedSince: new Date(tracked.trackedSince).toISOString(),
+              label: tracked.label,
+              tags: tracked.tags,
+              pageTitle: result.title,
+            });
+          }
 
-        // Track the URL with the content
-        const tracked = await tracker.trackUrl(url, result.content.markdown, {
-          label: args.label as string | undefined,
-          tags: args.tags as string[] | undefined,
-        });
+          case 'check': {
+            if (!url) throw new Error('url is required for check action');
+            const result = await smartBrowser.browse(url, {
+              validateContent: true,
+              enableLearning: true,
+            });
+            const checkResult = await tracker.checkForChanges(url, result.content.markdown);
 
-        return jsonResponse({
-          message: 'URL is now being tracked for content changes',
-          url: tracked.url,
-          domain: tracked.domain,
-          fingerprint: {
-            hash: tracked.fingerprint.hash.substring(0, 12) + '...',
-            textLength: tracked.fingerprint.textLength,
-            wordCount: tracked.fingerprint.wordCount,
-          },
-          trackedSince: new Date(tracked.trackedSince).toISOString(),
-          label: tracked.label,
-          tags: tracked.tags,
-          pageTitle: result.title,
-        });
-      }
+            if (checkResult.isFirstCheck || !checkResult.isTracked) {
+              const tracked = await tracker.trackUrl(url, result.content.markdown);
+              return jsonResponse({
+                action: 'check',
+                message: 'URL was not tracked - now tracking for future comparisons',
+                url: tracked.url,
+                isTracked: true,
+                isFirstCheck: true,
+                hasChanged: false,
+                fingerprint: {
+                  hash: tracked.fingerprint.hash.substring(0, 12) + '...',
+                  textLength: tracked.fingerprint.textLength,
+                  wordCount: tracked.fingerprint.wordCount,
+                },
+                pageTitle: result.title,
+              });
+            }
 
-      case 'check_content_changes': {
-        const tracker = getContentChangeTracker();
-        const url = args.url as string;
+            const response: Record<string, unknown> = {
+              action: 'check',
+              url,
+              isTracked: true,
+              hasChanged: checkResult.hasChanged,
+              checkCount: checkResult.trackedUrl?.checkCount,
+              changeCount: checkResult.trackedUrl?.changeCount,
+              lastChecked: checkResult.trackedUrl?.lastChecked
+                ? new Date(checkResult.trackedUrl.lastChecked).toISOString()
+                : undefined,
+              pageTitle: result.title,
+            };
 
-        // Browse the URL to get current content
-        const result = await smartBrowser.browse(url, {
-          validateContent: true,
-          enableLearning: true,
-        });
+            if (checkResult.hasChanged && checkResult.changeReport) {
+              response.changeDetails = {
+                significance: checkResult.changeReport.overallSignificance,
+                summary: checkResult.changeReport.summary,
+                previousFingerprint: {
+                  textLength: checkResult.changeReport.oldFingerprint.textLength,
+                  wordCount: checkResult.changeReport.oldFingerprint.wordCount,
+                },
+                newFingerprint: {
+                  textLength: checkResult.changeReport.newFingerprint.textLength,
+                  wordCount: checkResult.changeReport.newFingerprint.wordCount,
+                },
+                textLengthDiff:
+                  checkResult.changeReport.newFingerprint.textLength -
+                  checkResult.changeReport.oldFingerprint.textLength,
+                wordCountDiff:
+                  checkResult.changeReport.newFingerprint.wordCount -
+                  checkResult.changeReport.oldFingerprint.wordCount,
+              };
+            }
+            return jsonResponse(response);
+          }
 
-        // Check for changes
-        const checkResult = await tracker.checkForChanges(url, result.content.markdown);
+          case 'list': {
+            const urls = await tracker.listTrackedUrls({
+              domain: args.domain as string | undefined,
+              tags: args.tags as string[] | undefined,
+              hasChanges: args.hasChanges as boolean | undefined,
+              limit: (args.limit as number) || 50,
+            });
+            return jsonResponse({
+              action: 'list',
+              count: urls.length,
+              trackedUrls: urls.map(u => ({
+                url: u.url,
+                domain: u.domain,
+                label: u.label,
+                tags: u.tags,
+                trackedSince: new Date(u.trackedSince).toISOString(),
+                lastChecked: new Date(u.lastChecked).toISOString(),
+                checkCount: u.checkCount,
+                changeCount: u.changeCount,
+                hasChanges: u.changeCount > 0,
+                fingerprint: {
+                  textLength: u.fingerprint.textLength,
+                  wordCount: u.fingerprint.wordCount,
+                },
+              })),
+            });
+          }
 
-        if (checkResult.isFirstCheck || !checkResult.isTracked) {
-          // Auto-track if not tracked
-          const tracked = await tracker.trackUrl(url, result.content.markdown);
-          return jsonResponse({
-            message: 'URL was not tracked - now tracking for future comparisons',
-            url: tracked.url,
-            isTracked: true,
-            isFirstCheck: true,
-            hasChanged: false,
-            fingerprint: {
-              hash: tracked.fingerprint.hash.substring(0, 12) + '...',
-              textLength: tracked.fingerprint.textLength,
-              wordCount: tracked.fingerprint.wordCount,
-            },
-            pageTitle: result.title,
-          });
+          case 'history': {
+            const history = await tracker.getChangeHistory(
+              url,
+              (args.limit as number) || 50
+            );
+            return jsonResponse({
+              action: 'history',
+              count: history.length,
+              changes: history.map(r => ({
+                url: r.url,
+                timestamp: new Date(r.timestamp).toISOString(),
+                significance: r.significance,
+                summary: r.summary,
+                sectionsAdded: r.sectionsAdded,
+                sectionsRemoved: r.sectionsRemoved,
+                sectionsModified: r.sectionsModified,
+                previousLength: r.previousFingerprint.textLength,
+                newLength: r.newFingerprint.textLength,
+                lengthChange: r.newFingerprint.textLength - r.previousFingerprint.textLength,
+              })),
+            });
+          }
+
+          case 'untrack': {
+            if (!url) throw new Error('url is required for untrack action');
+            const wasTracked = await tracker.untrackUrl(url);
+            return jsonResponse({
+              action: 'untrack',
+              message: wasTracked ? 'URL is no longer being tracked' : 'URL was not being tracked',
+              url,
+              untracked: wasTracked,
+            });
+          }
+
+          case 'stats': {
+            const stats = await tracker.getStats();
+            return jsonResponse({
+              action: 'stats',
+              totalTracked: stats.totalTracked,
+              urlsWithChanges: stats.urlsWithChanges,
+              totalChanges: stats.totalChanges,
+              changesBySignificance: stats.changesBySignificance,
+              recentChanges: stats.recentChanges.map(c => ({
+                url: c.url,
+                timestamp: new Date(c.timestamp).toISOString(),
+                significance: c.significance,
+              })),
+            });
+          }
+
+          default:
+            throw new Error(`Unknown content_tracking action: ${action}`);
         }
-
-        const response: Record<string, unknown> = {
-          url,
-          isTracked: true,
-          hasChanged: checkResult.hasChanged,
-          checkCount: checkResult.trackedUrl?.checkCount,
-          changeCount: checkResult.trackedUrl?.changeCount,
-          lastChecked: checkResult.trackedUrl?.lastChecked
-            ? new Date(checkResult.trackedUrl.lastChecked).toISOString()
-            : undefined,
-          pageTitle: result.title,
-        };
-
-        if (checkResult.hasChanged && checkResult.changeReport) {
-          response.changeDetails = {
-            significance: checkResult.changeReport.overallSignificance,
-            summary: checkResult.changeReport.summary,
-            previousFingerprint: {
-              textLength: checkResult.changeReport.oldFingerprint.textLength,
-              wordCount: checkResult.changeReport.oldFingerprint.wordCount,
-            },
-            newFingerprint: {
-              textLength: checkResult.changeReport.newFingerprint.textLength,
-              wordCount: checkResult.changeReport.newFingerprint.wordCount,
-            },
-            textLengthDiff:
-              checkResult.changeReport.newFingerprint.textLength -
-              checkResult.changeReport.oldFingerprint.textLength,
-            wordCountDiff:
-              checkResult.changeReport.newFingerprint.wordCount -
-              checkResult.changeReport.oldFingerprint.wordCount,
-          };
-        }
-
-        return jsonResponse(response);
-      }
-
-      case 'list_tracked_urls': {
-        const tracker = getContentChangeTracker();
-        const urls = await tracker.listTrackedUrls({
-          domain: args.domain as string | undefined,
-          tags: args.tags as string[] | undefined,
-          hasChanges: args.hasChanges as boolean | undefined,
-          limit: (args.limit as number) || 50,
-        });
-
-        return jsonResponse({
-          count: urls.length,
-          trackedUrls: urls.map(u => ({
-            url: u.url,
-            domain: u.domain,
-            label: u.label,
-            tags: u.tags,
-            trackedSince: new Date(u.trackedSince).toISOString(),
-            lastChecked: new Date(u.lastChecked).toISOString(),
-            checkCount: u.checkCount,
-            changeCount: u.changeCount,
-            hasChanges: u.changeCount > 0,
-            fingerprint: {
-              textLength: u.fingerprint.textLength,
-              wordCount: u.fingerprint.wordCount,
-            },
-          })),
-        });
-      }
-
-      case 'get_change_history': {
-        const tracker = getContentChangeTracker();
-        const history = await tracker.getChangeHistory(
-          args.url as string | undefined,
-          (args.limit as number) || 50
-        );
-
-        return jsonResponse({
-          count: history.length,
-          changes: history.map(r => ({
-            url: r.url,
-            timestamp: new Date(r.timestamp).toISOString(),
-            significance: r.significance,
-            summary: r.summary,
-            sectionsAdded: r.sectionsAdded,
-            sectionsRemoved: r.sectionsRemoved,
-            sectionsModified: r.sectionsModified,
-            previousLength: r.previousFingerprint.textLength,
-            newLength: r.newFingerprint.textLength,
-            lengthChange: r.newFingerprint.textLength - r.previousFingerprint.textLength,
-          })),
-        });
-      }
-
-      case 'untrack_url': {
-        const tracker = getContentChangeTracker();
-        const url = args.url as string;
-        const wasTracked = await tracker.untrackUrl(url);
-
-        if (!wasTracked) {
-          return jsonResponse({
-            message: 'URL was not being tracked',
-            url,
-            untracked: false,
-          });
-        }
-
-        return jsonResponse({
-          message: 'URL is no longer being tracked',
-          url,
-          untracked: true,
-        });
-      }
-
-      case 'get_change_tracker_stats': {
-        const tracker = getContentChangeTracker();
-        const stats = await tracker.getStats();
-
-        return jsonResponse({
-          totalTracked: stats.totalTracked,
-          urlsWithChanges: stats.urlsWithChanges,
-          totalChanges: stats.totalChanges,
-          changesBySignificance: stats.changesBySignificance,
-          recentChanges: stats.recentChanges.map(c => ({
-            url: c.url,
-            timestamp: new Date(c.timestamp).toISOString(),
-            significance: c.significance,
-          })),
-        });
       }
 
       // ============================================
@@ -3399,268 +2541,274 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       // ============================================
-      // DEBUG TRACE RECORDING (O-005)
+      // DEBUG TRACE RECORDING (O-005) - Consolidated Handler
       // ============================================
-      case 'get_debug_traces': {
+      case 'debug_traces': {
         const debugRecorder = smartBrowser.getDebugRecorder();
-        const traces = await debugRecorder.query({
-          domain: args.domain as string | undefined,
-          urlPattern: args.urlPattern as string | undefined,
-          success: args.success as boolean | undefined,
-          errorType: args.errorType as ('timeout' | 'network' | 'selector' | 'validation' | 'bot_challenge' | 'rate_limit' | 'auth' | 'unknown') | undefined,
-          tier: args.tier as ('intelligence' | 'lightweight' | 'playwright') | undefined,
-          limit: (args.limit as number) ?? 20,
-          offset: args.offset as number | undefined,
-        });
+        const action = args.action as string;
 
-        return jsonResponse({
-          schemaVersion: addSchemaVersion({}).schemaVersion,
-          count: traces.length,
-          traces: traces.map(t => ({
-            id: t.id,
-            timestamp: new Date(t.timestamp).toISOString(),
-            url: t.url,
-            domain: t.domain,
-            success: t.success,
-            durationMs: t.durationMs,
-            tier: t.tiers.finalTier,
-            fellBack: t.tiers.fellBack,
-            errorCount: t.errors.length,
-            contentLength: t.content.textLength,
-          })),
-        });
-      }
+        switch (action) {
+          case 'list': {
+            const traces = await debugRecorder.query({
+              domain: args.domain as string | undefined,
+              urlPattern: args.urlPattern as string | undefined,
+              success: args.success as boolean | undefined,
+              errorType: args.errorType as ('timeout' | 'network' | 'selector' | 'validation' | 'bot_challenge' | 'rate_limit' | 'auth' | 'unknown') | undefined,
+              tier: args.tier as ('intelligence' | 'lightweight' | 'playwright') | undefined,
+              limit: (args.limit as number) ?? 20,
+              offset: args.offset as number | undefined,
+            });
 
-      case 'get_debug_trace': {
-        const debugRecorder = smartBrowser.getDebugRecorder();
-        const trace = await debugRecorder.getTrace(args.id as string);
-
-        if (!trace) {
-          return jsonResponse({
-            schemaVersion: addSchemaVersion({}).schemaVersion,
-            error: `Trace not found: ${args.id}`,
-          });
-        }
-
-        return jsonResponse({
-          schemaVersion: addSchemaVersion({}).schemaVersion,
-          trace,
-        });
-      }
-
-      case 'get_debug_trace_stats': {
-        const debugRecorder = smartBrowser.getDebugRecorder();
-        const stats = await debugRecorder.getStats();
-
-        return jsonResponse({
-          schemaVersion: addSchemaVersion({}).schemaVersion,
-          ...stats,
-          oldestTrace: stats.oldestTrace ? new Date(stats.oldestTrace).toISOString() : null,
-          newestTrace: stats.newestTrace ? new Date(stats.newestTrace).toISOString() : null,
-          storageSizeMB: Math.round(stats.storageSizeBytes / 1024 / 1024 * 100) / 100,
-        });
-      }
-
-      case 'configure_debug_recording': {
-        const debugRecorder = smartBrowser.getDebugRecorder();
-
-        if (args.enabled !== undefined) {
-          if (args.enabled) {
-            debugRecorder.enable();
-          } else {
-            debugRecorder.disable();
+            return jsonResponse({
+              schemaVersion: addSchemaVersion({}).schemaVersion,
+              count: traces.length,
+              traces: traces.map(t => ({
+                id: t.id,
+                timestamp: new Date(t.timestamp).toISOString(),
+                url: t.url,
+                domain: t.domain,
+                success: t.success,
+                durationMs: t.durationMs,
+                tier: t.tiers.finalTier,
+                fellBack: t.tiers.fellBack,
+                errorCount: t.errors.length,
+                contentLength: t.content.textLength,
+              })),
+            });
           }
+
+          case 'get': {
+            if (!args.id) {
+              return errorResponse('id is required for get action');
+            }
+            const trace = await debugRecorder.getTrace(args.id as string);
+
+            if (!trace) {
+              return jsonResponse({
+                schemaVersion: addSchemaVersion({}).schemaVersion,
+                error: `Trace not found: ${args.id}`,
+              });
+            }
+
+            return jsonResponse({
+              schemaVersion: addSchemaVersion({}).schemaVersion,
+              trace,
+            });
+          }
+
+          case 'stats': {
+            const stats = await debugRecorder.getStats();
+
+            return jsonResponse({
+              schemaVersion: addSchemaVersion({}).schemaVersion,
+              ...stats,
+              oldestTrace: stats.oldestTrace ? new Date(stats.oldestTrace).toISOString() : null,
+              newestTrace: stats.newestTrace ? new Date(stats.newestTrace).toISOString() : null,
+              storageSizeMB: Math.round(stats.storageSizeBytes / 1024 / 1024 * 100) / 100,
+            });
+          }
+
+          case 'configure': {
+            if (args.enabled !== undefined) {
+              if (args.enabled) {
+                debugRecorder.enable();
+              } else {
+                debugRecorder.disable();
+              }
+            }
+
+            if (args.alwaysRecordDomain) {
+              debugRecorder.alwaysRecord(args.alwaysRecordDomain as string);
+            }
+
+            if (args.neverRecordDomain) {
+              debugRecorder.neverRecord(args.neverRecordDomain as string);
+            }
+
+            if (args.onlyRecordFailures !== undefined || args.maxTraces !== undefined || args.maxAgeHours !== undefined) {
+              debugRecorder.updateConfig({
+                onlyRecordFailures: args.onlyRecordFailures as boolean | undefined,
+                maxTraces: args.maxTraces as number | undefined,
+                maxAgeHours: args.maxAgeHours as number | undefined,
+              });
+            }
+
+            const config = debugRecorder.getConfig();
+            return jsonResponse({
+              schemaVersion: addSchemaVersion({}).schemaVersion,
+              message: 'Configuration updated',
+              config: {
+                enabled: config.enabled,
+                onlyRecordFailures: config.onlyRecordFailures,
+                alwaysRecordDomains: config.alwaysRecordDomains,
+                neverRecordDomains: config.neverRecordDomains,
+                maxTraces: config.maxTraces,
+                maxAgeHours: config.maxAgeHours,
+              },
+            });
+          }
+
+          case 'export': {
+            if (!args.ids || (args.ids as string[]).length === 0) {
+              return errorResponse('ids are required for export action');
+            }
+            const ids = args.ids as string[];
+            const exportData = await debugRecorder.exportTraces(ids);
+
+            return jsonResponse({
+              schemaVersion: addSchemaVersion({}).schemaVersion,
+              exportedAt: new Date(exportData.exportedAt).toISOString(),
+              traceCount: exportData.traces.length,
+              traces: exportData.traces,
+            });
+          }
+
+          case 'delete': {
+            if (!args.id) {
+              return errorResponse('id is required for delete action');
+            }
+            const deleted = await debugRecorder.deleteTrace(args.id as string);
+
+            return jsonResponse({
+              schemaVersion: addSchemaVersion({}).schemaVersion,
+              success: deleted,
+              id: args.id,
+              message: deleted ? 'Trace deleted' : 'Trace not found',
+            });
+          }
+
+          case 'clear': {
+            const count = await debugRecorder.clearAll();
+
+            return jsonResponse({
+              schemaVersion: addSchemaVersion({}).schemaVersion,
+              success: true,
+              deletedCount: count,
+              message: `Deleted ${count} traces`,
+            });
+          }
+
+          default:
+            return errorResponse(`Unknown debug_traces action: ${action}`);
         }
-
-        if (args.alwaysRecordDomain) {
-          debugRecorder.alwaysRecord(args.alwaysRecordDomain as string);
-        }
-
-        if (args.neverRecordDomain) {
-          debugRecorder.neverRecord(args.neverRecordDomain as string);
-        }
-
-        if (args.onlyRecordFailures !== undefined || args.maxTraces !== undefined || args.maxAgeHours !== undefined) {
-          debugRecorder.updateConfig({
-            onlyRecordFailures: args.onlyRecordFailures as boolean | undefined,
-            maxTraces: args.maxTraces as number | undefined,
-            maxAgeHours: args.maxAgeHours as number | undefined,
-          });
-        }
-
-        const config = debugRecorder.getConfig();
-        return jsonResponse({
-          schemaVersion: addSchemaVersion({}).schemaVersion,
-          message: 'Configuration updated',
-          config: {
-            enabled: config.enabled,
-            onlyRecordFailures: config.onlyRecordFailures,
-            alwaysRecordDomains: config.alwaysRecordDomains,
-            neverRecordDomains: config.neverRecordDomains,
-            maxTraces: config.maxTraces,
-            maxAgeHours: config.maxAgeHours,
-          },
-        });
-      }
-
-      case 'export_debug_traces': {
-        const debugRecorder = smartBrowser.getDebugRecorder();
-        const ids = args.ids as string[];
-        const exportData = await debugRecorder.exportTraces(ids);
-
-        return jsonResponse({
-          schemaVersion: addSchemaVersion({}).schemaVersion,
-          exportedAt: new Date(exportData.exportedAt).toISOString(),
-          traceCount: exportData.traces.length,
-          traces: exportData.traces,
-        });
-      }
-
-      case 'delete_debug_trace': {
-        const debugRecorder = smartBrowser.getDebugRecorder();
-        const deleted = await debugRecorder.deleteTrace(args.id as string);
-
-        return jsonResponse({
-          schemaVersion: addSchemaVersion({}).schemaVersion,
-          success: deleted,
-          id: args.id,
-          message: deleted ? 'Trace deleted' : 'Trace not found',
-        });
-      }
-
-      case 'clear_debug_traces': {
-        const debugRecorder = smartBrowser.getDebugRecorder();
-        const count = await debugRecorder.clearAll();
-
-        return jsonResponse({
-          schemaVersion: addSchemaVersion({}).schemaVersion,
-          success: true,
-          deletedCount: count,
-          message: `Deleted ${count} traces`,
-        });
       }
 
       // ============================================
-      // USAGE METERING (GTM-001)
+      // USAGE METERING (GTM-001) - Consolidated Handler
       // ============================================
-
-      case 'get_usage_summary': {
+      case 'usage_analytics': {
         const usageMeter = getUsageMeter();
         await usageMeter.initialize();
+        const action = args.action as string;
 
-        const options: UsageQueryOptions = {
-          period: (args.period as 'hour' | 'day' | 'week' | 'month' | 'all') || 'all',
-          domain: args.domain as string | undefined,
-          tier: args.tier as ('intelligence' | 'lightweight' | 'playwright') | undefined,
-          tenantId: args.tenantId as string | undefined,
-        };
-
-        const summary = await usageMeter.getSummary(options);
-
-        // Calculate success rate from currentPeriod counts
-        const periodSuccessRate = summary.currentPeriod.requestCount > 0
-          ? summary.currentPeriod.successCount / summary.currentPeriod.requestCount
-          : 0;
-
-        return jsonResponse({
-          schemaVersion: addSchemaVersion({}).schemaVersion,
-          period: options.period,
-          totalRequests: summary.totalRequests,
-          totalCostUnits: summary.totalCostUnits,
-          successRate: Math.round(summary.successRate * 100) / 100,
-          avgCostPerRequest: Math.round(summary.avgCostPerRequest * 100) / 100,
-          currentPeriod: {
-            requestCount: summary.currentPeriod.requestCount,
-            totalCostUnits: summary.currentPeriod.totalCostUnits,
-            successRate: Math.round(periodSuccessRate * 100) / 100,
-            fallbackRate: Math.round(summary.currentPeriod.fallbackRate * 100) / 100,
-            byTier: summary.currentPeriod.byTier,
-            topDomainsByCost: summary.currentPeriod.topDomainsByCost.slice(0, 5),
-            topDomainsByRequests: summary.currentPeriod.topDomainsByRequests.slice(0, 5),
-          },
-          filters: {
-            domain: options.domain,
-            tier: options.tier,
-            tenantId: options.tenantId,
-          },
-        });
-      }
-
-      case 'get_usage_by_period': {
-        const usageMeter = getUsageMeter();
-        await usageMeter.initialize();
-
-        // Only 'hour' and 'day' are supported granularities
-        const rawGranularity = args.granularity as string || 'day';
-        const granularity: 'hour' | 'day' = rawGranularity === 'hour' ? 'hour' : 'day';
-        const periods = (args.periods as number) || (granularity === 'hour' ? 24 : 7);
-        const domain = args.domain as string | undefined;
-
-        const periodData = await usageMeter.getUsageByPeriod(granularity, { periods, domain });
-
-        return jsonResponse({
-          schemaVersion: addSchemaVersion({}).schemaVersion,
-          granularity,
-          periods: periodData.map(p => {
-            const successRate = p.requestCount > 0 ? p.successCount / p.requestCount : 0;
-            return {
-              periodStart: new Date(p.periodStart).toISOString(),
-              periodEnd: new Date(p.periodEnd).toISOString(),
-              requestCount: p.requestCount,
-              totalCostUnits: p.totalCostUnits,
-              successRate: Math.round(successRate * 100) / 100,
-              fallbackRate: Math.round(p.fallbackRate * 100) / 100,
-              byTier: p.byTier,
+        switch (action) {
+          case 'summary': {
+            const options: UsageQueryOptions = {
+              period: (args.period as 'hour' | 'day' | 'week' | 'month' | 'all') || 'all',
+              domain: args.domain as string | undefined,
+              tier: args.tier as ('intelligence' | 'lightweight' | 'playwright') | undefined,
+              tenantId: args.tenantId as string | undefined,
             };
-          }),
-        });
-      }
 
-      case 'get_cost_breakdown': {
-        const usageMeter = getUsageMeter();
-        await usageMeter.initialize();
+            const summary = await usageMeter.getSummary(options);
+            const periodSuccessRate = summary.currentPeriod.requestCount > 0
+              ? summary.currentPeriod.successCount / summary.currentPeriod.requestCount
+              : 0;
 
-        const period = (args.period as 'hour' | 'day' | 'week' | 'month' | 'all') || 'day';
-        const domain = args.domain as string | undefined;
+            return jsonResponse({
+              schemaVersion: addSchemaVersion({}).schemaVersion,
+              period: options.period,
+              totalRequests: summary.totalRequests,
+              totalCostUnits: summary.totalCostUnits,
+              successRate: Math.round(summary.successRate * 100) / 100,
+              avgCostPerRequest: Math.round(summary.avgCostPerRequest * 100) / 100,
+              currentPeriod: {
+                requestCount: summary.currentPeriod.requestCount,
+                totalCostUnits: summary.currentPeriod.totalCostUnits,
+                successRate: Math.round(periodSuccessRate * 100) / 100,
+                fallbackRate: Math.round(summary.currentPeriod.fallbackRate * 100) / 100,
+                byTier: summary.currentPeriod.byTier,
+                topDomainsByCost: summary.currentPeriod.topDomainsByCost.slice(0, 5),
+                topDomainsByRequests: summary.currentPeriod.topDomainsByRequests.slice(0, 5),
+              },
+              filters: {
+                domain: options.domain,
+                tier: options.tier,
+                tenantId: options.tenantId,
+              },
+            });
+          }
 
-        const breakdown = await usageMeter.getCostBreakdown({ period, domain });
+          case 'by_period': {
+            const rawGranularity = args.granularity as string || 'day';
+            const granularity: 'hour' | 'day' = rawGranularity === 'hour' ? 'hour' : 'day';
+            const periods = (args.periods as number) || (granularity === 'hour' ? 24 : 7);
+            const domain = args.domain as string | undefined;
 
-        return jsonResponse({
-          schemaVersion: addSchemaVersion({}).schemaVersion,
-          period,
-          total: breakdown.total,
-          estimatedMonthlyCost: Math.round(breakdown.estimatedMonthlyCost * 100) / 100,
-          byTier: {
-            intelligence: {
-              cost: breakdown.byTier.intelligence.cost,
-              percentage: Math.round(breakdown.byTier.intelligence.percentage * 100),
-              requests: breakdown.byTier.intelligence.requests,
-            },
-            lightweight: {
-              cost: breakdown.byTier.lightweight.cost,
-              percentage: Math.round(breakdown.byTier.lightweight.percentage * 100),
-              requests: breakdown.byTier.lightweight.requests,
-            },
-            playwright: {
-              cost: breakdown.byTier.playwright.cost,
-              percentage: Math.round(breakdown.byTier.playwright.percentage * 100),
-              requests: breakdown.byTier.playwright.requests,
-            },
-          },
-          recommendations: generateCostRecommendations(breakdown),
-        });
-      }
+            const periodData = await usageMeter.getUsageByPeriod(granularity, { periods, domain });
 
-      case 'reset_usage_meters': {
-        const usageMeter = getUsageMeter();
-        await usageMeter.initialize();
-        await usageMeter.reset();
+            return jsonResponse({
+              schemaVersion: addSchemaVersion({}).schemaVersion,
+              granularity,
+              periods: periodData.map(p => {
+                const successRate = p.requestCount > 0 ? p.successCount / p.requestCount : 0;
+                return {
+                  periodStart: new Date(p.periodStart).toISOString(),
+                  periodEnd: new Date(p.periodEnd).toISOString(),
+                  requestCount: p.requestCount,
+                  totalCostUnits: p.totalCostUnits,
+                  successRate: Math.round(successRate * 100) / 100,
+                  fallbackRate: Math.round(p.fallbackRate * 100) / 100,
+                  byTier: p.byTier,
+                };
+              }),
+            });
+          }
 
-        return jsonResponse({
-          schemaVersion: addSchemaVersion({}).schemaVersion,
-          success: true,
-          message: 'Usage meters reset',
-        });
+          case 'cost_breakdown': {
+            const period = (args.period as 'hour' | 'day' | 'week' | 'month' | 'all') || 'day';
+            const domain = args.domain as string | undefined;
+
+            const breakdown = await usageMeter.getCostBreakdown({ period, domain });
+
+            return jsonResponse({
+              schemaVersion: addSchemaVersion({}).schemaVersion,
+              period,
+              total: breakdown.total,
+              estimatedMonthlyCost: Math.round(breakdown.estimatedMonthlyCost * 100) / 100,
+              byTier: {
+                intelligence: {
+                  cost: breakdown.byTier.intelligence.cost,
+                  percentage: Math.round(breakdown.byTier.intelligence.percentage * 100),
+                  requests: breakdown.byTier.intelligence.requests,
+                },
+                lightweight: {
+                  cost: breakdown.byTier.lightweight.cost,
+                  percentage: Math.round(breakdown.byTier.lightweight.percentage * 100),
+                  requests: breakdown.byTier.lightweight.requests,
+                },
+                playwright: {
+                  cost: breakdown.byTier.playwright.cost,
+                  percentage: Math.round(breakdown.byTier.playwright.percentage * 100),
+                  requests: breakdown.byTier.playwright.requests,
+                },
+              },
+              recommendations: generateCostRecommendations(breakdown),
+            });
+          }
+
+          case 'reset': {
+            await usageMeter.reset();
+            return jsonResponse({
+              schemaVersion: addSchemaVersion({}).schemaVersion,
+              success: true,
+              message: 'Usage meters reset',
+            });
+          }
+
+          default:
+            return errorResponse(`Unknown usage_analytics action: ${action}`);
+        }
       }
 
       // ============================================
