@@ -292,7 +292,7 @@ All 10 phases complete:
 | P0 | Consolidate 6 auth tools → 1 | Complete |
 | P0 | Auto-embed domain insights in smart_browse | Complete |
 | P0 | Auto-apply skills (remove skill_management) | Complete |
-| P1 | Move debug tools to DEBUG_MODE | In Progress |
+| P1 | Move debug tools to DEBUG_MODE | PR #105 |
 | P1 | Remove analytics/infrastructure tools from MCP | Not Started |
 
 **Target Tools:**
