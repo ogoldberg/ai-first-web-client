@@ -281,6 +281,18 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ---
 
+## In Progress: YouTube API Handler (I-010)
+
+**Status:** In Progress
+
+**Goal:** Add YouTube Data API v3 handler for extracting video metadata and channel information, with API key configuration support.
+
+| ID    | Task                | Priority | Effort | Status      |
+|-------|---------------------|----------|--------|-------------|
+| I-010 | YouTube API handler | Medium   | M      | In Progress |
+
+---
+
 ## Recently Completed: Medium API Handler (I-009)
 
 **Status:** Complete (PR #96)
