@@ -31,6 +31,16 @@ import { SmartBrowser } from './core/smart-browser.js';
 import { BrowseTool } from './tools/browse-tool.js';
 import { ApiCallTool } from './tools/api-call-tool.js';
 import { AuthWorkflow } from './core/auth-workflow.js';
+import {
+  type AuthType,
+  buildTypedCredentials,
+  handleAuthStatus,
+  handleAuthConfigure,
+  handleOAuthComplete,
+  handleAuthGuidance,
+  handleAuthDelete,
+  handleAuthList,
+} from './tools/auth-helpers.js';
 import { logger } from './utils/logger.js';
 import { computeLearningEffectiveness } from './core/learning-effectiveness.js';
 import { addSchemaVersion } from './types/schema-version.js';
@@ -2651,182 +2661,76 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       // API AUTHENTICATION WORKFLOW
       // ============================================
       case 'get_api_auth_status': {
-        const status = await authWorkflow.getAuthStatus(
+        const result = await handleAuthStatus(
+          authWorkflow,
           args.domain as string,
           (args.profile as string) || 'default'
         );
-
         return jsonResponse({
-          domain: status.domain,
-          status: status.status,
-          message: status.message,
-          detectedAuth: status.detectedAuth,
-          configuredCredentials: status.configuredCredentials,
-          missingAuth: status.missingAuth.map(auth => ({
-            type: auth.type,
-            guidance: authWorkflow.getAuthGuidance(auth),
-          })),
+          ...result,
           deprecation_notice: "This tool is deprecated. Use api_auth with action='status' instead.",
         });
       }
 
       case 'configure_api_auth': {
-        const authType = args.authType as string;
-        const rawCredentials = args.credentials as Record<string, unknown>;
-
-        // Build typed credentials based on auth type
-        let typedCredentials: any;
-        switch (authType) {
-          case 'api_key':
-            typedCredentials = {
-              type: 'api_key',
-              in: rawCredentials.in || 'header',
-              name: rawCredentials.name || 'X-API-Key',
-              value: rawCredentials.value,
-            };
-            break;
-          case 'bearer':
-            typedCredentials = {
-              type: 'bearer',
-              token: rawCredentials.token,
-              expiresAt: rawCredentials.expiresAt,
-            };
-            break;
-          case 'basic':
-            typedCredentials = {
-              type: 'basic',
-              username: rawCredentials.username,
-              password: rawCredentials.password,
-            };
-            break;
-          case 'oauth2':
-            typedCredentials = {
-              type: 'oauth2',
-              flow: rawCredentials.flow || 'authorization_code',
-              clientId: rawCredentials.clientId,
-              clientSecret: rawCredentials.clientSecret,
-              accessToken: rawCredentials.accessToken,
-              refreshToken: rawCredentials.refreshToken,
-              scopes: rawCredentials.scopes,
-              urls: {
-                authorizationUrl: rawCredentials.authorizationUrl,
-                tokenUrl: rawCredentials.tokenUrl,
-                refreshUrl: rawCredentials.refreshUrl,
-              },
-              username: rawCredentials.username,
-              password: rawCredentials.password,
-            };
-            break;
-          case 'cookie':
-            typedCredentials = {
-              type: 'cookie',
-              name: rawCredentials.name,
-              value: rawCredentials.value,
-              expiresAt: rawCredentials.expiresAt,
-            };
-            break;
-          default:
-            return errorResponse(`Unknown auth type: ${authType}`);
-        }
-
-        const result = await authWorkflow.configureCredentials(
+        const result = await handleAuthConfigure(
+          authWorkflow,
           args.domain as string,
-          typedCredentials,
+          args.authType as string,
+          args.credentials as Record<string, unknown>,
           (args.profile as string) || 'default',
           args.validate !== false
         );
-
+        if ('error' in result && !('success' in result)) {
+          return errorResponse(result.error);
+        }
         return jsonResponse({
-          success: result.success,
-          domain: result.domain,
-          type: result.type,
-          profile: result.profile,
-          validated: result.validated,
-          error: result.error,
-          nextStep: result.nextStep,
+          ...result,
           deprecation_notice: "This tool is deprecated. Use api_auth with action='configure' instead.",
         });
       }
 
       case 'complete_oauth': {
-        const result = await authWorkflow.completeOAuthFlow(
+        const result = await handleOAuthComplete(
+          authWorkflow,
           args.code as string,
           args.state as string
         );
-
         return jsonResponse({
-          success: result.success,
-          domain: result.domain,
-          profile: result.profile,
-          validated: result.validated,
-          error: result.error,
-          message: result.success
-            ? 'OAuth authorization completed successfully. You can now make authenticated API calls.'
-            : 'OAuth authorization failed. Please try again.',
+          ...result,
           deprecation_notice: "This tool is deprecated. Use api_auth with action='complete_oauth' instead.",
         });
       }
 
       case 'get_auth_guidance': {
-        const status = await authWorkflow.getAuthStatus(args.domain as string);
-        const authType = args.authType as string | undefined;
-
-        let guidance: Array<{ type: string; guidance: ReturnType<typeof authWorkflow.getAuthGuidance> }>;
-
-        if (authType) {
-          // Get guidance for specific type
-          const authInfo = status.detectedAuth.find(a => a.type === authType) ||
-            { type: authType as any, in: 'header', name: undefined };
-          guidance = [{ type: authType, guidance: authWorkflow.getAuthGuidance(authInfo) }];
-        } else {
-          // Get guidance for all detected auth types
-          guidance = status.detectedAuth.map(auth => ({
-            type: auth.type,
-            guidance: authWorkflow.getAuthGuidance(auth),
-          }));
-
-          // If no auth detected, show guidance for common types
-          if (guidance.length === 0) {
-            guidance = [
-              { type: 'api_key', guidance: authWorkflow.getAuthGuidance({ type: 'api_key', in: 'header' }) },
-              { type: 'bearer', guidance: authWorkflow.getAuthGuidance({ type: 'bearer' }) },
-            ];
-          }
-        }
-
+        const result = await handleAuthGuidance(
+          authWorkflow,
+          args.domain as string,
+          args.authType as string | undefined
+        );
         return jsonResponse({
-          domain: args.domain,
-          detectedAuthTypes: status.detectedAuth.map(a => a.type),
-          guidance,
+          ...result,
           deprecation_notice: "This tool is deprecated. Use api_auth with action='guidance' instead.",
         });
       }
 
       case 'delete_api_auth': {
-        const deleted = await authWorkflow.deleteCredentials(
+        const result = await handleAuthDelete(
+          authWorkflow,
           args.domain as string,
-          args.authType as any,
+          args.authType as AuthType | undefined,
           (args.profile as string) || 'default'
         );
-
         return jsonResponse({
-          success: deleted,
-          domain: args.domain,
-          authType: args.authType || 'all',
-          profile: args.profile || 'default',
-          message: deleted
-            ? 'Credentials deleted successfully'
-            : 'No matching credentials found',
+          ...result,
           deprecation_notice: "This tool is deprecated. Use api_auth with action='delete' instead.",
         });
       }
 
       case 'list_configured_auth': {
-        const configuredDomains = authWorkflow.listConfiguredDomains();
-
+        const result = handleAuthList(authWorkflow);
         return jsonResponse({
-          totalDomains: configuredDomains.length,
-          domains: configuredDomains,
+          ...result,
           deprecation_notice: "This tool is deprecated. Use api_auth with action='list' instead.",
         });
       }
@@ -2842,22 +2746,12 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             if (!args.domain) {
               return errorResponse("Missing required parameter 'domain' for action 'status'");
             }
-            const status = await authWorkflow.getAuthStatus(
+            const result = await handleAuthStatus(
+              authWorkflow,
               args.domain as string,
               (args.profile as string) || 'default'
             );
-
-            return jsonResponse({
-              domain: status.domain,
-              status: status.status,
-              message: status.message,
-              detectedAuth: status.detectedAuth,
-              configuredCredentials: status.configuredCredentials,
-              missingAuth: status.missingAuth.map(auth => ({
-                type: auth.type,
-                guidance: authWorkflow.getAuthGuidance(auth),
-              })),
-            });
+            return jsonResponse(result);
           }
 
           case 'configure': {
@@ -2870,81 +2764,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             if (!args.credentials) {
               return errorResponse("Missing required parameter 'credentials' for action 'configure'");
             }
-
-            const authType = args.authType as string;
-            const rawCredentials = args.credentials as Record<string, unknown>;
-
-            // Build typed credentials based on auth type
-            let typedCredentials: any;
-            switch (authType) {
-              case 'api_key':
-                typedCredentials = {
-                  type: 'api_key',
-                  in: rawCredentials.in || 'header',
-                  name: rawCredentials.name || 'X-API-Key',
-                  value: rawCredentials.value,
-                };
-                break;
-              case 'bearer':
-                typedCredentials = {
-                  type: 'bearer',
-                  token: rawCredentials.token,
-                  expiresAt: rawCredentials.expiresAt,
-                };
-                break;
-              case 'basic':
-                typedCredentials = {
-                  type: 'basic',
-                  username: rawCredentials.username,
-                  password: rawCredentials.password,
-                };
-                break;
-              case 'oauth2':
-                typedCredentials = {
-                  type: 'oauth2',
-                  flow: rawCredentials.flow || 'authorization_code',
-                  clientId: rawCredentials.clientId,
-                  clientSecret: rawCredentials.clientSecret,
-                  accessToken: rawCredentials.accessToken,
-                  refreshToken: rawCredentials.refreshToken,
-                  scopes: rawCredentials.scopes,
-                  urls: {
-                    authorizationUrl: rawCredentials.authorizationUrl,
-                    tokenUrl: rawCredentials.tokenUrl,
-                    refreshUrl: rawCredentials.refreshUrl,
-                  },
-                  username: rawCredentials.username,
-                  password: rawCredentials.password,
-                };
-                break;
-              case 'cookie':
-                typedCredentials = {
-                  type: 'cookie',
-                  name: rawCredentials.name,
-                  value: rawCredentials.value,
-                  expiresAt: rawCredentials.expiresAt,
-                };
-                break;
-              default:
-                return errorResponse(`Unknown auth type: ${authType}`);
-            }
-
-            const result = await authWorkflow.configureCredentials(
+            const result = await handleAuthConfigure(
+              authWorkflow,
               args.domain as string,
-              typedCredentials,
+              args.authType as string,
+              args.credentials as Record<string, unknown>,
               (args.profile as string) || 'default',
               args.validate !== false
             );
-
-            return jsonResponse({
-              success: result.success,
-              domain: result.domain,
-              type: result.type,
-              profile: result.profile,
-              validated: result.validated,
-              error: result.error,
-              nextStep: result.nextStep,
-            });
+            if ('error' in result && !('success' in result)) {
+              return errorResponse(result.error);
+            }
+            return jsonResponse(result);
           }
 
           case 'complete_oauth': {
@@ -2954,91 +2785,42 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             if (!args.state) {
               return errorResponse("Missing required parameter 'state' for action 'complete_oauth'");
             }
-
-            const result = await authWorkflow.completeOAuthFlow(
+            const result = await handleOAuthComplete(
+              authWorkflow,
               args.code as string,
               args.state as string
             );
-
-            return jsonResponse({
-              success: result.success,
-              domain: result.domain,
-              profile: result.profile,
-              validated: result.validated,
-              error: result.error,
-              message: result.success
-                ? 'OAuth authorization completed successfully. You can now make authenticated API calls.'
-                : 'OAuth authorization failed. Please try again.',
-            });
+            return jsonResponse(result);
           }
 
           case 'guidance': {
             if (!args.domain) {
               return errorResponse("Missing required parameter 'domain' for action 'guidance'");
             }
-
-            const status = await authWorkflow.getAuthStatus(args.domain as string);
-            const authType = args.authType as string | undefined;
-
-            let guidance: Array<{ type: string; guidance: ReturnType<typeof authWorkflow.getAuthGuidance> }>;
-
-            if (authType) {
-              // Get guidance for specific type
-              const authInfo = status.detectedAuth.find(a => a.type === authType) ||
-                { type: authType as any, in: 'header', name: undefined };
-              guidance = [{ type: authType, guidance: authWorkflow.getAuthGuidance(authInfo) }];
-            } else {
-              // Get guidance for all detected auth types
-              guidance = status.detectedAuth.map(auth => ({
-                type: auth.type,
-                guidance: authWorkflow.getAuthGuidance(auth),
-              }));
-
-              // If no auth detected, show guidance for common types
-              if (guidance.length === 0) {
-                guidance = [
-                  { type: 'api_key', guidance: authWorkflow.getAuthGuidance({ type: 'api_key', in: 'header' }) },
-                  { type: 'bearer', guidance: authWorkflow.getAuthGuidance({ type: 'bearer' }) },
-                ];
-              }
-            }
-
-            return jsonResponse({
-              domain: args.domain,
-              detectedAuthTypes: status.detectedAuth.map(a => a.type),
-              guidance,
-            });
+            const result = await handleAuthGuidance(
+              authWorkflow,
+              args.domain as string,
+              args.authType as string | undefined
+            );
+            return jsonResponse(result);
           }
 
           case 'delete': {
             if (!args.domain) {
               return errorResponse("Missing required parameter 'domain' for action 'delete'");
             }
-
-            const deleted = await authWorkflow.deleteCredentials(
+            const result = await handleAuthDelete(
+              authWorkflow,
               args.domain as string,
-              args.authType as any,
+              args.authType as AuthType | undefined,
               (args.profile as string) || 'default'
             );
-
-            return jsonResponse({
-              success: deleted,
-              domain: args.domain,
-              authType: args.authType || 'all',
-              profile: args.profile || 'default',
-              message: deleted
-                ? 'Credentials deleted successfully'
-                : 'No matching credentials found',
-            });
+            return jsonResponse(result);
           }
 
           case 'list': {
-            const configuredDomains = authWorkflow.listConfiguredDomains();
-
-            return jsonResponse({
-              totalDomains: configuredDomains.length,
-              domains: configuredDomains,
-            });
+            const result = handleAuthList(authWorkflow);
+            return jsonResponse(result);
           }
 
           default:

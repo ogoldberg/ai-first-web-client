@@ -9,13 +9,21 @@
  * - delete_api_auth -> action='delete'
  * - list_configured_auth -> action='list'
  *
- * The underlying AuthWorkflow functionality is tested in auth-workflow.test.ts.
- * This file tests the tool schema validation and action routing.
+ * Tests the helper functions that handle routing and response formatting.
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { AuthWorkflow } from '../../src/core/auth-workflow.js';
 import { SessionManager } from '../../src/core/session-manager.js';
+import {
+  buildTypedCredentials,
+  handleAuthStatus,
+  handleAuthConfigure,
+  handleOAuthComplete,
+  handleAuthGuidance,
+  handleAuthDelete,
+  handleAuthList,
+} from '../../src/tools/auth-helpers.js';
 
 // Mock the api-documentation-discovery module
 vi.mock('../../src/core/api-documentation-discovery.js', async () => {
@@ -64,114 +72,294 @@ describe('api_auth tool consolidation (TC-001)', () => {
     authWorkflow = new AuthWorkflow(mockSessionManager, mockFetch);
   });
 
-  describe('action routing', () => {
-    it('should support status action (equivalent to get_api_auth_status)', async () => {
-      const status = await authWorkflow.getAuthStatus('api.example.com', 'default');
-      expect(status).toHaveProperty('domain', 'api.example.com');
-      expect(status).toHaveProperty('status');
-      expect(status).toHaveProperty('detectedAuth');
+  describe('buildTypedCredentials', () => {
+    it('should build api_key credentials with defaults', () => {
+      const result = buildTypedCredentials('api_key', { value: 'my-key' });
+      expect(result).toEqual({
+        type: 'api_key',
+        in: 'header',
+        name: 'X-API-Key',
+        value: 'my-key',
+      });
     });
 
-    it('should support guidance action (equivalent to get_auth_guidance)', () => {
-      const guidance = authWorkflow.getAuthGuidance({ type: 'api_key', in: 'header' });
-      expect(guidance).toHaveProperty('instructions');
-      expect(guidance).toHaveProperty('requiredFields');
+    it('should build api_key credentials with custom values', () => {
+      const result = buildTypedCredentials('api_key', {
+        value: 'my-key',
+        in: 'query',
+        name: 'apikey',
+      });
+      expect(result).toEqual({
+        type: 'api_key',
+        in: 'query',
+        name: 'apikey',
+        value: 'my-key',
+      });
     });
 
-    it('should support list action (equivalent to list_configured_auth)', () => {
-      const domains = authWorkflow.listConfiguredDomains();
-      expect(Array.isArray(domains)).toBe(true);
+    it('should build bearer credentials', () => {
+      const result = buildTypedCredentials('bearer', {
+        token: 'my-token',
+        expiresAt: 1234567890,
+      });
+      expect(result).toEqual({
+        type: 'bearer',
+        token: 'my-token',
+        expiresAt: 1234567890,
+      });
     });
 
-    it('should support delete action (equivalent to delete_api_auth)', async () => {
-      // Attempt to delete non-existent credentials
-      const deleted = await authWorkflow.deleteCredentials('nonexistent.com', undefined, 'default');
-      expect(deleted).toBe(false);
+    it('should build basic credentials', () => {
+      const result = buildTypedCredentials('basic', {
+        username: 'user',
+        password: 'pass',
+      });
+      expect(result).toEqual({
+        type: 'basic',
+        username: 'user',
+        password: 'pass',
+      });
     });
 
-    it('should support configure action with api_key type', async () => {
-      const result = await authWorkflow.configureCredentials(
+    it('should build oauth2 credentials with defaults', () => {
+      const result = buildTypedCredentials('oauth2', {
+        clientId: 'client-123',
+      });
+      expect(result).toHaveProperty('type', 'oauth2');
+      expect(result).toHaveProperty('flow', 'authorization_code');
+      expect(result).toHaveProperty('clientId', 'client-123');
+    });
+
+    it('should build cookie credentials', () => {
+      const result = buildTypedCredentials('cookie', {
+        name: 'session',
+        value: 'abc123',
+      });
+      expect(result).toEqual({
+        type: 'cookie',
+        name: 'session',
+        value: 'abc123',
+        expiresAt: undefined,
+      });
+    });
+
+    it('should return error for unknown auth type', () => {
+      const result = buildTypedCredentials('unknown', {});
+      expect(result).toEqual({ error: 'Unknown auth type: unknown' });
+    });
+  });
+
+  describe('handleAuthStatus', () => {
+    it('should return properly formatted status response', async () => {
+      const result = await handleAuthStatus(authWorkflow, 'api.example.com', 'default');
+
+      expect(result).toHaveProperty('domain', 'api.example.com');
+      expect(result).toHaveProperty('status');
+      expect(result).toHaveProperty('message');
+      expect(result).toHaveProperty('detectedAuth');
+      expect(result).toHaveProperty('configuredCredentials');
+      expect(result).toHaveProperty('missingAuth');
+      expect(Array.isArray(result.missingAuth)).toBe(true);
+    });
+
+    it('should include guidance for each missing auth type', async () => {
+      // Configure some auth first so there's no missing auth
+      await authWorkflow.configureCredentials(
         'api.example.com',
-        {
-          type: 'api_key',
-          in: 'header',
-          name: 'X-API-Key',
-          value: 'test-key',
-        },
+        { type: 'api_key', in: 'header', name: 'X-API-Key', value: 'test' },
         'default',
         false
       );
+
+      const result = await handleAuthStatus(authWorkflow, 'api.example.com', 'default');
+      expect(result.configuredCredentials.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('handleAuthConfigure', () => {
+    it('should configure api_key credentials successfully', async () => {
+      const result = await handleAuthConfigure(
+        authWorkflow,
+        'api.example.com',
+        'api_key',
+        { value: 'test-key' },
+        'default',
+        false
+      );
+
+      expect('error' in result && !('success' in result)).toBe(false);
       expect(result).toHaveProperty('success', true);
       expect(result).toHaveProperty('domain', 'api.example.com');
       expect(result).toHaveProperty('type', 'api_key');
+      expect(result).toHaveProperty('profile', 'default');
     });
 
-    it('should support configure action with bearer type', async () => {
-      const result = await authWorkflow.configureCredentials(
+    it('should return error for unknown auth type', async () => {
+      const result = await handleAuthConfigure(
+        authWorkflow,
         'api.example.com',
-        {
-          type: 'bearer',
-          token: 'test-bearer-token',
-        },
+        'invalid_type',
+        {},
         'default',
         false
       );
-      expect(result).toHaveProperty('success', true);
-      expect(result).toHaveProperty('type', 'bearer');
+
+      expect('error' in result && !('success' in result)).toBe(true);
+      if ('error' in result && !('success' in result)) {
+        expect(result.error).toContain('Unknown auth type');
+      }
     });
 
-    it('should support configure action with basic type', async () => {
-      const result = await authWorkflow.configureCredentials(
+    it('should configure bearer credentials successfully', async () => {
+      const result = await handleAuthConfigure(
+        authWorkflow,
         'api.example.com',
-        {
-          type: 'basic',
-          username: 'user',
-          password: 'pass',
-        },
+        'bearer',
+        { token: 'my-bearer-token' },
         'default',
         false
       );
+
+      expect('success' in result).toBe(true);
+      if ('success' in result) {
+        expect(result.success).toBe(true);
+        expect(result.type).toBe('bearer');
+      }
+    });
+  });
+
+  describe('handleOAuthComplete', () => {
+    it('should return failure message for invalid OAuth flow', async () => {
+      const result = await handleOAuthComplete(
+        authWorkflow,
+        'invalid-code',
+        'invalid-state'
+      );
+
+      expect(result).toHaveProperty('success', false);
+      expect(result).toHaveProperty('message');
+      expect(result.message).toContain('failed');
+    });
+  });
+
+  describe('handleAuthGuidance', () => {
+    it('should return guidance for specific auth type', async () => {
+      const result = await handleAuthGuidance(authWorkflow, 'api.example.com', 'api_key');
+
+      expect(result).toHaveProperty('domain', 'api.example.com');
+      expect(result).toHaveProperty('detectedAuthTypes');
+      expect(result).toHaveProperty('guidance');
+      expect(result.guidance.length).toBe(1);
+      expect(result.guidance[0].type).toBe('api_key');
+      expect(result.guidance[0].guidance).toHaveProperty('instructions');
+      expect(result.guidance[0].guidance).toHaveProperty('requiredFields');
+    });
+
+    it('should return default guidance when no auth detected', async () => {
+      const result = await handleAuthGuidance(authWorkflow, 'api.example.com');
+
+      expect(result.guidance.length).toBeGreaterThan(0);
+      // Should include guidance for common types when no auth detected
+      const types = result.guidance.map(g => g.type);
+      expect(types).toContain('api_key');
+      expect(types).toContain('bearer');
+    });
+  });
+
+  describe('handleAuthDelete', () => {
+    it('should return false for non-existent credentials', async () => {
+      const result = await handleAuthDelete(
+        authWorkflow,
+        'nonexistent.com',
+        undefined,
+        'default'
+      );
+
+      expect(result).toHaveProperty('success', false);
+      expect(result).toHaveProperty('domain', 'nonexistent.com');
+      expect(result).toHaveProperty('authType', 'all');
+      expect(result).toHaveProperty('message');
+      expect(result.message).toContain('No matching');
+    });
+
+    it('should delete existing credentials', async () => {
+      // First configure some credentials
+      await handleAuthConfigure(
+        authWorkflow,
+        'api.example.com',
+        'api_key',
+        { value: 'test-key' },
+        'default',
+        false
+      );
+
+      // Then delete them
+      const result = await handleAuthDelete(
+        authWorkflow,
+        'api.example.com',
+        'api_key',
+        'default'
+      );
+
       expect(result).toHaveProperty('success', true);
-      expect(result).toHaveProperty('type', 'basic');
+      expect(result).toHaveProperty('message', 'Credentials deleted successfully');
     });
   });
 
-  describe('guidance types', () => {
-    it('should provide api_key guidance', () => {
-      const guidance = authWorkflow.getAuthGuidance({ type: 'api_key', in: 'header' });
-      expect(guidance.requiredFields).toContain('value');
+  describe('handleAuthList', () => {
+    it('should return empty list initially', () => {
+      const result = handleAuthList(authWorkflow);
+
+      expect(result).toHaveProperty('totalDomains', 0);
+      expect(result).toHaveProperty('domains');
+      expect(Array.isArray(result.domains)).toBe(true);
+      expect(result.domains.length).toBe(0);
     });
 
-    it('should provide bearer guidance', () => {
-      const guidance = authWorkflow.getAuthGuidance({ type: 'bearer' });
-      expect(guidance.requiredFields).toContain('token');
-    });
+    it('should list configured domains', async () => {
+      // Configure credentials for a domain
+      await handleAuthConfigure(
+        authWorkflow,
+        'api.example.com',
+        'api_key',
+        { value: 'test-key' },
+        'default',
+        false
+      );
 
-    it('should provide basic guidance', () => {
-      const guidance = authWorkflow.getAuthGuidance({ type: 'basic' });
-      expect(guidance.requiredFields).toContain('username');
-      expect(guidance.requiredFields).toContain('password');
-    });
+      const result = handleAuthList(authWorkflow);
 
-    it('should provide oauth2 guidance', () => {
-      const guidance = authWorkflow.getAuthGuidance({ type: 'oauth2' });
-      expect(guidance.requiredFields).toContain('clientId');
-    });
-
-    it('should provide cookie guidance', () => {
-      const guidance = authWorkflow.getAuthGuidance({ type: 'cookie' });
-      expect(guidance.requiredFields).toContain('name');
-      expect(guidance.requiredFields).toContain('value');
+      expect(result.totalDomains).toBeGreaterThan(0);
+      expect(result.domains.some(d => d.domain === 'api.example.com')).toBe(true);
     });
   });
 
-  describe('deprecation notices', () => {
-    it('should include deprecation notice in old tool descriptions', () => {
-      // This test verifies the tool descriptions contain deprecation notices
-      // The actual check is done via the tool schema in index.ts
-      // Here we just verify the expected format
-      const deprecationPattern = /\[DEPRECATED.*Use api_auth.*\]/;
-      expect(deprecationPattern.test('[DEPRECATED - Use api_auth with action=\'status\']')).toBe(true);
+  describe('guidance content validation', () => {
+    it('should provide api_key guidance with required fields', async () => {
+      const result = await handleAuthGuidance(authWorkflow, 'api.example.com', 'api_key');
+      expect(result.guidance[0].guidance.requiredFields).toContain('value');
+    });
+
+    it('should provide bearer guidance with required fields', async () => {
+      const result = await handleAuthGuidance(authWorkflow, 'api.example.com', 'bearer');
+      expect(result.guidance[0].guidance.requiredFields).toContain('token');
+    });
+
+    it('should provide basic guidance with required fields', async () => {
+      const result = await handleAuthGuidance(authWorkflow, 'api.example.com', 'basic');
+      expect(result.guidance[0].guidance.requiredFields).toContain('username');
+      expect(result.guidance[0].guidance.requiredFields).toContain('password');
+    });
+
+    it('should provide oauth2 guidance with required fields', async () => {
+      const result = await handleAuthGuidance(authWorkflow, 'api.example.com', 'oauth2');
+      expect(result.guidance[0].guidance.requiredFields).toContain('clientId');
+    });
+
+    it('should provide cookie guidance with required fields', async () => {
+      const result = await handleAuthGuidance(authWorkflow, 'api.example.com', 'cookie');
+      expect(result.guidance[0].guidance.requiredFields).toContain('name');
+      expect(result.guidance[0].guidance.requiredFields).toContain('value');
     });
   });
 });
