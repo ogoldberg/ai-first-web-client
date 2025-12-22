@@ -653,10 +653,10 @@ export class ApiPatternRegistry {
       }
     }
 
-    // Bootstrap with known patterns if registry is empty
-    if (this.patterns.size === 0) {
-      await this.bootstrap();
-    }
+    // Always ensure bootstrap patterns are loaded (even if persisted patterns exist)
+    // This fixes the issue where bootstrap patterns weren't available after
+    // the first run because the registry wasn't empty anymore
+    await this.ensureBootstrapPatterns();
 
     this.initialized = true;
     patternsLogger.info('ApiPatternRegistry initialized', {
@@ -666,16 +666,25 @@ export class ApiPatternRegistry {
   }
 
   /**
-   * Bootstrap the registry with known patterns from existing handlers
+   * Ensure all bootstrap patterns are loaded, adding any that are missing.
+   * This is called on every initialization to ensure bootstrap patterns
+   * are always available, even when persisted learned patterns exist.
    */
-  private async bootstrap(): Promise<void> {
-    patternsLogger.info('Bootstrapping pattern registry');
+  private async ensureBootstrapPatterns(): Promise<void> {
+    let addedCount = 0;
 
     for (const bootstrap of BOOTSTRAP_PATTERNS) {
+      const bootstrapId = `bootstrap:${bootstrap.source}`;
+
+      // Skip if this bootstrap pattern already exists
+      if (this.patterns.has(bootstrapId)) {
+        continue;
+      }
+
       const now = Date.now();
       const pattern: LearnedApiPattern = {
         ...bootstrap.pattern,
-        id: `bootstrap:${bootstrap.source}`,
+        id: bootstrapId,
         metrics: {
           ...bootstrap.pattern.metrics,
           successCount: bootstrap.initialSuccessCount,
@@ -698,9 +707,22 @@ export class ApiPatternRegistry {
         pattern,
         source: 'bootstrap',
       });
+      addedCount++;
     }
 
-    await this.persist();
+    if (addedCount > 0) {
+      patternsLogger.info('Added missing bootstrap patterns', { count: addedCount });
+      await this.persist();
+    }
+  }
+
+  /**
+   * Bootstrap the registry with known patterns from existing handlers
+   * @deprecated Use ensureBootstrapPatterns() instead
+   */
+  private async bootstrap(): Promise<void> {
+    patternsLogger.info('Bootstrapping pattern registry');
+    await this.ensureBootstrapPatterns();
   }
 
   /**

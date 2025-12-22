@@ -336,19 +336,27 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ---
 
-## In Progress: Fix Bootstrap Pattern Tests (T-009)
+## Recently Completed: Fix Bootstrap Pattern Tests (T-009)
 
-**Status:** In Progress
+**Status:** Complete
 
 **Goal:** Fix 8 failing tests in learned-pattern-application.test.ts where bootstrap patterns are not loading correctly after initialization.
 
-**Problem:**
-- Bootstrap patterns (json-suffix, registry-lookup, rest-resource, etc.) not matching against test URLs
-- Tests expect patterns to be auto-registered but findMatchingPatterns() returns empty
+**Root Cause:**
+- Bootstrap patterns were only loaded when the registry was empty
+- After the first run, persisted learned patterns existed in `learned-patterns.json`
+- Since `patterns.size > 0`, the `bootstrap()` method was skipped
+- This meant bootstrap patterns (reddit, npm, pypi, github, etc.) were never loaded
 
-| ID    | Task                         | Priority | Effort | Status      |
-|-------|------------------------------|----------|--------|-------------|
-| T-009 | Fix bootstrap pattern tests  | Critical | M      | In Progress |
+**Fix:**
+- Added `ensureBootstrapPatterns()` method that checks for and adds missing bootstrap patterns
+- This method is called on every `initialize()` regardless of persisted patterns
+- Only adds bootstrap patterns that don't already exist (by ID)
+- Preserves any existing patterns while ensuring all bootstrap patterns are available
+
+| ID    | Task                         | Priority | Effort | Status   |
+|-------|------------------------------|----------|--------|----------|
+| T-009 | Fix bootstrap pattern tests  | Critical | M      | Complete |
 
 ---
 
