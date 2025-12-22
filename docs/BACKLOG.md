@@ -170,6 +170,45 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 
 ---
 
+## P1.5: MCP Tool Consolidation (New Initiative)
+
+**Goal:** Reduce tool count from 25 to 5-6 core tools to eliminate LLM choice paralysis and simplify the user experience.
+
+**Context:** Current 25-tool interface overwhelms LLMs with too many choices. For the two main use cases (scraping and research), users need 3-5 tools max. Most complexity should be automatic or hidden in debug mode.
+
+**Success Criteria:**
+- Tool count: 25 → 5-6 (76% reduction)
+- Clear mental model: "browse, call API, configure auth"
+- Learning intelligence auto-applied, not manually queried
+- Developer/analytics tools separated from user-facing tools
+
+| ID | Task | Effort | Status | Notes |
+|----|------|--------|--------|-------|
+| TC-001 | Consolidate 6 auth tools into 1 | M | Not Started | Merge get_api_auth_status, configure_api_auth, complete_oauth, get_auth_guidance, delete_api_auth, list_configured_auth into single `api_auth` tool with actions |
+| TC-002 | Auto-embed domain insights in smart_browse | M | Not Started | Remove get_domain_intelligence, get_domain_capabilities, get_learning_stats, get_learning_effectiveness - include insights in browse response metadata |
+| TC-003 | Auto-apply skills (remove skill_management) | L | Not Started | Skills should be automatically applied based on URL patterns. Remove manual skill_management tool. Add skill application trace to browse response |
+| TC-004 | Move debug tools to DEBUG_MODE | S | Not Started | Hide capture_screenshot, export_har, debug_traces behind LLM_BROWSER_DEBUG_MODE env var |
+| TC-005 | Remove analytics tools from MCP | M | Not Started | Remove get_performance_metrics, usage_analytics, get_analytics_dashboard, get_system_status. Create separate admin interface or web dashboard |
+| TC-006 | Remove infrastructure tools | S | Not Started | Remove get_browser_providers, tier_management (internal details, fully automatic) |
+| TC-007 | Auto-track content or add flag | S | Not Started | Remove content_tracking tool. Either auto-track all URLs or add checkForChanges flag to smart_browse |
+| TC-008 | Deprecation warnings for old tools | S | Not Started | Add warnings to deprecated tools with migration guidance. Keep working for 2-3 releases |
+| TC-009 | Update documentation for 5-tool interface | M | Not Started | Rewrite docs to focus on core tools only. Move debug/admin tools to "Advanced" section |
+| TC-010 | Measure LLM tool selection improvement | S | Not Started | Track metrics: tool selection accuracy, first-browse success rate, user confusion indicators |
+
+**Target Tool Count: 5-6 Core Tools**
+1. `smart_browse` - Intelligent browsing (includes learning feedback in response)
+2. `execute_api_call` - Direct API calls
+3. `api_auth` - Auth configuration (consolidated, action-based)
+4. `session_management` - Session/cookie management
+5. `batch_browse` - Batch operations (optional convenience)
+
+**Non-Goals:**
+- ❌ Remove functionality (just consolidate access)
+- ❌ Break existing integrations immediately
+- ❌ Hide necessary capabilities
+
+---
+
 ## P2: Medium Priority (Plan For)
 
 ### Debugging & Observability
