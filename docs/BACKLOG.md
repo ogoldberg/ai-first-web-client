@@ -209,6 +209,132 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 
 ---
 
+## P1.5: SDK Extraction (New Initiative)
+
+**Goal:** Extract core intelligence into standalone SDK to enable programmatic use cases (scraping, automation) and serve as foundation for all interfaces.
+
+**Context:** Current MCP-only architecture limits use cases. Scraping/automation users need direct SDK access without LLM overhead. SDK-first design allows building multiple interfaces (MCP, API, CLI, Skills) on single foundation.
+
+**Success Criteria:**
+- Core published as `@llm-browser/core` npm package
+- MCP tools are thin wrappers (<50 lines each)
+- Full TypeScript types and documentation
+- Zero interface-specific code in core
+- Users can embed in Node.js apps directly
+
+**Dependencies:**
+- Should follow TC-001 to TC-010 (simplified MCP is cleaner wrapper)
+
+| ID | Task | Effort | Status | Notes |
+|----|------|--------|--------|-------|
+| SDK-001 | Audit core dependencies and interfaces | S | Not Started | Identify what belongs in SDK vs wrappers. Document current coupling between core and MCP |
+| SDK-002 | Create @llm-browser/core package structure | S | Not Started | Set up monorepo or separate package. package.json, tsconfig.json, build setup |
+| SDK-003 | Extract SmartBrowser as SDK entry point | M | Not Started | Clean public API: browse(), executeApi(), initialize(), getDomainInsights(), etc. |
+| SDK-004 | Extract learning components to SDK | M | Not Started | LearningEngine, ProceduralMemory, ApiPatternRegistry. Ensure zero MCP dependencies |
+| SDK-005 | Extract session and auth to SDK | M | Not Started | SessionManager, AuthWorkflow. Clean credential storage abstraction |
+| SDK-006 | Create SDK type definitions | S | Not Started | Comprehensive TypeScript types for all public APIs. Export interfaces, types, enums |
+| SDK-007 | Add SDK usage examples | M | Not Started | 10+ examples: basic browse, API discovery, auth setup, batch processing, etc. |
+| SDK-008 | Write SDK documentation | L | Not Started | API reference, getting started guide, use case tutorials. Document all public methods |
+| SDK-009 | Refactor MCP tools as thin wrappers | L | Not Started | Rewrite tools to call SDK. Each tool should be <50 lines. Remove duplicated logic |
+| SDK-010 | Publish SDK to npm | S | Not Started | Set up CI/CD, versioning, npm publish. Start with 0.1.0-alpha |
+| SDK-011 | Create SDK migration guide | M | Not Started | How to migrate from MCP-only to SDK usage. Include code examples for common patterns |
+| SDK-012 | Add SDK integration tests | M | Not Started | Test SDK in isolation (no MCP). Ensure all features work programmatically |
+
+**Benefits:**
+- Scraping users can use SDK directly (no LLM overhead)
+- Foundation for REST API, CLI, Python SDK
+- Better testability (SDK tested independently)
+- Clearer architectural boundaries
+- Self-hosting becomes easier (just npm install)
+
+---
+
+## P1.5: Skills & Prompts (New Initiative)
+
+**Goal:** Create Claude skills (prompt templates) to provide simplest possible UX for research use cases.
+
+**Context:** Skills are easiest entry point for non-technical users. They guide MCP tool usage without requiring users to know tool names or parameters. Perfect for research workflows where LLM composes operations.
+
+**Success Criteria:**
+- 5-10 high-quality skills published
+- Each skill guides a specific use case
+- Skills work with simplified MCP (5-6 tools)
+- Clear value demonstrated in examples
+- Submitted to Claude skills directory
+
+**Dependencies:**
+- Should follow TC-001 to TC-010 (simplified MCP is easier to guide)
+
+| ID | Task | Effort | Status | Notes |
+|----|------|--------|--------|-------|
+| SK-001 | Design skill templates | M | Not Started | Research Product, Monitor Changes, Scrape Catalog, Discover APIs, Compare Sources. Map to simplified MCP tools |
+| SK-002 | Create "Research Product Information" skill | S | Not Started | Prompt: Browse product pages, extract structured data (price, features, reviews), compare across sites |
+| SK-003 | Create "Monitor Website Changes" skill | S | Not Started | Prompt: Track URL for updates, alert on changes, provide diff summary |
+| SK-004 | Create "Scrape Product Catalog" skill | S | Not Started | Prompt: Use pagination to get all items, extract consistent fields, handle rate limiting |
+| SK-005 | Create "Discover APIs" skill | S | Not Started | Prompt: Browse site, identify API endpoints, test access, document patterns |
+| SK-006 | Create "Compare Information Sources" skill | S | Not Started | Prompt: Multi-site research, cross-reference facts, identify discrepancies |
+| SK-007 | Create "Extract Government Forms" skill | S | Not Started | Prompt: Navigate gov sites, extract requirements, fees, timelines, documents |
+| SK-008 | Create "Track Competitor Sites" skill | S | Not Started | Prompt: Monitor multiple competitor sites, extract key metrics, detect changes |
+| SK-009 | Test skills with real users | M | Not Started | Get feedback from 5-10 users. Iterate on prompts based on usage patterns |
+| SK-010 | Submit to Claude skills directory | S | Not Started | Package and submit approved skills. Include examples and documentation |
+| SK-011 | Create skill usage analytics | M | Not Started | Track which skills are most used, success rates, common modifications |
+
+**Benefits:**
+- Easiest UX (just describe what you want)
+- No tool knowledge required
+- Drives MCP adoption organically
+- Creates templates for common workflows
+- Differentiates from generic web scraping
+
+---
+
+## P1.5: Hosted API Preparation (New Initiative)
+
+**Goal:** Prepare infrastructure and features for launching hosted API service (primary monetization path).
+
+**Context:** GTM plan calls for hosted API with usage-based pricing. This requires multi-tenant isolation, API authentication, rate limiting, billing integration, and production reliability. Builds on SDK foundation.
+
+**Success Criteria:**
+- REST API endpoints wrapping SDK
+- Multi-tenant isolation with usage tracking
+- API key authentication
+- Rate limiting per tenant tier
+- Billing integration (Stripe or similar)
+- 99.5%+ uptime SLA capability
+
+**Dependencies:**
+- Requires SDK-001 to SDK-010 (API wraps SDK)
+- Builds on CX-008 (multi-tenant store)
+
+| ID | Task | Effort | Status | Notes |
+|----|------|--------|--------|-------|
+| API-001 | Design REST API endpoints | M | Not Started | POST /browse, POST /api-call, GET /patterns, etc. Map to SDK methods. OpenAPI spec |
+| API-002 | Implement API authentication | M | Not Started | API key auth, tenant ID extraction, JWT for OAuth flow |
+| API-003 | Add per-tenant rate limiting | M | Not Started | Redis-based rate limiter. Different limits per tier (Starter, Team, Enterprise) |
+| API-004 | Implement usage metering for billing | L | Not Started | Track requests by tier (intelligence=1, lightweight=5, playwright=25). Export to billing system |
+| API-005 | Create tenant management endpoints | M | Not Started | POST /tenants, GET /tenants/:id, PATCH /tenants/:id. Admin API for managing customers |
+| API-006 | Add API request/response logging | M | Not Started | Structured logging for debugging. Redact sensitive data. Queryable for support |
+| API-007 | Implement billing integration | L | Not Started | Stripe integration. Usage-based billing. Handle webhooks for subscription changes |
+| API-008 | Create admin dashboard | L | Not Started | Web UI for monitoring usage, managing tenants, viewing errors. Analytics charts |
+| API-009 | Set up production infrastructure | XL | Not Started | Docker containers, orchestration (K8s or ECS), load balancing, auto-scaling |
+| API-010 | Implement health checks and monitoring | M | Not Started | /health endpoint, metrics export (Prometheus), alerting (PagerDuty) |
+| API-011 | Add API documentation | L | Not Started | OpenAPI/Swagger UI, getting started guide, code examples (curl, Python, Node.js) |
+| API-012 | Create API client libraries | L | Not Started | Official clients: JavaScript/TypeScript (wraps fetch), Python (requests-based) |
+| API-013 | Set up CI/CD pipeline | M | Not Started | Automated testing, deployment to staging/production, rollback capability |
+| API-014 | Load testing and optimization | L | Not Started | Test at 1000+ req/s, identify bottlenecks, optimize database queries |
+| API-015 | Security audit | M | Not Started | Penetration testing, OWASP top 10 review, dependency scanning |
+| API-016 | Create pricing calculator | M | Not Started | Help users estimate costs based on usage patterns. Interactive tool on website |
+| API-017 | Beta program launch | M | Not Started | Private beta with 10-20 users. Gather feedback, fix critical issues |
+
+**Benefits:**
+- Primary monetization path
+- Platform-agnostic (any LLM can use)
+- Usage-based revenue scales with customer success
+- Centralized learning (shared pattern pool)
+- Enterprise-ready (SLA, support, security)
+
+---
+
 ## P2: Medium Priority (Plan For)
 
 ### Debugging & Observability
