@@ -281,6 +281,18 @@ Note: "Order" reflects the implementation sequence, optimized for dependencies a
 
 ---
 
+## In Progress: Medium API Handler (I-009)
+
+**Status:** In Progress
+
+**Goal:** Add Medium.com API handler for extracting article content via their undocumented but discoverable API.
+
+| ID    | Task               | Priority | Effort | Status      |
+|-------|--------------------|----------|--------|-------------|
+| I-009 | Medium API handler | Medium   | M      | In Progress |
+
+---
+
 ## Recently Completed: Content Change Detection Alerts (F-003)
 
 **Status:** Complete (PR #94)
