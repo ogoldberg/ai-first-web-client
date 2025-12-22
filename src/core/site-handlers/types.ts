@@ -131,12 +131,8 @@ export abstract class BaseSiteHandler implements SiteHandler {
    * Escape text for markdown
    */
   protected escapeMarkdown(text: string): string {
-    return text
-      .replace(/\\/g, '\\\\')
-      .replace(/\*/g, '\\*')
-      .replace(/_/g, '\\_')
-      .replace(/\[/g, '\\[')
-      .replace(/\]/g, '\\]');
+    // Escape all characters with special meaning in Markdown
+    return text.replace(/[\\`*_{}[\]()#+.!|-]/g, '\\$&');
   }
 
   /**

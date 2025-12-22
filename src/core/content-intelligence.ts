@@ -40,6 +40,7 @@ import {
   gitHubHandler,
   type FetchFunction,
   type SiteHandlerOptions,
+  type SiteHandlerResult,
 } from './site-handlers/index.js';
 
 // Create a require function for ESM compatibility
@@ -1754,6 +1755,22 @@ export class ContentIntelligence {
   // ============================================
 
   /**
+   * Convert a SiteHandlerResult to a ContentResult
+   * strategiesAttempted and timing are populated by the main extract loop
+   */
+  private toContentResult(result: SiteHandlerResult): ContentResult {
+    return {
+      content: result.content,
+      meta: {
+        ...result.meta,
+        strategiesAttempted: [],
+        timing: 0,
+      },
+      warnings: result.warnings,
+    };
+  }
+
+  /**
    * Try Reddit's public JSON API
    */
   private async tryRedditAPI(
@@ -1769,15 +1786,7 @@ export class ContentIntelligence {
       return null;
     }
 
-    return {
-      content: result.content,
-      meta: {
-        ...result.meta,
-        strategiesAttempted: [],
-        timing: 0,
-      },
-      warnings: result.warnings,
-    };
+    return this.toContentResult(result);
   }
 
   // ============================================
@@ -1801,15 +1810,7 @@ export class ContentIntelligence {
       return null;
     }
 
-    return {
-      content: result.content,
-      meta: {
-        ...result.meta,
-        strategiesAttempted: [],
-        timing: 0,
-      },
-      warnings: result.warnings,
-    };
+    return this.toContentResult(result);
   }
 
   // ============================================
@@ -1833,15 +1834,7 @@ export class ContentIntelligence {
       return null;
     }
 
-    return {
-      content: result.content,
-      meta: {
-        ...result.meta,
-        strategiesAttempted: [],
-        timing: 0,
-      },
-      warnings: result.warnings,
-    };
+    return this.toContentResult(result);
   }
 
   // ============================================
