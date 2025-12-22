@@ -295,6 +295,7 @@ All 10 phases complete:
 | P1 | Move debug tools to DEBUG_MODE | Complete |
 | P1 | Remove analytics/infrastructure tools from MCP | Complete |
 | P1 | Auto-track content or add checkForChanges flag | Complete |
+| P1 | Deprecation warnings for old tools | In Progress |
 
 **Target Tools:**
 1. `smart_browse` - Intelligent browsing with auto-learning
