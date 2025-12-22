@@ -293,7 +293,7 @@ All 10 phases complete:
 | P0 | Auto-embed domain insights in smart_browse | Complete |
 | P0 | Auto-apply skills (remove skill_management) | Complete |
 | P1 | Move debug tools to DEBUG_MODE | Complete |
-| P1 | Remove analytics/infrastructure tools from MCP | Not Started |
+| P1 | Remove analytics/infrastructure tools from MCP | In Progress |
 
 **Target Tools:**
 1. `smart_browse` - Intelligent browsing with auto-learning
