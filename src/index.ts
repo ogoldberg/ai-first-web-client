@@ -59,6 +59,20 @@ import { generateDashboard, getQuickStatus } from './utils/analytics-dashboard.j
 import { getContentChangeTracker } from './utils/content-change-tracker.js';
 
 /**
+ * TC-004: Debug mode flag
+ * When false, debug tools (capture_screenshot, export_har, debug_traces) are hidden from tool list
+ * Set LLM_BROWSER_DEBUG_MODE=1 or LLM_BROWSER_DEBUG_MODE=true to enable
+ */
+const DEBUG_MODE = ['1', 'true'].includes(
+  (process.env.LLM_BROWSER_DEBUG_MODE || '').toLowerCase()
+);
+
+/**
+ * List of tool names that require DEBUG_MODE to be enabled
+ */
+const DEBUG_TOOLS = ['capture_screenshot', 'export_har', 'debug_traces'];
+
+/**
  * Create a versioned JSON response for MCP tools
  * All successful responses include schemaVersion for client compatibility
  */
@@ -1281,12 +1295,21 @@ Use this for quick health checks. For detailed analytics, use get_analytics_dash
           properties: {},
         },
       },
-    ],
+    // TC-004: Filter out debug tools if DEBUG_MODE is disabled
+    ].filter(tool => DEBUG_MODE || !DEBUG_TOOLS.includes(tool.name)),
   };
 });
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
+
+  // TC-004: Block debug tools if DEBUG_MODE is disabled (safety check)
+  if (!DEBUG_MODE && DEBUG_TOOLS.includes(name)) {
+    return errorResponse(
+      `${name} is a debug tool and requires LLM_BROWSER_DEBUG_MODE=1 to be set. ` +
+      'Debug tools are hidden by default to reduce cognitive load for LLMs.'
+    );
+  }
 
   try {
     if (!args) {
