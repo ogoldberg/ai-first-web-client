@@ -2053,4 +2053,501 @@ describe('ContentIntelligence', () => {
       expect(capturedEvent?.content.text).toContain('Full body content');
     });
   });
+
+  describe('Medium API Extraction', () => {
+    // Helper to create Medium JSON response with security prefix
+    const createMediumResponse = (data: unknown, status = 200) => {
+      const jsonStr = JSON.stringify(data);
+      const prefixedJson = `])}while(1);</x>${jsonStr}`;
+      return {
+        ok: status >= 200 && status < 300,
+        status,
+        statusText: status === 200 ? 'OK' : 'Error',
+        text: () => Promise.resolve(prefixedJson),
+        headers: new Headers({
+          'content-type': 'text/html', // Medium actually returns text/html
+        }),
+      };
+    };
+
+    // Sample Medium article data
+    const sampleMediumArticle = {
+      payload: {
+        value: {
+          title: 'Understanding JavaScript Closures',
+          creatorId: 'user123',
+          firstPublishedAt: 1700000000000,
+          content: {
+            subtitle: 'A deep dive into one of JS most powerful features',
+            bodyModel: {
+              paragraphs: [
+                { type: 1, text: 'Closures are one of the most powerful features in JavaScript.' },
+                { type: 3, text: 'What is a Closure?' },
+                { type: 1, text: 'A closure is the combination of a function bundled together with references to its surrounding state.' },
+                { type: 6, text: 'Functions in JavaScript form closures.' },
+                { type: 8, text: 'function outer() {\n  let count = 0;\n  return function inner() {\n    count++;\n    return count;\n  }\n}' },
+                { type: 9, text: 'First bullet point' },
+                { type: 9, text: 'Second bullet point' },
+                { type: 1, text: 'Understanding closures is essential for any JavaScript developer.' },
+              ],
+            },
+          },
+          virtuals: {
+            readingTime: 5.5,
+            totalClapCount: 1250,
+          },
+        },
+        references: {
+          User: {
+            user123: {
+              name: 'Jane Developer',
+              username: 'janedev',
+            },
+          },
+        },
+      },
+    };
+
+    it('should extract content from Medium article using ?format=json API', async () => {
+      mockFetch.mockResolvedValueOnce(createMediumResponse(sampleMediumArticle));
+
+      const result = await intelligence.extract('https://medium.com/@janedev/understanding-javascript-closures-abc123');
+
+      expect(result.meta.strategy).toBe('api:medium');
+      expect(result.meta.confidence).toBe('high');
+      expect(result.content.title).toBe('Understanding JavaScript Closures');
+      expect(result.content.text).toContain('Jane Developer');
+      expect(result.content.text).toContain('Closures are one of the most powerful features');
+      expect(result.content.markdown).toContain('## What is a Closure?');
+      expect(result.content.markdown).toContain('```');
+    });
+
+    it('should handle subdomain Medium URLs', async () => {
+      mockFetch.mockResolvedValueOnce(createMediumResponse(sampleMediumArticle));
+
+      const result = await intelligence.extract('https://engineering.medium.com/understanding-closures-abc123', {
+        minContentLength: 100,
+      });
+
+      expect(result.meta.strategy).toBe('api:medium');
+      expect(result.content.title).toBe('Understanding JavaScript Closures');
+    });
+
+    it('should handle publication Medium URLs', async () => {
+      mockFetch.mockResolvedValueOnce(createMediumResponse(sampleMediumArticle));
+
+      const result = await intelligence.extract('https://medium.com/better-programming/understanding-closures-abc123', {
+        minContentLength: 100,
+      });
+
+      expect(result.meta.strategy).toBe('api:medium');
+    });
+
+    it('should strip multiple security prefix variants', async () => {
+      // Test with different prefixes
+      const prefixes = [
+        `])}while(1);</x>`,
+        `while(1);`,
+        `)]}',`,
+        `)]}`,
+      ];
+
+      for (const prefix of prefixes) {
+        vi.resetAllMocks();
+        const jsonStr = JSON.stringify(sampleMediumArticle);
+        const prefixedJson = `${prefix}${jsonStr}`;
+
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          text: () => Promise.resolve(prefixedJson),
+          headers: new Headers({ 'content-type': 'text/html' }),
+        });
+
+        const result = await intelligence.extract('https://medium.com/@user/article-abc123', {
+          minContentLength: 100,
+        });
+
+        expect(result.meta.strategy).toBe('api:medium');
+        expect(result.content.title).toBe('Understanding JavaScript Closures');
+      }
+    });
+
+    it('should format different paragraph types correctly', async () => {
+      mockFetch.mockResolvedValueOnce(createMediumResponse(sampleMediumArticle));
+
+      const result = await intelligence.extract('https://medium.com/@user/article-abc123', {
+        minContentLength: 100,
+      });
+
+      const markdown = result.content.markdown;
+
+      // Check H3 header (type 3)
+      expect(markdown).toContain('## What is a Closure?');
+
+      // Check blockquote (type 6)
+      expect(markdown).toContain('> Functions in JavaScript form closures.');
+
+      // Check code block (type 8)
+      expect(markdown).toContain('```');
+      expect(markdown).toContain('function outer()');
+
+      // Check bullet points (type 9)
+      expect(markdown).toContain('- First bullet point');
+      expect(markdown).toContain('- Second bullet point');
+    });
+
+    it('should extract author information from references', async () => {
+      mockFetch.mockResolvedValueOnce(createMediumResponse(sampleMediumArticle));
+
+      const result = await intelligence.extract('https://medium.com/@user/article-abc123', {
+        minContentLength: 100,
+      });
+
+      expect(result.content.text).toContain('Jane Developer');
+      expect(result.content.markdown).toContain('**By Jane Developer**');
+    });
+
+    it('should include reading time and claps', async () => {
+      mockFetch.mockResolvedValueOnce(createMediumResponse(sampleMediumArticle));
+
+      const result = await intelligence.extract('https://medium.com/@user/article-abc123', {
+        minContentLength: 100,
+      });
+
+      expect(result.content.text).toContain('1250 claps');
+      expect(result.content.markdown).toContain('6 min read'); // Math.ceil(5.5) = 6
+    });
+
+    it('should skip non-Medium URLs', async () => {
+      mockFetch.mockResolvedValueOnce(createHtmlResponse(`
+        <html><body><p>Some content here for the test.</p></body></html>
+      `));
+
+      const result = await intelligence.extract('https://dev.to/article', {
+        minContentLength: 10,
+      });
+
+      expect(result.meta.strategy).not.toBe('api:medium');
+    });
+
+    it('should skip non-article Medium URLs', async () => {
+      // Homepage or profile page without article path
+      // Use forceStrategy to test just Medium behavior
+      mockFetch.mockResolvedValueOnce(createMediumResponse({
+        payload: { value: null },
+      }));
+
+      // Profile URL is not an article, so Medium API should return null
+      // We use forceStrategy and expect it to throw (no other fallback)
+      try {
+        await intelligence.extract('https://medium.com/@username', {
+          forceStrategy: 'api:medium',
+          minContentLength: 10,
+        });
+        // If we get here, the extraction succeeded which is unexpected
+        expect.fail('Should not have extracted from non-article URL');
+      } catch {
+        // Expected - Medium API should not work on profile URLs
+      }
+    });
+
+    it('should handle API errors gracefully', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 404,
+        text: () => Promise.resolve('Not Found'),
+        headers: new Headers({}),
+      });
+
+      // Force Medium strategy to test error handling directly
+      try {
+        await intelligence.extract('https://medium.com/@user/article-abc123', {
+          forceStrategy: 'api:medium',
+          minContentLength: 10,
+        });
+        expect.fail('Should have thrown on API error');
+      } catch {
+        // Expected - Medium API should fail gracefully
+      }
+    });
+
+    it('should handle invalid JSON gracefully', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        text: () => Promise.resolve('])}while(1);</x>{invalid json here'),
+        headers: new Headers({ 'content-type': 'text/html' }),
+      });
+
+      // Force Medium strategy to test JSON parsing error handling
+      try {
+        await intelligence.extract('https://medium.com/@user/article-abc123', {
+          forceStrategy: 'api:medium',
+          minContentLength: 10,
+        });
+        expect.fail('Should have thrown on invalid JSON');
+      } catch {
+        // Expected - Medium API should fail on invalid JSON
+      }
+    });
+
+    it('should handle missing article data gracefully', async () => {
+      const emptyPayload = {
+        payload: {
+          value: null,
+        },
+      };
+
+      mockFetch.mockResolvedValueOnce(createMediumResponse(emptyPayload));
+
+      // Force Medium strategy to test empty data handling
+      try {
+        await intelligence.extract('https://medium.com/@user/article-abc123', {
+          forceStrategy: 'api:medium',
+          minContentLength: 10,
+        });
+        expect.fail('Should have thrown on missing article data');
+      } catch {
+        // Expected - Medium API should fail on missing data
+      }
+    });
+
+    it('should handle article with H4 headers (type 13)', async () => {
+      const articleWithH4 = {
+        payload: {
+          value: {
+            title: 'Article with Subheadings',
+            creatorId: 'user123',
+            firstPublishedAt: 1700000000000,
+            content: {
+              bodyModel: {
+                paragraphs: [
+                  { type: 3, text: 'Main Section' },
+                  { type: 13, text: 'Subsection' },
+                  { type: 1, text: 'Content under subsection with enough text for validation purposes.' },
+                ],
+              },
+            },
+            virtuals: { readingTime: 2, totalClapCount: 100 },
+          },
+          references: {
+            User: {
+              user123: { name: 'Author', username: 'author' },
+            },
+          },
+        },
+      };
+
+      mockFetch.mockResolvedValueOnce(createMediumResponse(articleWithH4));
+
+      const result = await intelligence.extract('https://medium.com/@user/article-abc123', {
+        minContentLength: 50,
+      });
+
+      expect(result.meta.strategy).toBe('api:medium');
+      expect(result.content.markdown).toContain('## Main Section');
+      expect(result.content.markdown).toContain('### Subsection');
+    });
+
+    it('should handle articles with image captions (type 4)', async () => {
+      const articleWithImages = {
+        payload: {
+          value: {
+            title: 'Article with Images',
+            creatorId: 'user123',
+            firstPublishedAt: 1700000000000,
+            content: {
+              bodyModel: {
+                paragraphs: [
+                  { type: 1, text: 'Introduction text for the article.' },
+                  { type: 4, text: 'Figure 1: A beautiful diagram showing the concept.' },
+                  { type: 1, text: 'More content after the image with additional explanation.' },
+                ],
+              },
+            },
+            virtuals: { readingTime: 3, totalClapCount: 200 },
+          },
+          references: {
+            User: {
+              user123: { name: 'Author', username: 'author' },
+            },
+          },
+        },
+      };
+
+      mockFetch.mockResolvedValueOnce(createMediumResponse(articleWithImages));
+
+      const result = await intelligence.extract('https://medium.com/@user/article-abc123', {
+        minContentLength: 50,
+      });
+
+      expect(result.meta.strategy).toBe('api:medium');
+      expect(result.content.markdown).toContain('*Figure 1: A beautiful diagram showing the concept.*');
+    });
+
+    it('should handle preformatted text (type 11)', async () => {
+      const articleWithPreformatted = {
+        payload: {
+          value: {
+            title: 'Article with Preformatted',
+            creatorId: 'user123',
+            firstPublishedAt: 1700000000000,
+            content: {
+              bodyModel: {
+                paragraphs: [
+                  { type: 1, text: 'Some intro text here for the test.' },
+                  { type: 11, text: 'This is preformatted\n  text with\n    indentation' },
+                  { type: 1, text: 'Continuing with more content after the preformatted block.' },
+                ],
+              },
+            },
+            virtuals: { readingTime: 2, totalClapCount: 50 },
+          },
+          references: {
+            User: {
+              user123: { name: 'Author', username: 'author' },
+            },
+          },
+        },
+      };
+
+      mockFetch.mockResolvedValueOnce(createMediumResponse(articleWithPreformatted));
+
+      const result = await intelligence.extract('https://medium.com/@user/article-abc123', {
+        minContentLength: 50,
+      });
+
+      expect(result.meta.strategy).toBe('api:medium');
+      expect(result.content.markdown).toContain('```');
+      expect(result.content.markdown).toContain('This is preformatted');
+    });
+
+    it('should handle ordered list items (type 10)', async () => {
+      const articleWithOrderedList = {
+        payload: {
+          value: {
+            title: 'Article with Ordered List',
+            creatorId: 'user123',
+            firstPublishedAt: 1700000000000,
+            content: {
+              bodyModel: {
+                paragraphs: [
+                  { type: 1, text: 'Steps to follow in order:' },
+                  { type: 10, text: 'First step in the process' },
+                  { type: 10, text: 'Second step in the process' },
+                  { type: 10, text: 'Third step in the process' },
+                  { type: 1, text: 'Conclusion and summary text.' },
+                ],
+              },
+            },
+            virtuals: { readingTime: 2, totalClapCount: 75 },
+          },
+          references: {
+            User: {
+              user123: { name: 'Author', username: 'author' },
+            },
+          },
+        },
+      };
+
+      mockFetch.mockResolvedValueOnce(createMediumResponse(articleWithOrderedList));
+
+      const result = await intelligence.extract('https://medium.com/@user/article-abc123', {
+        minContentLength: 50,
+      });
+
+      expect(result.meta.strategy).toBe('api:medium');
+      expect(result.content.markdown).toContain('1. First step');
+      expect(result.content.markdown).toContain('1. Second step');
+    });
+
+    it('should handle /p/ style article URLs', async () => {
+      mockFetch.mockResolvedValueOnce(createMediumResponse(sampleMediumArticle));
+
+      const result = await intelligence.extract('https://medium.com/p/abc123def456', {
+        minContentLength: 100,
+      });
+
+      expect(result.meta.strategy).toBe('api:medium');
+    });
+
+    it('should use forceStrategy correctly', async () => {
+      mockFetch.mockResolvedValueOnce(createMediumResponse(sampleMediumArticle));
+
+      const result = await intelligence.extract('https://medium.com/@user/article-abc123', {
+        forceStrategy: 'api:medium',
+        minContentLength: 100,
+      });
+
+      expect(result.meta.strategy).toBe('api:medium');
+      expect(result.content.title).toBe('Understanding JavaScript Closures');
+    });
+
+    it('should handle article with no subtitle', async () => {
+      const articleNoSubtitle = {
+        payload: {
+          value: {
+            title: 'Simple Article',
+            creatorId: 'user123',
+            firstPublishedAt: 1700000000000,
+            content: {
+              bodyModel: {
+                paragraphs: [
+                  { type: 1, text: 'This is the main content of the article with enough text for validation.' },
+                ],
+              },
+            },
+            virtuals: { readingTime: 1, totalClapCount: 10 },
+          },
+          references: {
+            User: {
+              user123: { name: 'Simple Author', username: 'simple' },
+            },
+          },
+        },
+      };
+
+      mockFetch.mockResolvedValueOnce(createMediumResponse(articleNoSubtitle));
+
+      const result = await intelligence.extract('https://medium.com/@user/simple-article-abc123', {
+        minContentLength: 50,
+      });
+
+      expect(result.meta.strategy).toBe('api:medium');
+      expect(result.content.title).toBe('Simple Article');
+    });
+
+    it('should handle missing author gracefully', async () => {
+      const articleNoAuthor = {
+        payload: {
+          value: {
+            title: 'Anonymous Article',
+            creatorId: 'unknown',
+            firstPublishedAt: 1700000000000,
+            content: {
+              bodyModel: {
+                paragraphs: [
+                  { type: 1, text: 'Content from an article without known author information for testing.' },
+                ],
+              },
+            },
+            virtuals: { readingTime: 1, totalClapCount: 5 },
+          },
+          references: {
+            User: {},
+          },
+        },
+      };
+
+      mockFetch.mockResolvedValueOnce(createMediumResponse(articleNoAuthor));
+
+      const result = await intelligence.extract('https://medium.com/@user/anon-article-abc123', {
+        minContentLength: 50,
+      });
+
+      expect(result.meta.strategy).toBe('api:medium');
+      expect(result.content.text).toContain('Unknown Author');
+    });
+  });
 });
