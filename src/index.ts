@@ -57,6 +57,7 @@ import { UrlSafetyError } from './utils/url-safety.js';
 import { getUsageMeter, type UsageQueryOptions } from './utils/usage-meter.js';
 import { generateDashboard, getQuickStatus } from './utils/analytics-dashboard.js';
 import { getContentChangeTracker } from './utils/content-change-tracker.js';
+import { getToolSelectionMetrics } from './utils/tool-selection-metrics.js';
 
 /**
  * Helper to read boolean mode flags from environment variables
@@ -106,6 +107,8 @@ const ADMIN_TOOLS = [
   'tier_management',
   // TC-007: Content tracking tool (use smart_browse with checkForChanges instead)
   'content_tracking',
+  // TC-010: Tool selection metrics
+  'tool_selection_metrics',
   // TC-008: Deprecated tools (hidden, use consolidated alternatives)
   'get_domain_intelligence',    // Use smart_browse with includeInsights
   'get_domain_capabilities',    // Use smart_browse with includeInsights
@@ -1343,6 +1346,59 @@ Use this for quick health checks. For detailed analytics, use get_analytics_dash
           properties: {},
         },
       },
+
+      // ============================================
+      // TOOL SELECTION METRICS (TC-010)
+      // ============================================
+      {
+        name: 'tool_selection_metrics',
+        description: `Get metrics about tool selection patterns to measure the effectiveness of the 5-tool interface.
+
+Actions:
+- stats: Get tool usage statistics (invocations, success rates, category breakdown)
+- confusion: Get confusion indicators (deprecated tool usage, repeated failures, tool hopping)
+
+Tracks:
+- Which tools are used most frequently
+- First-browse success rate (smart_browse success on first try)
+- Deprecated tool usage (indicates confusion with new interface)
+- Tool sequence patterns within sessions
+
+Use this to validate that the 5-tool interface is working effectively and LLMs are not confused.`,
+        inputSchema: {
+          type: 'object',
+          properties: {
+            action: {
+              type: 'string',
+              enum: ['stats', 'confusion'],
+              description: 'Action to perform',
+            },
+            period: {
+              type: 'string',
+              enum: ['hour', 'day', 'week', 'month', 'all'],
+              description: 'Time period for analysis (default: day)',
+            },
+            tool: {
+              type: 'string',
+              description: 'Filter by specific tool name',
+            },
+            category: {
+              type: 'string',
+              enum: ['core', 'debug', 'admin', 'deprecated', 'unknown'],
+              description: 'Filter by tool category',
+            },
+            sessionId: {
+              type: 'string',
+              description: 'Filter by session ID',
+            },
+            tenantId: {
+              type: 'string',
+              description: 'Filter by tenant ID',
+            },
+          },
+          required: ['action'],
+        },
+      },
     // TC-004: Filter out debug tools if DEBUG_MODE is disabled
     // TC-005/TC-006: Filter out admin tools if ADMIN_MODE is disabled
     ].filter(tool => {
@@ -1355,9 +1411,36 @@ Use this for quick health checks. For detailed analytics, use get_analytics_dash
 
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
   const { name, arguments: args } = request.params;
+  const startTime = Date.now();
+
+  // TC-010: Initialize tool selection metrics for recording
+  const toolMetrics = getToolSelectionMetrics();
+  // Initialize asynchronously but don't block - recording will handle it
+  toolMetrics.initialize().catch(() => {
+    // Silently ignore initialization failures - metrics are non-critical
+  });
+
+  // Helper to record tool invocation result
+  const recordToolInvocation = async (success: boolean, error?: string) => {
+    try {
+      await toolMetrics.record({
+        timestamp: startTime,
+        tool: name,
+        success,
+        error,
+        durationMs: Date.now() - startTime,
+        // Session ID could be extracted from request context if available
+        sessionId: undefined,
+        tenantId: undefined,
+      });
+    } catch {
+      // Silently ignore recording failures - metrics are non-critical
+    }
+  };
 
   // TC-004: Block debug tools if DEBUG_MODE is disabled (safety check)
   if (!DEBUG_MODE && DEBUG_TOOLS.includes(name)) {
+    await recordToolInvocation(false, 'Debug mode required');
     return errorResponse(
       `${name} is a debug tool and requires LLM_BROWSER_DEBUG_MODE=1 to be set. ` +
       'Debug tools are hidden by default to reduce cognitive load for LLMs.'
@@ -1366,6 +1449,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
   // TC-005/TC-006: Block admin tools if ADMIN_MODE is disabled (safety check)
   if (!ADMIN_MODE && ADMIN_TOOLS.includes(name)) {
+    await recordToolInvocation(false, 'Admin mode required');
     return errorResponse(
       `${name} is an admin tool and requires LLM_BROWSER_ADMIN_MODE=1 to be set. ` +
       'Admin tools (analytics, infrastructure) are hidden by default to reduce cognitive load for LLMs.'
@@ -3279,10 +3363,44 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
         return jsonResponse(status);
       }
 
+      // ============================================
+      // TOOL SELECTION METRICS (TC-010)
+      // ============================================
+      case 'tool_selection_metrics': {
+        const action = args.action as string;
+        const metrics = getToolSelectionMetrics();
+        await metrics.initialize();
+
+        const queryOptions = {
+          period: args.period as 'hour' | 'day' | 'week' | 'month' | 'all' | undefined,
+          tool: args.tool as string | undefined,
+          category: args.category as 'core' | 'debug' | 'admin' | 'deprecated' | 'unknown' | undefined,
+          sessionId: args.sessionId as string | undefined,
+          tenantId: args.tenantId as string | undefined,
+        };
+
+        switch (action) {
+          case 'stats': {
+            const stats = await metrics.getStats(queryOptions);
+            return jsonResponse(stats);
+          }
+          case 'confusion': {
+            const indicators = await metrics.getConfusionIndicators(queryOptions);
+            return jsonResponse(indicators);
+          }
+          default:
+            throw new Error(`Unknown action for tool_selection_metrics: ${action}`);
+        }
+      }
+
       default:
         throw new Error(`Unknown tool: ${name}`);
     }
   } catch (error) {
+    // TC-010: Record failed tool invocation
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    await recordToolInvocation(false, errorMessage);
+
     // Extract URL and domain from request args for error context
     const url = typeof args?.url === 'string' ? args.url : undefined;
     let domain: string | undefined;
