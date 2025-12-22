@@ -294,7 +294,7 @@ All 10 phases complete:
 | P0 | Auto-apply skills (remove skill_management) | Complete |
 | P1 | Move debug tools to DEBUG_MODE | Complete |
 | P1 | Remove analytics/infrastructure tools from MCP | Complete |
-| P1 | Auto-track content or add checkForChanges flag | In Progress |
+| P1 | Auto-track content or add checkForChanges flag | Complete |
 
 **Target Tools:**
 1. `smart_browse` - Intelligent browsing with auto-learning
@@ -776,12 +776,13 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for ful
 
 ### v0.5.0 (2025-12-22)
 
-- Added TC-005/TC-006: Hide analytics and infrastructure tools behind ADMIN_MODE
-  - New LLM_BROWSER_ADMIN_MODE environment variable (set to 1 or true to enable)
-  - Analytics tools hidden by default: get_performance_metrics, usage_analytics, get_analytics_dashboard, get_system_status
-  - Infrastructure tools hidden by default: get_browser_providers, tier_management
-  - Tools remain fully functional when ADMIN_MODE is enabled
-  - Reduces cognitive load for LLMs by hiding 6 non-essential tools
+- Added TC-005/TC-006/TC-007: Hide analytics, infrastructure, and content tracking tools behind ADMIN_MODE
+  - LLM_BROWSER_ADMIN_MODE environment variable (set to 1 or true to enable)
+  - Analytics tools hidden: get_performance_metrics, usage_analytics, get_analytics_dashboard, get_system_status
+  - Infrastructure tools hidden: get_browser_providers, tier_management
+  - Content tracking tool hidden: content_tracking (use smart_browse with checkForChanges instead)
+  - All tools remain fully functional when ADMIN_MODE is enabled
+  - Reduces cognitive load for LLMs by hiding 7 non-essential tools
 
 ### v0.5.0 (2025-12-21)
 
