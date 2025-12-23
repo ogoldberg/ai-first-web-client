@@ -284,6 +284,28 @@ export interface StealthProfile {
 export type BotDetectionType = 'cloudflare' | 'datadome' | 'perimeterx' | 'akamai' | 'recaptcha' | 'turnstile' | 'unknown';
 
 /**
+ * Anomaly false positive - record of when anomaly detection incorrectly flagged content
+ * This allows the system to learn which anomaly detections are unreliable for specific domains
+ */
+export interface AnomalyFalsePositive {
+  // What type of anomaly was incorrectly detected
+  anomalyType: 'challenge_page' | 'error_page' | 'empty_content' | 'redirect_notice' | 'captcha' | 'rate_limited';
+
+  // The reason(s) that triggered the false positive (e.g., "cloudflare", "too many requests")
+  triggerReasons: string[];
+
+  // How much content was actually extracted (proves it wasn't a real block)
+  actualContentLength: number;
+
+  // How many times this false positive has occurred
+  occurrences: number;
+
+  // When first seen and last seen
+  firstSeen: number;
+  lastSeen: number;
+}
+
+/**
  * Problem type for LLM-assisted research
  * Covers all categories of issues the browser might encounter
  */
@@ -485,6 +507,9 @@ export interface SuccessProfile {
   hasFrameworkData: boolean;
   hasBypassableApis: boolean;
 
+  // Stealth profile - learned anti-bot evasion settings
+  stealthProfile?: StealthProfile;
+
   // Notes for debugging
   notes?: string;
 }
@@ -512,6 +537,9 @@ export interface EnhancedKnowledgeBaseEntry {
 
   // Failure history
   recentFailures: FailureContext[];
+
+  // Anomaly false positives - track when anomaly detection was wrong
+  anomalyFalsePositives?: AnomalyFalsePositive[];
 
   // SUCCESS PROFILE - what works for this domain
   successProfile?: SuccessProfile;

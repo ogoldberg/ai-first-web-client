@@ -32,6 +32,8 @@ import type {
   ConfidenceDecayConfig,
   ApiPattern,
   SuccessProfile,
+  StealthProfile,
+  AnomalyFalsePositive,
   PatternSource,
   ProvenanceMetadata,
 } from '../types/index.js';
@@ -636,6 +638,313 @@ export class LearningEngine {
     }
 
     return null;
+  }
+
+  // ============================================
+  // STEALTH LEARNING
+  // ============================================
+
+  /**
+   * Record a successful stealth access for a domain
+   * This updates the stealth profile with what worked
+   */
+  recordStealthSuccess(
+    domain: string,
+    details: {
+      userAgent?: string;
+      platform?: 'Windows' | 'macOS' | 'Linux';
+      fingerprintSeed?: string;
+      headers?: Record<string, string>;
+      usedFullBrowser?: boolean;
+    }
+  ): void {
+    const entry = this.getOrCreateEntry(domain);
+    const now = Date.now();
+
+    // Initialize or update stealth profile
+    if (!entry.successProfile) {
+      entry.successProfile = {
+        preferredTier: details.usedFullBrowser ? 'playwright' : 'intelligence',
+        avgResponseTime: 0,
+        avgContentLength: 0,
+        successCount: 1,
+        lastSuccess: now,
+        hasStructuredData: false,
+        hasFrameworkData: false,
+        hasBypassableApis: false,
+      };
+    }
+
+    if (!entry.successProfile.stealthProfile) {
+      entry.successProfile.stealthProfile = {
+        required: false,
+        requiresFullBrowser: details.usedFullBrowser ?? false,
+        detectionTypes: [],
+        successRate: 1,
+        successCount: 1,
+        failureCount: 0,
+        lastUpdated: now,
+      };
+    }
+
+    const stealth = entry.successProfile.stealthProfile;
+
+    // Update with successful configuration
+    if (details.userAgent) {
+      stealth.workingUserAgent = details.userAgent;
+    }
+    if (details.platform) {
+      stealth.workingPlatform = details.platform;
+    }
+    if (details.fingerprintSeed) {
+      stealth.fingerprintSeed = details.fingerprintSeed;
+    }
+    if (details.headers) {
+      stealth.requiredHeaders = { ...stealth.requiredHeaders, ...details.headers };
+    }
+
+    stealth.successCount++;
+    stealth.successRate = stealth.successCount / (stealth.successCount + stealth.failureCount);
+    stealth.lastUpdated = now;
+
+    this.save();
+
+    logger.learning.debug(`Recorded stealth success for ${domain}`, {
+      successCount: stealth.successCount,
+      successRate: stealth.successRate.toFixed(2),
+    });
+  }
+
+  /**
+   * Record a bot detection failure for a domain
+   * This helps learn what doesn't work and what type of detection was encountered
+   */
+  recordStealthFailure(
+    domain: string,
+    details: {
+      detectionType: 'cloudflare' | 'datadome' | 'perimeterx' | 'akamai' | 'recaptcha' | 'turnstile' | 'unknown';
+      responseStatus?: number;
+      requiresFullBrowser?: boolean;
+      suggestedDelay?: number;
+    }
+  ): void {
+    const entry = this.getOrCreateEntry(domain);
+    const now = Date.now();
+
+    // Initialize profiles if needed
+    if (!entry.successProfile) {
+      entry.successProfile = {
+        preferredTier: 'playwright',
+        avgResponseTime: 0,
+        avgContentLength: 0,
+        successCount: 0,
+        lastSuccess: 0,
+        hasStructuredData: false,
+        hasFrameworkData: false,
+        hasBypassableApis: false,
+      };
+    }
+
+    if (!entry.successProfile.stealthProfile) {
+      entry.successProfile.stealthProfile = {
+        required: true,
+        requiresFullBrowser: false,
+        detectionTypes: [],
+        successRate: 0,
+        successCount: 0,
+        failureCount: 1,
+        lastUpdated: now,
+      };
+    }
+
+    const stealth = entry.successProfile.stealthProfile;
+
+    // Mark stealth as required since we got detected
+    stealth.required = true;
+
+    // Track detection type
+    if (!stealth.detectionTypes.includes(details.detectionType)) {
+      stealth.detectionTypes.push(details.detectionType);
+    }
+
+    // Update requirement flags
+    if (details.requiresFullBrowser) {
+      stealth.requiresFullBrowser = true;
+    }
+
+    // Update delay requirements if rate limited
+    if (details.suggestedDelay) {
+      stealth.minDelayMs = Math.max(stealth.minDelayMs || 0, details.suggestedDelay);
+      stealth.maxDelayMs = Math.max(stealth.maxDelayMs || 0, details.suggestedDelay * 2);
+    }
+
+    stealth.failureCount++;
+    stealth.successRate = stealth.successCount / (stealth.successCount + stealth.failureCount);
+    stealth.lastUpdated = now;
+
+    this.save();
+
+    logger.learning.debug(`Recorded stealth failure for ${domain}`, {
+      detectionType: details.detectionType,
+      failureCount: stealth.failureCount,
+      successRate: stealth.successRate.toFixed(2),
+    });
+  }
+
+  /**
+   * Get the stealth profile for a domain
+   * Returns learned anti-bot evasion settings
+   */
+  getStealthProfile(domain: string): StealthProfile | null {
+    const entry = this.entries.get(domain);
+    return entry?.successProfile?.stealthProfile || null;
+  }
+
+  /**
+   * Check if a domain requires stealth mode
+   * Returns true if we've previously been blocked without stealth
+   */
+  requiresStealth(domain: string): boolean {
+    const profile = this.getStealthProfile(domain);
+    return profile?.required ?? false;
+  }
+
+  /**
+   * Check if a domain requires full browser (Playwright)
+   * Returns true if lightweight/static fetching has been blocked
+   */
+  requiresFullBrowser(domain: string): boolean {
+    const profile = this.getStealthProfile(domain);
+    return profile?.requiresFullBrowser ?? false;
+  }
+
+  /**
+   * Get recommended delay for a domain based on learned rate limiting
+   */
+  getRecommendedDelay(domain: string): { min: number; max: number } | null {
+    const profile = this.getStealthProfile(domain);
+    if (!profile || (!profile.minDelayMs && !profile.maxDelayMs)) {
+      return null;
+    }
+    return {
+      min: profile.minDelayMs || 100,
+      max: profile.maxDelayMs || 500,
+    };
+  }
+
+  // ============================================
+  // ANOMALY FALSE POSITIVE LEARNING
+  // ============================================
+
+  /**
+   * Record a false positive in anomaly detection
+   *
+   * Called when anomaly detection triggered but we successfully extracted
+   * substantial content, proving the detection was incorrect.
+   *
+   * @param domain Domain where false positive occurred
+   * @param anomalyType Type of anomaly that was incorrectly detected
+   * @param triggerReasons Reasons that triggered the detection (e.g., "cloudflare")
+   * @param actualContentLength How much content was actually extracted
+   */
+  recordAnomalyFalsePositive(
+    domain: string,
+    anomalyType: 'challenge_page' | 'error_page' | 'empty_content' | 'redirect_notice' | 'captcha' | 'rate_limited',
+    triggerReasons: string[],
+    actualContentLength: number
+  ): void {
+    const entry = this.getOrCreateEntry(domain);
+    const now = Date.now();
+
+    // Initialize if needed
+    if (!entry.anomalyFalsePositives) {
+      entry.anomalyFalsePositives = [];
+    }
+
+    // Find existing record for this anomaly type
+    const existing = entry.anomalyFalsePositives.find(
+      fp => fp.anomalyType === anomalyType
+    );
+
+    if (existing) {
+      // Update existing record
+      existing.occurrences++;
+      existing.lastSeen = now;
+      existing.actualContentLength = Math.max(existing.actualContentLength, actualContentLength);
+      // Merge trigger reasons
+      for (const reason of triggerReasons) {
+        if (!existing.triggerReasons.includes(reason)) {
+          existing.triggerReasons.push(reason);
+        }
+      }
+    } else {
+      // Create new record
+      entry.anomalyFalsePositives.push({
+        anomalyType,
+        triggerReasons,
+        actualContentLength,
+        occurrences: 1,
+        firstSeen: now,
+        lastSeen: now,
+      });
+    }
+
+    entry.lastUpdated = now;
+    this.save();
+
+    log.info('Recorded anomaly false positive', {
+      domain,
+      anomalyType,
+      triggerReasons,
+      actualContentLength,
+      totalFalsePositives: entry.anomalyFalsePositives.length,
+    });
+  }
+
+  /**
+   * Check if an anomaly type has been flagged as unreliable for this domain
+   *
+   * Returns true if we should skip or de-weight this anomaly detection
+   * because it has produced false positives before.
+   *
+   * @param domain Domain to check
+   * @param anomalyType Type of anomaly being detected
+   * @returns Whether this detection is unreliable for this domain
+   */
+  isAnomalyDetectionUnreliable(
+    domain: string,
+    anomalyType: 'challenge_page' | 'error_page' | 'empty_content' | 'redirect_notice' | 'captcha' | 'rate_limited'
+  ): boolean {
+    const entry = this.entries.get(domain);
+    if (!entry?.anomalyFalsePositives) {
+      return false;
+    }
+
+    const falsePositive = entry.anomalyFalsePositives.find(
+      fp => fp.anomalyType === anomalyType
+    );
+
+    // Consider unreliable if we've seen 2+ false positives
+    // and content was substantial (3000+ chars)
+    if (falsePositive && falsePositive.occurrences >= 2 && falsePositive.actualContentLength >= 3000) {
+      log.debug('Anomaly detection marked as unreliable', {
+        domain,
+        anomalyType,
+        occurrences: falsePositive.occurrences,
+        lastContentLength: falsePositive.actualContentLength,
+      });
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Get all anomaly false positives for a domain
+   */
+  getAnomalyFalsePositives(domain: string): AnomalyFalsePositive[] {
+    const entry = this.entries.get(domain);
+    return entry?.anomalyFalsePositives || [];
   }
 
   /**

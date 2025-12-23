@@ -24,6 +24,12 @@ import {
   type BrowserProviderType,
   type BrowserProviderConfig,
 } from './browser-providers.js';
+import {
+  launchStealthBrowser,
+  generateFingerprint,
+  createStealthContext,
+  type BrowserFingerprint,
+} from './stealth-browser.js';
 
 // Create a require function for ESM compatibility
 const require = createRequire(import.meta.url);
@@ -65,6 +71,9 @@ export interface BrowserConfig {
   devtools?: boolean;
   // Provider configuration (auto-detected from env vars if not specified)
   provider?: Partial<BrowserProviderConfig>;
+  // Stealth configuration
+  stealth?: boolean | 'auto'; // Enable stealth mode (default: 'auto')
+  fingerprintSeed?: string; // Seed for consistent fingerprint generation
 }
 
 const DEFAULT_CONFIG: BrowserConfig = {
@@ -72,6 +81,7 @@ const DEFAULT_CONFIG: BrowserConfig = {
   screenshotDir: '/tmp/browser-screenshots',
   slowMo: 0,
   devtools: false,
+  stealth: 'auto',
 };
 
 export class BrowserManager {
@@ -79,6 +89,8 @@ export class BrowserManager {
   private contexts: Map<string, BrowserContext> = new Map();
   private config: BrowserConfig;
   private provider: BrowserProvider;
+  private fingerprint: BrowserFingerprint | null = null;
+  private stealthEnabled: boolean = false;
 
   constructor(config: Partial<BrowserConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
@@ -192,14 +204,29 @@ export class BrowserManager {
           );
         }
       } else {
-        // Local browser launch
+        // Local browser launch with stealth mode
         logger.browser.info('Launching local browser', {
           headless: this.config.headless,
+          stealth: this.config.stealth,
         });
-        this.browser = await pw.chromium.launch({
-          headless: this.config.headless,
-          slowMo: this.config.slowMo,
-          devtools: this.config.devtools,
+
+        const stealthResult = await launchStealthBrowser({
+          stealth: this.config.stealth,
+          fingerprintSeed: this.config.fingerprintSeed,
+          launchOptions: {
+            headless: this.config.headless,
+            slowMo: this.config.slowMo,
+            devtools: this.config.devtools,
+          },
+        });
+
+        this.browser = stealthResult.browser;
+        this.fingerprint = stealthResult.fingerprint;
+        this.stealthEnabled = stealthResult.stealthEnabled;
+
+        logger.browser.info('Local browser launched', {
+          stealthEnabled: this.stealthEnabled,
+          platform: this.fingerprint.platform,
         });
       }
 
@@ -235,14 +262,39 @@ export class BrowserManager {
     await this.initialize();
 
     if (!this.contexts.has(profile)) {
-      const context = await this.browser!.newContext({
-        userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        viewport: { width: 1920, height: 1080 },
-      });
+      let context: BrowserContext;
+
+      if (this.stealthEnabled && this.fingerprint) {
+        // Use stealth context with learned fingerprint for anti-bot evasion
+        context = await createStealthContext(this.browser!, this.fingerprint, {
+          applyEvasionScripts: true,
+        });
+      } else {
+        // Fallback to standard context
+        context = await this.browser!.newContext({
+          userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          viewport: { width: 1920, height: 1080 },
+        });
+      }
+
       this.contexts.set(profile, context);
     }
 
     return this.contexts.get(profile)!;
+  }
+
+  /**
+   * Check if stealth mode is enabled
+   */
+  isStealthEnabled(): boolean {
+    return this.stealthEnabled;
+  }
+
+  /**
+   * Get the current browser fingerprint (if stealth is enabled)
+   */
+  getFingerprint(): BrowserFingerprint | null {
+    return this.fingerprint;
   }
 
   async browse(
