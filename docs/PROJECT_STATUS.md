@@ -350,6 +350,7 @@ All 10 phases complete:
 | P1 | Refactor MCP tools as thin wrappers (SDK-009) | Complete |
 | P1 | Publish to npm (SDK-010) | Complete |
 | P1 | Create SDK migration guide (SDK-011) | Complete |
+| P1 | Add SDK integration tests (SDK-012) | In Progress |
 
 **Benefits:** Enables direct programmatic use, foundation for all interfaces
 
