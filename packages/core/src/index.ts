@@ -165,6 +165,65 @@ export {
   INTROSPECTION_QUERY,
 } from './core/graphql-introspection.js';
 
+// Site handlers
+export {
+  // Types
+  type SiteHandler,
+  type SiteHandlerResult,
+  type SiteHandlerOptions,
+  type FetchFunction,
+  BaseSiteHandler,
+  // Handler instances
+  siteHandlers,
+  findHandler,
+  getHandlerNames,
+  redditHandler,
+  hackerNewsHandler,
+  gitHubHandler,
+  wikipediaHandler,
+  stackOverflowHandler,
+  npmHandler,
+  pypiHandler,
+  devtoHandler,
+  mediumHandler,
+  youtubeHandler,
+  // Handler classes
+  RedditHandler,
+  HackerNewsHandler,
+  GitHubHandler,
+  WikipediaHandler,
+  StackOverflowHandler,
+  NpmHandler,
+  PyPIHandler,
+  DevToHandler,
+  MediumHandler,
+  YouTubeHandler,
+} from './core/site-handlers/index.js';
+
+// Framework extractors
+export {
+  // Types
+  type FrameworkExtractionResult,
+  type FrameworkExtractorOptions,
+  // Utilities
+  extractTextFromObject,
+  extractTitleFromObject,
+  unescapeJavaScriptString,
+  htmlToPlainText,
+  // Extractors
+  extractNextJSData,
+  extractNuxtData,
+  extractGatsbyData,
+  extractRemixData,
+  extractAngularData,
+  detectAngularApp,
+  extractVitePressData,
+  detectVitePressApp,
+  extractVuePressData,
+  detectVuePressApp,
+  tryFrameworkExtractors,
+} from './core/framework-extractors/index.js';
+
 // OpenAPI discovery
 export { generatePatternsFromSpec, generatePatternsFromOpenAPISpec } from './core/openapi-discovery.js';
 

@@ -234,8 +234,8 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 | SDK-005 | Extract session and auth to SDK | M | Complete | SessionManager, AuthWorkflow with full type exports. Clean credential storage abstraction |
 | SDK-006 | Create SDK type definitions | S | Complete | Comprehensive TypeScript types for all public APIs. Export interfaces, types, enums |
 | SDK-007 | Add SDK usage examples | M | Complete | 12 examples: basic browse, tier control, API discovery, sessions, batch processing, content extraction, stealth mode, error handling, change tracking, procedural memory, analytics, TypeScript |
-| SDK-008 | Write SDK documentation | L | Not Started | API reference, getting started guide, use case tutorials. Document all public methods |
-| SDK-009 | Refactor MCP tools as thin wrappers | L | Not Started | Rewrite tools to call SDK. Each tool should be <50 lines. Remove duplicated logic |
+| SDK-008 | Write SDK documentation | L | Complete | Comprehensive README with config options, TypeScript examples, options reference, API documentation |
+| SDK-009 | Refactor MCP tools as thin wrappers | L | Complete | Modular MCP architecture: tool-schemas.ts, response-formatters.ts, sdk-client.ts, handlers/ directory. Index.ts reduced from 3588 to ~400 lines |
 | SDK-010 | Publish SDK to npm | S | Not Started | Set up CI/CD, versioning, npm publish. Start with 0.1.0-alpha |
 | SDK-011 | Create SDK migration guide | M | Not Started | How to migrate from MCP-only to SDK usage. Include code examples for common patterns |
 | SDK-012 | Add SDK integration tests | M | Not Started | Test SDK in isolation (no MCP). Ensure all features work programmatically |

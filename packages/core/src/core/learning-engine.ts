@@ -33,9 +33,9 @@ import type {
   ApiPattern,
   SuccessProfile,
   StealthProfile,
+  AnomalyFalsePositive,
   PatternSource,
   ProvenanceMetadata,
-  AnomalyFalsePositive,
 } from '../types/index.js';
 import type { AntiPattern, FailureCategory, PatternLearningEvent } from '../types/api-patterns.js';
 import type { ApiPatternRegistry } from './api-pattern-learner.js';
@@ -832,6 +832,121 @@ export class LearningEngine {
     };
   }
 
+  // ============================================
+  // ANOMALY FALSE POSITIVE LEARNING
+  // ============================================
+
+  /**
+   * Record a false positive in anomaly detection
+   *
+   * Called when anomaly detection triggered but we successfully extracted
+   * substantial content, proving the detection was incorrect.
+   *
+   * @param domain Domain where false positive occurred
+   * @param anomalyType Type of anomaly that was incorrectly detected
+   * @param triggerReasons Reasons that triggered the detection (e.g., "cloudflare")
+   * @param actualContentLength How much content was actually extracted
+   */
+  recordAnomalyFalsePositive(
+    domain: string,
+    anomalyType: 'challenge_page' | 'error_page' | 'empty_content' | 'redirect_notice' | 'captcha' | 'rate_limited',
+    triggerReasons: string[],
+    actualContentLength: number
+  ): void {
+    const entry = this.getOrCreateEntry(domain);
+    const now = Date.now();
+
+    // Initialize if needed
+    if (!entry.anomalyFalsePositives) {
+      entry.anomalyFalsePositives = [];
+    }
+
+    // Find existing record for this anomaly type
+    const existing = entry.anomalyFalsePositives.find(
+      fp => fp.anomalyType === anomalyType
+    );
+
+    if (existing) {
+      // Update existing record
+      existing.occurrences++;
+      existing.lastSeen = now;
+      existing.actualContentLength = Math.max(existing.actualContentLength, actualContentLength);
+      // Merge trigger reasons
+      for (const reason of triggerReasons) {
+        if (!existing.triggerReasons.includes(reason)) {
+          existing.triggerReasons.push(reason);
+        }
+      }
+    } else {
+      // Create new record
+      entry.anomalyFalsePositives.push({
+        anomalyType,
+        triggerReasons,
+        actualContentLength,
+        occurrences: 1,
+        firstSeen: now,
+        lastSeen: now,
+      });
+    }
+
+    entry.lastUpdated = now;
+    this.save();
+
+    log.info('Recorded anomaly false positive', {
+      domain,
+      anomalyType,
+      triggerReasons,
+      actualContentLength,
+      totalFalsePositives: entry.anomalyFalsePositives.length,
+    });
+  }
+
+  /**
+   * Check if an anomaly type has been flagged as unreliable for this domain
+   *
+   * Returns true if we should skip or de-weight this anomaly detection
+   * because it has produced false positives before.
+   *
+   * @param domain Domain to check
+   * @param anomalyType Type of anomaly being detected
+   * @returns Whether this detection is unreliable for this domain
+   */
+  isAnomalyDetectionUnreliable(
+    domain: string,
+    anomalyType: 'challenge_page' | 'error_page' | 'empty_content' | 'redirect_notice' | 'captcha' | 'rate_limited'
+  ): boolean {
+    const entry = this.entries.get(domain);
+    if (!entry?.anomalyFalsePositives) {
+      return false;
+    }
+
+    const falsePositive = entry.anomalyFalsePositives.find(
+      fp => fp.anomalyType === anomalyType
+    );
+
+    // Consider unreliable if we've seen 2+ false positives
+    // and content was substantial (3000+ chars)
+    if (falsePositive && falsePositive.occurrences >= 2 && falsePositive.actualContentLength >= 3000) {
+      log.debug('Anomaly detection marked as unreliable', {
+        domain,
+        anomalyType,
+        occurrences: falsePositive.occurrences,
+        lastContentLength: falsePositive.actualContentLength,
+      });
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Get all anomaly false positives for a domain
+   */
+  getAnomalyFalsePositives(domain: string): AnomalyFalsePositive[] {
+    const entry = this.entries.get(domain);
+    return entry?.anomalyFalsePositives || [];
+  }
+
   /**
    * Classify an error into a failure type
    */
@@ -1389,113 +1504,6 @@ export class LearningEngine {
       suggestedAction,
       waitTimeMs,
     };
-  }
-
-  // ============================================
-  // ANOMALY FALSE POSITIVE LEARNING
-  // ============================================
-
-  /**
-   * Record a false positive in anomaly detection
-   *
-   * Called when anomaly detection triggered but we successfully extracted
-   * substantial content, proving the detection was incorrect.
-   *
-   * @param domain Domain where false positive occurred
-   * @param anomalyType Type of anomaly that was incorrectly detected
-   * @param triggerReasons Reasons that triggered the detection (e.g., "cloudflare")
-   * @param actualContentLength How much content was actually extracted
-   */
-  recordAnomalyFalsePositive(
-    domain: string,
-    anomalyType: 'challenge_page' | 'error_page' | 'empty_content' | 'redirect_notice' | 'captcha' | 'rate_limited',
-    triggerReasons: string[],
-    actualContentLength: number
-  ): void {
-    const entry = this.getOrCreateEntry(domain);
-    const now = Date.now();
-
-    // Initialize if needed
-    if (!entry.anomalyFalsePositives) {
-      entry.anomalyFalsePositives = [];
-    }
-
-    // Find existing record for this anomaly type
-    const existing = entry.anomalyFalsePositives.find(
-      fp => fp.anomalyType === anomalyType
-    );
-
-    if (existing) {
-      // Update existing record
-      existing.occurrences++;
-      existing.lastSeen = now;
-      existing.actualContentLength = Math.max(existing.actualContentLength, actualContentLength);
-      // Merge trigger reasons
-      for (const reason of triggerReasons) {
-        if (!existing.triggerReasons.includes(reason)) {
-          existing.triggerReasons.push(reason);
-        }
-      }
-    } else {
-      // Create new record
-      entry.anomalyFalsePositives.push({
-        anomalyType,
-        triggerReasons,
-        actualContentLength,
-        occurrences: 1,
-        firstSeen: now,
-        lastSeen: now,
-      });
-    }
-
-    entry.lastUpdated = now;
-    this.save();
-
-    log.info('Recorded anomaly false positive', {
-      domain,
-      anomalyType,
-      triggerReasons,
-      actualContentLength,
-      totalFalsePositives: entry.anomalyFalsePositives.length,
-    });
-  }
-
-  /**
-   * Check if an anomaly type has been flagged as unreliable for this domain
-   *
-   * Returns true if we should skip or de-weight this anomaly detection
-   * because it has produced false positives before.
-   *
-   * @param domain Domain to check
-   * @param anomalyType Type of anomaly being detected
-   * @returns Whether this detection is unreliable for this domain
-   */
-  isAnomalyDetectionUnreliable(
-    domain: string,
-    anomalyType: 'challenge_page' | 'error_page' | 'empty_content' | 'redirect_notice' | 'captcha' | 'rate_limited'
-  ): boolean {
-    const entry = this.entries.get(domain);
-    if (!entry?.anomalyFalsePositives) {
-      return false;
-    }
-
-    const falsePositive = entry.anomalyFalsePositives.find(
-      fp => fp.anomalyType === anomalyType
-    );
-
-    // Consider unreliable if we've seen 2+ false positives
-    // and content was substantial (3000+ chars)
-    if (falsePositive && falsePositive.occurrences >= 2 && falsePositive.actualContentLength >= 3000) {
-      log.debug('Anomaly detection marked as unreliable', {
-        domain,
-        anomalyType,
-        occurrences: falsePositive.occurrences,
-        lastContentLength: falsePositive.actualContentLength,
-      });
-      return true;
-    }
-
-    return false;
   }
 
   // ============================================

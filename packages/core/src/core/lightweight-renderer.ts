@@ -22,7 +22,6 @@ import { CookieJar, Cookie } from 'tough-cookie';
 import vm from 'node:vm';
 import { URL } from 'node:url';
 import { TIMEOUTS } from '../utils/timeouts.js';
-import { getStealthFetchHeaders } from './stealth-browser.js';
 
 export interface LightweightRenderOptions {
   // Timeout for the entire render operation (ms)
@@ -45,10 +44,6 @@ export interface LightweightRenderOptions {
   skipScriptPatterns?: RegExp[];
   // Cookies to send with requests
   cookies?: Cookie[];
-  // Enable stealth mode (anti-bot evasion headers)
-  enableStealth?: boolean;
-  // Seed for fingerprint generation (e.g., domain name for consistency)
-  stealthFingerprintSeed?: string;
 }
 
 export interface LightweightRenderResult {
@@ -147,7 +142,6 @@ const DEFAULT_OPTIONS: LightweightRenderOptions = {
   followRedirects: true,
   maxRedirects: 5,
   skipScriptPatterns: DEFAULT_SKIP_PATTERNS,
-  enableStealth: true,  // Enable stealth headers by default for better bot evasion
 };
 
 export class LightweightRenderer {
@@ -316,7 +310,7 @@ export class LightweightRenderer {
   }
 
   /**
-   * Fetch URL with cookie handling, redirects, and stealth headers
+   * Fetch URL with cookie handling and redirects
    */
   private async fetchWithCookies(
     url: string,
@@ -326,34 +320,16 @@ export class LightweightRenderer {
     let redirectCount = 0;
     const maxRedirects = opts.maxRedirects || 5;
 
-    // Determine fingerprint seed (use domain for consistency across requests to same site)
-    const domain = new URL(url).hostname;
-    const fingerprintSeed = opts.stealthFingerprintSeed || domain;
-
     while (true) {
       // Get cookies for this URL
       const cookieString = await this.cookieJar.getCookieString(currentUrl);
 
-      // Build headers - use stealth headers if enabled
-      let headers: Record<string, string>;
-      if (opts.enableStealth !== false) {
-        // Use stealth headers for better bot evasion
-        headers = getStealthFetchHeaders({
-          fingerprintSeed,
-          extraHeaders: {
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            ...opts.headers,
-          },
-        });
-      } else {
-        // Fallback to basic headers
-        headers = {
-          'User-Agent': opts.userAgent || DEFAULT_OPTIONS.userAgent!,
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          'Accept-Language': 'en-US,en;q=0.5',
-          ...opts.headers,
-        };
-      }
+      const headers: Record<string, string> = {
+        'User-Agent': opts.userAgent || DEFAULT_OPTIONS.userAgent!,
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        ...opts.headers,
+      };
 
       if (cookieString) {
         headers['Cookie'] = cookieString;
@@ -430,10 +406,7 @@ export class LightweightRenderer {
       onLine: true,
     };
 
-    // Create mock fetch that tracks requests (with stealth headers)
-    const domain = new URL(baseUrl).hostname;
-    const fingerprintSeed = opts.stealthFingerprintSeed || domain;
-
+    // Create mock fetch that tracks requests
     const mockFetch = async (input: string | URL, init?: RequestInit): Promise<Response> => {
       const fetchUrl = new URL(input.toString(), baseUrl).href;
       const method = init?.method || 'GET';
@@ -441,21 +414,10 @@ export class LightweightRenderer {
 
       try {
         const cookieString = await this.cookieJar.getCookieString(fetchUrl);
-
-        // Build headers with stealth support
-        let requestHeaders: Record<string, string>;
-        if (opts.enableStealth !== false) {
-          requestHeaders = getStealthFetchHeaders({
-            fingerprintSeed,
-            extraHeaders: init?.headers as Record<string, string> || {},
-          });
-        } else {
-          requestHeaders = {
-            'User-Agent': opts.userAgent || DEFAULT_OPTIONS.userAgent!,
-            ...(init?.headers as Record<string, string>),
-          };
-        }
-
+        const requestHeaders: Record<string, string> = {
+          'User-Agent': opts.userAgent || DEFAULT_OPTIONS.userAgent!,
+          ...(init?.headers as Record<string, string>),
+        };
         if (cookieString) {
           requestHeaders['Cookie'] = cookieString;
         }
