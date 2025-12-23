@@ -247,12 +247,12 @@ Control tier selection:
 
 ```typescript
 // Force a specific tier
-const result = await browser.browse(url, {
+let result = await browser.browse(url, {
   forceTier: 'playwright',  // Always use full browser
 });
 
 // Set budget constraints
-const result = await browser.browse(url, {
+result = await browser.browse(url, {
   maxCostTier: 'lightweight',  // Never use playwright
   maxLatencyMs: 1000,          // Give up if > 1 second
 });
@@ -793,7 +793,7 @@ async function discoverApis() {
 Work with sites that require login:
 
 ```typescript
-import { createLLMBrowser, AuthWorkflow } from '@llm-browser/core';
+import { createLLMBrowser } from '@llm-browser/core';
 
 async function authenticatedBrowse() {
   const browser = await createLLMBrowser({
@@ -934,30 +934,34 @@ import {
   isStealthAvailable,
 } from '@llm-browser/core';
 
-// 1. Fingerprint generation (works everywhere)
-const fingerprint = generateFingerprint('example.com');
-console.log('User Agent:', fingerprint.userAgent);
-console.log('Viewport:', fingerprint.viewport);
-console.log('Locale:', fingerprint.locale);
+async function stealthExample() {
+  // 1. Fingerprint generation (works everywhere)
+  const fingerprint = generateFingerprint('example.com');
+  console.log('User Agent:', fingerprint.userAgent);
+  console.log('Viewport:', fingerprint.viewport);
+  console.log('Locale:', fingerprint.locale);
 
-// 2. Stealth headers for HTTP requests (all tiers)
-const headers = getStealthFetchHeaders({
-  fingerprintSeed: 'example.com',
-  extraHeaders: { 'Authorization': 'Bearer token' },
-});
-
-// 3. Behavioral delays
-await BehavioralDelays.sleep(100, 500);  // Random 100-500ms
-const delay = BehavioralDelays.jitteredDelay(1000, 0.3);  // 1s +/- 30%
-
-// 4. Full stealth browser (requires playwright-extra)
-if (isStealthAvailable()) {
-  const { browser, fingerprint, stealthEnabled } = await launchStealthBrowser({
+  // 2. Stealth headers for HTTP requests (all tiers)
+  const headers = getStealthFetchHeaders({
     fingerprintSeed: 'example.com',
+    extraHeaders: { 'Authorization': 'Bearer token' },
   });
-  // Use browser...
-  await browser.close();
+
+  // 3. Behavioral delays
+  await BehavioralDelays.sleep(100, 500);  // Random 100-500ms
+  const delay = BehavioralDelays.jitteredDelay(1000, 0.3);  // 1s +/- 30%
+
+  // 4. Full stealth browser (requires playwright-extra)
+  if (isStealthAvailable()) {
+    const { browser, fingerprint: fp, stealthEnabled } = await launchStealthBrowser({
+      fingerprintSeed: 'example.com',
+    });
+    // Use browser...
+    await browser.close();
+  }
 }
+
+stealthExample();
 ```
 
 **What stealth provides:**
@@ -988,6 +992,7 @@ import {
 
 async function handleErrors() {
   const browser = await createLLMBrowser();
+  const url = 'https://example.com';
 
   try {
     // URL validation (SSRF protection)
@@ -1048,6 +1053,7 @@ async function optimizedBrowse() {
   const browser = await createLLMBrowser({
     enableLearning: true,  // Learn patterns for faster future access
   });
+  const url = 'https://example.com';
 
   try {
     // 1. Use budget controls to avoid slow tiers
@@ -1116,7 +1122,18 @@ async function multiTenant() {
 
   // Contribute a learned pattern
   await sharedPool.contributePattern(
-    { /* pattern data */ },
+    {
+      id: 'p1',
+      domain: 'example.com',
+      endpoint: '/api/data',
+      method: 'GET',
+      confidence: 'high',
+      canBypass: true,
+      contentMapping: { title: 'title' },
+      source: 'manual',
+      createdAt: Date.now(),
+      lastVerified: Date.now(),
+    },
     'user-123',
     0.95  // confidence
   );
