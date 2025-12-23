@@ -44,10 +44,26 @@ export { TieredFetcher } from './core/tiered-fetcher.js';
 export { LearningEngine } from './core/learning-engine.js';
 export { ProceduralMemory } from './core/procedural-memory.js';
 export { BrowserManager } from './core/browser-manager.js';
-export { SessionManager } from './core/session-manager.js';
+export {
+  SessionManager,
+  type SessionHealth,
+  type SessionRefreshCallback,
+} from './core/session-manager.js';
 export { ContentIntelligence } from './core/content-intelligence.js';
 export { ApiAnalyzer } from './core/api-analyzer.js';
-export { AuthWorkflow } from './core/auth-workflow.js';
+export {
+  AuthWorkflow,
+  type StoredApiCredentials,
+  type ApiKeyCredentials,
+  type BearerCredentials,
+  type BasicCredentials,
+  type OAuth2Credentials,
+  type CookieCredentials,
+  type AuthWorkflowStatus,
+  type ConfigureCredentialsResult,
+  type AuthenticatedRequestOptions,
+  type AuthenticatedRequestResult,
+} from './core/auth-workflow.js';
 export { LightweightRenderer } from './core/lightweight-renderer.js';
 export { SemanticPatternMatcher } from './core/semantic-pattern-matcher.js';
 export { DomainGroupLearner } from './core/domain-group-learner.js';

@@ -231,7 +231,7 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 | SDK-002 | Create @llm-browser/core package structure | S | Complete | Set up npm workspaces monorepo with packages/core and packages/mcp |
 | SDK-003 | Extract SmartBrowser as SDK entry point | M | Complete | Clean public API: browse(), executeApi(), initialize(), getDomainInsights(), etc. |
 | SDK-004 | Extract learning components to SDK | M | Complete | LearningEngine, ProceduralMemory, ApiPatternRegistry. Zero MCP dependencies. Full exports in packages/core |
-| SDK-005 | Extract session and auth to SDK | M | In Progress | SessionManager, AuthWorkflow. Clean credential storage abstraction |
+| SDK-005 | Extract session and auth to SDK | M | Complete | SessionManager, AuthWorkflow with full type exports. Clean credential storage abstraction |
 | SDK-006 | Create SDK type definitions | S | Not Started | Comprehensive TypeScript types for all public APIs. Export interfaces, types, enums |
 | SDK-007 | Add SDK usage examples | M | Not Started | 10+ examples: basic browse, API discovery, auth setup, batch processing, etc. |
 | SDK-008 | Write SDK documentation | L | Not Started | API reference, getting started guide, use case tutorials. Document all public methods |
