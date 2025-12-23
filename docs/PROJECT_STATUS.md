@@ -359,7 +359,7 @@ All 10 phases complete:
 
 | Priority | Initiative | Status |
 |----------|-----------|--------|
-| P1 | Design skill templates | Not Started |
+| P1 | Design skill templates | In Progress |
 | P1 | Create 5 core skills (Research, Monitor, Scrape, Discover, Compare) | Not Started |
 | P2 | Test with users and submit to directory | Not Started |
 

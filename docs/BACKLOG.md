@@ -267,7 +267,7 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 
 | ID | Task | Effort | Status | Notes |
 |----|------|--------|--------|-------|
-| SK-001 | Design skill templates | M | Not Started | Research Product, Monitor Changes, Scrape Catalog, Discover APIs, Compare Sources. Map to simplified MCP tools |
+| SK-001 | Design skill templates | M | In Progress | Research Product, Monitor Changes, Scrape Catalog, Discover APIs, Compare Sources. Map to simplified MCP tools |
 | SK-002 | Create "Research Product Information" skill | S | Not Started | Prompt: Browse product pages, extract structured data (price, features, reviews), compare across sites |
 | SK-003 | Create "Monitor Website Changes" skill | S | Not Started | Prompt: Track URL for updates, alert on changes, provide diff summary |
 | SK-004 | Create "Scrape Product Catalog" skill | S | Not Started | Prompt: Use pagination to get all items, extract consistent fields, handle rate limiting |
