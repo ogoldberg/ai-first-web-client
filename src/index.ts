@@ -13,6 +13,11 @@
  * - Session management
  *
  * The browser gets smarter over time, learning from every interaction.
+ *
+ * Architecture: This file uses the MCP modules from ./mcp/ which provide:
+ * - sdk-client.ts: SDK client wrapper for MCP handlers
+ * - tool-schemas.ts: Tool schema definitions
+ * - response-formatters.ts: Response formatting utilities
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
@@ -22,19 +27,24 @@ import {
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 
-import { BrowserManager } from './core/browser-manager.js';
-import { ContentExtractor } from './utils/content-extractor.js';
-import { ApiAnalyzer } from './core/api-analyzer.js';
-import { SessionManager } from './core/session-manager.js';
-import { LearningEngine } from './core/learning-engine.js';
+// MCP modules - SDK-009: Refactored MCP architecture
 import {
-  SmartBrowser,
+  getMcpSdkClient,
+  jsonResponse,
+  errorResponse,
+  formatBrowseResult,
+  formatBatchResults,
+  getFilteredToolSchemas,
+  DEBUG_TOOLS,
+  ADMIN_TOOLS,
+} from './mcp/index.js';
+
+// Core components (still needed for some handlers during migration)
+import { BrowserManager } from './core/browser-manager.js';
+import {
   type DomainCapabilitiesSummary,
   type DomainKnowledgeSummary,
 } from './core/smart-browser.js';
-import { BrowseTool } from './tools/browse-tool.js';
-import { ApiCallTool } from './tools/api-call-tool.js';
-import { AuthWorkflow } from './core/auth-workflow.js';
 import {
   type AuthType,
   buildTypedCredentials,
@@ -47,17 +57,13 @@ import {
 } from './tools/auth-helpers.js';
 import { logger } from './utils/logger.js';
 import { computeLearningEffectiveness } from './core/learning-effectiveness.js';
-import { addSchemaVersion } from './types/schema-version.js';
-import {
-  buildStructuredError,
-  type ErrorContext,
-  type ClassificationContext,
-} from './types/errors.js';
-import { UrlSafetyError } from './utils/url-safety.js';
 import { getUsageMeter, type UsageQueryOptions } from './utils/usage-meter.js';
 import { generateDashboard, getQuickStatus } from './utils/analytics-dashboard.js';
 import { getContentChangeTracker } from './utils/content-change-tracker.js';
 import { getToolSelectionMetrics } from './utils/tool-selection-metrics.js';
+
+// Additional imports needed for schema versioning in some handlers
+import { addSchemaVersion } from './types/schema-version.js';
 
 /**
  * Helper to read boolean mode flags from environment variables
@@ -74,127 +80,21 @@ const getModeFlag = (envVar: string): boolean =>
 const DEBUG_MODE = getModeFlag('LLM_BROWSER_DEBUG_MODE');
 
 /**
- * List of tool names that require DEBUG_MODE to be enabled
- */
-const DEBUG_TOOLS = ['capture_screenshot', 'export_har', 'debug_traces'];
-
-/**
  * TC-005/TC-006/TC-007/TC-008: Admin mode flag
  * When false, admin and deprecated tools are hidden from tool list
  * Set LLM_BROWSER_ADMIN_MODE=1 or LLM_BROWSER_ADMIN_MODE=true to enable
- *
- * Hidden tools:
- * - Analytics: get_performance_metrics, usage_analytics, get_analytics_dashboard, get_system_status
- * - Infrastructure: get_browser_providers, tier_management
- * - Content tracking: content_tracking (use smart_browse with checkForChanges instead)
- * - Deprecated: get_domain_intelligence, get_domain_capabilities, get_learning_stats,
- *   get_learning_effectiveness, skill_management, get_api_auth_status, configure_api_auth,
- *   complete_oauth, get_auth_guidance, delete_api_auth, list_configured_auth
  */
 const ADMIN_MODE = getModeFlag('LLM_BROWSER_ADMIN_MODE');
 
-/**
- * List of tool names that require ADMIN_MODE to be enabled
- */
-const ADMIN_TOOLS = [
-  // TC-005: Analytics tools
-  'get_performance_metrics',
-  'usage_analytics',
-  'get_analytics_dashboard',
-  'get_system_status',
-  // TC-006: Infrastructure tools
-  'get_browser_providers',
-  'tier_management',
-  // TC-007: Content tracking tool (use smart_browse with checkForChanges instead)
-  'content_tracking',
-  // TC-010: Tool selection metrics
-  'tool_selection_metrics',
-  // TC-008: Deprecated tools (hidden, use consolidated alternatives)
-  'get_domain_intelligence',    // Use smart_browse with includeInsights
-  'get_domain_capabilities',    // Use smart_browse with includeInsights
-  'get_learning_stats',         // Use ADMIN_MODE analytics tools
-  'get_learning_effectiveness', // Use ADMIN_MODE analytics tools
-  'skill_management',           // Skills are auto-applied
-  'get_api_auth_status',        // Use api_auth with action='status'
-  'configure_api_auth',         // Use api_auth with action='configure'
-  'complete_oauth',             // Use api_auth with action='complete_oauth'
-  'get_auth_guidance',          // Use api_auth with action='guidance'
-  'delete_api_auth',            // Use api_auth with action='delete'
-  'list_configured_auth',       // Use api_auth with action='list'
-];
-
-/**
- * Create a versioned JSON response for MCP tools
- * All successful responses include schemaVersion for client compatibility
- */
-function jsonResponse(data: object, indent: number = 2): { content: Array<{ type: 'text'; text: string }> } {
-  return {
-    content: [{ type: 'text', text: JSON.stringify(addSchemaVersion(data), null, indent) }],
-  };
-}
-
-/**
- * Create a structured error response for MCP tools (CX-004)
- *
- * Returns a structured error with:
- * - category: High-level error category (network, auth, content, etc.)
- * - code: Specific error code for programmatic handling
- * - retryable: Whether the error is likely to succeed on retry
- * - recommendedActions: Suggested actions for LLM recovery
- * - context: Additional context about the error
- *
- * Note: Errors don't include schema version for backward compatibility
- */
-function errorResponse(
-  error: Error | string,
-  classificationContext?: ClassificationContext,
-  errorContext?: ErrorContext
-): { content: Array<{ type: 'text'; text: string }>; isError: true } {
-  // Extract security category from UrlSafetyError if applicable
-  const securityCategory = error instanceof UrlSafetyError ? error.category : undefined;
-
-  // Build classification context with security category
-  const fullClassificationContext: ClassificationContext = {
-    ...classificationContext,
-    securityCategory: securityCategory || classificationContext?.securityCategory,
-  };
-
-  // Build structured error
-  const structuredError = buildStructuredError(error, fullClassificationContext, errorContext);
-
-  return {
-    content: [{ type: 'text', text: JSON.stringify(structuredError) }],
-    isError: true,
-  };
-}
-
-// Initialize core components
-const browserManager = new BrowserManager();
-const contentExtractor = new ContentExtractor();
-const apiAnalyzer = new ApiAnalyzer();
-const sessionManager = new SessionManager('./sessions');
-const learningEngine = new LearningEngine('./enhanced-knowledge-base.json');
-
-// Initialize smart browser (unified intelligent browsing)
-const smartBrowser = new SmartBrowser(
-  browserManager,
-  contentExtractor,
-  apiAnalyzer,
-  sessionManager
-);
-
-// Initialize legacy tools (for backward compatibility)
-const browseTool = new BrowseTool(
-  browserManager,
-  contentExtractor,
-  apiAnalyzer,
-  sessionManager,
-  learningEngine
-);
-const apiCallTool = new ApiCallTool(browserManager);
-
-// Initialize auth workflow
-const authWorkflow = new AuthWorkflow(sessionManager);
+// Initialize core components using SDK client (SDK-009)
+const sdkClient = getMcpSdkClient();
+const browserManager = sdkClient.browserManager;
+const sessionManager = sdkClient.sessionManager;
+const learningEngine = sdkClient.learningEngine;
+const smartBrowser = sdkClient.smartBrowser;
+const browseTool = sdkClient.browseTool;
+const apiCallTool = sdkClient.apiCallTool;
+const authWorkflow = sdkClient.authWorkflow;
 
 // Create MCP server
 const server = new Server(
