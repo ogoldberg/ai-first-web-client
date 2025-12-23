@@ -204,6 +204,39 @@ export * from './types/api-patterns.js';
 export * from './types/har.js';
 
 // Re-export specific types from core modules
-export type { SmartBrowseOptions, SmartBrowseResult } from './core/smart-browser.js';
-export type { TieredFetchOptions, TieredFetchResult, RenderTier } from './core/tiered-fetcher.js';
+export type {
+  SmartBrowseOptions,
+  SmartBrowseResult,
+  DomainCapabilitiesSummary,
+  DomainKnowledgeSummary,
+  ScreenshotOptions,
+  ScreenshotResult,
+} from './core/smart-browser.js';
+
+export type {
+  TieredFetchOptions,
+  TieredFetchResult,
+  RenderTier,
+  FreshnessRequirement,
+  DomainPreference,
+} from './core/tiered-fetcher.js';
+
 export type { BrowserConfig } from './core/browser-manager.js';
+
+export type {
+  ContentResult,
+  ExtractionStrategy,
+  ContentIntelligenceOptions,
+} from './core/content-intelligence.js';
+
+export type { LearnApiPatternOptions } from './core/learning-engine.js';
+
+// Content extractor types
+export type {
+  ExtractedTable,
+  TableAsJSON,
+  TitleExtraction,
+  ContentExtraction,
+  ExtractionResultWithConfidence,
+  ExtractionResultWithTrace,
+} from './utils/content-extractor.js';
