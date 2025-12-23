@@ -1,7 +1,7 @@
 {
   "name": "@llm-browser/core",
   "version": "0.5.0",
-  "description": "Core SDK for LLM Browser - intelligent web browsing for machines",
+  "description": "Intelligent web browsing SDK for AI agents. Tiered rendering, API discovery, and progressive learning - gets faster over time.",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -22,18 +22,30 @@
   },
   "keywords": [
     "llm",
-    "browser",
-    "web-scraping",
-    "api-discovery",
-    "machine-learning",
     "ai-agent",
-    "headless-browser"
+    "web-scraping",
+    "browser-automation",
+    "api-discovery",
+    "mcp",
+    "model-context-protocol",
+    "claude",
+    "headless-browser",
+    "content-extraction",
+    "machine-learning",
+    "playwright",
+    "web-automation",
+    "rag",
+    "retrieval-augmented-generation"
   ],
   "author": "",
   "license": "MIT",
+  "homepage": "https://github.com/anthropics/llm-browser#readme",
+  "bugs": {
+    "url": "https://github.com/anthropics/llm-browser/issues"
+  },
   "repository": {
     "type": "git",
-    "url": "https://github.com/ogoldberg/ai-first-web-client",
+    "url": "git+https://github.com/anthropics/llm-browser.git",
     "directory": "packages/core"
   },
   "dependencies": {

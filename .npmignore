@@ -3,6 +3,8 @@ src/
 tests/
 scripts/
 docs/
+website/
+packages/
 
 # Configuration
 .claude/

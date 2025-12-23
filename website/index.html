@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LLM Browser - Web Browsing for AI Agents</title>
+  <meta name="description" content="A web browser where the user is an LLM. Fast, learning-based web access that gets smarter with every interaction.">
+  <meta name="keywords" content="LLM, AI agent, web scraping, MCP, Claude, API discovery, machine learning">
+
+  <!-- Open Graph -->
+  <meta property="og:title" content="LLM Browser - Web Browsing for AI Agents">
+  <meta property="og:description" content="A web browser where the user is an LLM. Fast, learning-based web access that gets smarter with every interaction.">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="og-image.png">
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="LLM Browser - Web Browsing for AI Agents">
+  <meta name="twitter:description" content="A web browser where the user is an LLM. Fast, learning-based web access that gets smarter with every interaction.">
+
+  <link rel="stylesheet" href="styles.css">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+</head>
+<body>
+  <!-- Navigation -->
+  <nav class="nav">
+    <div class="nav-container">
+      <a href="/" class="nav-logo">
+        <span class="logo-icon">{ }</span>
+        <span class="logo-text">LLM Browser</span>
+      </a>
+      <div class="nav-links">
+        <a href="#features">Features</a>
+        <a href="#how-it-works">How It Works</a>
+        <a href="#comparison">Compare</a>
+        <a href="https://github.com/anthropics/llm-browser" class="nav-github">GitHub</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero Section -->
+  <header class="hero">
+    <div class="container">
+      <div class="hero-badge">Open Source</div>
+      <h1>Web Browsing for AI Agents</h1>
+      <p class="hero-subtitle">
+        A browser where the user is an LLM, not a human. It learns from every interaction,
+        discovers APIs automatically, and progressively optimizes to skip rendering entirely.
+      </p>
+      <div class="hero-cta">
+        <a href="#get-started" class="btn btn-primary">Get Started</a>
+        <a href="https://github.com/anthropics/llm-browser" class="btn btn-secondary">View on GitHub</a>
+      </div>
+      <div class="hero-install">
+        <code>npm install llm-browser</code>
+        <button class="copy-btn" id="copyBtn" title="Copy">
+          <svg class="icon-copy" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+            <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+          </svg>
+          <svg class="icon-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none">
+            <polyline points="20,6 9,17 4,12"></polyline>
+          </svg>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Speed Demo -->
+  <section class="speed-demo">
+    <div class="container">
+      <div class="speed-comparison">
+        <div class="speed-item">
+          <div class="speed-label">First Visit</div>
+          <div class="speed-bar first-visit">
+            <span class="speed-time">~2-5s</span>
+          </div>
+          <div class="speed-desc">Full render + learning</div>
+        </div>
+        <div class="speed-item">
+          <div class="speed-label">Subsequent Visits</div>
+          <div class="speed-bar subsequent">
+            <span class="speed-time">~200ms</span>
+          </div>
+          <div class="speed-desc">Learned patterns / Direct API</div>
+        </div>
+      </div>
+      <p class="speed-note">Up to 10x faster on repeated access through progressive learning</p>
+    </div>
+  </section>
+
+  <!-- What It's Not -->
+  <section class="not-section">
+    <div class="container">
+      <h2>What This Is NOT</h2>
+      <div class="not-grid">
+        <div class="not-item">
+          <span class="not-icon">X</span>
+          <strong>Not a visual browser</strong>
+          <p>No screenshots, no UI for humans</p>
+        </div>
+        <div class="not-item">
+          <span class="not-icon">X</span>
+          <strong>Not magic</strong>
+          <p>Complex JS sites still need rendering</p>
+        </div>
+        <div class="not-item">
+          <span class="not-icon">X</span>
+          <strong>Not stealth</strong>
+          <p>Bot detection may still block it</p>
+        </div>
+        <div class="not-item">
+          <span class="not-icon">X</span>
+          <strong>No code generation</strong>
+          <p>LLMs use MCP tools directly</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section id="features" class="features">
+    <div class="container">
+      <h2>Built for AI Agents</h2>
+      <div class="features-grid">
+        <div class="feature">
+          <div class="feature-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <polyline points="12,6 12,12 16,14"></polyline>
+            </svg>
+          </div>
+          <h3>Tiered Rendering</h3>
+          <p>Tries the fastest approach first. Content Intelligence (50-200ms), Lightweight (200-500ms), full browser only when needed.</p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+              <path d="M2 17l10 5 10-5"></path>
+              <path d="M2 12l10 5 10-5"></path>
+            </svg>
+          </div>
+          <h3>Learns From Usage</h3>
+          <p>Discovers API patterns, learns reliable selectors, builds reusable browsing skills. Gets faster over time.</p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+            </svg>
+          </div>
+          <h3>API Discovery</h3>
+          <p>Automatically discovers REST and GraphQL endpoints from network traffic. Bypass browser rendering with direct API calls.</p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+            </svg>
+          </div>
+          <h3>Session Management</h3>
+          <p>Save and restore authenticated sessions. Health monitoring, automatic refresh, multi-profile support.</p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path>
+            </svg>
+          </div>
+          <h3>Works Without Playwright</h3>
+          <p>Content Intelligence and Lightweight tiers work on any Node.js system. Add Playwright only when you need full browser rendering.</p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="16,18 22,12 16,6"></polyline>
+              <polyline points="8,6 2,12 8,18"></polyline>
+            </svg>
+          </div>
+          <h3>MCP Native</h3>
+          <p>First-class Model Context Protocol support. Use with Claude Desktop or any MCP-compatible client.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- How It Works -->
+  <section id="how-it-works" class="how-it-works">
+    <div class="container">
+      <h2>How It Works</h2>
+      <div class="workflow">
+        <div class="workflow-step">
+          <div class="step-number">1</div>
+          <h3>First Visit</h3>
+          <p>Uses tiered rendering to extract content. Captures network traffic, discovers APIs, learns selector patterns.</p>
+        </div>
+        <div class="workflow-arrow">-></div>
+        <div class="workflow-step">
+          <div class="step-number">2</div>
+          <h3>Learning</h3>
+          <p>Stores successful patterns in procedural memory. Builds skills from action sequences. Tracks what works.</p>
+        </div>
+        <div class="workflow-arrow">-></div>
+        <div class="workflow-step">
+          <div class="step-number">3</div>
+          <h3>Future Visits</h3>
+          <p>Applies learned patterns. Often bypasses browser entirely with direct API calls. 10x faster access.</p>
+        </div>
+      </div>
+      <div class="tier-table">
+        <table>
+          <thead>
+            <tr>
+              <th>Tier</th>
+              <th>Speed</th>
+              <th>What It Does</th>
+              <th>When Used</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Content Intelligence</strong></td>
+              <td>50-200ms</td>
+              <td>Static HTML + framework extraction</td>
+              <td>Server-rendered content</td>
+            </tr>
+            <tr>
+              <td><strong>Lightweight</strong></td>
+              <td>200-500ms</td>
+              <td>linkedom + Node VM</td>
+              <td>Basic JavaScript needed</td>
+            </tr>
+            <tr>
+              <td><strong>Playwright</strong></td>
+              <td>2-5s</td>
+              <td>Full browser</td>
+              <td>Complex JS or interactions</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- Comparison -->
+  <section id="comparison" class="comparison">
+    <div class="container">
+      <h2>How It Compares</h2>
+      <div class="comparison-table">
+        <table>
+          <thead>
+            <tr>
+              <th>Feature</th>
+              <th>Jina / Firecrawl</th>
+              <th>Puppeteer</th>
+              <th class="highlight">LLM Browser</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Clean content extraction</td>
+              <td class="yes">Yes</td>
+              <td class="no">No</td>
+              <td class="yes highlight">Yes</td>
+            </tr>
+            <tr>
+              <td>API discovery</td>
+              <td class="no">No</td>
+              <td class="no">No</td>
+              <td class="yes highlight">Yes</td>
+            </tr>
+            <tr>
+              <td>Learns over time</td>
+              <td class="no">No</td>
+              <td class="no">No</td>
+              <td class="yes highlight">Yes</td>
+            </tr>
+            <tr>
+              <td>Selector fallbacks</td>
+              <td class="no">No</td>
+              <td class="no">No</td>
+              <td class="yes highlight">Yes</td>
+            </tr>
+            <tr>
+              <td>MCP integration</td>
+              <td class="no">No</td>
+              <td class="no">No</td>
+              <td class="yes highlight">Yes</td>
+            </tr>
+            <tr>
+              <td>Works without browser</td>
+              <td class="no">No</td>
+              <td class="no">No</td>
+              <td class="yes highlight">Yes (partial)</td>
+            </tr>
+            <tr>
+              <td>Progressive optimization</td>
+              <td class="no">No</td>
+              <td class="no">No</td>
+              <td class="yes highlight">Yes</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- Get Started -->
+  <section id="get-started" class="get-started">
+    <div class="container">
+      <h2>Get Started</h2>
+      <div class="install-options">
+        <div class="install-option">
+          <h3>With Claude Desktop</h3>
+          <p>Add to your Claude Desktop config:</p>
+          <pre><code>{
+  "mcpServers": {
+    "llm-browser": {
+      "command": "npx",
+      "args": ["llm-browser"]
+    }
+  }
+}</code></pre>
+        </div>
+        <div class="install-option">
+          <h3>Programmatic Usage</h3>
+          <p>Use directly in your Node.js application:</p>
+          <pre><code>import { createLLMBrowser } from '@llm-browser/core';
+
+const browser = await createLLMBrowser();
+const result = await browser.browse('https://example.com');
+
+console.log(result.content.markdown);
+console.log(result.discoveredApis);
+
+await browser.cleanup();</code></pre>
+        </div>
+      </div>
+      <div class="optional-deps">
+        <h3>Optional Dependencies</h3>
+        <pre><code># For full browser rendering (recommended)
+npm install playwright
+npx playwright install chromium
+
+# For neural embeddings (better skill transfer)
+npm install @xenova/transformers</code></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-content">
+        <div class="footer-logo">
+          <span class="logo-icon">{ }</span>
+          <span class="logo-text">LLM Browser</span>
+        </div>
+        <div class="footer-links">
+          <a href="https://github.com/anthropics/llm-browser">GitHub</a>
+          <a href="https://github.com/anthropics/llm-browser/issues">Issues</a>
+          <a href="https://www.npmjs.com/package/llm-browser">npm</a>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p>Open source under MIT license.</p>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    document.getElementById('copyBtn').addEventListener('click', function() {
+      navigator.clipboard.writeText('npm install llm-browser');
+      var iconCopy = this.querySelector('.icon-copy');
+      var iconCheck = this.querySelector('.icon-check');
+      iconCopy.style.display = 'none';
+      iconCheck.style.display = 'block';
+      setTimeout(function() {
+        iconCopy.style.display = 'block';
+        iconCheck.style.display = 'none';
+      }, 2000);
+    });
+  </script>
+</body>
+</html>

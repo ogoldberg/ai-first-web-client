@@ -1,8 +1,7 @@
 {
-  "name": "llm-browser-monorepo",
+  "name": "llm-browser",
   "version": "0.5.0",
-  "private": true,
-  "description": "A web browser where the user is an LLM, not a human. Monorepo containing core SDK and MCP server.",
+  "description": "Web browser for AI agents. Learns from every interaction, discovers APIs, and progressively optimizes - 10x faster on repeated access.",
   "type": "module",
   "workspaces": [
     "packages/*"
@@ -35,25 +34,29 @@
   },
   "keywords": [
     "llm",
+    "ai-agent",
     "mcp",
     "model-context-protocol",
-    "browser",
-    "ai-agent",
-    "web-scraping",
-    "api-discovery",
-    "machine-readable",
     "claude",
     "openai",
     "anthropic",
-    "web-automation",
+    "browser-automation",
+    "web-scraping",
+    "api-discovery",
     "headless-browser",
+    "playwright",
+    "content-extraction",
+    "web-automation",
+    "machine-learning",
+    "rag",
+    "retrieval-augmented-generation",
     "semantic-embeddings"
   ],
   "author": "",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/anthropics/llm-browser"
+    "url": "git+https://github.com/anthropics/llm-browser.git"
   },
   "homepage": "https://github.com/anthropics/llm-browser#readme",
   "bugs": {
