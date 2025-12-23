@@ -233,7 +233,7 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 | SDK-004 | Extract learning components to SDK | M | Complete | LearningEngine, ProceduralMemory, ApiPatternRegistry. Zero MCP dependencies. Full exports in packages/core |
 | SDK-005 | Extract session and auth to SDK | M | Complete | SessionManager, AuthWorkflow with full type exports. Clean credential storage abstraction |
 | SDK-006 | Create SDK type definitions | S | Complete | Comprehensive TypeScript types for all public APIs. Export interfaces, types, enums |
-| SDK-007 | Add SDK usage examples | M | Not Started | 10+ examples: basic browse, API discovery, auth setup, batch processing, etc. |
+| SDK-007 | Add SDK usage examples | M | Complete | 12 examples: basic browse, tier control, API discovery, sessions, batch processing, content extraction, stealth mode, error handling, change tracking, procedural memory, analytics, TypeScript |
 | SDK-008 | Write SDK documentation | L | Not Started | API reference, getting started guide, use case tutorials. Document all public methods |
 | SDK-009 | Refactor MCP tools as thin wrappers | L | Not Started | Rewrite tools to call SDK. Each tool should be <50 lines. Remove duplicated logic |
 | SDK-010 | Publish SDK to npm | S | Not Started | Set up CI/CD, versioning, npm publish. Start with 0.1.0-alpha |
