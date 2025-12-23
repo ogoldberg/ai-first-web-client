@@ -228,7 +228,7 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 | ID | Task | Effort | Status | Notes |
 |----|------|--------|--------|-------|
 | SDK-001 | Audit core dependencies and interfaces | S | Complete | Identify what belongs in SDK vs wrappers. Document current coupling between core and MCP. See [SDK_ARCHITECTURE.md](SDK_ARCHITECTURE.md) |
-| SDK-002 | Create @llm-browser/core package structure | S | Complete | Set up npm workspaces monorepo with packages/core and packages/mcp |
+| SDK-002 | Create @unbrowser/core package structure | S | Complete | Set up npm workspaces monorepo with packages/core and packages/mcp |
 | SDK-003 | Extract SmartBrowser as SDK entry point | M | Complete | Clean public API: browse(), executeApi(), initialize(), getDomainInsights(), etc. |
 | SDK-004 | Extract learning components to SDK | M | Complete | LearningEngine, ProceduralMemory, ApiPatternRegistry. Zero MCP dependencies. Full exports in packages/core |
 | SDK-005 | Extract session and auth to SDK | M | Complete | SessionManager, AuthWorkflow with full type exports. Clean credential storage abstraction |
@@ -236,7 +236,7 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 | SDK-007 | Add SDK usage examples | M | Complete | 12 examples: basic browse, tier control, API discovery, sessions, batch processing, content extraction, stealth mode, error handling, change tracking, procedural memory, analytics, TypeScript |
 | SDK-008 | Write SDK documentation | L | Complete | Comprehensive README with config options, TypeScript examples, options reference, API documentation |
 | SDK-009 | Refactor MCP tools as thin wrappers | L | Complete | Modular MCP architecture: tool-schemas.ts, response-formatters.ts, sdk-client.ts, handlers/ directory. Index.ts reduced from 3588 to ~400 lines |
-| SDK-010 | Publish SDK to npm | S | Not Started | Set up CI/CD, versioning, npm publish. Start with 0.1.0-alpha |
+| SDK-010 | Publish SDK to npm | S | Complete | Package renamed to @unbrowser/core v0.1.0-alpha.1. GitHub Actions workflow created for manual publish. Ready for npm publish when user authorizes |
 | SDK-011 | Create SDK migration guide | M | Not Started | How to migrate from MCP-only to SDK usage. Include code examples for common patterns |
 | SDK-012 | Add SDK integration tests | M | Not Started | Test SDK in isolation (no MCP). Ensure all features work programmatically |
 

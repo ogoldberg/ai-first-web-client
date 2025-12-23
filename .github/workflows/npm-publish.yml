@@ -1,0 +1,72 @@
+name: Publish to npm
+
+on:
+  # Manual trigger from GitHub Actions UI
+  workflow_dispatch:
+    inputs:
+      package:
+        description: 'Package to publish'
+        required: true
+        type: choice
+        options:
+          - core
+          - mcp
+          - both
+        default: 'core'
+      tag:
+        description: 'npm tag (e.g., alpha, beta, latest)'
+        required: true
+        type: choice
+        options:
+          - alpha
+          - beta
+          - latest
+        default: 'alpha'
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write  # Required for npm provenance
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build packages
+        run: npm run build
+
+      # Note: workflow_dispatch inputs with type: choice are safe from injection
+      # since they're constrained to predefined options (core/mcp/both, alpha/beta/latest)
+      - name: Publish @unbrowser/core
+        if: inputs.package == 'core' || inputs.package == 'both'
+        working-directory: packages/core
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_TAG: ${{ inputs.tag }}
+        run: |
+          npm run build
+          npm publish --access public --tag "$NPM_TAG" --provenance
+
+      - name: Publish @unbrowser/mcp
+        if: inputs.package == 'mcp' || inputs.package == 'both'
+        working-directory: packages/mcp
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_TAG: ${{ inputs.tag }}
+        run: |
+          npm run build
+          npm publish --access public --tag "$NPM_TAG" --provenance

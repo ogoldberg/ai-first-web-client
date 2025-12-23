@@ -1,12 +1,12 @@
 {
-  "name": "@llm-browser/mcp",
-  "version": "0.5.0",
-  "description": "MCP server for LLM Browser - Model Context Protocol interface",
+  "name": "@unbrowser/mcp",
+  "version": "0.1.0-alpha.1",
+  "description": "MCP server for Unbrowser - Model Context Protocol interface",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "bin": {
-    "llm-browser": "dist/index.js"
+    "unbrowser": "dist/index.js"
   },
   "files": [
     "dist",
@@ -17,7 +17,8 @@
     "dev": "tsc --watch",
     "start": "node dist/index.js",
     "inspect": "node --inspect dist/index.js",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "prepublishOnly": "npm run clean && npm run build"
   },
   "keywords": [
     "llm",
@@ -35,7 +36,7 @@
     "directory": "packages/mcp"
   },
   "dependencies": {
-    "@llm-browser/core": "workspace:*",
+    "@unbrowser/core": "workspace:*",
     "@modelcontextprotocol/sdk": "^0.6.0"
   },
   "devDependencies": {
