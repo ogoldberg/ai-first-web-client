@@ -2,13 +2,61 @@
 
 Core SDK for LLM Browser - intelligent web browsing for machines.
 
+## Table of Contents
+
+- [Overview](#overview)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Getting Started Guide](#getting-started-guide)
+  - [Your First Browse](#your-first-browse)
+  - [Understanding Results](#understanding-results)
+  - [Initialization Status](#initialization-status)
+- [Core Concepts](#core-concepts)
+  - [Tiered Rendering](#tiered-rendering)
+  - [Learning System](#learning-system)
+  - [Procedural Memory (Skills)](#procedural-memory-skills)
+  - [Session Management](#session-management)
+- [API Reference](#api-reference)
+  - [Factory Functions](#factory-functions)
+  - [LLMBrowserClient](#llmbrowserclient)
+  - [Configuration Options](#configuration-options)
+  - [Browse Options](#browse-options)
+  - [Browse Result](#browse-result)
+- [Use Case Tutorials](#use-case-tutorials)
+  - [Web Scraping](#web-scraping)
+  - [API Discovery](#api-discovery)
+  - [Authenticated Browsing](#authenticated-browsing)
+  - [Batch Processing](#batch-processing)
+  - [Content Monitoring](#content-monitoring)
+- [Advanced Topics](#advanced-topics)
+  - [Stealth Mode](#stealth-mode)
+  - [Error Handling](#error-handling)
+  - [Performance Optimization](#performance-optimization)
+  - [Multi-Tenant Usage](#multi-tenant-usage)
+  - [Custom Learning](#custom-learning)
+- [TypeScript Support](#typescript-support)
+- [Troubleshooting](#troubleshooting)
+- [License](#license)
+
+---
+
 ## Overview
 
-This package provides programmatic access to all LLM Browser capabilities without requiring the MCP protocol. Use this for:
+The LLM Browser SDK provides programmatic access to intelligent web browsing capabilities designed specifically for AI agents and automation. Unlike traditional web scraping tools that just extract content, this SDK:
 
-- Direct integration into Node.js applications
-- Building custom web automation workflows
-- Programmatic access to learning and API discovery
+- **Learns from browsing patterns** - Discovers API endpoints, learns selectors, builds reusable skills
+- **Gets faster over time** - Uses learned patterns to bypass browser rendering when possible
+- **Handles complexity automatically** - Cookie banners, pagination, authentication, rate limiting
+- **Works without Playwright** - Optional browser dependency; falls back to lightweight rendering
+
+### Use Cases
+
+- **Research Agents**: Extract structured data from any website
+- **Automation**: Build reliable web workflows that adapt to site changes
+- **API Discovery**: Automatically find and use APIs instead of scraping HTML
+- **Monitoring**: Track content changes across multiple sites
+
+---
 
 ## Installation
 
@@ -16,66 +64,918 @@ This package provides programmatic access to all LLM Browser capabilities withou
 npm install @llm-browser/core
 ```
 
+### Optional Dependencies
+
+For full browser rendering (recommended for complex sites):
+
+```bash
+npm install playwright
+npx playwright install chromium
+```
+
+For semantic pattern matching (improves cross-domain learning):
+
+```bash
+npm install @xenova/transformers @lancedb/lancedb better-sqlite3
+```
+
+For stealth mode (anti-bot evasion):
+
+```bash
+npm install playwright-extra puppeteer-extra-plugin-stealth
+```
+
+---
+
 ## Quick Start
 
 ```typescript
 import { createLLMBrowser } from '@llm-browser/core';
 
+// Create and initialize browser
 const browser = await createLLMBrowser();
 
-// Browse a URL with automatic learning
+// Browse a URL
 const result = await browser.browse('https://example.com');
 console.log(result.content.markdown);
 
-// Get domain intelligence
-const intelligence = await browser.getDomainIntelligence('example.com');
-console.log(intelligence.knownPatterns);
-
-// Clean up
+// Clean up when done
 await browser.cleanup();
 ```
 
-## TypeScript Examples
+---
 
-### Basic Usage with Types
+## Getting Started Guide
+
+### Your First Browse
+
+The SDK provides a high-level `LLMBrowserClient` class that handles all the complexity:
+
+```typescript
+import { createLLMBrowser } from '@llm-browser/core';
+
+async function main() {
+  // Create browser with configuration
+  const browser = await createLLMBrowser({
+    sessionsDir: './my-sessions',       // Where to store session data
+    enableLearning: true,               // Learn patterns from browsing
+    enableProceduralMemory: true,       // Learn reusable browsing skills
+  });
+
+  try {
+    // Browse with options
+    const result = await browser.browse('https://news.ycombinator.com', {
+      timeout: 30000,                   // 30 second timeout
+      enableLearning: true,             // Learn from this request
+    });
+
+    // Access extracted content
+    console.log('Title:', result.title);
+    console.log('Content:', result.content.markdown.slice(0, 500));
+
+    // Check discovered APIs (for future direct access)
+    if (result.discoveredApis.length > 0) {
+      console.log('APIs found:', result.discoveredApis.map(a => a.endpoint));
+    }
+
+    // Check which rendering tier was used
+    console.log('Rendered via:', result.learning.renderTier);
+
+  } finally {
+    await browser.cleanup();
+  }
+}
+
+main();
+```
+
+### Understanding Results
+
+The `browse()` method returns a `SmartBrowseResult` with rich information:
+
+```typescript
+interface SmartBrowseResult {
+  // Basic info
+  url: string;
+  title: string;
+
+  // Extracted content in multiple formats
+  content: {
+    html: string;       // Raw HTML
+    markdown: string;   // Clean markdown
+    text: string;       // Plain text
+  };
+
+  // Extracted tables as structured JSON
+  tables?: Array<{
+    headers: string[];
+    data: Record<string, string>[];
+    caption?: string;
+  }>;
+
+  // Network requests captured during browsing
+  network: NetworkRequest[];
+
+  // Console messages from the page
+  console: ConsoleMessage[];
+
+  // API endpoints discovered (for future direct access)
+  discoveredApis: ApiPattern[];
+
+  // Page metadata
+  metadata: {
+    loadTime: number;
+    timestamp: number;
+    finalUrl: string;   // After redirects
+    language?: string;
+    fromCache?: boolean;
+  };
+
+  // Learning insights (what the system learned)
+  learning: {
+    renderTier: 'intelligence' | 'lightweight' | 'playwright';
+    confidenceLevel: 'high' | 'medium' | 'low' | 'unknown';
+    selectorsUsed: string[];
+    skillsMatched?: SkillMatch[];
+    // ... more fields
+  };
+
+  // Per-field confidence scores (optional)
+  fieldConfidence?: BrowseFieldConfidence;
+
+  // Decision trace for debugging (optional)
+  decisionTrace?: DecisionTrace;
+}
+```
+
+### Initialization Status
+
+Check what features are active after initialization:
+
+```typescript
+const browser = await createLLMBrowser();
+
+const status = browser.getInitializationStatus();
+console.log(status.message);
+// "Initialized with: playwright ON, semantic matching OFF, learning ON"
+
+if (!status.playwrightAvailable) {
+  console.log('Running in lightweight mode only');
+}
+
+console.log('Playwright:', status.playwrightAvailable);
+console.log('Semantic matching:', status.semanticMatchingEnabled);
+console.log('Sessions loaded:', status.sessionsLoaded);
+console.log('Domains with patterns:', status.domainsWithPatterns);
+```
+
+---
+
+## Core Concepts
+
+### Tiered Rendering
+
+The SDK uses three rendering tiers, automatically selecting the fastest one that works:
+
+| Tier | Speed | Description | When Used |
+|------|-------|-------------|-----------|
+| **Intelligence** | ~50-200ms | No rendering. Extracts framework data (Next.js, etc.), structured data (JSON-LD), or calls learned APIs directly. | Static sites, SSG frameworks, sites with known APIs |
+| **Lightweight** | ~200-500ms | HTTP fetch + linkedom DOM parsing. Executes simple JavaScript. | Most sites that don't need full browser |
+| **Playwright** | ~2-5s | Full Chromium browser. Required for complex JavaScript, login flows. | SPAs, sites with anti-bot protection, complex interactions |
+
+Control tier selection:
+
+```typescript
+// Force a specific tier
+const result = await browser.browse(url, {
+  forceTier: 'playwright',  // Always use full browser
+});
+
+// Set budget constraints
+const result = await browser.browse(url, {
+  maxCostTier: 'lightweight',  // Never use playwright
+  maxLatencyMs: 1000,          // Give up if > 1 second
+});
+
+// Check which tier was used
+console.log('Tier used:', result.learning.renderTier);
+console.log('Fell back:', result.learning.tierFellBack);
+```
+
+### Learning System
+
+The SDK learns patterns from successful browsing to optimize future requests:
+
+```typescript
+// Get learning statistics
+const stats = browser.getLearningStats();
+console.log(`Learned from ${stats.totalDomains} domains`);
+console.log(`${stats.bypassablePatterns} API patterns (can skip browser)`);
+
+// Get domain-specific intelligence
+const intel = await browser.getDomainIntelligence('example.com');
+console.log('Known patterns:', intel.knownPatterns);
+console.log('Success rate:', intel.successRate);
+console.log('Domain group:', intel.domainGroup); // e.g., 'spanish_gov'
+```
+
+**What gets learned:**
+- API endpoints that return the same data as rendered pages
+- CSS selectors that reliably extract specific content types
+- Pagination patterns (query params, infinite scroll, etc.)
+- Validation rules (expected content length, required text)
+- Domain groups (sites that share similar patterns)
+
+### Procedural Memory (Skills)
+
+Skills are reusable browsing sequences learned from successful operations:
+
+```typescript
+// Find skills applicable to a URL
+const skills = browser.findApplicableSkills('https://example.com/product/123');
+console.log('Matching skills:', skills.map(s => s.skill.name));
+
+// Get skill statistics
+const skillStats = browser.getProceduralMemoryStats();
+console.log('Total skills:', skillStats.totalSkills);
+console.log('By domain:', skillStats.skillsByDomain);
+```
+
+Skills are automatically applied when browsing if they match the URL pattern.
+
+### Session Management
+
+Persist authenticated sessions across requests:
+
+```typescript
+// Check session health
+const health = browser.getSessionHealth('example.com');
+console.log('Status:', health.status); // 'healthy' | 'expiring_soon' | 'expired' | 'stale'
+console.log('Authenticated:', health.isAuthenticated);
+
+// Get all sessions
+const allHealth = browser.getAllSessionHealth();
+allHealth.forEach(s => {
+  console.log(`${s.domain}: ${s.status}`);
+});
+```
+
+Sessions are automatically loaded when browsing domains with saved sessions.
+
+---
+
+## API Reference
+
+### Factory Functions
+
+#### `createLLMBrowser(config?)`
+
+Creates and initializes an LLM Browser client.
+
+```typescript
+import { createLLMBrowser, type LLMBrowserConfig } from '@llm-browser/core';
+
+const config: LLMBrowserConfig = {
+  sessionsDir: './sessions',
+  enableLearning: true,
+  enableProceduralMemory: true,
+};
+
+const browser = await createLLMBrowser(config);
+```
+
+**Returns:** `Promise<LLMBrowserClient>`
+
+#### `createContentFetcher()`
+
+Creates a lightweight content fetcher without full browser capabilities.
+
+```typescript
+import { createContentFetcher } from '@llm-browser/core';
+
+const fetcher = createContentFetcher();
+
+// Tiered fetch
+const result = await fetcher.fetch('https://example.com');
+console.log(result.content.text);
+
+// Extract content from HTML
+const extracted = fetcher.extract('<html>...</html>', 'https://example.com');
+console.log(extracted.markdown);
+```
+
+### LLMBrowserClient
+
+The main SDK client class.
+
+#### `browse(url, options?)`
+
+Browse a URL with intelligent learning and optimization.
+
+```typescript
+const result = await browser.browse('https://example.com', {
+  timeout: 30000,
+  enableLearning: true,
+});
+```
+
+**Parameters:**
+- `url: string` - URL to browse
+- `options?: SmartBrowseOptions` - Browse options (see below)
+
+**Returns:** `Promise<SmartBrowseResult>`
+
+#### `fetch(url, options?)`
+
+Fast content fetching using tiered rendering.
+
+```typescript
+const result = await browser.fetch('https://example.com', {
+  forceTier: 'intelligence',
+});
+```
+
+**Parameters:**
+- `url: string` - URL to fetch
+- `options?: TieredFetchOptions` - Fetch options
+
+**Returns:** `Promise<TieredFetchResult>`
+
+#### `getDomainIntelligence(domain)`
+
+Get learned patterns and intelligence for a domain.
+
+```typescript
+const intel = await browser.getDomainIntelligence('example.com');
+```
+
+**Returns:**
+```typescript
+{
+  knownPatterns: number;         // API patterns learned
+  selectorChains: number;        // Content selectors learned
+  validators: number;            // Validation rules learned
+  paginationPatterns: number;    // Pagination patterns detected
+  recentFailures: number;        // Recent failure count
+  successRate: number;           // Overall success rate (0-1)
+  domainGroup: string | null;    // Domain group (e.g., 'spanish_gov')
+  recommendedWaitStrategy: string; // Suggested wait strategy
+  shouldUseSession: boolean;     // Whether session is recommended
+}
+```
+
+#### `findApplicableSkills(url, topK?)`
+
+Find browsing skills that match a URL.
+
+```typescript
+const skills = browser.findApplicableSkills('https://example.com', 3);
+```
+
+**Parameters:**
+- `url: string` - URL to match
+- `topK?: number` - Maximum skills to return (default: 3)
+
+**Returns:** `SkillMatch[]`
+
+#### `getProceduralMemoryStats()`
+
+Get statistics about learned skills.
+
+```typescript
+const stats = browser.getProceduralMemoryStats();
+```
+
+**Returns:**
+```typescript
+{
+  totalSkills: number;
+  totalTrajectories: number;
+  skillsByDomain: Record<string, number>;
+  avgSuccessRate: number;
+  mostUsedSkills: Array<{ name: string; uses: number }>;
+}
+```
+
+#### `getLearningStats()`
+
+Get statistics about the learning system.
+
+```typescript
+const stats = browser.getLearningStats();
+```
+
+**Returns:**
+```typescript
+{
+  totalDomains: number;
+  totalApiPatterns: number;
+  bypassablePatterns: number;
+  totalSelectors: number;
+  totalValidators: number;
+  domainGroups: string[];
+  recentLearningEvents: Array<{ type: string; domain: string; timestamp: number }>;
+}
+```
+
+#### `getTieredFetcherStats()`
+
+Get statistics about tiered fetching.
+
+```typescript
+const stats = browser.getTieredFetcherStats();
+```
+
+**Returns:**
+```typescript
+{
+  totalDomains: number;
+  byTier: Record<string, number>;     // Requests per tier
+  avgResponseTimes: Record<string, number>;  // Avg time per tier
+  playwrightAvailable: boolean;
+}
+```
+
+#### `getSessionHealth(domain, profile?)`
+
+Check health of a session.
+
+```typescript
+const health = browser.getSessionHealth('example.com', 'default');
+```
+
+**Returns:** `SessionHealth`
+
+#### `getAllSessionHealth()`
+
+Get health of all sessions.
+
+```typescript
+const allHealth = browser.getAllSessionHealth();
+```
+
+**Returns:** `SessionHealth[]`
+
+#### `getInitializationStatus()`
+
+Get detailed initialization status.
+
+```typescript
+const status = browser.getInitializationStatus();
+```
+
+**Returns:**
+```typescript
+{
+  initialized: boolean;
+  playwrightAvailable: boolean;
+  semanticMatchingEnabled: boolean;
+  learningEnabled: boolean;
+  proceduralMemoryEnabled: boolean;
+  sessionsLoaded: number;
+  domainsWithPatterns: number;
+  message: string;  // Human-readable summary
+}
+```
+
+#### `cleanup()`
+
+Release browser resources.
+
+```typescript
+await browser.cleanup();
+```
+
+#### Component Accessors
+
+For advanced usage, access underlying components:
+
+```typescript
+const smartBrowser = browser.getSmartBrowser();
+const learningEngine = browser.getLearningEngine();
+const proceduralMemory = browser.getProceduralMemory();
+const tieredFetcher = browser.getTieredFetcher();
+const contentExtractor = browser.getContentExtractor();
+const sessionManager = browser.getSessionManager();
+```
+
+### Configuration Options
+
+#### LLMBrowserConfig
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `sessionsDir` | `string` | `'./sessions'` | Directory for session data |
+| `learningEnginePath` | `string` | `'./enhanced-knowledge-base.json'` | Path to learning data file |
+| `browser` | `BrowserConfig` | See below | Browser configuration |
+| `enableProceduralMemory` | `boolean` | `true` | Enable skill learning |
+| `enableLearning` | `boolean` | `true` | Enable API pattern learning |
+
+#### BrowserConfig
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `headless` | `boolean` | `true` | Run browser in headless mode |
+| `screenshotDir` | `string` | `'/tmp/browser-screenshots'` | Screenshot directory |
+| `slowMo` | `number` | `0` | Slow down actions (ms, for debugging) |
+| `devtools` | `boolean` | `false` | Open Chrome DevTools |
+| `provider` | `BrowserProviderConfig` | auto-detected | Browser provider config |
+
+### Browse Options
+
+Options for the `browse()` method, grouped by concern:
+
+#### Essential Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `forceTier` | `RenderTier` | auto | Force specific tier: `'intelligence'`, `'lightweight'`, `'playwright'` |
+| `waitForSelector` | `string` | - | CSS selector to wait for before extraction |
+| `timeout` | `number` | `30000` | Navigation timeout (ms) |
+| `minContentLength` | `number` | - | Minimum content length for tier validation |
+| `contentType` | `string` | - | Expected content type hint |
+
+#### Learning Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `enableLearning` | `boolean` | `true` | Learn patterns from this request |
+| `useSkills` | `boolean` | `true` | Apply learned browsing skills |
+| `recordTrajectory` | `boolean` | `true` | Record for skill learning |
+| `includeDecisionTrace` | `boolean` | `false` | Include detailed decision trace |
+| `recordDebugTrace` | `boolean` | `false` | Record debug trace for analysis |
+
+#### Validation & Content Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `extractContent` | `boolean` | `true` | Extract content from page |
+| `validateContent` | `boolean` | - | Validate against learned patterns |
+| `checkForChanges` | `boolean` | - | Check for content changes |
+| `followPagination` | `boolean` | `false` | Auto-follow pagination |
+| `maxPages` | `number` | - | Max pages when paginating |
+
+#### Budget Controls
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `maxLatencyMs` | `number` | - | Stop tier fallback when exceeded |
+| `maxCostTier` | `RenderTier` | `'playwright'` | Most expensive tier allowed |
+| `freshnessRequirement` | `'realtime' \| 'cached' \| 'any'` | `'any'` | Content freshness control |
+
+#### Browser Behavior
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `waitFor` | `string` | `'load'` | Wait strategy: `'load'`, `'domcontentloaded'`, `'networkidle'` |
+| `captureNetwork` | `boolean` | `true` | Capture network requests |
+| `captureConsole` | `boolean` | `true` | Capture console messages |
+| `sessionProfile` | `string` | - | Session profile for auth |
+| `dismissCookieBanner` | `boolean` | - | Auto-dismiss cookie banners |
+| `scrollToLoad` | `boolean` | - | Scroll for lazy content |
+| `useRateLimiting` | `boolean` | `true` | Apply rate limiting |
+| `retryOnError` | `boolean` | `true` | Retry on transient errors |
+
+#### LLM-Assisted Retry
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `retryWith` | `RetryConfig` | - | Config from LLM after problem response |
+
+### Browse Result
+
+Full `SmartBrowseResult` interface:
+
+```typescript
+interface SmartBrowseResult {
+  url: string;
+  title: string;
+  content: {
+    html: string;
+    markdown: string;
+    text: string;
+  };
+  tables?: ExtractedTableResult[];
+  network: NetworkRequest[];
+  console: ConsoleMessage[];
+  discoveredApis: ApiPattern[];
+  metadata: {
+    loadTime: number;
+    timestamp: number;
+    finalUrl: string;
+    language?: string;
+    fromCache?: boolean;
+    retryCount?: number;
+  };
+  learning: {
+    renderTier?: RenderTier;
+    tierFellBack?: boolean;
+    tiersAttempted?: RenderTier[];
+    tierReason?: string;
+    tierTiming?: Record<RenderTier, number>;
+    confidenceLevel: 'high' | 'medium' | 'low' | 'unknown';
+    selectorsUsed: string[];
+    selectorsSucceeded: string[];
+    selectorsFailed: string[];
+    validationResult?: { valid: boolean; reasons: string[] };
+    paginationDetected?: PaginationPattern;
+    contentChanged?: boolean;
+    recommendedRefreshHours?: number;
+    domainGroup?: string;
+    skillsMatched?: SkillMatch[];
+    skillApplied?: string;
+    skillExecutionTrace?: SkillExecutionTrace;
+    trajectoryRecorded?: boolean;
+    anomalyDetected?: boolean;
+    anomalyType?: string;
+    budgetInfo?: {
+      latencyExceeded: boolean;
+      tiersSkipped: RenderTier[];
+      maxCostTierEnforced?: RenderTier;
+      usedCache: boolean;
+      freshnessApplied?: FreshnessRequirement;
+    };
+    domainCapabilities?: DomainCapabilitiesSummary;
+    domainKnowledge?: DomainKnowledgeSummary;
+    problemResponse?: ProblemResponse;
+  };
+  fieldConfidence?: BrowseFieldConfidence;
+  decisionTrace?: DecisionTrace;
+  additionalPages?: Array<{
+    url: string;
+    content: { html: string; markdown: string; text: string };
+  }>;
+}
+```
+
+---
+
+## Use Case Tutorials
+
+### Web Scraping
+
+Extract structured data from websites:
+
+```typescript
+import { createLLMBrowser } from '@llm-browser/core';
+
+async function scrapeProducts() {
+  const browser = await createLLMBrowser();
+
+  try {
+    const result = await browser.browse('https://shop.example.com/products', {
+      waitForSelector: '.product-card',  // Wait for content to load
+      enableLearning: true,              // Learn patterns for next time
+    });
+
+    // Extract tables (product listings often use tables)
+    if (result.tables && result.tables.length > 0) {
+      console.log('Found product table:');
+      result.tables[0].data.forEach(row => {
+        console.log(`  ${row.name}: ${row.price}`);
+      });
+    }
+
+    // Check if APIs were discovered (faster next time)
+    const apis = result.discoveredApis.filter(a => a.canBypass);
+    if (apis.length > 0) {
+      console.log('\nAPI found! Next time will be faster:');
+      apis.forEach(api => {
+        console.log(`  ${api.method} ${api.endpoint}`);
+      });
+    }
+
+  } finally {
+    await browser.cleanup();
+  }
+}
+```
+
+### API Discovery
+
+Find and use APIs instead of scraping:
+
+```typescript
+import { createLLMBrowser } from '@llm-browser/core';
+
+async function discoverApis() {
+  const browser = await createLLMBrowser();
+
+  try {
+    // First browse captures network traffic and discovers APIs
+    const result = await browser.browse('https://api.example.com/docs');
+
+    // Show discovered endpoints
+    console.log('Discovered APIs:');
+    result.discoveredApis.forEach(api => {
+      console.log(`  [${api.confidence}] ${api.method} ${api.endpoint}`);
+      console.log(`    Can bypass browser: ${api.canBypass}`);
+      if (api.authType) {
+        console.log(`    Auth: ${api.authType}`);
+      }
+    });
+
+    // Get domain intelligence
+    const intel = await browser.getDomainIntelligence('api.example.com');
+    console.log(`\nDomain Intelligence:`);
+    console.log(`  Known patterns: ${intel.knownPatterns}`);
+    console.log(`  Success rate: ${(intel.successRate * 100).toFixed(1)}%`);
+    console.log(`  Bypassable: ${intel.knownPatterns > 0 ? 'Yes' : 'No'}`);
+
+  } finally {
+    await browser.cleanup();
+  }
+}
+```
+
+### Authenticated Browsing
+
+Work with sites that require login:
+
+```typescript
+import { createLLMBrowser, AuthWorkflow } from '@llm-browser/core';
+
+async function authenticatedBrowse() {
+  const browser = await createLLMBrowser({
+    sessionsDir: './sessions',
+  });
+
+  try {
+    // Check session health
+    const health = browser.getSessionHealth('secure.example.com');
+
+    if (health.status === 'expired' || health.status === 'stale') {
+      console.log('Session expired, need to re-authenticate');
+      // Perform login flow...
+    } else {
+      console.log(`Session status: ${health.status}`);
+    }
+
+    // Browse with session
+    const result = await browser.browse('https://secure.example.com/dashboard', {
+      sessionProfile: 'default',
+    });
+
+    console.log('Dashboard content:', result.content.text.slice(0, 500));
+
+  } finally {
+    await browser.cleanup();
+  }
+}
+```
+
+### Batch Processing
+
+Browse multiple URLs efficiently:
+
+```typescript
+import { createLLMBrowser, SmartBrowser } from '@llm-browser/core';
+
+async function batchBrowse() {
+  const browser = await createLLMBrowser();
+
+  try {
+    const urls = [
+      'https://example.com/page1',
+      'https://example.com/page2',
+      'https://example.com/page3',
+    ];
+
+    // Access SmartBrowser for batch operations
+    const smartBrowser = browser.getSmartBrowser();
+
+    // Batch browse with controlled concurrency
+    const results = await smartBrowser.batchBrowse(urls, {
+      concurrency: 3,           // Max parallel requests
+      perUrlTimeoutMs: 30000,   // Per-URL timeout
+      continueOnRateLimit: true, // Don't stop on rate limits
+    });
+
+    // Process results
+    results.forEach((item, i) => {
+      if (item.status === 'success' && item.result) {
+        console.log(`[${i}] ${item.url}: ${item.result.title}`);
+      } else {
+        console.log(`[${i}] ${item.url}: ${item.status} - ${item.error}`);
+      }
+    });
+
+    // Summary
+    const successful = results.filter(r => r.status === 'success').length;
+    console.log(`\nCompleted: ${successful}/${results.length}`);
+
+  } finally {
+    await browser.cleanup();
+  }
+}
+```
+
+### Content Monitoring
+
+Track content changes over time:
+
+```typescript
+import { createLLMBrowser, ContentChangeTracker } from '@llm-browser/core';
+
+async function monitorContent() {
+  const browser = await createLLMBrowser();
+  const tracker = new ContentChangeTracker();
+  await tracker.initialize();
+
+  try {
+    const url = 'https://news.example.com';
+
+    // Browse and track
+    const result = await browser.browse(url, {
+      checkForChanges: true,
+    });
+
+    // Register for tracking
+    await tracker.trackUrl(url, result.content.text, {
+      label: 'News Homepage',
+      tags: ['news', 'monitoring'],
+    });
+
+    // Later, check for changes
+    const changeResult = await tracker.checkForChanges(url, result.content.text);
+
+    if (changeResult.changed) {
+      console.log('Content changed!');
+      console.log('Significance:', changeResult.significance);
+      console.log('Change summary:', changeResult.summary);
+    }
+
+    // Get tracking statistics
+    const stats = tracker.getStats();
+    console.log(`Tracking ${stats.totalUrls} URLs`);
+    console.log(`${stats.changedUrls} have changed`);
+
+  } finally {
+    await browser.cleanup();
+  }
+}
+```
+
+---
+
+## Advanced Topics
+
+### Stealth Mode
+
+For sites with bot detection, use stealth features:
 
 ```typescript
 import {
   createLLMBrowser,
-  type LLMBrowserConfig,
-  type SmartBrowseOptions,
-  type SmartBrowseResult,
+  generateFingerprint,
+  getStealthFetchHeaders,
+  BehavioralDelays,
+  launchStealthBrowser,
+  isStealthAvailable,
 } from '@llm-browser/core';
 
-// Typed configuration
-const config: LLMBrowserConfig = {
-  sessionsDir: './my-sessions',
-  enableLearning: true,
-  enableProceduralMemory: true,
-  browser: {
-    headless: true,
-    slowMo: 0,
-  },
-};
+// 1. Fingerprint generation (works everywhere)
+const fingerprint = generateFingerprint('example.com');
+console.log('User Agent:', fingerprint.userAgent);
+console.log('Viewport:', fingerprint.viewport);
+console.log('Locale:', fingerprint.locale);
 
-const browser = await createLLMBrowser(config);
+// 2. Stealth headers for HTTP requests (all tiers)
+const headers = getStealthFetchHeaders({
+  fingerprintSeed: 'example.com',
+  extraHeaders: { 'Authorization': 'Bearer token' },
+});
 
-// Typed browse options
-const options: SmartBrowseOptions = {
-  forceTier: 'lightweight',
-  timeout: 15000,
-  includeDecisionTrace: true,
-};
+// 3. Behavioral delays
+await BehavioralDelays.sleep(100, 500);  // Random 100-500ms
+const delay = BehavioralDelays.jitteredDelay(1000, 0.3);  // 1s +/- 30%
 
-const result: SmartBrowseResult = await browser.browse('https://example.com', options);
-
-// Access typed fields
-console.log(result.content.markdown);
-console.log(result.learning.renderTier);
-console.log(result.decisionTrace?.tierAttempts);
+// 4. Full stealth browser (requires playwright-extra)
+if (isStealthAvailable()) {
+  const { browser, fingerprint, stealthEnabled } = await launchStealthBrowser({
+    fingerprintSeed: 'example.com',
+  });
+  // Use browser...
+  await browser.close();
+}
 ```
 
+**What stealth provides:**
+
+- User agent rotation from realistic Chrome versions
+- Matching Accept-Language and locale headers
+- sec-ch-ua client hints
+- navigator.webdriver removal (Playwright only)
+- Plugin/mimeTypes spoofing (Playwright only)
+
+**Limitations:**
+- CAPTCHAs still require human solving
+- Datacenter IPs may be blocklisted
+- Advanced fingerprinting may still detect bots
+
 ### Error Handling
+
+Handle errors with structured error types:
 
 ```typescript
 import {
@@ -86,326 +986,350 @@ import {
   classifyFailure,
 } from '@llm-browser/core';
 
-const browser = await createLLMBrowser();
+async function handleErrors() {
+  const browser = await createLLMBrowser();
 
-try {
-  // URL validation (SSRF protection)
-  validateUrlOrThrow(url);
+  try {
+    // URL validation (SSRF protection)
+    validateUrlOrThrow(url);
 
-  const result = await browser.browse(url);
-  console.log(result.content.markdown);
-} catch (error) {
-  if (error instanceof UrlSafetyError) {
-    console.error(`Blocked URL: ${error.message} (${error.category})`);
-  } else if (error instanceof StructuredError) {
-    console.error(`Browse failed: ${error.code} - ${error.message}`);
-    console.error(`Severity: ${error.severity}, Retryable: ${error.retryable}`);
-  } else {
-    // Classify unknown errors
-    const classified = classifyFailure(undefined, error);
-    console.error(`Error category: ${classified.category}`);
+    const result = await browser.browse(url);
+
+    // Check for problem response (LLM-assisted solving)
+    if (result.learning.problemResponse) {
+      const problem = result.learning.problemResponse;
+      console.log(`Problem: ${problem.problemType}`);
+      console.log(`Reason: ${problem.reason}`);
+      console.log(`Research query: ${problem.researchSuggestion.searchQuery}`);
+      console.log(`Retry params: ${problem.researchSuggestion.retryParameters}`);
+
+      // Can retry with suggested config
+      const retryResult = await browser.browse(url, {
+        retryWith: {
+          useFullBrowser: true,
+          delayMs: 2000,
+        },
+      });
+    }
+
+  } catch (error) {
+    if (error instanceof UrlSafetyError) {
+      // Blocked by SSRF protection
+      console.error(`Blocked URL: ${error.message}`);
+      console.error(`Category: ${error.category}`);
+    } else if (error instanceof StructuredError) {
+      // Structured browse error
+      console.error(`Browse failed: ${error.code}`);
+      console.error(`Message: ${error.message}`);
+      console.error(`Severity: ${error.severity}`);
+      console.error(`Retryable: ${error.retryable}`);
+      if (error.recommendedActions) {
+        console.error(`Actions: ${error.recommendedActions.join(', ')}`);
+      }
+    } else {
+      // Classify unknown error
+      const classified = classifyFailure(undefined, error);
+      console.error(`Error category: ${classified.category}`);
+    }
+  } finally {
+    await browser.cleanup();
   }
-} finally {
-  await browser.cleanup();
 }
 ```
 
-### Working with Learning Systems
+### Performance Optimization
+
+Optimize for speed and efficiency:
 
 ```typescript
 import { createLLMBrowser } from '@llm-browser/core';
 
-const browser = await createLLMBrowser({
-  enableLearning: true,        // API pattern learning
-  enableProceduralMemory: true, // Skill/trajectory learning
-});
-
-// Browse with learning enabled
-const result = await browser.browse('https://example.com', {
-  enableLearning: true,
-  recordTrajectory: true,
-});
-
-// Check what was learned
-console.log('Selectors used:', result.learning.selectorsUsed);
-console.log('Tier used:', result.learning.renderTier);
-console.log('Skills matched:', result.learning.skillsMatched);
-
-// Get learning statistics
-const stats = browser.getLearningStats();
-console.log(`Learned patterns from ${stats.totalDomains} domains`);
-console.log(`${stats.bypassablePatterns} patterns can bypass browser`);
-
-// Get skill statistics
-const skillStats = browser.getProceduralMemoryStats();
-console.log(`${skillStats.totalSkills} learned skills`);
-```
-
-### Using the Content Fetcher (Lightweight)
-
-```typescript
-import { createContentFetcher } from '@llm-browser/core';
-
-// Lightweight fetcher without full browser capabilities
-const fetcher = createContentFetcher();
-
-// Fast tiered fetching
-const result = await fetcher.fetch('https://example.com', {
-  forceTier: 'intelligence', // Fastest tier
-  minContentLength: 100,
-});
-
-console.log(`Fetched via ${result.tier} tier in ${result.timing.total}ms`);
-console.log(result.content.text);
-
-// Extract content from raw HTML
-const extracted = fetcher.extract('<html>...</html>', 'https://example.com');
-console.log(extracted.markdown);
-```
-
-## Features
-
-- **Smart Browsing**: Automatic tier selection (static → lightweight → playwright)
-- **API Discovery**: Learn API patterns from network traffic
-- **Skill Learning**: Build reusable browsing skills from successful patterns
-- **Session Management**: Persistent authenticated sessions
-- **Content Intelligence**: Framework detection and structured data extraction
-
-## API Reference
-
-### `createLLMBrowser(config?)`
-
-Factory function to create an initialized browser client.
-
-```typescript
-import { createLLMBrowser, type LLMBrowserConfig } from '@llm-browser/core';
-
-const browser = await createLLMBrowser({
-  sessionsDir: './my-sessions',
-  enableLearning: true,
-  enableProceduralMemory: true,
-});
-```
-
-### Configuration Reference
-
-#### LLMBrowserConfig
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `sessionsDir` | `string` | `'./sessions'` | Directory for storing session data |
-| `learningEnginePath` | `string` | `'./enhanced-knowledge-base.json'` | Path to learning engine JSON file |
-| `browser` | `BrowserConfig` | See below | Browser configuration options |
-| `enableProceduralMemory` | `boolean` | `true` | Enable skill learning from browsing patterns |
-| `enableLearning` | `boolean` | `true` | Enable API pattern learning |
-
-#### BrowserConfig
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `headless` | `boolean` | `true` | Run browser in headless mode |
-| `screenshotDir` | `string` | `'/tmp/browser-screenshots'` | Directory for saving screenshots |
-| `slowMo` | `number` | `0` | Slow down actions by this many ms (debugging) |
-| `devtools` | `boolean` | `false` | Open Chrome DevTools on launch |
-| `provider` | `BrowserProviderConfig` | auto-detected | Browser provider (local, browserless, brightdata) |
-
-### Browse Options Reference
-
-The `browse()` method accepts `SmartBrowseOptions`. Options are grouped by concern:
-
-#### Essential Options
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `forceTier` | `RenderTier` | auto | Force a specific tier: `'intelligence'`, `'lightweight'`, `'playwright'` |
-| `waitForSelector` | `string` | - | CSS selector to wait for before extracting content |
-| `timeout` | `number` | 30000 | Navigation timeout in milliseconds |
-| `minContentLength` | `number` | - | Minimum content length for tier validation |
-| `contentType` | `string` | - | Expected content type: `'article'`, `'list'`, `'table'`, etc. |
-
-#### Learning Options
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `enableLearning` | `boolean` | `true` | Learn patterns from this request |
-| `useSkills` | `boolean` | `true` | Apply learned browsing skills |
-| `recordTrajectory` | `boolean` | `true` | Record this session for skill learning |
-| `includeDecisionTrace` | `boolean` | `false` | Include detailed decision trace in response |
-| `recordDebugTrace` | `boolean` | `false` | Record debug trace for later analysis |
-
-#### Validation & Content Options
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `extractContent` | `boolean` | `true` | Extract content from page |
-| `validateContent` | `boolean` | - | Validate response against learned patterns |
-| `checkForChanges` | `boolean` | - | Check if content has changed since last visit |
-| `followPagination` | `boolean` | `false` | Automatically follow pagination links |
-| `maxPages` | `number` | - | Maximum pages to follow when paginating |
-
-#### Budget Controls
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `maxLatencyMs` | `number` | - | Stop tier fallback if latency exceeds this |
-| `maxCostTier` | `RenderTier` | `'playwright'` | Most expensive tier allowed |
-| `freshnessRequirement` | `FreshnessRequirement` | `'any'` | `'realtime'`, `'cached'`, or `'any'` |
-
-#### Browser Behavior Options
-
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `waitFor` | `string` | `'load'` | Wait strategy: `'load'`, `'domcontentloaded'`, `'networkidle'` |
-| `captureNetwork` | `boolean` | `true` | Capture network requests |
-| `captureConsole` | `boolean` | `true` | Capture console messages |
-| `sessionProfile` | `string` | - | Session profile name for authenticated browsing |
-| `dismissCookieBanner` | `boolean` | - | Auto-dismiss cookie consent banners |
-| `scrollToLoad` | `boolean` | - | Scroll to trigger lazy-loaded content |
-| `useRateLimiting` | `boolean` | `true` | Apply per-domain rate limiting |
-| `retryOnError` | `boolean` | `true` | Retry on transient errors |
-
-### LLMBrowserClient
-
-Main SDK client class with methods:
-
-- `browse(url, options)` - Browse with automatic optimization
-- `fetch(url, options)` - Fast content fetching using tiered rendering
-- `getDomainIntelligence(domain)` - Get learned patterns for a domain
-- `findApplicableSkills(url)` - Find matching browsing skills
-- `getLearningStats()` - Get learning engine statistics
-- `getProceduralMemoryStats()` - Get skill learning statistics
-- `getTieredFetcherStats()` - Get tiered fetcher statistics
-- `cleanup()` - Release browser resources
-
-## Stealth Mode (Anti-Bot Evasion)
-
-The SDK includes built-in anti-bot evasion capabilities that work across all rendering tiers.
-
-### Fingerprint Generation
-
-Generate consistent browser fingerprints for stealth browsing:
-
-```typescript
-import {
-  generateFingerprint,
-  getStealthFetchHeaders,
-  BehavioralDelays,
-} from '@llm-browser/core';
-
-// Generate a random fingerprint
-const fingerprint = generateFingerprint();
-
-// Or use a seed for consistency (e.g., same fingerprint for same domain)
-const seededFingerprint = generateFingerprint('example.com');
-
-console.log(fingerprint.userAgent);       // Chrome-like UA
-console.log(fingerprint.viewport);        // { width: 1920, height: 1080 }
-console.log(fingerprint.locale);          // 'en-US'
-console.log(fingerprint.timezoneId);      // 'America/New_York'
-console.log(fingerprint.clientHints);     // sec-ch-ua headers
-```
-
-### Stealth Headers for HTTP Requests
-
-Apply stealth headers to any HTTP request (works without Playwright):
-
-```typescript
-import { getStealthFetchHeaders } from '@llm-browser/core';
-
-// Get headers matching a realistic browser fingerprint
-const headers = getStealthFetchHeaders({
-  fingerprintSeed: 'example.com', // Consistent per-domain
-});
-
-// Use with fetch
-const response = await fetch('https://example.com', { headers });
-
-// Or merge with your own headers
-const customHeaders = getStealthFetchHeaders({
-  extraHeaders: {
-    'Authorization': 'Bearer token',
-    'X-Custom': 'value',
-  },
-});
-```
-
-### Behavioral Delays
-
-Add human-like timing patterns:
-
-```typescript
-import { BehavioralDelays } from '@llm-browser/core';
-
-// Random delay between actions
-await BehavioralDelays.sleep(100, 500); // 100-500ms
-
-// Jittered delay (for rate limiting)
-const delay = BehavioralDelays.jitteredDelay(1000, 0.3); // 1s +/- 30%
-
-// Exponential backoff with jitter
-const backoff = BehavioralDelays.exponentialBackoff(2); // Attempt 2 = ~4s
-```
-
-### Playwright Stealth Mode
-
-For full browser rendering, use stealth mode with playwright-extra:
-
-```bash
-# Install optional dependencies
-npm install playwright-extra puppeteer-extra-plugin-stealth
-```
-
-```typescript
-import {
-  launchStealthBrowser,
-  createStealthContext,
-  isStealthAvailable,
-} from '@llm-browser/core';
-
-// Check if stealth is available
-if (isStealthAvailable()) {
-  // Launch browser with stealth plugin
-  const { browser, fingerprint, stealthEnabled } = await launchStealthBrowser({
-    fingerprintSeed: 'example.com',
+async function optimizedBrowse() {
+  const browser = await createLLMBrowser({
+    enableLearning: true,  // Learn patterns for faster future access
   });
 
-  // Create context with evasion scripts
-  const context = await createStealthContext(browser, fingerprint);
-  const page = await context.newPage();
+  try {
+    // 1. Use budget controls to avoid slow tiers
+    const fastResult = await browser.browse(url, {
+      maxCostTier: 'lightweight',  // Skip playwright
+      maxLatencyMs: 2000,          // Give up after 2s
+    });
 
-  // Browse normally - evasion is automatic
-  await page.goto('https://example.com');
+    // 2. Force fast tier for known static sites
+    const staticResult = await browser.browse('https://static.example.com', {
+      forceTier: 'intelligence',
+    });
+
+    // 3. Check if domain can bypass browser
+    const intel = await browser.getDomainIntelligence('example.com');
+    if (intel.knownPatterns > 0) {
+      console.log('This domain has learned API patterns - will be fast');
+    }
+
+    // 4. Get tier statistics
+    const stats = browser.getTieredFetcherStats();
+    console.log('Average times by tier:', stats.avgResponseTimes);
+
+  } finally {
+    await browser.cleanup();
+  }
 }
 ```
 
-### What Stealth Mode Provides
+### Multi-Tenant Usage
 
-**HTTP-level (all tiers):**
-- User agent rotation from realistic Chrome versions
-- Matching Accept-Language and locale
-- sec-ch-ua client hints headers
-- Consistent viewport/platform combinations
+For applications serving multiple users:
 
-**Browser-level (Playwright only):**
-- navigator.webdriver removal
-- chrome.runtime patching
-- Plugin/mimeTypes array spoofing
-- Permissions API patching
-- Language consistency
+```typescript
+import {
+  TenantStore,
+  MultiTenantStore,
+  SharedPatternPool,
+  EmbeddedStore,
+} from '@llm-browser/core';
 
-### Limitations
+async function multiTenant() {
+  // Create embedded store
+  const baseStore = await EmbeddedStore.create({
+    dataDir: './data',
+    tenant: 'system',
+  });
 
-Stealth mode helps with basic bot detection but cannot bypass:
-- CAPTCHAs (reCAPTCHA, Turnstile) - require human solving
-- Datacenter IP blocklists - require residential proxies
-- Advanced fingerprinting - some sites use sophisticated detection
+  // Create multi-tenant manager
+  const multiTenant = new MultiTenantStore(baseStore);
+  await multiTenant.initialize();
 
-## Status
+  // Create tenant with shared pool access
+  const tenantStore = await multiTenant.getOrCreateTenant('user-123', {
+    sharePatterns: true,   // Contribute patterns to shared pool
+    consumeShared: true,   // Use patterns from shared pool
+  });
 
-This package is part of the SDK extraction effort (SDK-001 to SDK-012).
-Current status: **SmartBrowser extracted** (SDK-003).
+  // Each tenant has isolated storage
+  await tenantStore.set('my-data', { value: 1 });
+  const data = await tenantStore.get('my-data');
 
-See [SDK_ARCHITECTURE.md](../../docs/SDK_ARCHITECTURE.md) for the full plan.
+  // Shared pool allows cross-tenant pattern sharing
+  const sharedPool = new SharedPatternPool(baseStore);
+  await sharedPool.initialize();
+
+  // Contribute a learned pattern
+  await sharedPool.contributePattern(
+    { /* pattern data */ },
+    'user-123',
+    0.95  // confidence
+  );
+
+  // Get shared patterns (excludes own contributions)
+  const patterns = await sharedPool.getSharedPatterns('other-user');
+}
+```
+
+### Custom Learning
+
+Extend the learning system:
+
+```typescript
+import { createLLMBrowser, ApiPatternRegistry, PATTERN_TEMPLATES } from '@llm-browser/core';
+
+async function customLearning() {
+  const browser = await createLLMBrowser();
+  const learningEngine = browser.getLearningEngine();
+
+  // Get the pattern registry
+  const registry = learningEngine.getPatternRegistry();
+
+  // Manually register a pattern
+  registry.registerPattern({
+    id: 'my-custom-pattern',
+    domain: 'api.myservice.com',
+    templateId: 'rest-resource',
+    endpoint: '/api/v1/items/{id}',
+    method: 'GET',
+    confidence: 'high',
+    canBypass: true,
+    contentMapping: {
+      title: 'data.name',
+      content: 'data.description',
+    },
+    source: 'bootstrap',
+    createdAt: Date.now(),
+    lastVerified: Date.now(),
+  });
+
+  // Check pattern templates
+  console.log('Available templates:', Object.keys(PATTERN_TEMPLATES));
+
+  // Get learning effectiveness metrics
+  const effectiveness = await learningEngine.getEffectivenessMetrics();
+  console.log('Pattern hit rate:', effectiveness.patternHitRate);
+  console.log('Confidence accuracy:', effectiveness.confidenceAccuracy);
+
+  await browser.cleanup();
+}
+```
+
+---
+
+## TypeScript Support
+
+The SDK is written in TypeScript and provides comprehensive type definitions:
+
+```typescript
+import {
+  // Factory functions
+  createLLMBrowser,
+  createContentFetcher,
+
+  // Main client
+  LLMBrowserClient,
+
+  // Configuration types
+  type LLMBrowserConfig,
+  type BrowserConfig,
+
+  // Browse types
+  type SmartBrowseOptions,
+  type SmartBrowseResult,
+  type TieredFetchOptions,
+  type TieredFetchResult,
+  type RenderTier,
+
+  // Result types
+  type NetworkRequest,
+  type ConsoleMessage,
+  type ApiPattern,
+  type BrowseResult,
+
+  // Learning types
+  type BrowsingSkill,
+  type SkillMatch,
+  type SkillExecutionTrace,
+
+  // Error types
+  type StructuredError,
+  UrlSafetyError,
+
+  // Session types
+  type SessionHealth,
+
+  // Core classes (for advanced usage)
+  SmartBrowser,
+  LearningEngine,
+  ProceduralMemory,
+  TieredFetcher,
+  ContentExtractor,
+  SessionManager,
+} from '@llm-browser/core';
+```
+
+Full TypeScript example:
+
+```typescript
+import {
+  createLLMBrowser,
+  type LLMBrowserConfig,
+  type SmartBrowseOptions,
+  type SmartBrowseResult,
+} from '@llm-browser/core';
+
+const config: LLMBrowserConfig = {
+  sessionsDir: './sessions',
+  enableLearning: true,
+};
+
+const options: SmartBrowseOptions = {
+  timeout: 30000,
+  forceTier: 'lightweight',
+  enableLearning: true,
+};
+
+async function typedExample(): Promise<void> {
+  const browser = await createLLMBrowser(config);
+
+  try {
+    const result: SmartBrowseResult = await browser.browse(
+      'https://example.com',
+      options
+    );
+
+    // TypeScript knows all the fields
+    console.log(result.title);
+    console.log(result.content.markdown);
+    console.log(result.learning.renderTier);
+
+    if (result.fieldConfidence) {
+      console.log('Title confidence:', result.fieldConfidence.title.score);
+    }
+
+  } finally {
+    await browser.cleanup();
+  }
+}
+```
+
+---
+
+## Troubleshooting
+
+### Common Issues
+
+#### "Playwright not available"
+
+Install Playwright and browser:
+```bash
+npm install playwright
+npx playwright install chromium
+```
+
+#### "Semantic matching disabled"
+
+Install optional dependencies:
+```bash
+npm install @xenova/transformers @lancedb/lancedb better-sqlite3
+```
+
+#### "Request blocked by SSRF protection"
+
+The SDK blocks requests to private IP ranges by default. For testing:
+```typescript
+import { configureUrlSafety } from '@llm-browser/core';
+
+// WARNING: Only for testing, not production
+configureUrlSafety({
+  allowPrivateIPs: true,
+  allowLocalhost: true,
+});
+```
+
+#### "Rate limited"
+
+The SDK applies per-domain rate limiting. Adjust or disable:
+```typescript
+const result = await browser.browse(url, {
+  useRateLimiting: false,  // Disable rate limiting (not recommended)
+});
+```
+
+### Debug Logging
+
+Enable verbose logging:
+```typescript
+import { configureLogger } from '@llm-browser/core';
+
+configureLogger({
+  level: 'debug',  // 'trace' | 'debug' | 'info' | 'warn' | 'error'
+});
+```
+
+### Getting Help
+
+- Check the [examples](./examples/) directory for runnable code
+- File issues at the [GitHub repository](https://github.com/anthropics/llm-browser/issues)
+- See [SDK_ARCHITECTURE.md](../../docs/SDK_ARCHITECTURE.md) for internals
+
+---
 
 ## License
 
