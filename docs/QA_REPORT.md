@@ -7,8 +7,8 @@
 ## Summary
 
 - **Successes:** 13 tests passed
-- **Warnings:** 5 minor issues
-- **Issues:** 7 findings (4 test bugs, 3 actual bugs)
+- **Warnings:** 4 minor issues
+- **Issues:** 7 findings (4 test bugs, 3 actual bugs - all 3 now fixed)
 
 ---
 
@@ -41,48 +41,58 @@ export {
 
 ---
 
-### 2. BUG - IPv6 Loopback Not Blocked by URL Safety
+### 2. FIXED - IPv6 Loopback Not Blocked by URL Safety
 
 **Severity:** Medium
-**Status:** Open - Needs Fix
+**Status:** Fixed
 
-**Description:** The URL safety validator does not block IPv6 loopback addresses.
+**Description:** The URL safety validator did not block IPv6 loopback addresses.
 
-**Reproduction:**
+**Fix Applied:**
+- Added `isIPv6()` function to detect bracketed IPv6 addresses
+- Added `stripIPv6Brackets()` helper for consistent IPv6 handling
+- Added `isIPv6Loopback()` to detect `::1` and expanded forms
+- Added `isIPv6LinkLocal()` to detect `fe80::/10` addresses
+- Added `isIPv6Private()` to detect `fc00::/7` addresses
+- Updated `isLocalhost()` to check IPv6 loopback
+- Updated `validate()` to check IPv6 link-local and private ranges
+
+**Verification:**
 ```javascript
 import { validateUrl } from '@llm-browser/core';
 
-const result = validateUrl('http://[::1]/admin');
-console.log(result);
-// { safe: true, ... }  // WRONG! Should be blocked
+validateUrl('http://[::1]/admin');      // { safe: false, category: 'localhost' }
+validateUrl('http://[fe80::1]/');       // { safe: false, category: 'link_local' }
+validateUrl('http://[fd00::1]/');       // { safe: false, category: 'private_ip' }
 ```
-
-**Expected:** IPv6 loopback `[::1]` should be blocked like IPv4 `127.0.0.1`
-
-**Root Cause:** `url-safety.ts` only checks IPv4 addresses, no IPv6 handling.
-
-**Recommended Fix:** Add IPv6 localhost/private address detection in `isLocalhost()` and `isPrivateIP()` functions.
 
 ---
 
-### 3. BUG - classifyFailure Crashes on Non-Error Objects
+### 3. FIXED - classifyFailure Crashes on Non-Error Objects
 
 **Severity:** Low
-**Status:** Open - Needs Fix
+**Status:** Fixed
 
-**Description:** `classifyFailure()` throws when passed an object without an `error.message` property.
+**Description:** `classifyFailure()` threw when passed an object without an `error.message` property.
 
-**Reproduction:**
+**Fix Applied:**
+- Changed `errorMessage` parameter type from `string` to `string | Error | unknown`
+- Added input normalization that handles:
+  - String messages (pass through)
+  - Error objects (extract `.message`)
+  - Objects with `.message`, `.error`, or `.statusText` properties
+  - Any other object (JSON stringify as fallback)
+  - null/undefined (default to 'Unknown error')
+
+**Verification:**
 ```javascript
 import { classifyFailure } from '@llm-browser/core';
 
-// Crashes with: Cannot read properties of undefined (reading 'toLowerCase')
-const result = classifyFailure({ status: 403 });
+classifyFailure(undefined, { status: 403 });                    // Returns { category: 'unknown', ... }
+classifyFailure(undefined, new Error('Connection timeout'));    // Returns { category: 'timeout', ... }
+classifyFailure(undefined, { message: 'Auth required' });       // Returns { category: 'auth_required', ... }
+classifyFailure(undefined, null);                               // Returns { category: 'unknown', ... }
 ```
-
-**Root Cause:** The function expects `error.message` but receives an HTTP response object.
-
-**Recommended Fix:** Add defensive checks for different error shapes (Error objects, HTTP responses, etc.)
 
 ---
 
@@ -177,10 +187,10 @@ Several classes have method names different from what users might expect:
 ## Recommendations
 
 ### Priority 1 (Security)
-- Fix IPv6 loopback blocking in URL safety
+- ~~Fix IPv6 loopback blocking in URL safety~~ DONE
 
 ### Priority 2 (Stability)
-- Add defensive checks in classifyFailure()
+- ~~Add defensive checks in classifyFailure()~~ DONE
 
 ### Priority 3 (Developer Experience)
 - Document async initialization requirements

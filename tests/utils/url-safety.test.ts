@@ -409,11 +409,11 @@ describe('Edge Cases', () => {
   });
 
   it('should handle URLs with IPv6 addresses', () => {
-    // IPv6 localhost
+    // IPv6 localhost should be blocked just like IPv4 localhost
     const result = validator.validate('http://[::1]');
-    // Note: Our current implementation doesn't validate IPv6, so this passes
-    // This is a known limitation that could be addressed in a future iteration
-    expect(result.safe).toBe(true); // IPv6 support is limited
+    expect(result.safe).toBe(false);
+    expect(result.category).toBe('localhost');
+    expect(result.reason).toContain('loopback');
   });
 
   it('should handle URLs with unicode hostnames', () => {

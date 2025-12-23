@@ -76,73 +76,104 @@ const PARSE_KEYWORDS = [
 
 /**
  * Classify a failure based on HTTP response and/or error
+ *
+ * @param statusCode - HTTP status code (optional)
+ * @param errorMessage - Error message string, Error object, or any error-like object
+ * @param responseTime - Response time in ms (optional)
  */
 export function classifyFailure(
   statusCode: number | undefined,
-  errorMessage: string,
+  errorMessage: string | Error | unknown,
   responseTime?: number
 ): FailureClassification {
-  const messageLower = errorMessage.toLowerCase();
+  // Normalize errorMessage to string, handling various input types
+  let messageStr: string;
+  if (typeof errorMessage === 'string') {
+    messageStr = errorMessage;
+  } else if (errorMessage instanceof Error) {
+    messageStr = errorMessage.message;
+  } else if (errorMessage && typeof errorMessage === 'object') {
+    // Handle objects like { status: 403, message: '...' }
+    const obj = errorMessage as Record<string, unknown>;
+    if (typeof obj.message === 'string') {
+      messageStr = obj.message;
+    } else if (typeof obj.error === 'string') {
+      messageStr = obj.error;
+    } else if (typeof obj.statusText === 'string') {
+      messageStr = obj.statusText;
+    } else {
+      // Last resort: stringify the object
+      try {
+        messageStr = JSON.stringify(errorMessage);
+      } catch {
+        messageStr = String(errorMessage);
+      }
+    }
+  } else {
+    messageStr = String(errorMessage ?? 'Unknown error');
+  }
+
+  const messageLower = messageStr.toLowerCase();
 
   // HTTP status code-based classification
   if (statusCode !== undefined) {
     if (statusCode === 401 || statusCode === 403) {
-      return createClassification('auth_required', 1.0, errorMessage);
+      return createClassification('auth_required', 1.0, messageStr);
     }
     if (statusCode === 429) {
-      return createClassification('rate_limited', 1.0, errorMessage);
+      return createClassification('rate_limited', 1.0, messageStr);
     }
     if (statusCode === 404) {
-      return createClassification('wrong_endpoint', 1.0, errorMessage);
+      return createClassification('wrong_endpoint', 1.0, messageStr);
     }
     if (statusCode >= 500 && statusCode < 600) {
-      return createClassification('server_error', 0.9, errorMessage);
+      return createClassification('server_error', 0.9, messageStr);
     }
     if (statusCode >= 400 && statusCode < 500) {
       // Other 4xx errors - could be various issues
       if (containsKeywords(messageLower, AUTH_KEYWORDS)) {
-        return createClassification('auth_required', 0.8, errorMessage);
+        return createClassification('auth_required', 0.8, messageStr);
       }
       if (containsKeywords(messageLower, RATE_LIMIT_KEYWORDS)) {
-        return createClassification('rate_limited', 0.8, errorMessage);
+        return createClassification('rate_limited', 0.8, messageStr);
       }
-      return createClassification('wrong_endpoint', 0.6, errorMessage);
+      return createClassification('wrong_endpoint', 0.6, messageStr);
     }
   }
 
   // Error message-based classification
   if (containsKeywords(messageLower, TIMEOUT_KEYWORDS)) {
-    return createClassification('timeout', 0.9, errorMessage);
+    return createClassification('timeout', 0.9, messageStr);
   }
   if (containsKeywords(messageLower, NETWORK_KEYWORDS)) {
-    return createClassification('network_error', 0.9, errorMessage);
+    return createClassification('network_error', 0.9, messageStr);
   }
   if (containsKeywords(messageLower, RATE_LIMIT_KEYWORDS)) {
-    return createClassification('rate_limited', 0.8, errorMessage);
+    return createClassification('rate_limited', 0.8, messageStr);
   }
   if (containsKeywords(messageLower, AUTH_KEYWORDS)) {
-    return createClassification('auth_required', 0.8, errorMessage);
+    return createClassification('auth_required', 0.8, messageStr);
   }
   if (containsKeywords(messageLower, SERVER_ERROR_KEYWORDS)) {
-    return createClassification('server_error', 0.8, errorMessage);
+    return createClassification('server_error', 0.8, messageStr);
   }
   if (containsKeywords(messageLower, PARSE_KEYWORDS)) {
-    return createClassification('parse_error', 0.8, errorMessage);
+    return createClassification('parse_error', 0.8, messageStr);
   }
 
   // Check for validation-related messages
   if (messageLower.includes('missing') && messageLower.includes('field')) {
-    return createClassification('validation_failed', 0.9, errorMessage);
+    return createClassification('validation_failed', 0.9, messageStr);
   }
   if (messageLower.includes('content too short') || messageLower.includes('too short')) {
-    return createClassification('content_too_short', 0.9, errorMessage);
+    return createClassification('content_too_short', 0.9, messageStr);
   }
   if (messageLower.includes('required field')) {
-    return createClassification('validation_failed', 0.9, errorMessage);
+    return createClassification('validation_failed', 0.9, messageStr);
   }
 
   // Default to unknown
-  return createClassification('unknown', 0.3, errorMessage);
+  return createClassification('unknown', 0.3, messageStr);
 }
 
 /**

@@ -155,6 +155,59 @@ function isIPv4(hostname: string): boolean {
 }
 
 /**
+ * Check if a value is an IPv6 address (bracketed format from URL hostname)
+ * Note: URL.hostname keeps the brackets for IPv6, e.g., [::1]
+ */
+function isIPv6(hostname: string): boolean {
+  // Check for bracketed IPv6 addresses
+  if (hostname.startsWith('[') && hostname.endsWith(']')) {
+    return true;
+  }
+  // Also check for unbracketed IPv6 patterns (in case called directly)
+  const ipv6Pattern = /^([0-9a-fA-F]{0,4}:){2,7}[0-9a-fA-F]{0,4}$|^::$|^::1$|^fe80:/i;
+  return ipv6Pattern.test(hostname);
+}
+
+/**
+ * Strip brackets from IPv6 hostname if present
+ */
+function stripIPv6Brackets(hostname: string): string {
+  if (hostname.startsWith('[') && hostname.endsWith(']')) {
+    return hostname.slice(1, -1);
+  }
+  return hostname;
+}
+
+/**
+ * Check if IPv6 address is loopback (::1)
+ */
+function isIPv6Loopback(hostname: string): boolean {
+  const normalized = stripIPv6Brackets(hostname).toLowerCase();
+  // ::1 is the IPv6 loopback address
+  // Also check for expanded forms like 0:0:0:0:0:0:0:1
+  return normalized === '::1' ||
+         normalized === '0:0:0:0:0:0:0:1' ||
+         normalized === '0000:0000:0000:0000:0000:0000:0000:0001';
+}
+
+/**
+ * Check if IPv6 address is link-local (fe80::/10)
+ */
+function isIPv6LinkLocal(hostname: string): boolean {
+  const normalized = stripIPv6Brackets(hostname).toLowerCase();
+  return normalized.startsWith('fe80:') || normalized.startsWith('fe80');
+}
+
+/**
+ * Check if IPv6 address is private/unique local (fc00::/7 - includes fd00::/8)
+ */
+function isIPv6Private(hostname: string): boolean {
+  const normalized = stripIPv6Brackets(hostname).toLowerCase();
+  // fc00::/7 covers fc00:: through fdff::
+  return normalized.startsWith('fc') || normalized.startsWith('fd');
+}
+
+/**
  * Check if IP is in a range
  */
 function isInRange(ip: string, range: { start: number; end: number }): boolean {
@@ -179,7 +232,8 @@ function isLocalhost(hostname: string): boolean {
     lowered === 'localhost.localdomain' ||
     lowered.endsWith('.localhost') ||
     lowered === '0.0.0.0' ||
-    (isIPv4(hostname) && isInRange(hostname, LOOPBACK_RANGE))
+    (isIPv4(hostname) && isInRange(hostname, LOOPBACK_RANGE)) ||
+    isIPv6Loopback(lowered)
   );
 }
 
@@ -300,7 +354,7 @@ export class UrlSafetyValidator {
       };
     }
 
-    // For IP addresses, perform additional checks
+    // For IPv4 addresses, perform additional checks
     if (isIPv4(hostname)) {
       // Check link-local (but skip if it's an allowed metadata endpoint)
       const isMetadata = isMetadataEndpoint(hostname);
@@ -319,6 +373,29 @@ export class UrlSafetyValidator {
           ...result,
           safe: false,
           reason: `Blocked private IP address: ${hostname}. Enable allowPrivateIPs to access internal network resources.`,
+          category: 'private_ip',
+        };
+      }
+    }
+
+    // For IPv6 addresses, perform additional checks
+    if (isIPv6(hostname)) {
+      // Check IPv6 link-local (fe80::/10)
+      if (!this.config.allowLinkLocal && isIPv6LinkLocal(hostname)) {
+        return {
+          ...result,
+          safe: false,
+          reason: `Blocked IPv6 link-local address: ${hostname}. Enable allowLinkLocal to access these addresses.`,
+          category: 'link_local',
+        };
+      }
+
+      // Check IPv6 private/unique local (fc00::/7)
+      if (!this.config.allowPrivateIPs && isIPv6Private(hostname)) {
+        return {
+          ...result,
+          safe: false,
+          reason: `Blocked IPv6 private address: ${hostname}. Enable allowPrivateIPs to access internal network resources.`,
           category: 'private_ip',
         };
       }
