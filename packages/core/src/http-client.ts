@@ -1,0 +1,392 @@
+/**
+ * Unbrowser HTTP Client
+ *
+ * Client for interacting with the Unbrowser cloud API.
+ * Provides a simple interface for browsing URLs via the cloud service.
+ */
+
+// ============================================
+// Types
+// ============================================
+
+export interface UnbrowserConfig {
+  /** API key for authentication (required) */
+  apiKey: string;
+  /** Base URL for the API (default: https://api.unbrowser.ai) */
+  baseUrl?: string;
+  /** Request timeout in milliseconds (default: 60000) */
+  timeout?: number;
+  /** Retry failed requests (default: true) */
+  retry?: boolean;
+  /** Maximum retry attempts (default: 3) */
+  maxRetries?: number;
+}
+
+export interface BrowseOptions {
+  /** Content type to return (default: markdown) */
+  contentType?: 'markdown' | 'text' | 'html';
+  /** CSS selector to wait for before extraction */
+  waitForSelector?: string;
+  /** Scroll page to trigger lazy loading */
+  scrollToLoad?: boolean;
+  /** Maximum characters to return */
+  maxChars?: number;
+  /** Include tables in response */
+  includeTables?: boolean;
+  /** Maximum latency allowed (will skip slower tiers) */
+  maxLatencyMs?: number;
+  /** Maximum cost tier to use */
+  maxCostTier?: 'intelligence' | 'lightweight' | 'playwright';
+}
+
+export interface SessionData {
+  /** Cookies to send with the request */
+  cookies?: Cookie[];
+  /** LocalStorage values to set */
+  localStorage?: Record<string, string>;
+}
+
+export interface Cookie {
+  name: string;
+  value: string;
+  domain?: string;
+  path?: string;
+}
+
+export interface BrowseResult {
+  /** The original URL requested */
+  url: string;
+  /** The final URL after redirects */
+  finalUrl: string;
+  /** Page title */
+  title: string;
+  /** Extracted content */
+  content: {
+    markdown: string;
+    text: string;
+    html?: string;
+  };
+  /** Extracted tables (if includeTables was true) */
+  tables?: Array<{
+    headers: string[];
+    rows: string[][];
+  }>;
+  /** Discovered API endpoints */
+  discoveredApis?: Array<{
+    url: string;
+    method: string;
+    contentType: string;
+  }>;
+  /** Request metadata */
+  metadata: {
+    loadTime: number;
+    tier: string;
+    tiersAttempted: string[];
+  };
+  /** New cookies set during the request */
+  newCookies?: Cookie[];
+}
+
+export interface BatchResult {
+  results: Array<{
+    url: string;
+    success: boolean;
+    data?: BrowseResult;
+    error?: { code: string; message: string };
+  }>;
+  totalTime: number;
+}
+
+export interface DomainIntelligence {
+  domain: string;
+  knownPatterns: number;
+  selectorChains: number;
+  validators: number;
+  paginationPatterns: number;
+  recentFailures: number;
+  successRate: number;
+  domainGroup: string | null;
+  recommendedWaitStrategy: string;
+  shouldUseSession: boolean;
+}
+
+export interface ProgressEvent {
+  stage: string;
+  tier?: string;
+  elapsed: number;
+  message?: string;
+}
+
+export type ProgressCallback = (event: ProgressEvent) => void;
+
+export class UnbrowserError extends Error {
+  code: string;
+
+  constructor(code: string, message: string) {
+    super(message);
+    this.code = code;
+    this.name = 'UnbrowserError';
+  }
+}
+
+// ============================================
+// Client Implementation
+// ============================================
+
+export class UnbrowserClient {
+  private apiKey: string;
+  private baseUrl: string;
+  private timeout: number;
+  private retry: boolean;
+  private maxRetries: number;
+
+  constructor(config: UnbrowserConfig) {
+    if (!config.apiKey) {
+      throw new UnbrowserError('MISSING_API_KEY', 'apiKey is required');
+    }
+
+    if (!config.apiKey.startsWith('ub_')) {
+      throw new UnbrowserError('INVALID_API_KEY', 'Invalid API key format');
+    }
+
+    this.apiKey = config.apiKey;
+    this.baseUrl = (config.baseUrl || 'https://api.unbrowser.ai').replace(/\/$/, '');
+    this.timeout = config.timeout || 60000;
+    this.retry = config.retry !== false;
+    this.maxRetries = config.maxRetries || 3;
+  }
+
+  /**
+   * Make an authenticated request to the API
+   */
+  private async request<T>(
+    method: string,
+    path: string,
+    body?: unknown,
+    options?: { signal?: AbortSignal }
+  ): Promise<T> {
+    const url = `${this.baseUrl}${path}`;
+
+    let lastError: Error | null = null;
+    const attempts = this.retry ? this.maxRetries : 1;
+
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+        const response = await fetch(url, {
+          method,
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${this.apiKey}`,
+          },
+          body: body ? JSON.stringify(body) : undefined,
+          signal: options?.signal || controller.signal,
+        });
+
+        clearTimeout(timeoutId);
+
+        const result = (await response.json()) as { success: boolean; data?: T; error?: { code: string; message: string } };
+
+        if (!result.success) {
+          const error = result.error || { code: 'UNKNOWN_ERROR', message: 'Unknown error' };
+          throw new UnbrowserError(error.code, error.message);
+        }
+
+        return result.data as T;
+      } catch (error) {
+        lastError = error as Error;
+
+        // Don't retry on auth errors or bad requests
+        if (error instanceof UnbrowserError) {
+          if (['UNAUTHORIZED', 'FORBIDDEN', 'INVALID_REQUEST', 'INVALID_URL'].includes(error.code)) {
+            throw error;
+          }
+        }
+
+        // Don't retry on user abort
+        if (error instanceof Error && error.name === 'AbortError') {
+          throw new UnbrowserError('REQUEST_ABORTED', 'Request was aborted');
+        }
+
+        // Wait before retrying (exponential backoff)
+        if (attempt < attempts) {
+          await new Promise((resolve) => setTimeout(resolve, Math.pow(2, attempt) * 1000));
+        }
+      }
+    }
+
+    throw lastError || new UnbrowserError('UNKNOWN_ERROR', 'Request failed');
+  }
+
+  /**
+   * Browse a URL and extract content
+   */
+  async browse(url: string, options?: BrowseOptions, session?: SessionData): Promise<BrowseResult> {
+    return this.request<BrowseResult>('POST', '/v1/browse', {
+      url,
+      options,
+      session,
+    });
+  }
+
+  /**
+   * Browse a URL with progress updates via SSE
+   */
+  async browseWithProgress(
+    url: string,
+    onProgress: ProgressCallback,
+    options?: BrowseOptions,
+    session?: SessionData
+  ): Promise<BrowseResult> {
+    const fullUrl = `${this.baseUrl}/v1/browse`;
+
+    const response = await fetch(fullUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'text/event-stream',
+        Authorization: `Bearer ${this.apiKey}`,
+      },
+      body: JSON.stringify({ url, options, session }),
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      try {
+        const error = JSON.parse(text);
+        throw new UnbrowserError(error.error?.code || 'HTTP_ERROR', error.error?.message || `HTTP ${response.status}`);
+      } catch {
+        throw new UnbrowserError('HTTP_ERROR', `HTTP ${response.status}: ${text}`);
+      }
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) {
+      throw new UnbrowserError('SSE_ERROR', 'Failed to get response reader');
+    }
+
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let result: BrowseResult | null = null;
+    let error: UnbrowserError | null = null;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (line.startsWith('event: ')) {
+          const eventType = line.slice(7).trim();
+
+          // Read the data line
+          const dataLineIndex = lines.indexOf(line) + 1;
+          if (dataLineIndex < lines.length && lines[dataLineIndex].startsWith('data: ')) {
+            const data = JSON.parse(lines[dataLineIndex].slice(6));
+
+            if (eventType === 'progress') {
+              onProgress(data as ProgressEvent);
+            } else if (eventType === 'result') {
+              result = data.data as BrowseResult;
+            } else if (eventType === 'error') {
+              error = new UnbrowserError(data.error?.code || 'BROWSE_ERROR', data.error?.message || 'Browse failed');
+            }
+          }
+        }
+      }
+    }
+
+    if (error) throw error;
+    if (!result) throw new UnbrowserError('SSE_ERROR', 'No result received');
+
+    return result;
+  }
+
+  /**
+   * Fast content fetch (tiered rendering)
+   */
+  async fetch(url: string, options?: BrowseOptions, session?: SessionData): Promise<BrowseResult> {
+    return this.request<BrowseResult>('POST', '/v1/fetch', {
+      url,
+      options,
+      session,
+    });
+  }
+
+  /**
+   * Browse multiple URLs in parallel
+   */
+  async batch(urls: string[], options?: BrowseOptions, session?: SessionData): Promise<BatchResult> {
+    return this.request<BatchResult>('POST', '/v1/batch', {
+      urls,
+      options,
+      session,
+    });
+  }
+
+  /**
+   * Get domain intelligence summary
+   */
+  async getDomainIntelligence(domain: string): Promise<DomainIntelligence> {
+    return this.request<DomainIntelligence>('GET', `/v1/domains/${encodeURIComponent(domain)}/intelligence`);
+  }
+
+  /**
+   * Get usage statistics for the current billing period
+   */
+  async getUsage(): Promise<{
+    period: { start: string; end: string };
+    requests: { total: number; byTier: Record<string, number> };
+    limits: { daily: number; remaining: number };
+  }> {
+    return this.request('GET', '/v1/usage');
+  }
+
+  /**
+   * Check API health (no auth required)
+   */
+  async health(): Promise<{ status: string; version: string; uptime?: number }> {
+    const url = `${this.baseUrl}/health`;
+
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      throw new UnbrowserError('HEALTH_CHECK_FAILED', `Health check failed: HTTP ${response.status}`);
+    }
+
+    return response.json() as Promise<{ status: string; version: string; uptime?: number }>;
+  }
+}
+
+// ============================================
+// Factory Function
+// ============================================
+
+/**
+ * Create an Unbrowser client for cloud API access
+ *
+ * @example
+ * ```typescript
+ * import { createUnbrowser } from '@unbrowser/core';
+ *
+ * const client = createUnbrowser({
+ *   apiKey: 'ub_live_xxxxx',
+ * });
+ *
+ * const result = await client.browse('https://example.com');
+ * console.log(result.content.markdown);
+ * ```
+ */
+export function createUnbrowser(config: UnbrowserConfig): UnbrowserClient {
+  return new UnbrowserClient(config);
+}
