@@ -237,7 +237,7 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 | SDK-008 | Write SDK documentation | L | Complete | Comprehensive README with config options, TypeScript examples, options reference, API documentation |
 | SDK-009 | Refactor MCP tools as thin wrappers | L | Complete | Modular MCP architecture: tool-schemas.ts, response-formatters.ts, sdk-client.ts, handlers/ directory. Index.ts reduced from 3588 to ~400 lines |
 | SDK-010 | Publish SDK to npm | S | Complete | Package renamed to @unbrowser/core v0.1.0-alpha.1. GitHub Actions workflow created for manual publish. Ready for npm publish when user authorizes |
-| SDK-011 | Create SDK migration guide | M | Not Started | How to migrate from MCP-only to SDK usage. Include code examples for common patterns |
+| SDK-011 | Create SDK migration guide | M | In Progress | How to migrate from MCP-only to SDK usage. Include code examples for common patterns |
 | SDK-012 | Add SDK integration tests | M | Not Started | Test SDK in isolation (no MCP). Ensure all features work programmatically |
 
 **Benefits:**
