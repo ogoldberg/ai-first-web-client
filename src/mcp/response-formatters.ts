@@ -128,6 +128,7 @@ export function formatBrowseResult(
     includeNetwork = false,
     includeConsole = false,
     includeHtml = false,
+    includeInsights = true,
   } = options;
 
   // Apply maxChars truncation to markdown content
@@ -184,9 +185,13 @@ export function formatBrowseResult(
       tierReason: result.learning.tierReason,
       // Budget tracking (CX-005)
       budgetInfo: result.learning.budgetInfo,
-      // Domain insights (TC-002)
-      domainCapabilities: result.learning.domainCapabilities,
-      domainKnowledge: result.learning.domainKnowledge,
+      // Domain insights (TC-002) - conditionally included
+      ...(includeInsights && result.learning.domainCapabilities
+        ? { domainCapabilities: result.learning.domainCapabilities }
+        : {}),
+      ...(includeInsights && result.learning.domainKnowledge
+        ? { domainKnowledge: result.learning.domainKnowledge }
+        : {}),
     },
     // Discovered APIs for future direct access
     discoveredApis: result.discoveredApis.map(api => ({

@@ -55,12 +55,13 @@ export class McpSdkClient {
     this.sessionManager = new SessionManager('./sessions');
     this.learningEngine = new LearningEngine('./enhanced-knowledge-base.json');
 
-    // Initialize smart browser
+    // Initialize smart browser with shared learning engine
     this.smartBrowser = new SmartBrowser(
       this.browserManager,
       this.contentExtractor,
       this.apiAnalyzer,
-      this.sessionManager
+      this.sessionManager,
+      this.learningEngine
     );
 
     // Initialize auth workflow
