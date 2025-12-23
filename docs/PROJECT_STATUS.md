@@ -342,11 +342,13 @@ All 10 phases complete:
 
 | Priority | Initiative | Status |
 |----------|-----------|--------|
-| P0 | Audit dependencies and create package structure | Not Started |
-| P0 | Extract SmartBrowser, learning, session components | Not Started |
-| P1 | Add types, docs, examples | Not Started |
-| P1 | Refactor MCP tools as thin wrappers | Not Started |
-| P1 | Publish to npm | Not Started |
+| P0 | Audit dependencies and create package structure (SDK-001, SDK-002) | Complete |
+| P0 | Extract SmartBrowser, learning, session components (SDK-003, SDK-004, SDK-005) | Complete |
+| P0 | Create SDK type definitions (SDK-006) | Complete |
+| P1 | Add SDK usage examples (SDK-007) | In Progress |
+| P1 | Write SDK documentation (SDK-008) | Not Started |
+| P1 | Refactor MCP tools as thin wrappers (SDK-009) | Not Started |
+| P1 | Publish to npm (SDK-010) | Not Started |
 
 **Benefits:** Enables direct programmatic use, foundation for all interfaces
 
