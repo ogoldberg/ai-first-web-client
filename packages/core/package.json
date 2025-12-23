@@ -13,7 +13,8 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "examples"
   ],
   "scripts": {
     "build": "tsc",
@@ -39,13 +40,13 @@
   ],
   "author": "",
   "license": "MIT",
-  "homepage": "https://github.com/anthropics/llm-browser#readme",
+  "homepage": "https://github.com/ogoldberg/ai-first-web-client#readme",
   "bugs": {
-    "url": "https://github.com/anthropics/llm-browser/issues"
+    "url": "https://github.com/ogoldberg/ai-first-web-client/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/anthropics/llm-browser.git",
+    "url": "git+https://github.com/ogoldberg/ai-first-web-client.git",
     "directory": "packages/core"
   },
   "dependencies": {

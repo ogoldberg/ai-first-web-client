@@ -23,16 +23,37 @@ export { BaseSiteHandler } from './types.js';
 import { redditHandler } from './reddit-handler.js';
 import { hackerNewsHandler } from './hackernews-handler.js';
 import { gitHubHandler } from './github-handler.js';
+import { wikipediaHandler } from './wikipedia-handler.js';
+import { stackOverflowHandler } from './stackoverflow-handler.js';
+import { npmHandler } from './npm-handler.js';
+import { pypiHandler } from './pypi-handler.js';
+import { devtoHandler } from './devto-handler.js';
+import { mediumHandler } from './medium-handler.js';
+import { youtubeHandler } from './youtube-handler.js';
 
 // Export individual handlers for direct use
 export { redditHandler } from './reddit-handler.js';
 export { hackerNewsHandler } from './hackernews-handler.js';
 export { gitHubHandler } from './github-handler.js';
+export { wikipediaHandler } from './wikipedia-handler.js';
+export { stackOverflowHandler } from './stackoverflow-handler.js';
+export { npmHandler } from './npm-handler.js';
+export { pypiHandler } from './pypi-handler.js';
+export { devtoHandler } from './devto-handler.js';
+export { mediumHandler } from './medium-handler.js';
+export { youtubeHandler } from './youtube-handler.js';
 
 // Handler classes for custom instantiation
 export { RedditHandler } from './reddit-handler.js';
 export { HackerNewsHandler } from './hackernews-handler.js';
 export { GitHubHandler } from './github-handler.js';
+export { WikipediaHandler } from './wikipedia-handler.js';
+export { StackOverflowHandler } from './stackoverflow-handler.js';
+export { NpmHandler } from './npm-handler.js';
+export { PyPIHandler } from './pypi-handler.js';
+export { DevToHandler } from './devto-handler.js';
+export { MediumHandler } from './medium-handler.js';
+export { YouTubeHandler } from './youtube-handler.js';
 
 /**
  * All registered site handlers
@@ -42,6 +63,13 @@ export const siteHandlers = [
   redditHandler,
   hackerNewsHandler,
   gitHubHandler,
+  wikipediaHandler,
+  stackOverflowHandler,
+  npmHandler,
+  pypiHandler,
+  devtoHandler,
+  mediumHandler,
+  youtubeHandler,
 ] as const;
 
 /**

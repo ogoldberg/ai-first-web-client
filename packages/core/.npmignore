@@ -1,0 +1,34 @@
+# Source files (dist is published)
+src/
+tsconfig.json
+tsconfig.tsbuildinfo
+
+# Development artifacts
+*.log
+.DS_Store
+
+# Local data files (user-specific)
+*.json
+!package.json
+sessions/
+data/
+debug-traces/
+
+# Lock files (consumers use their own)
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+
+# Test files
+*.test.ts
+*.spec.ts
+__tests__/
+
+# IDE
+.vscode/
+.idea/
+
+# Include these explicitly
+!dist/**
+!README.md
+!examples/**

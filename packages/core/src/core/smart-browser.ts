@@ -33,8 +33,6 @@ import type {
   FieldConfidence,
   TableConfidence,
   ApiConfidence,
-  ProblemResponse,
-  RetryConfig,
 } from '../types/index.js';
 import {
   createFieldConfidence,
@@ -75,15 +73,6 @@ import type {
   HarExportOptions,
   HarExportResult,
 } from '../types/har.js';
-import {
-  classifyProblem,
-  createProblemResponse,
-  detectBotProtection,
-  isBlockedByBotDetection,
-  suggestRetryConfig,
-} from './research-suggestion.js';
-import { getStealthFetchHeaders, BehavioralDelays } from './stealth-browser.js';
-import { detectChallengeElements, type ChallengeDetectionResult } from './challenge-detector.js';
 
 // Procedural memory thresholds
 const SKILL_APPLICATION_THRESHOLD = 0.8;  // Minimum similarity to auto-apply a skill
@@ -158,12 +147,6 @@ export interface SmartBrowseOptions extends BrowseOptions {
   // Record debug trace for this operation
   // Trace will be stored persistently for later analysis
   recordDebugTrace?: boolean;
-
-  // === LLM-Assisted Retry (LR-001) ===
-
-  // Retry configuration provided by LLM after researching solutions
-  // Use this when retrying after a ProblemResponse was returned
-  retryWith?: RetryConfig;
 }
 
 /**
@@ -243,11 +226,6 @@ export interface SmartBrowseResult extends BrowseResult {
 
     // Domain knowledge summary (TC-002)
     domainKnowledge?: DomainKnowledgeSummary;
-
-    // LLM-Assisted problem solving (LR-001)
-    // When the browser encounters issues it can't resolve automatically,
-    // this contains research suggestions for the LLM to investigate
-    problemResponse?: ProblemResponse;
   };
 
   // Additional pages if pagination was followed
@@ -297,9 +275,10 @@ export class SmartBrowser {
     private browserManager: BrowserManager,
     private contentExtractor: ContentExtractor,
     private apiAnalyzer: ApiAnalyzer,
-    private sessionManager: SessionManager
+    private sessionManager: SessionManager,
+    learningEngine?: LearningEngine
   ) {
-    this.learningEngine = new LearningEngine();
+    this.learningEngine = learningEngine ?? new LearningEngine();
     this.proceduralMemory = new ProceduralMemory();
     this.tieredFetcher = new TieredFetcher(browserManager, contentExtractor);
     this.debugRecorder = getDebugTraceRecorder();
@@ -343,37 +322,6 @@ export class SmartBrowser {
     const enableLearning = options.enableLearning !== false;
     const useSkills = options.useSkills !== false;
     const recordTrajectory = options.recordTrajectory !== false;
-
-    // === LLM-Assisted Retry Support (LR-001) ===
-    // If retryWith config is provided, apply those settings
-    if (options.retryWith) {
-      const retry = options.retryWith;
-      logger.smartBrowser.info('Applying LLM-provided retry configuration', { retry });
-
-      // Apply delay if specified
-      if (retry.delayMs && retry.delayMs > 0) {
-        logger.smartBrowser.debug(`Waiting ${retry.delayMs}ms before retry`);
-        await BehavioralDelays.sleep(retry.delayMs, retry.delayMs);
-      }
-
-      // Merge retry options with browse options
-      if (retry.useFullBrowser) {
-        options.forceTier = 'playwright';
-      }
-      if (retry.waitForSelector) {
-        options.waitForSelector = retry.waitForSelector;
-      }
-      if (retry.scrollToLoad !== undefined) {
-        options.scrollToLoad = retry.scrollToLoad;
-      }
-      if (retry.timeout) {
-        options.timeout = retry.timeout;
-      }
-      // Headers will be passed through to the fetcher
-    }
-
-    // Track attempted strategies for problem reporting
-    const attemptedStrategies: string[] = [];
 
     // Initialize learning result
     const learning: SmartBrowseResult['learning'] = {
@@ -573,35 +521,15 @@ export class SmartBrowser {
     // Note: Bot challenge handling is done in waitForBotChallenge() during browse
     // The page content here should already be post-challenge
 
-    // === Quick Content Check (Skip Anomaly Detection for Substantial Content) ===
-    // Check content length BEFORE running anomaly detection. If we have substantial
-    // content, skip the expensive anomaly detection + wait cycle entirely.
-    // This is a key learning: anomaly detection based on HTML keywords (cloudflare,
-    // captcha, etc.) produces false positives for legitimate sites that use these
-    // services. Content length is a much stronger signal.
-    const QUICK_CHECK_THRESHOLD = 3000;
-    let skipAnomalyDetection = false;
-    try {
-      const quickTextLength = await page.evaluate(() => document.body?.textContent?.length || 0);
-      if (quickTextLength > QUICK_CHECK_THRESHOLD) {
-        logger.smartBrowser.debug(`Quick check: ${quickTextLength} chars - skipping anomaly detection`);
-        skipAnomalyDetection = true;
-      }
-    } catch (quickCheckError) {
-      logger.smartBrowser.debug(`Quick content check failed, will run anomaly detection: ${quickCheckError}`);
-    }
-
     // Run universal anomaly detection (with error boundary)
-    // Only run if content looks suspicious (short or empty)
-    if (!skipAnomalyDetection) {
-      try {
-        const anomalyResult = this.learningEngine.detectContentAnomalies(
-          html,
-          finalUrl,
-          options.contentType // Use content type as expected topic hint
-        );
+    try {
+      const anomalyResult = this.learningEngine.detectContentAnomalies(
+        html,
+        finalUrl,
+        options.contentType // Use content type as expected topic hint
+      );
 
-        if (anomalyResult.isAnomaly) {
+      if (anomalyResult.isAnomaly) {
         logger.smartBrowser.warn(`Content anomaly detected: ${anomalyResult.anomalyType} (${Math.round(anomalyResult.confidence * 100)}% confidence)`);
         logger.smartBrowser.warn(`Reasons: ${anomalyResult.reasons.join('; ')}`);
 
@@ -644,44 +572,11 @@ export class SmartBrowser {
           };
           learning.confidenceLevel = 'low';
         }
-
-        // === LLM-Assisted Problem Response (LR-001) ===
-        // Generate problem response for LLM to research and retry
-        if (anomalyResult.isAnomaly && anomalyResult.confidence > 0.7) {
-          // Map anomaly types to problem types
-          let problemType: 'bot_detection' | 'rate_limiting' | 'extraction_failure' | 'unknown' = 'unknown';
-          let detectionType = undefined;
-
-          if (anomalyResult.anomalyType === 'challenge_page' || anomalyResult.anomalyType === 'captcha') {
-            problemType = 'bot_detection';
-            detectionType = detectBotProtection(html);
-            attemptedStrategies.push('stealth_headers', learning.renderTier || 'unknown');
-          } else if (anomalyResult.anomalyType === 'rate_limited') {
-            problemType = 'rate_limiting';
-            attemptedStrategies.push('rate_limiter');
-          } else if (anomalyResult.anomalyType === 'empty_content') {
-            problemType = 'extraction_failure';
-            attemptedStrategies.push(learning.renderTier || 'unknown');
-          }
-
-          // Create problem response with research suggestion
-          learning.problemResponse = createProblemResponse(url, problemType, {
-            detectionType,
-            attemptedStrategies,
-            partialContent: html.substring(0, 500),
-          });
-
-          logger.smartBrowser.info('Problem response generated for LLM assistance', {
-            problemType,
-            detectionType,
-          });
-        }
       }
-      } catch (anomalyError) {
-        logger.smartBrowser.error(`Anomaly detection failed (non-fatal): ${anomalyError}`);
-        // Continue without anomaly detection - non-critical feature
-      }
-    } // End of if (!skipAnomalyDetection)
+    } catch (anomalyError) {
+      logger.smartBrowser.error(`Anomaly detection failed (non-fatal): ${anomalyError}`);
+      // Continue without anomaly detection - non-critical feature
+    }
 
     // Detect page context for better skill matching (with error boundary)
     if (useSkills) {
@@ -876,111 +771,6 @@ export class SmartBrowser {
       }
     }
 
-    // === LLM-Assisted Problem Detection (LR-001) ===
-    // Check for challenge pages and bot detection even in Playwright path
-    // Some sites require human interaction that even full browser can't bypass
-    //
-    // IMPORTANT: Only flag as challenge if content is SHORT. Real pages often contain
-    // words like "robot" or "captcha" (for reCAPTCHA widgets, support chat, etc.)
-    // but have substantial content. Challenge pages are typically < 5KB.
-    const MIN_REAL_CONTENT_LENGTH = 5000;
-    const hasSubstantialContent = extractedContent.text.length > MIN_REAL_CONTENT_LENGTH;
-
-    // Title-based detection (strong signal - challenge pages have distinctive titles)
-    const titleLooksLikeChallenge =
-      extractedContent.title.toLowerCase().includes('robot') ||
-      extractedContent.title.toLowerCase().includes('captcha') ||
-      extractedContent.title.toLowerCase().includes('blocked') ||
-      extractedContent.title.toLowerCase().includes('access denied') ||
-      extractedContent.title.toLowerCase().includes('just a moment') ||
-      extractedContent.title.toLowerCase().includes('verify');
-
-    // Content-based detection (only applies to short content)
-    const contentLooksLikeChallenge = !hasSubstantialContent && (
-      extractedContent.text.toLowerCase().includes('verify you are human') ||
-      extractedContent.text.toLowerCase().includes('not a robot') ||
-      extractedContent.text.toLowerCase().includes('unusual activity') ||
-      extractedContent.text.toLowerCase().includes('checking your browser')
-    );
-
-    // Combined detection: title signals OR (short content with challenge keywords)
-    const looksLikeChallenge = isBlockedByBotDetection(200, html) ||
-      titleLooksLikeChallenge ||
-      contentLooksLikeChallenge;
-
-    if (looksLikeChallenge) {
-      learning.confidenceLevel = 'low';
-      const detectionType = detectBotProtection(html);
-
-      logger.smartBrowser.warn('Challenge page detected, attempting to detect interactive elements', {
-        title: extractedContent.title,
-        detectionType,
-        contentLength: extractedContent.text.length,
-      });
-
-      // Detect and optionally attempt to solve challenge
-      let challengeResult: ChallengeDetectionResult | null = null;
-      try {
-        challengeResult = await detectChallengeElements(page, {
-          autoSolve: true, // Attempt to click challenge elements
-          detectionType,
-          solveTimeout: 10000,
-        });
-
-        if (challengeResult.solveResult === 'success') {
-          logger.smartBrowser.info('Challenge solved automatically, re-extracting content');
-
-          // Wait a bit for page to stabilize after challenge
-          await BehavioralDelays.sleep(1000, 2000);
-
-          // Re-extract content after challenge solved
-          const newHtml = await page.content();
-          const newExtracted = this.contentExtractor.extract(newHtml, finalUrl);
-
-          // Check if we got real content now
-          if (newExtracted.text.length > MIN_SUCCESS_TEXT_LENGTH) {
-            extractedContent = newExtracted;
-            html = newHtml;
-            learning.confidenceLevel = 'medium';
-            learning.problemResponse = undefined; // Challenge was solved
-            logger.smartBrowser.info('Content extracted after challenge solve', {
-              contentLength: newExtracted.text.length,
-            });
-          }
-        }
-      } catch (challengeError) {
-        logger.smartBrowser.debug('Challenge detection/solve failed', {
-          error: challengeError instanceof Error ? challengeError.message : 'Unknown error',
-        });
-      }
-
-      // Create problem response if challenge wasn't solved
-      if (!challengeResult || challengeResult.solveResult !== 'success') {
-        const problemResponse = createProblemResponse(url, 'bot_detection', {
-          detectionType,
-          attemptedStrategies: ['intelligence', 'lightweight', 'playwright'],
-          partialContent: extractedContent.text.substring(0, 500),
-        });
-
-        // Add challenge element info to problem response
-        if (challengeResult && challengeResult.elements.length > 0) {
-          problemResponse.challengeElements = challengeResult.elements;
-          problemResponse.challengeSolveAttempted = challengeResult.solveAttempted;
-          problemResponse.challengeSolveResult = challengeResult.solveResult;
-        }
-
-        learning.problemResponse = problemResponse;
-
-        logger.smartBrowser.warn('Challenge page could not be bypassed', {
-          title: extractedContent.title,
-          detectionType,
-          challengeElementCount: challengeResult?.elements.length || 0,
-          solveAttempted: challengeResult?.solveAttempted || false,
-          solveResult: challengeResult?.solveResult,
-        });
-      }
-    }
-
     // Complete trajectory recording for procedural memory (with error boundary)
     if (recordTrajectory && this.currentTrajectory) {
       try {
@@ -1040,54 +830,6 @@ export class SmartBrowser {
       finalUrl,
       playwrightTierAttempts
     );
-
-    // === Final Sanity Check ===
-    // If we extracted substantial content (3000+ chars), we have a real page
-    // Clear any false positive problem responses from earlier detection
-    const SUBSTANTIAL_CONTENT_THRESHOLD = 3000;
-
-    if (extractedContent.text.length > SUBSTANTIAL_CONTENT_THRESHOLD && learning.problemResponse) {
-      // Only keep the problem response if the title clearly indicates a challenge
-      const titleLower = (extractedContent.title || '').toLowerCase();
-      const titleIndicatesChallenge =
-        titleLower.includes('robot') ||
-        titleLower.includes('captcha') ||
-        titleLower.includes('blocked') ||
-        titleLower.includes('denied') ||
-        titleLower.includes('verify');
-
-      if (!titleIndicatesChallenge) {
-        // Record this as a learned false positive so we skip detection on future visits
-        const anomalyType = learning.anomalyType;
-        if (anomalyType && enableLearning) {
-          // Extract trigger reasons from the problem response or anomaly data
-          const triggerReasons: string[] = [];
-          if (learning.problemResponse?.researchSuggestion?.hints) {
-            // Use hints as proxy for what triggered the detection
-            triggerReasons.push(...learning.problemResponse.researchSuggestion.hints.slice(0, 3).map(h => h.substring(0, 50)));
-          }
-          if (learning.validationResult?.reasons) {
-            triggerReasons.push(...learning.validationResult.reasons);
-          }
-
-          this.learningEngine.recordAnomalyFalsePositive(
-            domain,
-            anomalyType,
-            triggerReasons,
-            extractedContent.text.length
-          );
-        }
-
-        logger.smartBrowser.info('Clearing false positive problem response - substantial content extracted', {
-          contentLength: extractedContent.text.length,
-          previousProblemType: learning.problemResponse.problemType,
-          title: extractedContent.title,
-          recordedForLearning: !!anomalyType && enableLearning,
-        });
-        learning.problemResponse = undefined;
-        learning.confidenceLevel = learning.confidenceLevel === 'low' ? 'medium' : learning.confidenceLevel;
-      }
-    }
 
     const browseResult: SmartBrowseResult = {
       url,
@@ -1241,20 +983,6 @@ export class SmartBrowser {
           if (!validationResult.valid) {
             logger.smartBrowser.warn(`Content validation failed: ${validationResult.reasons.join(', ')}`);
             learning.confidenceLevel = 'low';
-
-            // === LLM-Assisted Problem Response (LR-001) ===
-            // Generate problem response for extraction failures
-            const problemType = classifyProblem(
-              validationResult.reasons.join(', '),
-              undefined,
-              result.html,
-              result.tiersAttempted
-            );
-            learning.problemResponse = createProblemResponse(url, problemType, {
-              attemptedStrategies: result.tiersAttempted,
-              partialContent: result.content.text.substring(0, 500),
-            });
-            logger.smartBrowser.info('Problem response generated for validation failure', { problemType });
           } else {
             this.learningEngine.learnValidator(domain, result.content.text, result.finalUrl);
           }
@@ -1327,51 +1055,6 @@ export class SmartBrowser {
         result.finalUrl,
         result.tierAttempts
       );
-
-      // === Final Sanity Check (same as Playwright path) ===
-      // If we extracted substantial content (3000+ chars), we have a real page
-      // Clear any false positive problem responses from earlier detection
-      const SUBSTANTIAL_CONTENT_THRESHOLD = 3000;
-      if (result.content.text.length > SUBSTANTIAL_CONTENT_THRESHOLD && learning.problemResponse) {
-        // Only keep the problem response if the title clearly indicates a challenge
-        const titleLower = (result.content.title || '').toLowerCase();
-        const titleIndicatesChallenge =
-          titleLower.includes('robot') ||
-          titleLower.includes('captcha') ||
-          titleLower.includes('blocked') ||
-          titleLower.includes('denied') ||
-          titleLower.includes('verify');
-
-        if (!titleIndicatesChallenge) {
-          // Record this as a learned false positive so we skip detection on future visits
-          const anomalyType = learning.anomalyType;
-          if (anomalyType && enableLearning) {
-            const triggerReasons: string[] = [];
-            if (learning.problemResponse?.researchSuggestion?.hints) {
-              triggerReasons.push(...learning.problemResponse.researchSuggestion.hints.slice(0, 3).map(h => h.substring(0, 50)));
-            }
-            if (learning.validationResult?.reasons) {
-              triggerReasons.push(...learning.validationResult.reasons);
-            }
-
-            this.learningEngine.recordAnomalyFalsePositive(
-              domain,
-              anomalyType,
-              triggerReasons,
-              result.content.text.length
-            );
-          }
-
-          logger.smartBrowser.info('Clearing false positive problem response (tiered path) - substantial content extracted', {
-            contentLength: result.content.text.length,
-            previousProblemType: learning.problemResponse.problemType,
-            title: result.content.title,
-            recordedForLearning: !!anomalyType && enableLearning,
-          });
-          learning.problemResponse = undefined;
-          learning.confidenceLevel = learning.confidenceLevel === 'low' ? 'medium' : learning.confidenceLevel;
-        }
-      }
 
       const tieredResult: SmartBrowseResult = {
         url,

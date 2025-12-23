@@ -196,32 +196,10 @@ export class BrowserManager {
         logger.browser.info('Launching local browser', {
           headless: this.config.headless,
         });
-
-        // Stealth browser args to avoid bot detection
-        const stealthArgs = [
-          // Disable automation detection
-          '--disable-blink-features=AutomationControlled',
-          // Disable site isolation (helps with some fingerprinting)
-          '--disable-features=IsolateOrigins,site-per-process',
-          // Disable infobars like "Chrome is being controlled by automated software"
-          '--disable-infobars',
-          // Disable extensions to reduce fingerprint surface
-          '--disable-extensions',
-          // Use a realistic window size
-          '--window-size=1920,1080',
-          // Disable GPU to avoid some fingerprinting
-          '--disable-gpu',
-          // Disable dev shm usage (helps in containers)
-          '--disable-dev-shm-usage',
-          // No sandbox (required for some environments)
-          '--no-sandbox',
-        ];
-
         this.browser = await pw.chromium.launch({
           headless: this.config.headless,
           slowMo: this.config.slowMo,
           devtools: this.config.devtools,
-          args: stealthArgs,
         });
       }
 
