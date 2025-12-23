@@ -229,7 +229,7 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 |----|------|--------|--------|-------|
 | SDK-001 | Audit core dependencies and interfaces | S | Complete | Identify what belongs in SDK vs wrappers. Document current coupling between core and MCP. See [SDK_ARCHITECTURE.md](SDK_ARCHITECTURE.md) |
 | SDK-002 | Create @llm-browser/core package structure | S | Complete | Set up npm workspaces monorepo with packages/core and packages/mcp |
-| SDK-003 | Extract SmartBrowser as SDK entry point | M | Not Started | Clean public API: browse(), executeApi(), initialize(), getDomainInsights(), etc. |
+| SDK-003 | Extract SmartBrowser as SDK entry point | M | In Progress | Clean public API: browse(), executeApi(), initialize(), getDomainInsights(), etc. |
 | SDK-004 | Extract learning components to SDK | M | Not Started | LearningEngine, ProceduralMemory, ApiPatternRegistry. Ensure zero MCP dependencies |
 | SDK-005 | Extract session and auth to SDK | M | Not Started | SessionManager, AuthWorkflow. Clean credential storage abstraction |
 | SDK-006 | Create SDK type definitions | S | Not Started | Comprehensive TypeScript types for all public APIs. Export interfaces, types, enums |
