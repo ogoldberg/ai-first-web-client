@@ -54,6 +54,8 @@
     "linkedom": "^0.18.12",
     "pdf-parse": "^1.1.1",
     "pino": "^10.1.0",
+    "playwright-extra": "^4.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
     "tough-cookie": "^6.0.0",
     "turndown": "^7.2.0"
   },

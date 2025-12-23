@@ -42,6 +42,11 @@ import {
   type SiteHandlerOptions,
   type SiteHandlerResult,
 } from './site-handlers/index.js';
+import {
+  getStealthFetchHeaders,
+  generateFingerprint,
+  type BrowserFingerprint,
+} from './stealth-browser.js';
 
 // Create a require function for ESM compatibility
 const require = createRequire(import.meta.url);
@@ -120,6 +125,10 @@ export interface ContentIntelligenceOptions {
   allowBrowser?: boolean;
   // Callback when API extraction succeeds (for pattern learning)
   onExtractionSuccess?: ApiExtractionListener;
+  // Enable stealth mode (anti-bot evasion headers)
+  enableStealth?: boolean;
+  // Seed for fingerprint generation (e.g., domain name for consistency)
+  stealthFingerprintSeed?: string;
 }
 
 // YouTube oEmbed API response type
@@ -186,6 +195,7 @@ const DEFAULT_OPTIONS: ContentIntelligenceOptions = {
   skipStrategies: [],
   allowBrowser: true,
   userAgent: BROWSER_USER_AGENT,
+  enableStealth: true,  // Enable stealth headers by default for better bot evasion
 };
 
 // Lazy-loaded Playwright reference
@@ -1417,14 +1427,24 @@ export class ContentIntelligence {
         likelyGraphQL,
       });
 
-      // Create a fetch function that uses our cookie jar and timeout handling
+      // Create a fetch function that uses our cookie jar, timeout handling, and stealth headers
       const graphqlFetch = async (url: string, init?: RequestInit): Promise<Response> => {
         const cookieString = await this.cookieJar.getCookieString(url);
+        const fingerprintSeed = opts.stealthFingerprintSeed || domain;
 
-        const headers: Record<string, string> = {
-          'User-Agent': opts.userAgent || DEFAULT_OPTIONS.userAgent!,
-          ...(init?.headers as Record<string, string> || {}),
-        };
+        // Build headers with stealth support
+        let headers: Record<string, string>;
+        if (opts.enableStealth !== false) {
+          headers = getStealthFetchHeaders({
+            fingerprintSeed,
+            extraHeaders: init?.headers as Record<string, string> || {},
+          });
+        } else {
+          headers = {
+            'User-Agent': opts.userAgent || DEFAULT_OPTIONS.userAgent!,
+            ...(init?.headers as Record<string, string> || {}),
+          };
+        }
 
         if (cookieString) {
           headers['Cookie'] = cookieString;
@@ -4432,12 +4452,30 @@ export class ContentIntelligence {
   ): Promise<Response> {
     const cookieString = await this.cookieJar.getCookieString(url);
 
-    const headers: Record<string, string> = {
-      'User-Agent': opts.userAgent || DEFAULT_OPTIONS.userAgent!,
-      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-      'Accept-Language': 'en-US,en;q=0.5',
-      ...opts.headers,
-    };
+    // Determine fingerprint seed (use domain for consistency across requests to same site)
+    const domain = new URL(url).hostname;
+    const fingerprintSeed = opts.stealthFingerprintSeed || domain;
+
+    // Build headers - use stealth headers if enabled
+    let headers: Record<string, string>;
+    if (opts.enableStealth !== false) {
+      // Use stealth headers for better bot evasion
+      headers = getStealthFetchHeaders({
+        fingerprintSeed,
+        extraHeaders: {
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          ...opts.headers,
+        },
+      });
+    } else {
+      // Fallback to basic headers
+      headers = {
+        'User-Agent': opts.userAgent || DEFAULT_OPTIONS.userAgent!,
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        ...opts.headers,
+      };
+    }
 
     if (cookieString) {
       headers['Cookie'] = cookieString;

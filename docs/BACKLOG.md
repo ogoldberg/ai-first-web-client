@@ -434,6 +434,113 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 
 ---
 
+## P2: Anti-Bot Evasion (New Initiative)
+
+**Goal:** Improve bot detection evasion using open-source techniques only - no third-party services required.
+
+**Context:** Current implementation has good bot detection (identifies Cloudflare, CAPTCHAs, rate limiting) but limited evasion. The system detects challenges but doesn't prevent them. These improvements use open-source npm packages and built-in code only.
+
+**What counts as third-party services (NOT included):**
+- Bright Data, Luminati (proxy services)
+- 2Captcha, Anti-Captcha (CAPTCHA solving)
+- Browserless.io (hosted browser)
+- ScrapingBee, ScraperAPI (scraping services)
+
+**What's fair game (included):**
+- Open-source npm packages (playwright-extra, stealth plugin)
+- Built-in code we write ourselves
+- Browser configuration options
+
+**Success Criteria:**
+- Stealth plugin integrated as optional dependency
+- Fingerprint randomization system with consistent profiles
+- Context initialization scripts for common evasion
+- Request headers match browser fingerprints
+- Behavioral patterns configurable
+
+| ID | Task | Effort | Status | Notes |
+|----|------|--------|--------|-------|
+| AB-001 | Integrate playwright-extra + stealth plugin | M | Complete | Optional dep. launchStealthBrowser() wraps playwright-extra with stealth plugin |
+| AB-002 | Create fingerprint randomization system | M | Complete | generateFingerprint() with UA pool, viewport sizes, timezone/locale, client hints |
+| AB-003 | Add context initialization scripts | S | Complete | EVASION_SCRIPTS for webdriver, permissions, plugins, mimeTypes, chrome.runtime, languages |
+| AB-004 | Request header hardening | S | Complete | getStealthFetchHeaders() with Accept-Language, sec-ch-ua. Works for all tiers |
+| AB-005 | Behavioral delay patterns | S | Complete | BehavioralDelays.randomDelay(), sleep(), jitteredDelay(), exponentialBackoff() |
+| AB-006 | Stealth mode configuration | S | Complete | StealthConfig interface, getStealthConfig(), LLM_BROWSER_STEALTH env var |
+| AB-007 | Add stealth features to documentation | S | Complete | README section, landing page updated with Stealth Mode feature |
+| AB-008 | Test stealth effectiveness | M | Complete | 30 unit tests + test-stealth.js script. Verified with httpbin.org |
+
+**Limitations (require third-party services):**
+- CAPTCHAs (reCAPTCHA/Turnstile) - require human solving or solving services
+- Residential IPs - datacenter IPs often blocklisted
+- Advanced fingerprinting - some sites use sophisticated device fingerprinting
+
+**Architecture Notes:**
+- Stealth plugin wraps Playwright launch, no code changes to BrowserManager internals
+- Fingerprint generator produces consistent profiles (UA + viewport + timezone all match)
+- Evasion is optional - works with or without stealth enabled
+- Falls back gracefully if stealth deps not installed
+
+---
+
+## P2: LLM-Assisted Bypass Research (New Initiative)
+
+**Goal:** Create a self-improving feedback loop where the LLM Browser can research its own bypass techniques when blocked.
+
+**Concept:**
+1. LLM Browser gets blocked on a site (Cloudflare, DataDome, etc.)
+2. Returns structured response with research suggestions
+3. LLM uses LLM Browser to search for bypass techniques
+4. LLM synthesizes research into actionable parameters
+5. LLM retries with new parameters
+6. If successful, LLM Browser learns and persists what worked
+
+**Why This Matters:**
+- Dynamic adaptation without code changes
+- Site-specific solutions researched on-demand
+- Leverages LLM reasoning to interpret nuanced advice
+- Self-documenting through conversation history
+
+**Success Criteria:**
+- Blocked responses include structured research suggestions
+- Search queries are detection-type specific
+- LLM can pass retry parameters back to browse tool
+- Successful retries are learned for future use
+
+| ID | Task | Effort | Status | Notes |
+|----|------|--------|--------|-------|
+| LR-001 | Add ResearchSuggestion to blocked response | S | DONE | Include searchQuery, recommendedSources, detectionType. Expanded to ProblemResponse with all problem types. |
+| LR-002 | Generate detection-specific search queries | M | DONE | Detection-specific queries for all bot protection types plus problem-type queries |
+| LR-003 | Add retryWith parameter to browse tool | M | DONE | RetryConfig support in SmartBrowseOptions with userAgent, headers, delays, etc. |
+| LR-004 | Curate trusted source list | S | DONE | TRUSTED_SOURCES: github.com, stackoverflow.com, MDN, web.dev, playwright.dev |
+| LR-005 | Add recursion depth limit | S | Planned | Max 2 research attempts per blocked site |
+| LR-006 | Integrate successful retries with stealth learning | M | Planned | Persist what worked via recordStealthSuccess() |
+
+**Example Flow:**
+```
+LLM: "Browse bloomberg.com"
+Browser: {
+  blocked: true,
+  detectionType: "datadome",
+  researchSuggestion: {
+    searchQuery: "bypass datadome bot detection 2025 node.js",
+    recommendedSources: ["github.com", "stackoverflow.com"],
+    retryParameters: ["userAgent", "headers", "useFullBrowser", "delayMs"]
+  }
+}
+LLM: "Search for datadome bypass techniques"
+Browser: [returns search results/articles]
+LLM: "Retry bloomberg.com with { useFullBrowser: true, delayMs: 2000 }"
+Browser: { success: true, ... }  // Learns this for future
+```
+
+**Safeguards:**
+- Only activates on explicit blocks (403, challenge pages), not general errors
+- Curated source list avoids low-quality or malicious advice
+- Recursion limit prevents infinite loops
+- Does not bypass authentication or access controls
+
+---
+
 ## P3: Low Priority (Nice to Have)
 
 ### Features
@@ -446,7 +553,7 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 | F-010 | Diff generation for changes | M | Features | Show what changed |
 | F-011 | Webhook notifications | L | Features | External integrations |
 | F-013 | Human-in-the-loop inspection UI | L | Features | Minimal UI to see selectors, extracted content, tier decisions |
-| F-014 | Advanced anti-bot strategies | L | Features | Rotating user agents, smarter wait strategies, proxy provider integration |
+| F-014 | Advanced anti-bot strategies | L | Features | Superseded by AB-001 through AB-008 (Anti-Bot Evasion initiative) |
 
 ### Technical Debt
 

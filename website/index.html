@@ -44,8 +44,9 @@
       <div class="hero-badge">Open Source</div>
       <h1>Web Browsing for AI Agents</h1>
       <p class="hero-subtitle">
-        A browser where the user is an LLM, not a human. It learns from every interaction,
-        discovers APIs automatically, and progressively optimizes to skip rendering entirely.
+        A browser designed for LLM agents, not humans. Learns from every interaction,
+        discovers APIs automatically, builds procedural skills, and progressively
+        optimizes to bypass browser rendering entirely. 10x faster on repeated access.
       </p>
       <div class="hero-cta">
         <a href="#get-started" class="btn btn-primary">Get Started</a>
@@ -106,8 +107,8 @@
         </div>
         <div class="not-item">
           <span class="not-icon">X</span>
-          <strong>Not stealth</strong>
-          <p>Bot detection may still block it</p>
+          <strong>Not a CAPTCHA solver</strong>
+          <p>Detects challenges, but can't solve visual CAPTCHAs</p>
         </div>
         <div class="not-item">
           <span class="not-icon">X</span>
@@ -131,7 +132,7 @@
             </svg>
           </div>
           <h3>Tiered Rendering</h3>
-          <p>Tries the fastest approach first. Content Intelligence (50-200ms), Lightweight (200-500ms), full browser only when needed.</p>
+          <p>Tries the fastest approach first. Content Intelligence (50-200ms), Lightweight JS (200-500ms), full browser only when needed. Automatically picks the right tier.</p>
         </div>
         <div class="feature">
           <div class="feature-icon">
@@ -141,8 +142,8 @@
               <path d="M2 12l10 5 10-5"></path>
             </svg>
           </div>
-          <h3>Learns From Usage</h3>
-          <p>Discovers API patterns, learns reliable selectors, builds reusable browsing skills. Gets faster over time.</p>
+          <h3>Procedural Memory</h3>
+          <p>Learns browsing skills from trajectories. Skill versioning with rollback, anti-patterns to avoid mistakes, cross-domain transfer. Gets smarter with every interaction.</p>
         </div>
         <div class="feature">
           <div class="feature-icon">
@@ -151,7 +152,19 @@
             </svg>
           </div>
           <h3>API Discovery</h3>
-          <p>Automatically discovers REST and GraphQL endpoints from network traffic. Bypass browser rendering with direct API calls.</p>
+          <p>Automatically discovers REST and GraphQL endpoints from network traffic. Validates patterns, tracks confidence, enables direct API calls that bypass rendering entirely.</p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+            </svg>
+          </div>
+          <h3>Framework Extraction</h3>
+          <p>Detects Next.js, Nuxt, Gatsby, Remix hydration data. Extracts JSON-LD, OpenGraph, microdata. Gets structured data without parsing HTML.</p>
         </div>
         <div class="feature">
           <div class="feature-icon">
@@ -161,16 +174,38 @@
             </svg>
           </div>
           <h3>Session Management</h3>
-          <p>Save and restore authenticated sessions. Health monitoring, automatic refresh, multi-profile support.</p>
+          <p>Save and restore authenticated sessions. Health monitoring, automatic refresh, multi-profile support. Sessions persist across restarts.</p>
         </div>
         <div class="feature">
           <div class="feature-icon">
             <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path>
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
             </svg>
           </div>
-          <h3>Works Without Playwright</h3>
-          <p>Content Intelligence and Lightweight tiers work on any Node.js system. Add Playwright only when you need full browser rendering.</p>
+          <h3>Stealth & Challenge Detection</h3>
+          <p>Built-in anti-bot evasion with fingerprint rotation, behavioral delays, human-like actions. Detects Cloudflare, PerimeterX, DataDome challenges and attempts auto-bypass.</p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+          </div>
+          <h3>Confidence Scoring</h3>
+          <p>Every result includes confidence levels. High confidence = direct API calls. Low confidence = full browser. The system learns what works and adapts automatically.</p>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="3" width="7" height="7"></rect>
+              <rect x="14" y="3" width="7" height="7"></rect>
+              <rect x="14" y="14" width="7" height="7"></rect>
+              <rect x="3" y="14" width="7" height="7"></rect>
+            </svg>
+          </div>
+          <h3>Pagination Detection</h3>
+          <p>Automatically detects pagination patterns (query params, path segments, infinite scroll). Follow pages with a single option, no manual pattern specification needed.</p>
         </div>
         <div class="feature">
           <div class="feature-icon">
@@ -180,7 +215,7 @@
             </svg>
           </div>
           <h3>MCP Native</h3>
-          <p>First-class Model Context Protocol support. Use with Claude Desktop or any MCP-compatible client.</p>
+          <p>First-class Model Context Protocol support. Use with Claude Desktop, Claude Code, Cursor, Windsurf, or any MCP client. No code generation needed.</p>
         </div>
       </div>
     </div>
@@ -254,7 +289,7 @@
             <tr>
               <th>Feature</th>
               <th>Jina / Firecrawl</th>
-              <th>Puppeteer</th>
+              <th>Puppeteer / Playwright</th>
               <th class="highlight">LLM Browser</th>
             </tr>
           </thead>
@@ -262,44 +297,62 @@
             <tr>
               <td>Clean content extraction</td>
               <td class="yes">Yes</td>
-              <td class="no">No</td>
-              <td class="yes highlight">Yes</td>
+              <td class="no">No (raw HTML)</td>
+              <td class="yes highlight">Yes (markdown + tables)</td>
             </tr>
             <tr>
               <td>API discovery</td>
               <td class="no">No</td>
               <td class="no">No</td>
-              <td class="yes highlight">Yes</td>
+              <td class="yes highlight">Yes (REST + GraphQL)</td>
             </tr>
             <tr>
-              <td>Learns over time</td>
+              <td>Procedural memory</td>
               <td class="no">No</td>
               <td class="no">No</td>
-              <td class="yes highlight">Yes</td>
+              <td class="yes highlight">Yes (skills + anti-patterns)</td>
             </tr>
             <tr>
-              <td>Selector fallbacks</td>
+              <td>Selector learning</td>
               <td class="no">No</td>
               <td class="no">No</td>
-              <td class="yes highlight">Yes</td>
+              <td class="yes highlight">Yes (with fallback chains)</td>
+            </tr>
+            <tr>
+              <td>Framework data extraction</td>
+              <td class="no">No</td>
+              <td class="no">No</td>
+              <td class="yes highlight">Yes (Next.js, Nuxt, etc.)</td>
+            </tr>
+            <tr>
+              <td>Challenge detection</td>
+              <td class="no">No</td>
+              <td class="no">No</td>
+              <td class="yes highlight">Yes (CF, PX, DataDome)</td>
+            </tr>
+            <tr>
+              <td>Session persistence</td>
+              <td class="no">No</td>
+              <td class="partial">Manual</td>
+              <td class="yes highlight">Yes (auto + health checks)</td>
             </tr>
             <tr>
               <td>MCP integration</td>
               <td class="no">No</td>
               <td class="no">No</td>
-              <td class="yes highlight">Yes</td>
+              <td class="yes highlight">Yes (first-class)</td>
             </tr>
             <tr>
-              <td>Works without browser</td>
+              <td>Works without full browser</td>
               <td class="no">No</td>
               <td class="no">No</td>
-              <td class="yes highlight">Yes (partial)</td>
+              <td class="yes highlight">Yes (tiered rendering)</td>
             </tr>
             <tr>
-              <td>Progressive optimization</td>
+              <td>Gets faster over time</td>
               <td class="no">No</td>
               <td class="no">No</td>
-              <td class="yes highlight">Yes</td>
+              <td class="yes highlight">Yes (10x on repeat visits)</td>
             </tr>
           </tbody>
         </table>
@@ -311,10 +364,14 @@
   <section id="get-started" class="get-started">
     <div class="container">
       <h2>Get Started</h2>
+
+      <h3 class="section-subtitle">MCP Clients</h3>
+      <p class="section-desc">Add LLM Browser as an MCP server in any compatible client:</p>
+
       <div class="install-options">
         <div class="install-option">
-          <h3>With Claude Desktop</h3>
-          <p>Add to your Claude Desktop config:</p>
+          <h3>Claude Desktop</h3>
+          <p>Add to <code>~/Library/Application Support/Claude/claude_desktop_config.json</code> (macOS) or <code>%APPDATA%\Claude\claude_desktop_config.json</code> (Windows):</p>
           <pre><code>{
   "mcpServers": {
     "llm-browser": {
@@ -325,8 +382,80 @@
 }</code></pre>
         </div>
         <div class="install-option">
-          <h3>Programmatic Usage</h3>
-          <p>Use directly in your Node.js application:</p>
+          <h3>Claude Code (CLI)</h3>
+          <p>Add to <code>~/.claude/settings.json</code> or project <code>.mcp.json</code>:</p>
+          <pre><code>{
+  "mcpServers": {
+    "llm-browser": {
+      "command": "npx",
+      "args": ["llm-browser"]
+    }
+  }
+}</code></pre>
+        </div>
+        <div class="install-option">
+          <h3>Cursor</h3>
+          <p>Add to <code>~/.cursor/mcp.json</code>:</p>
+          <pre><code>{
+  "mcpServers": {
+    "llm-browser": {
+      "command": "npx",
+      "args": ["llm-browser"]
+    }
+  }
+}</code></pre>
+        </div>
+        <div class="install-option">
+          <h3>Windsurf</h3>
+          <p>Add to <code>~/.codeium/windsurf/mcp_config.json</code>:</p>
+          <pre><code>{
+  "mcpServers": {
+    "llm-browser": {
+      "command": "npx",
+      "args": ["llm-browser"]
+    }
+  }
+}</code></pre>
+        </div>
+        <div class="install-option">
+          <h3>VS Code + Continue</h3>
+          <p>Add to <code>~/.continue/config.json</code>:</p>
+          <pre><code>{
+  "experimental": {
+    "modelContextProtocolServers": [
+      {
+        "transport": {
+          "type": "stdio",
+          "command": "npx",
+          "args": ["llm-browser"]
+        }
+      }
+    ]
+  }
+}</code></pre>
+        </div>
+        <div class="install-option">
+          <h3>Cline (VS Code)</h3>
+          <p>Add to Cline's MCP settings in VS Code:</p>
+          <pre><code>{
+  "mcpServers": {
+    "llm-browser": {
+      "command": "npx",
+      "args": ["llm-browser"]
+    }
+  }
+}</code></pre>
+        </div>
+      </div>
+
+      <h3 class="section-subtitle">SDK Usage</h3>
+      <p class="section-desc">Use directly in your Node.js application or custom agent:</p>
+
+      <div class="install-options">
+        <div class="install-option">
+          <h3>Node.js SDK</h3>
+          <p>Install and use programmatically:</p>
+          <pre><code>npm install @llm-browser/core</code></pre>
           <pre><code>import { createLLMBrowser } from '@llm-browser/core';
 
 const browser = await createLLMBrowser();
@@ -337,12 +466,28 @@ console.log(result.discoveredApis);
 
 await browser.cleanup();</code></pre>
         </div>
+        <div class="install-option">
+          <h3>Direct MCP Server</h3>
+          <p>Run as a standalone MCP server:</p>
+          <pre><code># Install globally
+npm install -g llm-browser
+
+# Run the server
+llm-browser
+
+# Or run directly with npx
+npx llm-browser</code></pre>
+        </div>
       </div>
+
       <div class="optional-deps">
         <h3>Optional Dependencies</h3>
         <pre><code># For full browser rendering (recommended)
 npm install playwright
 npx playwright install chromium
+
+# For enhanced stealth mode (Playwright only)
+npm install playwright-extra puppeteer-extra-plugin-stealth
 
 # For neural embeddings (better skill transfer)
 npm install @xenova/transformers</code></pre>
