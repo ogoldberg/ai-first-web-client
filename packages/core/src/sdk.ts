@@ -25,17 +25,19 @@
 import { BrowserManager, type BrowserConfig } from './core/browser-manager.js';
 import { ContentExtractor } from './utils/content-extractor.js';
 import { ApiAnalyzer } from './core/api-analyzer.js';
-import { SessionManager } from './core/session-manager.js';
+import { SessionManager, type SessionHealth } from './core/session-manager.js';
 import { SmartBrowser, type SmartBrowseOptions, type SmartBrowseResult } from './core/smart-browser.js';
 import { TieredFetcher, type TieredFetchOptions, type TieredFetchResult } from './core/tiered-fetcher.js';
 import { ProceduralMemory } from './core/procedural-memory.js';
 import { LearningEngine } from './core/learning-engine.js';
+import { logger } from './utils/logger.js';
 import type { SkillMatch } from './types/index.js';
 
 // Re-export core types from their actual modules
 export type { SmartBrowseOptions, SmartBrowseResult } from './core/smart-browser.js';
 export type { TieredFetchOptions, TieredFetchResult, RenderTier } from './core/tiered-fetcher.js';
 export type { BrowserConfig } from './core/browser-manager.js';
+export type { SessionHealth } from './core/session-manager.js';
 
 export type {
   NetworkRequest,
@@ -77,6 +79,35 @@ export interface LLMBrowserConfig {
   enableProceduralMemory?: boolean;
   /** Enable content learning (default: true) */
   enableLearning?: boolean;
+}
+
+/**
+ * Status of initialized features
+ */
+export interface InitializationStatus {
+  /** Whether the client has been initialized */
+  initialized: boolean;
+
+  /** Whether Playwright is available for full browser rendering */
+  playwrightAvailable: boolean;
+
+  /** Whether semantic pattern matching is enabled */
+  semanticMatchingEnabled: boolean;
+
+  /** Whether learning is enabled */
+  learningEnabled: boolean;
+
+  /** Whether procedural memory (skill learning) is enabled */
+  proceduralMemoryEnabled: boolean;
+
+  /** Number of sessions loaded */
+  sessionsLoaded: number;
+
+  /** Number of domains with learned patterns */
+  domainsWithPatterns: number;
+
+  /** Summary message */
+  message: string;
 }
 
 // =============================================================================
@@ -126,6 +157,17 @@ export class LLMBrowserClient {
     await this.smartBrowser.initialize();
 
     this.initialized = true;
+
+    // Log initialization status
+    const status = this.getInitializationStatus();
+    logger.smartBrowser.info('LLM Browser SDK initialized', {
+      playwrightAvailable: status.playwrightAvailable,
+      semanticMatching: status.semanticMatchingEnabled ? 'ON' : 'OFF',
+      learning: status.learningEnabled ? 'ON' : 'OFF',
+      proceduralMemory: status.proceduralMemoryEnabled ? 'ON' : 'OFF',
+      sessionsLoaded: status.sessionsLoaded,
+      domainsWithPatterns: status.domainsWithPatterns,
+    });
   }
 
   /**
@@ -268,6 +310,100 @@ export class LLMBrowserClient {
    */
   getContentExtractor(): ContentExtractor {
     return this.contentExtractor;
+  }
+
+  /**
+   * Access the session manager
+   */
+  getSessionManager(): SessionManager {
+    return this.sessionManager;
+  }
+
+  /**
+   * Check session health for a domain
+   *
+   * Returns detailed health status including:
+   * - Whether the session is healthy, expiring soon, expired, or stale
+   * - Authentication status
+   * - Cookie expiration information
+   * - Staleness (days since last use)
+   *
+   * @param domain - Domain to check (e.g., 'example.com')
+   * @param profile - Session profile name (default: 'default')
+   */
+  getSessionHealth(domain: string, profile: string = 'default'): SessionHealth {
+    return this.sessionManager.getSessionHealth(domain, profile);
+  }
+
+  /**
+   * Get health status for all sessions
+   *
+   * Returns sessions sorted by health priority:
+   * expired > expiring_soon > stale > healthy
+   */
+  getAllSessionHealth(): SessionHealth[] {
+    return this.sessionManager.getAllSessionHealth();
+  }
+
+  /**
+   * Get detailed initialization status
+   *
+   * Returns information about which features are active after initialization.
+   * Useful for debugging and understanding what capabilities are available.
+   *
+   * @example
+   * ```typescript
+   * const browser = await createLLMBrowser();
+   * const status = browser.getInitializationStatus();
+   * console.log(status.message);
+   * // "Initialized with: playwright ON, semantic matching OFF, learning ON"
+   *
+   * if (!status.playwrightAvailable) {
+   *   console.log('Running in lightweight mode only');
+   * }
+   * ```
+   */
+  getInitializationStatus(): InitializationStatus {
+    const playwrightAvailable = BrowserManager.isPlaywrightAvailable();
+    const semanticMatchingEnabled = this.initialized
+      ? this.smartBrowser.isSemanticMatchingEnabled()
+      : false;
+    const learningEnabled = this.config.enableLearning !== false;
+    const proceduralMemoryEnabled = this.config.enableProceduralMemory !== false;
+
+    // Get counts from learning engine if initialized
+    let sessionsLoaded = 0;
+    let domainsWithPatterns = 0;
+
+    if (this.initialized) {
+      const sessions = this.sessionManager.getAllSessionHealth();
+      sessionsLoaded = sessions.length;
+
+      const learningStats = this.smartBrowser.getLearningEngine().getStats();
+      domainsWithPatterns = learningStats.totalDomains;
+    }
+
+    // Build summary message
+    const features: string[] = [];
+    features.push(`playwright ${playwrightAvailable ? 'ON' : 'OFF'}`);
+    features.push(`semantic matching ${semanticMatchingEnabled ? 'ON' : 'OFF'}`);
+    features.push(`learning ${learningEnabled ? 'ON' : 'OFF'}`);
+    features.push(`procedural memory ${proceduralMemoryEnabled ? 'ON' : 'OFF'}`);
+
+    const message = this.initialized
+      ? `Initialized with: ${features.join(', ')}`
+      : 'Not initialized';
+
+    return {
+      initialized: this.initialized,
+      playwrightAvailable,
+      semanticMatchingEnabled,
+      learningEnabled,
+      proceduralMemoryEnabled,
+      sessionsLoaded,
+      domainsWithPatterns,
+      message,
+    };
   }
 
   /**

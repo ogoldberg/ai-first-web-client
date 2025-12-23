@@ -335,6 +335,35 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 
 ---
 
+## P1.5: Developer Experience (New Initiative)
+
+**Goal:** Improve SDK usability based on PM sweep findings. See [PM_IMPROVEMENT_RECOMMENDATIONS.md](PM_IMPROVEMENT_RECOMMENDATIONS.md) for full analysis.
+
+**Context:** SDK documentation is minimal, initialization is non-obvious, and advanced features are hidden. Quick wins can significantly improve developer onboarding.
+
+**Success Criteria:**
+- README has config options table and TypeScript examples
+- Initialization status is visible (not silent failures)
+- Cache management API available
+- Method naming clarified in JSDoc
+
+| ID | Task | Effort | Status | Notes |
+|----|------|--------|--------|-------|
+| DX-001 | Add LLMBrowserConfig options table to README | S | DONE | Document all config options with types, defaults, descriptions |
+| DX-002 | Add TypeScript import examples to README | S | DONE | Show proper type imports for SmartBrowseResult, options, errors |
+| DX-003 | Add SmartBrowseOptions grouped reference | M | DONE | Group 30+ options by concern: Essential, Learning, Validation, Advanced (added to README) |
+| DX-004 | Add cache management API to LLMBrowserClient | S | Not Started | clearCache(domain?), getCacheStats() methods |
+| DX-005 | Expose getSessionHealth() on LLMBrowserClient | S | DONE | Convenience method wrapping SessionManager |
+| DX-006 | Add getInitializationStatus() method | S | DONE | Return what features are active (semantic, playwright, etc.) |
+| DX-007 | Clarify maxAttempts JSDoc in retry.ts | S | DONE | Add note: "maxAttempts is total attempts, not retries" |
+| DX-008 | Add initialization status logging | S | DONE | Log INFO on init: "Initialized with: semantic ON/OFF, playwright ON/OFF" |
+| DX-009 | Add onProgress callback to browse() | M | Not Started | Optional progress indication for long operations |
+| DX-010 | Improve error messages with suggestions | M | Not Started | E.g., "LightweightRenderer requires URL. Use ContentExtractor for HTML." |
+
+**Quick Wins (completed):** DX-001, DX-002, DX-003, DX-005, DX-006, DX-007, DX-008
+
+---
+
 ## P2: Medium Priority (Plan For)
 
 ### Debugging & Observability
