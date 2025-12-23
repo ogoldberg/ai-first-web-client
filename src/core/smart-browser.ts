@@ -275,9 +275,10 @@ export class SmartBrowser {
     private browserManager: BrowserManager,
     private contentExtractor: ContentExtractor,
     private apiAnalyzer: ApiAnalyzer,
-    private sessionManager: SessionManager
+    private sessionManager: SessionManager,
+    learningEngine?: LearningEngine
   ) {
-    this.learningEngine = new LearningEngine();
+    this.learningEngine = learningEngine ?? new LearningEngine();
     this.proceduralMemory = new ProceduralMemory();
     this.tieredFetcher = new TieredFetcher(browserManager, contentExtractor);
     this.debugRecorder = getDebugTraceRecorder();
