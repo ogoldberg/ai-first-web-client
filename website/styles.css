@@ -271,56 +271,6 @@ body {
   margin-top: 32px;
 }
 
-/* What It's Not */
-.not-section {
-  padding: 80px 0;
-}
-
-.not-section h2 {
-  text-align: center;
-  margin-bottom: 48px;
-  font-size: 28px;
-}
-
-.not-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 24px;
-  max-width: 900px;
-  margin: 0 auto;
-}
-
-.not-item {
-  padding: 24px;
-  background: var(--color-bg-secondary);
-  border: 1px solid var(--color-border);
-  border-radius: var(--border-radius);
-}
-
-.not-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  background: #7f1d1d;
-  color: #fca5a5;
-  border-radius: 50%;
-  font-size: 12px;
-  font-weight: 700;
-  margin-bottom: 12px;
-}
-
-.not-item strong {
-  display: block;
-  margin-bottom: 6px;
-}
-
-.not-item p {
-  color: var(--color-text-muted);
-  font-size: 14px;
-}
-
 /* Features */
 .features {
   padding: 100px 0;
