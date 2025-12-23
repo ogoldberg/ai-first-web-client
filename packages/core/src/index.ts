@@ -100,7 +100,16 @@ export { TenantStore, SharedPatternPool, MultiTenantStore } from './utils/tenant
 export { SqlitePersistentStore } from './utils/sqlite-persistent-store.js';
 export { PerformanceTracker } from './utils/performance-tracker.js';
 export { UsageMeter } from './utils/usage-meter.js';
-export { AnalyticsDashboard } from './utils/analytics-dashboard.js';
+export {
+  generateDashboard,
+  getQuickStatus,
+  type AnalyticsDashboard,
+  type TierAnalytics,
+  type DomainAnalytics,
+  type TimeSeriesPoint,
+  type SystemHealth,
+  type DashboardOptions,
+} from './utils/analytics-dashboard.js';
 export { ContentChangeTracker } from './utils/content-change-tracker.js';
 export { DebugTraceRecorder } from './utils/debug-trace-recorder.js';
 export { ExtractionBenchmark } from './utils/extraction-benchmark.js';
