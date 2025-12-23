@@ -22,62 +22,144 @@
  * @packageDocumentation
  */
 
+export const VERSION = '0.5.0';
+
 // ============================================
 // SDK Client (Primary Export)
 // ============================================
 
-// Note: These will be moved from src/sdk.ts in SDK-003
-// For now, this is a placeholder that establishes the package structure
-
-export const VERSION = '0.1.0';
-
-/**
- * Placeholder for SDK client.
- * Will be populated in SDK-003 when SmartBrowser is extracted.
- */
-export interface LLMBrowserConfig {
-  /** Directory for storing session data */
-  sessionsDir?: string;
-  /** Path to learning engine JSON file */
-  learningEnginePath?: string;
-  /** Enable procedural memory / skill learning */
-  enableProceduralMemory?: boolean;
-  /** Enable content learning */
-  enableLearning?: boolean;
-}
-
-/**
- * Placeholder type for browse result.
- * Will be fully typed in SDK-006.
- */
-export interface BrowseResult {
-  url: string;
-  content: {
-    markdown: string;
-    text: string;
-    html?: string;
-  };
-  metadata?: Record<string, unknown>;
-}
+export {
+  LLMBrowserClient,
+  createLLMBrowser,
+  createContentFetcher,
+  type LLMBrowserConfig,
+} from './sdk.js';
 
 // ============================================
-// Future Exports (SDK-003 through SDK-006)
+// Core Classes
 // ============================================
 
-// These exports will be added as the SDK extraction progresses:
-//
-// SDK-003: SmartBrowser extraction
-// export { LLMBrowserClient, createLLMBrowser, createContentFetcher } from './client';
-// export { SmartBrowser, type SmartBrowseOptions, type SmartBrowseResult } from './smart-browser';
-//
-// SDK-004: Learning components
-// export { LearningEngine } from './learning-engine';
-// export { ProceduralMemory } from './procedural-memory';
-// export { ApiPatternRegistry } from './api-pattern-registry';
-//
-// SDK-005: Session and auth
-// export { SessionManager } from './session-manager';
-// export { AuthWorkflow } from './auth-workflow';
-//
-// SDK-006: Type definitions
-// export * from './types';
+export { SmartBrowser } from './core/smart-browser.js';
+export { TieredFetcher } from './core/tiered-fetcher.js';
+export { LearningEngine } from './core/learning-engine.js';
+export { ProceduralMemory } from './core/procedural-memory.js';
+export { BrowserManager } from './core/browser-manager.js';
+export { SessionManager } from './core/session-manager.js';
+export { ContentIntelligence } from './core/content-intelligence.js';
+export { ApiAnalyzer } from './core/api-analyzer.js';
+export { AuthWorkflow } from './core/auth-workflow.js';
+export { LightweightRenderer } from './core/lightweight-renderer.js';
+export { SemanticPatternMatcher } from './core/semantic-pattern-matcher.js';
+export { DomainGroupLearner } from './core/domain-group-learner.js';
+
+// API Pattern Registry (from api-pattern-learner.ts)
+export { ApiPatternRegistry, PATTERN_TEMPLATES, BOOTSTRAP_PATTERNS } from './core/api-pattern-learner.js';
+
+// ============================================
+// Utility Classes
+// ============================================
+
+export { ContentExtractor } from './utils/content-extractor.js';
+export { PersistentStore } from './utils/persistent-store.js';
+export { EmbeddedStore } from './utils/embedded-store.js';
+export { VectorStore } from './utils/vector-store.js';
+export { EmbeddingProvider } from './utils/embedding-provider.js';
+export { EmbeddingPipeline } from './utils/embedding-pipeline.js';
+export { TenantStore, SharedPatternPool, MultiTenantStore } from './utils/tenant-store.js';
+export { SqlitePersistentStore } from './utils/sqlite-persistent-store.js';
+export { PerformanceTracker } from './utils/performance-tracker.js';
+export { UsageMeter } from './utils/usage-meter.js';
+export { AnalyticsDashboard } from './utils/analytics-dashboard.js';
+export { ContentChangeTracker } from './utils/content-change-tracker.js';
+export { DebugTraceRecorder } from './utils/debug-trace-recorder.js';
+export { ExtractionBenchmark } from './utils/extraction-benchmark.js';
+export { RateLimiter } from './utils/rate-limiter.js';
+export { ToolSelectionMetrics } from './utils/tool-selection-metrics.js';
+
+// Cache exports
+export { ResponseCache, ContentCache, pageCache, apiCache } from './utils/cache.js';
+
+// Logger exports
+export { logger, Logger, configureLogger, getLogger } from './utils/logger.js';
+
+// HAR converter
+export { convertToHar, serializeHar } from './utils/har-converter.js';
+
+// URL Safety
+export {
+  UrlSafetyValidator,
+  urlSafetyValidator,
+  validateUrl,
+  validateUrlOrThrow,
+  configureUrlSafety,
+  UrlSafetyError,
+  type UrlSafetyConfig,
+  type UrlSafetyResult,
+} from './utils/url-safety.js';
+
+// Session Crypto
+export { SessionCrypto, sessionCrypto } from './utils/session-crypto.js';
+
+// Retry utilities
+export { withRetry, type RetryOptions } from './utils/retry.js';
+
+// Timeout configuration
+export { TIMEOUTS } from './utils/timeouts.js';
+
+// Heuristics configuration
+export {
+  getConfig,
+  getDomainGroups,
+  findDomainGroup,
+  getStaticDomainPatterns,
+  getBrowserRequiredPatterns,
+  type HeuristicsConfig,
+  type DomainPattern,
+} from './utils/heuristics-config.js';
+
+// GraphQL discovery
+export {
+  isGraphQLEndpoint,
+  parseSchema,
+  GRAPHQL_ENDPOINT_PATHS,
+  INTROSPECTION_QUERY,
+} from './core/graphql-introspection.js';
+
+// OpenAPI discovery
+export { generatePatternsFromSpec, generatePatternsFromOpenAPISpec } from './core/openapi-discovery.js';
+
+// Link discovery
+export {
+  parseLinkHeader,
+  extractHtmlLinks,
+  detectHypermediaFormat,
+  extractHalLinks,
+  extractJsonApiLinks,
+} from './core/link-discovery.js';
+
+// Failure learning functions
+export {
+  classifyFailure,
+  createFailureRecord,
+  createAntiPattern,
+  isAntiPatternActive,
+  matchAntiPatterns,
+} from './core/failure-learning.js';
+
+// ============================================
+// Types (re-exported from types/)
+// ============================================
+
+export * from './types/index.js';
+export * from './types/schema-version.js';
+export * from './types/field-confidence.js';
+export * from './types/decision-trace.js';
+export * from './types/errors.js';
+export * from './types/provenance.js';
+export * from './types/api-patterns.js';
+export * from './types/har.js';
+
+// Re-export specific types from core modules
+export type { SmartBrowseOptions, SmartBrowseResult } from './core/smart-browser.js';
+export type { TieredFetchOptions, TieredFetchResult, RenderTier } from './core/tiered-fetcher.js';
+export type { BrowserConfig } from './core/browser-manager.js';

@@ -71,7 +71,7 @@ Main SDK client class with methods:
 ## Status
 
 This package is part of the SDK extraction effort (SDK-001 to SDK-012).
-Current status: **Package structure created** (SDK-002).
+Current status: **SmartBrowser extracted** (SDK-003).
 
 See [SDK_ARCHITECTURE.md](../../docs/SDK_ARCHITECTURE.md) for the full plan.
 

@@ -1,0 +1,337 @@
+/**
+ * LLM Browser SDK
+ *
+ * Programmatic SDK for using the LLM Browser as a library.
+ * This allows applications to integrate intelligent browsing capabilities
+ * directly without going through the MCP server.
+ *
+ * Features:
+ * - SmartBrowser: Intelligent browsing with automatic learning
+ * - TieredFetcher: Fast content fetching (intelligence → lightweight → playwright)
+ * - ProceduralMemory: Skill-based learning for browsing patterns
+ * - ContentExtractor: HTML to markdown/text extraction
+ * - SessionManager: Session persistence across requests
+ *
+ * Usage:
+ * ```typescript
+ * import { createLLMBrowser, SmartBrowser } from 'llm-browser-mcp/sdk';
+ *
+ * const browser = await createLLMBrowser();
+ * const result = await browser.browse('https://example.com');
+ * await browser.cleanup();
+ * ```
+ */
+
+import { BrowserManager, type BrowserConfig } from './core/browser-manager.js';
+import { ContentExtractor } from './utils/content-extractor.js';
+import { ApiAnalyzer } from './core/api-analyzer.js';
+import { SessionManager } from './core/session-manager.js';
+import { SmartBrowser, type SmartBrowseOptions, type SmartBrowseResult } from './core/smart-browser.js';
+import { TieredFetcher, type TieredFetchOptions, type TieredFetchResult } from './core/tiered-fetcher.js';
+import { ProceduralMemory } from './core/procedural-memory.js';
+import { LearningEngine } from './core/learning-engine.js';
+import type { SkillMatch } from './types/index.js';
+
+// Re-export core types from their actual modules
+export type { SmartBrowseOptions, SmartBrowseResult } from './core/smart-browser.js';
+export type { TieredFetchOptions, TieredFetchResult, RenderTier } from './core/tiered-fetcher.js';
+export type { BrowserConfig } from './core/browser-manager.js';
+
+export type {
+  NetworkRequest,
+  ConsoleMessage,
+  ApiPattern,
+  BrowseResult,
+  BrowseOptions,
+  BrowsingAction,
+  BrowsingSkill,
+  BrowsingTrajectory,
+  PageContext,
+  SkillMatch,
+} from './types/index.js';
+
+// Re-export core classes for advanced usage
+export {
+  SmartBrowser,
+  TieredFetcher,
+  ProceduralMemory,
+  LearningEngine,
+  ContentExtractor,
+  BrowserManager,
+  SessionManager,
+  ApiAnalyzer,
+};
+
+// =============================================================================
+// SDK CONFIGURATION
+// =============================================================================
+
+export interface LLMBrowserConfig {
+  /** Directory for storing session data (default: './sessions') */
+  sessionsDir?: string;
+  /** Path to learning engine JSON file (default: './enhanced-knowledge-base.json') */
+  learningEnginePath?: string;
+  /** Browser configuration */
+  browser?: BrowserConfig;
+  /** Enable procedural memory / skill learning (default: true) */
+  enableProceduralMemory?: boolean;
+  /** Enable content learning (default: true) */
+  enableLearning?: boolean;
+}
+
+// =============================================================================
+// SDK CLIENT
+// =============================================================================
+
+/**
+ * LLM Browser SDK Client
+ *
+ * High-level interface for intelligent web browsing with automatic learning.
+ */
+export class LLMBrowserClient {
+  private browserManager: BrowserManager;
+  private contentExtractor: ContentExtractor;
+  private apiAnalyzer: ApiAnalyzer;
+  private sessionManager: SessionManager;
+  private learningEngine: LearningEngine;
+  private smartBrowser: SmartBrowser;
+  private initialized = false;
+  private config: LLMBrowserConfig;
+
+  constructor(config: LLMBrowserConfig = {}) {
+    this.config = config;
+
+    this.browserManager = new BrowserManager(config.browser);
+    this.contentExtractor = new ContentExtractor();
+    this.apiAnalyzer = new ApiAnalyzer();
+    this.sessionManager = new SessionManager(config.sessionsDir ?? './sessions');
+    this.learningEngine = new LearningEngine(config.learningEnginePath ?? './enhanced-knowledge-base.json');
+
+    this.smartBrowser = new SmartBrowser(
+      this.browserManager,
+      this.contentExtractor,
+      this.apiAnalyzer,
+      this.sessionManager
+    );
+  }
+
+  /**
+   * Initialize the browser and learning systems
+   */
+  async initialize(): Promise<void> {
+    if (this.initialized) return;
+
+    await this.sessionManager.initialize();
+    await this.learningEngine.initialize();
+    await this.smartBrowser.initialize();
+
+    this.initialized = true;
+  }
+
+  /**
+   * Ensure the client is initialized
+   */
+  private async ensureInitialized(): Promise<void> {
+    if (!this.initialized) {
+      await this.initialize();
+    }
+  }
+
+  /**
+   * Browse a URL with intelligent learning and optimization
+   *
+   * This is the main entry point for browsing. It automatically:
+   * - Uses learned selectors for reliable content extraction
+   * - Applies tiered rendering (fast static → lightweight → full browser)
+   * - Validates responses against learned patterns
+   * - Learns from successes and failures
+   * - Applies cross-domain patterns
+   */
+  async browse(url: string, options: SmartBrowseOptions = {}): Promise<SmartBrowseResult> {
+    await this.ensureInitialized();
+
+    return this.smartBrowser.browse(url, {
+      enableLearning: this.config.enableLearning ?? true,
+      useSkills: this.config.enableProceduralMemory ?? true,
+      recordTrajectory: this.config.enableProceduralMemory ?? true,
+      ...options,
+    });
+  }
+
+  /**
+   * Fetch content using tiered rendering (fast path)
+   *
+   * Tries intelligence tier first (framework extraction, APIs),
+   * then lightweight (HTTP + JS), then full browser.
+   */
+  async fetch(url: string, options: TieredFetchOptions = {}): Promise<TieredFetchResult> {
+    await this.ensureInitialized();
+
+    return this.smartBrowser.getTieredFetcher().fetch(url, options);
+  }
+
+  /**
+   * Get domain intelligence summary
+   */
+  async getDomainIntelligence(domain: string): Promise<{
+    knownPatterns: number;
+    selectorChains: number;
+    validators: number;
+    paginationPatterns: number;
+    recentFailures: number;
+    successRate: number;
+    domainGroup: string | null;
+    recommendedWaitStrategy: string;
+    shouldUseSession: boolean;
+  }> {
+    await this.ensureInitialized();
+    return this.smartBrowser.getDomainIntelligence(domain);
+  }
+
+  /**
+   * Find applicable browsing skills for a URL
+   */
+  findApplicableSkills(url: string, topK: number = 3): SkillMatch[] {
+    return this.smartBrowser.findApplicableSkills(url, topK);
+  }
+
+  /**
+   * Get procedural memory statistics
+   */
+  getProceduralMemoryStats(): {
+    totalSkills: number;
+    totalTrajectories: number;
+    skillsByDomain: Record<string, number>;
+    avgSuccessRate: number;
+    mostUsedSkills: Array<{ name: string; uses: number }>;
+  } {
+    return this.smartBrowser.getProceduralMemoryStats();
+  }
+
+  /**
+   * Get learning statistics
+   */
+  getLearningStats(): {
+    totalDomains: number;
+    totalApiPatterns: number;
+    bypassablePatterns: number;
+    totalSelectors: number;
+    totalValidators: number;
+    domainGroups: string[];
+    recentLearningEvents: Array<{ type: string; domain: string; timestamp: number }>;
+  } {
+    return this.smartBrowser.getLearningEngine().getStats();
+  }
+
+  /**
+   * Get tiered fetcher statistics
+   */
+  getTieredFetcherStats(): {
+    totalDomains: number;
+    byTier: Record<string, number>;
+    avgResponseTimes: Record<string, number>;
+    playwrightAvailable: boolean;
+  } {
+    return this.smartBrowser.getTieredFetcher().getStats();
+  }
+
+  /**
+   * Access the underlying SmartBrowser for advanced operations
+   */
+  getSmartBrowser(): SmartBrowser {
+    return this.smartBrowser;
+  }
+
+  /**
+   * Access the procedural memory system
+   */
+  getProceduralMemory(): ProceduralMemory {
+    return this.smartBrowser.getProceduralMemory();
+  }
+
+  /**
+   * Access the learning engine
+   */
+  getLearningEngine(): LearningEngine {
+    return this.smartBrowser.getLearningEngine();
+  }
+
+  /**
+   * Access the tiered fetcher
+   */
+  getTieredFetcher(): TieredFetcher {
+    return this.smartBrowser.getTieredFetcher();
+  }
+
+  /**
+   * Access the content extractor
+   */
+  getContentExtractor(): ContentExtractor {
+    return this.contentExtractor;
+  }
+
+  /**
+   * Clean up browser resources
+   */
+  async cleanup(): Promise<void> {
+    await this.browserManager.cleanup();
+    this.initialized = false;
+  }
+
+  /**
+   * Check if Playwright is available
+   */
+  static isPlaywrightAvailable(): boolean {
+    return BrowserManager.isPlaywrightAvailable();
+  }
+}
+
+// =============================================================================
+// FACTORY FUNCTIONS
+// =============================================================================
+
+/**
+ * Create and initialize an LLM Browser client
+ *
+ * @param config - Configuration options
+ * @returns Initialized LLM Browser client
+ *
+ * @example
+ * ```typescript
+ * const browser = await createLLMBrowser();
+ * const result = await browser.browse('https://example.com');
+ * console.log(result.content.markdown);
+ * await browser.cleanup();
+ * ```
+ */
+export async function createLLMBrowser(config: LLMBrowserConfig = {}): Promise<LLMBrowserClient> {
+  const client = new LLMBrowserClient(config);
+  await client.initialize();
+  return client;
+}
+
+/**
+ * Create a simple content fetcher without full browser capabilities
+ *
+ * Uses tiered fetching for fast content extraction.
+ *
+ * @example
+ * ```typescript
+ * const fetcher = createContentFetcher();
+ * const content = await fetcher.fetch('https://example.com');
+ * console.log(content.text);
+ * ```
+ */
+export function createContentFetcher(): {
+  fetch: (url: string, options?: TieredFetchOptions) => Promise<TieredFetchResult>;
+  extract: (html: string, url: string) => { markdown: string; text: string; title: string };
+} {
+  const browserManager = new BrowserManager();
+  const contentExtractor = new ContentExtractor();
+  const tieredFetcher = new TieredFetcher(browserManager, contentExtractor);
+
+  return {
+    fetch: (url: string, options?: TieredFetchOptions) => tieredFetcher.fetch(url, options),
+    extract: (html: string, url: string) => contentExtractor.extract(html, url),
+  };
+}

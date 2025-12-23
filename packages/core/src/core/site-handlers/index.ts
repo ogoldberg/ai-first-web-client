@@ -1,0 +1,59 @@
+/**
+ * Site Handlers Index
+ *
+ * Central registry for all site-specific API handlers.
+ * These handlers extract content from specific websites using their APIs.
+ *
+ * To add a new handler:
+ * 1. Create a new file (e.g., mysite-handler.ts) extending BaseSiteHandler
+ * 2. Export a singleton instance
+ * 3. Import and add to the handlers array below
+ */
+
+// Export types
+export type {
+  SiteHandler,
+  SiteHandlerResult,
+  SiteHandlerOptions,
+  FetchFunction,
+} from './types.js';
+export { BaseSiteHandler } from './types.js';
+
+// Import handlers
+import { redditHandler } from './reddit-handler.js';
+import { hackerNewsHandler } from './hackernews-handler.js';
+import { gitHubHandler } from './github-handler.js';
+
+// Export individual handlers for direct use
+export { redditHandler } from './reddit-handler.js';
+export { hackerNewsHandler } from './hackernews-handler.js';
+export { gitHubHandler } from './github-handler.js';
+
+// Handler classes for custom instantiation
+export { RedditHandler } from './reddit-handler.js';
+export { HackerNewsHandler } from './hackernews-handler.js';
+export { GitHubHandler } from './github-handler.js';
+
+/**
+ * All registered site handlers
+ * Order matters: handlers are tried in sequence
+ */
+export const siteHandlers = [
+  redditHandler,
+  hackerNewsHandler,
+  gitHubHandler,
+] as const;
+
+/**
+ * Find a handler that can process the given URL
+ */
+export function findHandler(url: string) {
+  return siteHandlers.find((handler) => handler.canHandle(url)) || null;
+}
+
+/**
+ * Get all handler names (useful for logging/debugging)
+ */
+export function getHandlerNames(): string[] {
+  return siteHandlers.map((h) => h.name);
+}
