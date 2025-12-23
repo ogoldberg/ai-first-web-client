@@ -347,8 +347,8 @@ All 10 phases complete:
 | P0 | Create SDK type definitions (SDK-006) | Complete |
 | P1 | Add SDK usage examples (SDK-007) | Complete |
 | P1 | Write SDK documentation (SDK-008) | In Progress |
-| P1 | Refactor MCP tools as thin wrappers (SDK-009) | Not Started |
-| P1 | Publish to npm (SDK-010) | Not Started |
+| P1 | Refactor MCP tools as thin wrappers (SDK-009) | In Progress |
+| P1 | Publish to npm (SDK-010) | Suspended |
 
 **Benefits:** Enables direct programmatic use, foundation for all interfaces
 
