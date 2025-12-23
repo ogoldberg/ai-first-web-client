@@ -51,6 +51,21 @@ export { AuthWorkflow } from './core/auth-workflow.js';
 export { LightweightRenderer } from './core/lightweight-renderer.js';
 export { SemanticPatternMatcher } from './core/semantic-pattern-matcher.js';
 export { DomainGroupLearner } from './core/domain-group-learner.js';
+export { SemanticSearchExtended, createSemanticSearchExtended } from './core/semantic-search-extended.js';
+
+// Semantic initialization utilities
+export {
+  checkSemanticDependencies,
+  initializeSemanticInfrastructure,
+  getSemanticInfrastructure,
+  getSemanticMatcher,
+  isSemanticInitialized,
+  wasInitializationAttempted,
+  resetSemanticInfrastructure,
+  type SemanticInfrastructure,
+  type SemanticInfrastructureConfig,
+  type SemanticInitResult,
+} from './core/semantic-init.js';
 
 // API Pattern Registry (from api-pattern-learner.ts)
 export { ApiPatternRegistry, PATTERN_TEMPLATES, BOOTSTRAP_PATTERNS } from './core/api-pattern-learner.js';
@@ -145,6 +160,19 @@ export {
   isAntiPatternActive,
   matchAntiPatterns,
 } from './core/failure-learning.js';
+
+// Learning effectiveness metrics
+export {
+  computeLearningEffectiveness,
+  type PatternEffectiveness,
+  type ConfidenceAccuracy,
+  type TierOptimization,
+  type SkillEffectiveness,
+  type SelectorEffectiveness,
+  type DomainCoverage,
+  type LearningTrend,
+  type LearningEffectivenessReport,
+} from './core/learning-effectiveness.js';
 
 // ============================================
 // Types (re-exported from types/)
