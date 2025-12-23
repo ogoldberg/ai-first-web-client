@@ -186,6 +186,42 @@ export {
   matchAntiPatterns,
 } from './core/failure-learning.js';
 
+// Stealth browser (anti-bot evasion)
+export {
+  // Fingerprint generation
+  generateFingerprint,
+  type BrowserFingerprint,
+
+  // Stealth browser (Playwright-specific)
+  isStealthAvailable,
+  getStealthError,
+  launchStealthBrowser,
+  createStealthContext,
+  type StealthBrowserConfig,
+
+  // Evasion scripts (Playwright-specific)
+  EVASION_SCRIPTS,
+  getEvasionScripts,
+
+  // HTTP headers (applies to all tiers)
+  getAcceptLanguage,
+  getFingerprintHeaders,
+  getStealthFetchHeaders,
+
+  // Behavioral delays (applies to all tiers)
+  BehavioralDelays,
+
+  // Human-like movement/typing simulation
+  HumanMouseMovement,
+  HumanTyping,
+  HumanActions,
+
+  // Configuration
+  getStealthConfig,
+  type StealthConfig,
+  DEFAULT_STEALTH_CONFIG,
+} from './core/stealth-browser.js';
+
 // Learning effectiveness metrics
 export {
   computeLearningEffectiveness,
@@ -198,6 +234,26 @@ export {
   type LearningTrend,
   type LearningEffectivenessReport,
 } from './core/learning-effectiveness.js';
+
+// Research suggestion (LLM-assisted problem solving)
+export {
+  generateResearchSuggestion,
+  detectBotProtection,
+  classifyProblem,
+  createProblemResponse,
+  generateProblemReason,
+  isBlockedByBotDetection,
+  suggestRetryConfig,
+  TRUSTED_SOURCES,
+} from './core/research-suggestion.js';
+
+// Challenge detection (interactive challenge element detection and solving)
+export {
+  detectChallengeElements,
+  waitForChallengeResolution,
+  type ChallengeDetectionResult,
+  type ChallengeDetectorOptions,
+} from './core/challenge-detector.js';
 
 // ============================================
 // Types (re-exported from types/)

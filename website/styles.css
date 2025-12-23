@@ -527,6 +527,10 @@ body {
   color: #6b7280;
 }
 
+.comparison-table .partial {
+  color: #f59e0b;
+}
+
 /* Get Started */
 .get-started {
   padding: 100px 0;
@@ -534,15 +538,32 @@ body {
 
 .get-started h2 {
   text-align: center;
-  margin-bottom: 64px;
+  margin-bottom: 48px;
   font-size: 32px;
+}
+
+.section-subtitle {
+  font-size: 22px;
+  color: var(--color-text);
+  margin-bottom: 8px;
+  margin-top: 48px;
+}
+
+.section-subtitle:first-of-type {
+  margin-top: 0;
+}
+
+.section-desc {
+  color: var(--color-text-muted);
+  font-size: 15px;
+  margin-bottom: 24px;
 }
 
 .install-options {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-  gap: 32px;
-  margin-bottom: 48px;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 24px;
+  margin-bottom: 32px;
 }
 
 .install-option {
@@ -560,6 +581,14 @@ body {
   color: var(--color-text-muted);
   font-size: 14px;
   margin-bottom: 16px;
+}
+
+.install-option p code {
+  background: var(--color-code-bg);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  word-break: break-all;
 }
 
 .install-option pre {
@@ -674,5 +703,10 @@ body {
 
   .install-option {
     min-width: 0;
+  }
+
+  .section-subtitle {
+    font-size: 20px;
+    margin-top: 32px;
   }
 }

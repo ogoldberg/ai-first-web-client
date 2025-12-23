@@ -240,6 +240,224 @@ export interface PaginationPattern {
 }
 
 /**
+ * Stealth profile - learned anti-bot evasion settings for a domain
+ * The system learns which stealth settings work for each domain
+ */
+export interface StealthProfile {
+  // Whether stealth headers are required (vs optional) for this domain
+  required: boolean;
+
+  // The fingerprint seed that has worked (domain name by default)
+  fingerprintSeed?: string;
+
+  // Specific User-Agent that bypassed bot detection (if learned)
+  workingUserAgent?: string;
+
+  // Platform that works (Windows/macOS/Linux)
+  workingPlatform?: 'Windows' | 'macOS' | 'Linux';
+
+  // Whether this domain requires full browser (Playwright) due to JS challenges
+  requiresFullBrowser: boolean;
+
+  // Specific headers that helped bypass detection
+  requiredHeaders?: Record<string, string>;
+
+  // Behavioral delay requirements learned from rate limiting
+  minDelayMs?: number;
+  maxDelayMs?: number;
+
+  // Bot detection encountered (what was detected)
+  detectionTypes: Array<'cloudflare' | 'datadome' | 'perimeterx' | 'akamai' | 'recaptcha' | 'turnstile' | 'unknown'>;
+
+  // Success rate with current stealth settings
+  successRate: number;
+  successCount: number;
+  failureCount: number;
+
+  // Last time stealth settings were updated
+  lastUpdated: number;
+}
+
+/**
+ * Detection type for bot protection systems
+ */
+export type BotDetectionType = 'cloudflare' | 'datadome' | 'perimeterx' | 'akamai' | 'recaptcha' | 'turnstile' | 'unknown';
+
+/**
+ * Problem type for LLM-assisted research
+ * Covers all categories of issues the browser might encounter
+ */
+export type ProblemType =
+  | 'bot_detection'        // Blocked by anti-bot systems
+  | 'extraction_failure'   // Failed to extract content
+  | 'api_discovery'        // Can't find or access API
+  | 'authentication'       // Auth required or expired
+  | 'rate_limiting'        // Too many requests
+  | 'javascript_required'  // Content requires JS execution
+  | 'dynamic_content'      // Content loaded dynamically
+  | 'pagination'           // Can't navigate pagination
+  | 'selector_failure'     // Selectors don't match
+  | 'timeout'              // Request timed out
+  | 'unknown';
+
+/**
+ * Research suggestion returned when the browser encounters problems
+ * Enables LLM-assisted problem-solving feedback loop
+ */
+export interface ResearchSuggestion {
+  /** Category of problem encountered */
+  problemType: ProblemType;
+
+  /** Search query to find solutions */
+  searchQuery: string;
+
+  /** Recommended sources to search (trusted technical sites) */
+  recommendedSources: string[];
+
+  /** For bot detection, the specific system detected */
+  detectionType?: BotDetectionType;
+
+  /** Parameters the LLM can adjust on retry */
+  retryParameters: Array<
+    | 'userAgent'
+    | 'headers'
+    | 'useFullBrowser'
+    | 'delayMs'
+    | 'fingerprintSeed'
+    | 'waitForSelector'
+    | 'scrollToLoad'
+    | 'timeout'
+    | 'extractionStrategy'
+  >;
+
+  /** Specific suggestions based on problem type */
+  hints: string[];
+
+  /** Relevant documentation URLs if known */
+  documentationUrls?: string[];
+}
+
+/**
+ * Detected interactive challenge element on the page
+ * Used to help LLM understand what action might be required
+ */
+export interface ChallengeElement {
+  /** Type of element detected */
+  type: 'checkbox' | 'button' | 'captcha' | 'iframe' | 'unknown';
+
+  /** CSS selector that can target this element */
+  selector: string;
+
+  /** Text content of the element if any */
+  text?: string;
+
+  /** Position on page (for visualization/clicking) */
+  boundingBox?: {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  };
+
+  /** Whether element is likely clickable */
+  clickable: boolean;
+
+  /** Whether clicking was attempted */
+  clickAttempted?: boolean;
+
+  /** Result of click attempt if made */
+  clickResult?: 'success' | 'failed' | 'no_change' | 'page_changed';
+}
+
+/**
+ * Problem response with research suggestion for LLM-assisted solving
+ */
+export interface ProblemResponse {
+  /** Whether a problem occurred that needs LLM assistance */
+  needsAssistance: true;
+
+  /** Category of problem */
+  problemType: ProblemType;
+
+  /** HTTP status code if available */
+  statusCode?: number;
+
+  /** For bot detection, the specific system */
+  detectionType?: BotDetectionType;
+
+  /** Human-readable explanation of what happened */
+  reason: string;
+
+  /** Research suggestion for LLM to investigate solutions */
+  researchSuggestion: ResearchSuggestion;
+
+  /** What was already tried */
+  attemptedStrategies: string[];
+
+  /** Partial content if any was extracted */
+  partialContent?: string;
+
+  /** The URL that had the problem */
+  url: string;
+
+  /** Domain for learning purposes */
+  domain: string;
+
+  /** Interactive challenge elements detected on the page */
+  challengeElements?: ChallengeElement[];
+
+  /** Whether automatic challenge solving was attempted */
+  challengeSolveAttempted?: boolean;
+
+  /** Result of automatic challenge solving attempt */
+  challengeSolveResult?: 'success' | 'failed' | 'not_attempted' | 'requires_human' | 'no_change';
+}
+
+/** @deprecated Use ProblemResponse instead */
+export type BlockedResponse = ProblemResponse;
+
+/**
+ * Retry configuration that LLM can pass after researching solutions
+ */
+export interface RetryConfig {
+  /** Custom User-Agent to try */
+  userAgent?: string;
+
+  /** Custom headers to add/override */
+  headers?: Record<string, string>;
+
+  /** Force full browser rendering */
+  useFullBrowser?: boolean;
+
+  /** Delay before request (ms) */
+  delayMs?: number;
+
+  /** Custom fingerprint seed */
+  fingerprintSeed?: string;
+
+  /** Specific platform to emulate */
+  platform?: 'Windows' | 'macOS' | 'Linux';
+
+  /** Number of retry attempts already made */
+  retryAttempt?: number;
+
+  /** Wait for a specific selector before extraction */
+  waitForSelector?: string;
+
+  /** Scroll to trigger lazy loading */
+  scrollToLoad?: boolean;
+
+  /** Custom timeout (ms) */
+  timeout?: number;
+
+  /** Force a specific extraction strategy */
+  extractionStrategy?: string;
+
+  /** Custom selectors to try */
+  customSelectors?: Record<string, string>;
+}
+
+/**
  * Success profile - what works well for a domain
  * This helps the system remember successful strategies and skip failed ones
  */
@@ -267,8 +485,34 @@ export interface SuccessProfile {
   hasFrameworkData: boolean;
   hasBypassableApis: boolean;
 
+  // Stealth settings that work for this domain
+  stealthProfile?: StealthProfile;
+
   // Notes for debugging
   notes?: string;
+}
+
+/**
+ * Tracks false positives in anomaly detection for learning
+ * When anomaly detection fires but we successfully extract substantial content,
+ * we record it here so future visits can skip unreliable detection heuristics.
+ */
+export interface AnomalyFalsePositive {
+  // What type of anomaly was incorrectly detected
+  anomalyType: 'challenge_page' | 'error_page' | 'empty_content' | 'redirect_notice' | 'captcha' | 'rate_limited';
+
+  // The reason(s) that triggered the false positive (e.g., "cloudflare", "too many requests")
+  triggerReasons: string[];
+
+  // How much content was actually extracted (proves it wasn't a real block)
+  actualContentLength: number;
+
+  // How many times this false positive has occurred
+  occurrences: number;
+
+  // When first seen and last seen
+  firstSeen: number;
+  lastSeen: number;
 }
 
 /**
@@ -294,6 +538,10 @@ export interface EnhancedKnowledgeBaseEntry {
 
   // Failure history
   recentFailures: FailureContext[];
+
+  // Anomaly detection false positives - learned from content extraction success
+  // When anomaly detection triggers but we successfully extract content, record it
+  anomalyFalsePositives?: AnomalyFalsePositive[];
 
   // SUCCESS PROFILE - what works for this domain
   successProfile?: SuccessProfile;

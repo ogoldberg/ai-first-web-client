@@ -277,6 +277,129 @@ Main SDK client class with methods:
 - `getTieredFetcherStats()` - Get tiered fetcher statistics
 - `cleanup()` - Release browser resources
 
+## Stealth Mode (Anti-Bot Evasion)
+
+The SDK includes built-in anti-bot evasion capabilities that work across all rendering tiers.
+
+### Fingerprint Generation
+
+Generate consistent browser fingerprints for stealth browsing:
+
+```typescript
+import {
+  generateFingerprint,
+  getStealthFetchHeaders,
+  BehavioralDelays,
+} from '@llm-browser/core';
+
+// Generate a random fingerprint
+const fingerprint = generateFingerprint();
+
+// Or use a seed for consistency (e.g., same fingerprint for same domain)
+const seededFingerprint = generateFingerprint('example.com');
+
+console.log(fingerprint.userAgent);       // Chrome-like UA
+console.log(fingerprint.viewport);        // { width: 1920, height: 1080 }
+console.log(fingerprint.locale);          // 'en-US'
+console.log(fingerprint.timezoneId);      // 'America/New_York'
+console.log(fingerprint.clientHints);     // sec-ch-ua headers
+```
+
+### Stealth Headers for HTTP Requests
+
+Apply stealth headers to any HTTP request (works without Playwright):
+
+```typescript
+import { getStealthFetchHeaders } from '@llm-browser/core';
+
+// Get headers matching a realistic browser fingerprint
+const headers = getStealthFetchHeaders({
+  fingerprintSeed: 'example.com', // Consistent per-domain
+});
+
+// Use with fetch
+const response = await fetch('https://example.com', { headers });
+
+// Or merge with your own headers
+const customHeaders = getStealthFetchHeaders({
+  extraHeaders: {
+    'Authorization': 'Bearer token',
+    'X-Custom': 'value',
+  },
+});
+```
+
+### Behavioral Delays
+
+Add human-like timing patterns:
+
+```typescript
+import { BehavioralDelays } from '@llm-browser/core';
+
+// Random delay between actions
+await BehavioralDelays.sleep(100, 500); // 100-500ms
+
+// Jittered delay (for rate limiting)
+const delay = BehavioralDelays.jitteredDelay(1000, 0.3); // 1s +/- 30%
+
+// Exponential backoff with jitter
+const backoff = BehavioralDelays.exponentialBackoff(2); // Attempt 2 = ~4s
+```
+
+### Playwright Stealth Mode
+
+For full browser rendering, use stealth mode with playwright-extra:
+
+```bash
+# Install optional dependencies
+npm install playwright-extra puppeteer-extra-plugin-stealth
+```
+
+```typescript
+import {
+  launchStealthBrowser,
+  createStealthContext,
+  isStealthAvailable,
+} from '@llm-browser/core';
+
+// Check if stealth is available
+if (isStealthAvailable()) {
+  // Launch browser with stealth plugin
+  const { browser, fingerprint, stealthEnabled } = await launchStealthBrowser({
+    fingerprintSeed: 'example.com',
+  });
+
+  // Create context with evasion scripts
+  const context = await createStealthContext(browser, fingerprint);
+  const page = await context.newPage();
+
+  // Browse normally - evasion is automatic
+  await page.goto('https://example.com');
+}
+```
+
+### What Stealth Mode Provides
+
+**HTTP-level (all tiers):**
+- User agent rotation from realistic Chrome versions
+- Matching Accept-Language and locale
+- sec-ch-ua client hints headers
+- Consistent viewport/platform combinations
+
+**Browser-level (Playwright only):**
+- navigator.webdriver removal
+- chrome.runtime patching
+- Plugin/mimeTypes array spoofing
+- Permissions API patching
+- Language consistency
+
+### Limitations
+
+Stealth mode helps with basic bot detection but cannot bypass:
+- CAPTCHAs (reCAPTCHA, Turnstile) - require human solving
+- Datacenter IP blocklists - require residential proxies
+- Advanced fingerprinting - some sites use sophisticated detection
+
 ## Status
 
 This package is part of the SDK extraction effort (SDK-001 to SDK-012).
