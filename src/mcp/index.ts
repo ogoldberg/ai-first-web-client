@@ -31,3 +31,41 @@ export {
   sessionManagementSchema,
   apiAuthSchema,
 } from './tool-schemas.js';
+
+// Tool handlers
+export {
+  // Browse handlers
+  handleSmartBrowse,
+  handleBatchBrowse,
+  handleGetDomainIntelligence,
+  handleGetDomainCapabilities,
+  type SmartBrowseArgs,
+  type BatchBrowseArgs,
+  // Debug handlers
+  handleCaptureScreenshot,
+  handleExportHar,
+  handleGetLearningStats,
+  handleGetLearningEffectiveness,
+  handleDebugTraces,
+  type DebugTracesAction,
+  // Session handlers
+  handleSessionManagement,
+  handleExecuteApiCall,
+  handleGetBrowserProviders,
+  type SessionAction,
+  // Admin handlers
+  handleTierManagement,
+  handleGetPerformanceMetrics,
+  handleContentTracking,
+  handleUsageAnalytics,
+  handleGetAnalyticsDashboard,
+  handleGetSystemStatus,
+  handleToolSelectionMetrics,
+  type TierAction,
+  type ContentTrackingAction,
+  type UsageAnalyticsAction,
+  type ToolSelectionMetricsAction,
+  // Skill handlers
+  handleSkillManagement,
+  type SkillAction,
+} from './handlers/index.js';
