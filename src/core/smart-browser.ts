@@ -2729,6 +2729,409 @@ export class SmartBrowser {
   }
 
   /**
+   * Preview what will happen when browsing a URL without executing
+   *
+   * This provides a plan showing:
+   * - Which tier will be used (intelligence/lightweight/playwright)
+   * - Step-by-step execution plan
+   * - Time estimates
+   * - Confidence levels
+   * - Fallback strategies
+   *
+   * Competitive advantage: <50ms preview vs 2-5s browser automation
+   */
+  async previewBrowse(url: string, options: SmartBrowseOptions = {}): Promise<import('../types/plan-preview.js').BrowsePreviewResponse> {
+
+    // Validate URL (same as browse)
+    validateUrlOrThrow(url);
+
+    const domain = new URL(url).hostname;
+    const startTime = Date.now();
+
+    // Analyze what would happen without executing
+    const analysis = await this.analyzePreview(url, domain, options);
+
+    // Build execution plan
+    const plan = this.buildExecutionPlan(url, domain, analysis, options);
+
+    // Estimate time
+    const estimatedTime = this.estimateExecutionTime(plan, analysis);
+
+    // Assess confidence
+    const confidence = this.assessConfidence(analysis);
+
+    // Generate alternative plans
+    const alternativePlans = this.generateAlternativePlans(url, domain, analysis, options);
+
+    const previewDuration = Date.now() - startTime;
+    logger.smartBrowser.debug('Preview generated', {
+      url,
+      duration: previewDuration,
+      tier: plan.tier,
+      confidence: confidence.overall
+    });
+
+    return {
+      schemaVersion: '1.0',
+      plan,
+      estimatedTime,
+      confidence,
+      alternativePlans
+    };
+  }
+
+  /**
+   * Analyze what would happen for preview (no execution)
+   */
+  private async analyzePreview(
+    url: string,
+    domain: string,
+    options: SmartBrowseOptions
+  ): Promise<import('../types/plan-preview.js').PreviewAnalysis> {
+    const useSkills = options.useSkills !== false;
+
+    // Check for learned patterns
+    const entry = this.learningEngine.getEntry(domain);
+    const patterns = entry?.apiPatterns || [];
+    const hasPatterns = patterns.length > 0;
+
+    const patternAnalysis = patterns.map(p => ({
+      type: p.method || 'unknown',
+      confidence: this.confidenceToNumber(p.confidence),
+      successCount: p.verificationCount - p.failureCount,
+      totalAttempts: p.verificationCount
+    }));
+
+    // Check for skills
+    let skills: Array<{ name: string; similarity: number }> = [];
+    if (useSkills) {
+      const pageContext = {
+        url,
+        domain,
+        pageType: 'unknown' as const
+      };
+      const matchedSkills = this.proceduralMemory.retrieveSkills(pageContext, 3);
+      skills = matchedSkills.map(m => ({
+        name: m.skill.name,
+        similarity: m.similarity
+      }));
+    }
+
+    // Check domain group
+    const domainGroup = this.learningEngine.getDomainGroup(domain);
+
+    // Check for active session
+    const hasActiveSession = this.sessionManager.hasSession(domain);
+
+    // Check failure history
+    const failurePatterns = this.learningEngine.getFailurePatterns(domain);
+    const hasFailureHistory = failurePatterns.shouldBackoff;
+    const failureRate = failurePatterns.recentFailureRate;
+
+    // Determine recommended tier
+    const needsFullBrowser = options.followPagination || options.waitForSelector || skills.length > 0;
+    let recommendedTier: RenderTier;
+
+    if (options.forceTier) {
+      recommendedTier = options.forceTier;
+    } else if (needsFullBrowser) {
+      recommendedTier = 'playwright';
+    } else if (hasPatterns && patterns.some(p => p.canBypass)) {
+      recommendedTier = 'intelligence';
+    } else {
+      recommendedTier = 'lightweight';
+    }
+
+    return {
+      domain,
+      hasPatterns,
+      patterns: patternAnalysis,
+      hasSkills: skills.length > 0,
+      skills,
+      domainGroup: domainGroup?.name,
+      hasSession: hasActiveSession,
+      hasFailureHistory,
+      failureRate,
+      recommendedTier,
+      needsFullBrowser
+    };
+  }
+
+  /**
+   * Build execution plan from analysis
+   */
+  private buildExecutionPlan(
+    url: string,
+    domain: string,
+    analysis: import('../types/plan-preview.js').PreviewAnalysis,
+    options: SmartBrowseOptions
+  ): import('../types/plan-preview.js').ExecutionPlan {
+    const steps: import('../types/plan-preview.js').ExecutionStep[] = [];
+    let stepOrder = 1;
+
+    // Step 1: Pattern lookup
+    steps.push({
+      order: stepOrder++,
+      action: 'check_learned_patterns',
+      description: `Check for learned API patterns for ${domain}`,
+      tier: 'intelligence',
+      expectedDuration: 10,
+      confidence: 'high'
+    });
+
+    // Step 2: Skill retrieval
+    if (options.useSkills !== false) {
+      steps.push({
+        order: stepOrder++,
+        action: 'check_skills',
+        description: 'Check for applicable procedural skills',
+        tier: 'intelligence',
+        expectedDuration: 15,
+        confidence: 'high'
+      });
+    }
+
+    // Step 3: Main execution based on tier
+    if (analysis.recommendedTier === 'intelligence' && analysis.hasPatterns) {
+      const bestPattern = analysis.patterns[0];
+      steps.push({
+        order: stepOrder++,
+        action: 'try_learned_api',
+        description: `Use learned API pattern: ${bestPattern.type}`,
+        tier: 'intelligence',
+        expectedDuration: 200,
+        confidence: this.mapConfidenceScore(bestPattern.confidence),
+        reason: `Pattern has ${(bestPattern.confidence * 100).toFixed(0)}% success rate (${bestPattern.successCount}/${bestPattern.totalAttempts} uses)`
+      });
+    } else if (analysis.recommendedTier === 'lightweight') {
+      steps.push({
+        order: stepOrder++,
+        action: 'lightweight_render',
+        description: 'Render page with linkedom',
+        tier: 'lightweight',
+        expectedDuration: 400,
+        confidence: 'medium',
+        reason: 'No API patterns found, using lightweight rendering'
+      });
+    } else {
+      steps.push({
+        order: stepOrder++,
+        action: 'use_playwright',
+        description: 'Use full browser rendering',
+        tier: 'playwright',
+        expectedDuration: 2500,
+        confidence: 'high',
+        reason: analysis.needsFullBrowser ? 'Requires full browser (pagination/skills)' : 'Guaranteed rendering'
+      });
+    }
+
+    // Step 4: Content extraction
+    steps.push({
+      order: stepOrder++,
+      action: 'extract_content',
+      description: 'Parse response and extract content',
+      tier: analysis.recommendedTier,
+      expectedDuration: 50,
+      confidence: 'high'
+    });
+
+    // Build reasoning
+    let reasoning: string;
+    if (analysis.hasPatterns) {
+      const bestPattern = analysis.patterns[0];
+      reasoning = `${domain} has ${analysis.patterns.length} learned pattern(s) with ${(bestPattern.confidence * 100).toFixed(0)}% confidence. ${analysis.recommendedTier} tier should succeed.`;
+    } else if (analysis.needsFullBrowser) {
+      reasoning = `${domain} requires full browser for requested features (pagination, skills, or selectors). Using playwright tier.`;
+    } else {
+      reasoning = `${domain} has no learned patterns. Will try lightweight rendering first, with fallback to playwright.`;
+    }
+
+    // Build fallback plan
+    let fallbackPlan: import('../types/plan-preview.js').ExecutionPlan | undefined;
+    if (analysis.recommendedTier !== 'playwright') {
+      const fallbackSteps: import('../types/plan-preview.js').ExecutionStep[] = [
+        {
+          order: 1,
+          action: analysis.recommendedTier === 'intelligence' ? 'lightweight_render' : 'use_playwright',
+          description: analysis.recommendedTier === 'intelligence' ? 'Render with linkedom' : 'Use full browser',
+          tier: analysis.recommendedTier === 'intelligence' ? 'lightweight' : 'playwright',
+          expectedDuration: analysis.recommendedTier === 'intelligence' ? 400 : 2500,
+          confidence: 'medium'
+        }
+      ];
+
+      fallbackPlan = {
+        steps: fallbackSteps,
+        tier: analysis.recommendedTier === 'intelligence' ? 'lightweight' : 'playwright',
+        reasoning: `If ${analysis.recommendedTier} tier fails, fall back to ${fallbackSteps[0].tier}`
+      };
+    }
+
+    return {
+      steps,
+      tier: analysis.recommendedTier,
+      reasoning,
+      fallbackPlan
+    };
+  }
+
+  /**
+   * Estimate execution time from plan
+   */
+  private estimateExecutionTime(
+    plan: import('../types/plan-preview.js').ExecutionPlan,
+    analysis: import('../types/plan-preview.js').PreviewAnalysis
+  ): import('../types/plan-preview.js').TimeEstimate {
+    const expectedTime = plan.steps.reduce((sum, step) => sum + step.expectedDuration, 0);
+
+    // Add variance based on confidence
+    const variance = analysis.hasFailureHistory ? 0.5 : 0.3;
+
+    const breakdown: Record<string, number> = {};
+    breakdown[plan.tier] = expectedTime;
+
+    if (plan.fallbackPlan) {
+      const fallbackTime = plan.fallbackPlan.steps.reduce((sum, step) => sum + step.expectedDuration, 0);
+      breakdown[plan.fallbackPlan.tier] = fallbackTime;
+    }
+
+    return {
+      min: Math.floor(expectedTime * (1 - variance)),
+      max: Math.floor(expectedTime * (1 + variance)),
+      expected: expectedTime,
+      breakdown
+    };
+  }
+
+  /**
+   * Assess confidence from analysis
+   */
+  private assessConfidence(
+    analysis: import('../types/plan-preview.js').PreviewAnalysis
+  ): import('../types/plan-preview.js').ConfidenceLevel {
+    const hasHighConfidencePattern = analysis.patterns.some(p => p.confidence > 0.8);
+    const hasAnyPattern = analysis.patterns.length > 0;
+    const hasGoodHistory = !analysis.hasFailureHistory;
+
+    let overall: 'high' | 'medium' | 'low';
+    if (hasHighConfidencePattern && hasGoodHistory) {
+      overall = 'high';
+    } else if (hasAnyPattern || analysis.hasSkills) {
+      overall = 'medium';
+    } else {
+      overall = 'low';
+    }
+
+    let domainFamiliarity: 'high' | 'medium' | 'low' | 'none';
+    const patternCount = analysis.patterns.length;
+    if (patternCount >= 3) {
+      domainFamiliarity = 'high';
+    } else if (patternCount >= 1) {
+      domainFamiliarity = 'medium';
+    } else if (analysis.hasSkills || analysis.domainGroup) {
+      domainFamiliarity = 'low';
+    } else {
+      domainFamiliarity = 'none';
+    }
+
+    const avgSuccessRate = analysis.patterns.length > 0
+      ? analysis.patterns.reduce((sum, p) => sum + (p.successCount / Math.max(p.totalAttempts, 1)), 0) / analysis.patterns.length
+      : 0;
+
+    return {
+      overall,
+      factors: {
+        hasLearnedPatterns: hasAnyPattern,
+        domainFamiliarity,
+        apiDiscovered: analysis.patterns.some(p => p.confidence > 0.7),
+        requiresAuth: analysis.hasSession, // If we have a session, auth is likely required
+        botDetectionLikely: analysis.hasFailureHistory && analysis.failureRate > 0.3,
+        skillsAvailable: analysis.hasSkills,
+        patternCount: analysis.patterns.length,
+        patternSuccessRate: avgSuccessRate
+      }
+    };
+  }
+
+  /**
+   * Generate alternative execution plans
+   */
+  private generateAlternativePlans(
+    url: string,
+    domain: string,
+    analysis: import('../types/plan-preview.js').PreviewAnalysis,
+    options: SmartBrowseOptions
+  ): import('../types/plan-preview.js').ExecutionPlan[] {
+    const alternatives: import('../types/plan-preview.js').ExecutionPlan[] = [];
+
+    // If recommended tier is not playwright, offer playwright as alternative
+    if (analysis.recommendedTier !== 'playwright') {
+      alternatives.push({
+        steps: [
+          {
+            order: 1,
+            action: 'use_playwright',
+            description: 'Use full browser rendering',
+            tier: 'playwright',
+            expectedDuration: 2500,
+            confidence: 'high',
+            reason: 'Guaranteed to work but slower'
+          },
+          {
+            order: 2,
+            action: 'extract_content',
+            description: 'Parse response and extract content',
+            tier: 'playwright',
+            expectedDuration: 50,
+            confidence: 'high'
+          }
+        ],
+        tier: 'playwright',
+        reasoning: 'Skip learning and go directly to full browser for guaranteed success'
+      });
+    }
+
+    // If recommended tier is playwright, offer lightweight as fast alternative
+    if (analysis.recommendedTier === 'playwright' && !analysis.needsFullBrowser) {
+      alternatives.push({
+        steps: [
+          {
+            order: 1,
+            action: 'lightweight_render',
+            description: 'Try lightweight rendering',
+            tier: 'lightweight',
+            expectedDuration: 400,
+            confidence: 'medium',
+            reason: 'Faster but may not work for complex pages'
+          }
+        ],
+        tier: 'lightweight',
+        reasoning: 'Try faster lightweight tier first (may fail for complex pages)'
+      });
+    }
+
+    return alternatives;
+  }
+
+  /**
+   * Map numeric confidence score to level
+   */
+  private mapConfidenceScore(score: number): 'high' | 'medium' | 'low' {
+    if (score >= 0.8) return 'high';
+    if (score >= 0.5) return 'medium';
+    return 'low';
+  }
+
+  /**
+   * Convert confidence level to numeric score
+   */
+  private confidenceToNumber(level: 'high' | 'medium' | 'low'): number {
+    if (level === 'high') return 0.9;
+    if (level === 'medium') return 0.6;
+    return 0.3;
+  }
+
+  /**
    * Enable debug trace recording globally
    */
   enableDebugRecording(): void {

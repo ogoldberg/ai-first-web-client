@@ -44,4 +44,12 @@ export {
   type DomainIntelligence,
   type ProgressEvent,
   type ProgressCallback,
+
+  // Plan Preview Types
+  type BrowsePreview,
+  type ExecutionPlan,
+  type ExecutionStep,
+  type TimeEstimate,
+  type ConfidenceLevel,
+  type ConfidenceFactors,
 } from './http-client.js';
