@@ -23,6 +23,7 @@ import {
 } from '../middleware/proxy.js';
 import { getProxyManager, hasProxiesConfigured } from '../services/proxy-manager.js';
 import type { ProxyTier } from '../services/proxy-types.js';
+import { WorkflowRecorder } from '../../../src/core/workflow-recorder.js';
 
 interface BrowseRequest {
   url: string;
@@ -64,6 +65,17 @@ interface FormatOptions {
 }
 
 const browse = new Hono();
+
+// Workflow recorder singleton (COMP-009)
+// In production, this would be injected via dependency injection
+let workflowRecorder: WorkflowRecorder | null = null;
+
+export function getWorkflowRecorder(): WorkflowRecorder {
+  if (!workflowRecorder) {
+    workflowRecorder = new WorkflowRecorder();
+  }
+  return workflowRecorder;
+}
 
 // Apply auth, rate limiting, and proxy availability check to all routes
 browse.use('*', authMiddleware);
@@ -274,6 +286,18 @@ browse.post('/browse', requirePermission('browse'), browseValidator, async (c) =
           verify: body.options?.verify,
         });
 
+        // Capture step in workflow recording if session active (COMP-009)
+        const recordingSessionId = c.req.header('X-Recording-Session');
+        if (recordingSessionId) {
+          try {
+            const recorder = getWorkflowRecorder();
+            await recorder.recordStep(recordingSessionId, browseResult);
+          } catch (error) {
+            // Log but don't fail the request
+            console.warn('Failed to record workflow step:', error);
+          }
+        }
+
         const result = {
           success: true,
           data: formatBrowseResult(browseResult, startTime, formatOptions),
@@ -325,13 +349,22 @@ browse.post('/browse', requirePermission('browse'), browseValidator, async (c) =
       scrollToLoad: body.options?.scrollToLoad,
       maxLatencyMs: body.options?.maxLatencyMs,
       maxCostTier: body.options?.maxCostTier,
-<<<<<<< HEAD
+      verify: body.options?.verify,
       // TODO: Pass proxy config to browser client when implemented
       // proxy: proxyInfo?.proxy.getPlaywrightProxy(),
-=======
-      verify: body.options?.verify,
->>>>>>> 988b20a (feat(COMP-015): Add verification options to API and SDK)
     });
+
+    // Capture step in workflow recording if session active (COMP-009)
+    const recordingSessionId = c.req.header('X-Recording-Session');
+    if (recordingSessionId) {
+      try {
+        const recorder = getWorkflowRecorder();
+        await recorder.recordStep(recordingSessionId, browseResult);
+      } catch (error) {
+        // Log but don't fail the request
+        console.warn('Failed to record workflow step:', error);
+      }
+    }
 
     // Record usage for the tier used
     recordTierUsage(tenant.id, browseResult.learning?.renderTier || 'intelligence');
