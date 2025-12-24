@@ -97,6 +97,60 @@ export interface BatchResult {
   totalTime: number;
 }
 
+// ============================================
+// Plan Preview Types
+// ============================================
+
+export interface ExecutionStep {
+  order: number;
+  action: string;
+  description: string;
+  tier: 'intelligence' | 'lightweight' | 'playwright';
+  expectedDuration: number; // milliseconds
+  confidence: 'high' | 'medium' | 'low';
+  reason?: string;
+}
+
+export interface ExecutionPlan {
+  steps: ExecutionStep[];
+  tier: 'intelligence' | 'lightweight' | 'playwright';
+  reasoning: string;
+  fallbackPlan?: ExecutionPlan;
+}
+
+export interface TimeEstimate {
+  min: number; // milliseconds
+  max: number;
+  expected: number;
+  breakdown: {
+    [tier: string]: number;
+  };
+}
+
+export interface ConfidenceFactors {
+  hasLearnedPatterns: boolean;
+  domainFamiliarity: 'high' | 'medium' | 'low' | 'none';
+  apiDiscovered: boolean;
+  requiresAuth: boolean;
+  botDetectionLikely: boolean;
+  skillsAvailable: boolean;
+  patternCount: number;
+  patternSuccessRate: number;
+}
+
+export interface ConfidenceLevel {
+  overall: 'high' | 'medium' | 'low';
+  factors: ConfidenceFactors;
+}
+
+export interface BrowsePreview {
+  schemaVersion: string;
+  plan: ExecutionPlan;
+  estimatedTime: TimeEstimate;
+  confidence: ConfidenceLevel;
+  alternativePlans?: ExecutionPlan[];
+}
+
 export interface DomainIntelligence {
   domain: string;
   knownPatterns: number;
@@ -228,6 +282,27 @@ export class UnbrowserClient {
       url,
       options,
       session,
+    });
+  }
+
+  /**
+   * Preview what will happen when browsing a URL (without executing)
+   *
+   * Returns execution plan, time estimates, and confidence levels.
+   * Completes in <50ms vs 2-5s for browser automation.
+   *
+   * @example
+   * ```typescript
+   * const preview = await client.previewBrowse('https://reddit.com/r/programming');
+   * console.log(`Expected time: ${preview.estimatedTime.expected}ms`);
+   * console.log(`Confidence: ${preview.confidence.overall}`);
+   * console.log(`Plan: ${preview.plan.steps.length} steps using ${preview.plan.tier} tier`);
+   * ```
+   */
+  async previewBrowse(url: string, options?: BrowseOptions): Promise<BrowsePreview> {
+    return this.request<BrowsePreview>('POST', '/v1/browse/preview', {
+      url,
+      options,
     });
   }
 

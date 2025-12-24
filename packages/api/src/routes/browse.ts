@@ -168,6 +168,48 @@ function formatBrowseResult(
 }
 
 /**
+ * POST /v1/browse/preview
+ * Preview what will happen when browsing a URL without executing
+ *
+ * Returns execution plan, time estimates, and confidence levels.
+ * Competitive advantage: <50ms preview vs 2-5s browser automation.
+ */
+browse.post('/browse/preview', requirePermission('browse'), browseValidator, async (c) => {
+  const body = c.req.valid('json') as BrowseRequest;
+  const startTime = Date.now();
+
+  try {
+    const client = await getBrowserClient();
+
+    const previewResult = await client.previewBrowse(body.url, {
+      waitForSelector: body.options?.waitForSelector,
+      scrollToLoad: body.options?.scrollToLoad,
+      maxLatencyMs: body.options?.maxLatencyMs,
+      maxCostTier: body.options?.maxCostTier,
+    });
+
+    return c.json({
+      success: true,
+      data: previewResult,
+      metadata: {
+        previewDuration: Date.now() - startTime,
+      },
+    });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: 'PREVIEW_ERROR',
+          message: error instanceof Error ? error.message : 'Unknown error',
+        },
+      },
+      500
+    );
+  }
+});
+
+/**
  * POST /v1/browse
  * Browse a URL with intelligent rendering
  */
