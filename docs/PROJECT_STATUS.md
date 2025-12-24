@@ -1,16 +1,16 @@
-# LLM Browser MCP Server - Project Status
+# Unbrowser - Project Status
 
 **Last Updated:** 2025-12-24
 **Version:** 0.5.0
 **Current Phase:** Production Readiness (Phase 2)
 **Total Code:** ~20,000 lines TypeScript
-**Tests:** 2286 passing + 44 live tests
+**Tests:** 2340+ passing + 44 live tests
 
 ---
 
 ## Executive Summary
 
-The LLM Browser MCP Server is an intelligent browser designed specifically for LLM interactions. It learns from browsing patterns, discovers API endpoints automatically, and progressively optimizes to bypass browser rendering entirely.
+Unbrowser is an intelligent web browsing API for AI agents. It learns from browsing patterns, discovers API endpoints automatically, and progressively optimizes to bypass browser rendering entirely.
 
 **Core Philosophy:** "Browser Minimizer" - Start with full rendering, learn the patterns, then bypass the browser for 10x faster access.
 

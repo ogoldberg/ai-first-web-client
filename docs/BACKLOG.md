@@ -1,4 +1,4 @@
-# LLM Browser Task Backlog
+# Unbrowser Task Backlog
 
 ## How to Use This Backlog
 
@@ -311,9 +311,9 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 | API-001 | Design REST API endpoints | M | Complete | POST /browse, POST /api-call, GET /patterns, etc. Map to SDK methods. OpenAPI spec. Created docs/api/openapi.yaml and docs/api/API_DESIGN.md |
 | API-002 | Implement API authentication | M | Complete | API key auth with SHA-256 hashing, permission middleware, in-memory store for testing. packages/api with Hono server, 39 tests |
 | API-003 | Add per-tenant rate limiting | M | Complete | In-memory rate limiter with plan-based limits (FREE=100/day, STARTER=1000, TEAM=10000, ENTERPRISE=100000) |
-| API-004 | Implement usage metering for billing | L | In Progress | Track requests by tier (intelligence=1, lightweight=5, playwright=25). Export to billing system |
-| API-005 | Create tenant management endpoints | M | Not Started | POST /tenants, GET /tenants/:id, PATCH /tenants/:id. Admin API for managing customers |
-| API-006 | Add API request/response logging | M | Not Started | Structured logging for debugging. Redact sensitive data. Queryable for support |
+| API-004 | Implement usage metering for billing | L | Complete | Track requests by tier (intelligence=1, lightweight=5, playwright=25). Usage tracking service with per-tenant aggregation. Commit 77d63c0 |
+| API-005 | Create tenant management endpoints | M | Complete | POST /tenants, GET /tenants/:id, PATCH /tenants/:id. Admin API for managing customers. Merged in PR #132 |
+| API-006 | Add API request/response logging | M | Complete | Request logging middleware with unique IDs, timing, redaction. Admin log endpoints. 28 tests. PR #135 |
 | API-007 | Implement billing integration | L | Not Started | Stripe integration. Usage-based billing. Handle webhooks for subscription changes |
 | API-008 | Create admin dashboard | L | Not Started | Web UI for monitoring usage, managing tenants, viewing errors. Analytics charts |
 | API-009 | Set up production infrastructure | XL | Not Started | Docker containers, orchestration (K8s or ECS), load balancing, auto-scaling |
@@ -331,7 +331,7 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 | ID | Task | Effort | Status | Notes |
 |----|------|--------|--------|-------|
 | CLOUD-001 | Wire SmartBrowser to browse endpoints | M | Complete | Connect API routes to SmartBrowser. JSON/SSE responses. packages/api/src/services/browser.ts |
-| CLOUD-002 | Add usage tracking service | M | In Progress | Track per-tenant requests, tier usage, costs. Foundation for billing |
+| CLOUD-002 | Add usage tracking service | M | Complete | Track per-tenant requests, tier usage, costs. Foundation for billing. Implemented in packages/api/src/services/usage.ts |
 | CLOUD-003 | Implement proxy management for IP blocking | L | Complete | ProxyManager, ProxyHealthTracker, DomainRiskClassifier, ProxySelector. 4 tiers: datacenter, ISP, residential, premium. Plan-based access, health tracking, smart routing. 125 tests. See docs/PROXY_MANAGEMENT_PLAN.md |
 | CLOUD-004 | Add Supabase/Postgres persistence | L | Not Started | Replace in-memory stores with database. Tenant, API key, usage persistence |
 | CLOUD-005 | Implement Redis caching layer | M | Not Started | Session cache, rate limit state, pattern cache across instances |
@@ -384,18 +384,18 @@ See [COMPETITIVE_ANALYSIS.md](COMPETITIVE_ANALYSIS.md) for context on why these 
 
 | ID | Task | Effort | Status | Notes |
 |----|------|--------|--------|-------|
-| COMP-002 | Plan Preview | M | Suspended | Show users what will happen before execution. Branch: `claude/explore-browser-extension-XXNlH-backup` has partial impl with TS errors |
-| COMP-007 | Workflow Recording Core | L | Suspended | Record browse operations as replayable workflows. Branch has `src/core/workflow-recorder.ts` with TS errors (missing logger components) |
-| COMP-008 | Workflow ProceduralMemory Integration | M | Suspended | Store workflows in ProceduralMemory for persistence. Branch has partial impl |
-| COMP-009 | Workflow API Endpoints | M | Suspended | POST /v1/workflows/record/start, stop, replay. Branch has `packages/api/src/routes/workflows.ts` with TS errors |
-| COMP-010 | Workflow SDK Methods | M | Suspended | SDK methods for workflow recording. Branch has `packages/core/src/http-client.ts` updates |
-| COMP-014 | Verification Learning | M | Suspended | Learn which checks prevent failures. Branch has `src/core/verification-engine.ts` with TS errors (missing ProceduralMemory.getLearnedVerifications) |
-| COMP-015 | Verification API Options | S | Suspended | Add verify options to browse API. Branch has partial impl |
+| COMP-002 | Plan Preview | M | Complete | Show users what will happen before execution. PR #136 |
+| COMP-007 | Workflow Recording Core | L | Complete | Record browse operations as replayable workflows. `src/core/workflow-recorder.ts`. PR #136 |
+| COMP-008 | Workflow ProceduralMemory Integration | M | Complete | Store workflows in ProceduralMemory for persistence. PR #136 |
+| COMP-009 | Workflow API Endpoints | M | Complete | POST /v1/workflows/record/start, stop, replay. `packages/api/src/routes/workflows.ts`. PR #136 |
+| COMP-010 | Workflow SDK Methods | M | Complete | SDK methods for workflow recording. `packages/core/src/http-client.ts`. PR #136 |
+| COMP-014 | Verification Learning | M | Complete | Learn which checks prevent failures. `src/core/verification-engine.ts`. PR #136 |
+| COMP-015 | Verification API Options | S | Complete | Add verify options to browse API. PR #136 |
 
 **Notes:**
-- Branch `claude/explore-browser-extension-XXNlH-backup` contains ~2,800 lines of partial implementation
-- 10 TypeScript errors need fixing: missing logger components (`workflowRecorder`, `verificationEngine`) and missing `ProceduralMemory.getLearnedVerifications()` method
-- Estimated 2-4 hours to fix and complete
+- All COMP tasks in this section implemented in PR #136
+- Fixed ESM dynamic import issues for VerificationEngine
+- Tests passing, TypeScript builds cleanly
 
 ---
 
