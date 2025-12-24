@@ -7,18 +7,19 @@
 
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import { logger } from 'hono/logger';
 import { prettyJSON } from 'hono/pretty-json';
 import { secureHeaders } from 'hono/secure-headers';
 import { HTTPException } from 'hono/http-exception';
 import { health } from './routes/health.js';
 import { browse } from './routes/browse.js';
+import { admin } from './routes/admin.js';
+import { requestLoggerMiddleware } from './middleware/request-logger.js';
 
 // Create the main Hono app
 const app = new Hono();
 
 // Global middleware
-app.use('*', logger());
+app.use('*', requestLoggerMiddleware);
 app.use('*', secureHeaders());
 app.use('*', prettyJSON());
 app.use(
@@ -36,6 +37,7 @@ app.use(
 // Mount routes
 app.route('/health', health);
 app.route('/v1', browse);
+app.route('/v1/admin', admin);
 
 // Root endpoint
 app.get('/', (c) => {
@@ -50,6 +52,7 @@ app.get('/', (c) => {
       fetch: '/v1/fetch',
       intelligence: '/v1/domains/:domain/intelligence',
       usage: '/v1/usage',
+      adminLogs: '/v1/admin/logs',
     },
   });
 });
