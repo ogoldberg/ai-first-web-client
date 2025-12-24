@@ -23,6 +23,7 @@ import {
 } from '../middleware/proxy.js';
 import { getProxyManager, hasProxiesConfigured } from '../services/proxy-manager.js';
 import type { ProxyTier } from '../services/proxy-types.js';
+import { WorkflowRecorder } from '../../../src/core/workflow-recorder.js';
 
 interface BrowseRequest {
   url: string;
@@ -39,6 +40,11 @@ interface BrowseRequest {
       preferredCountry?: string;
       requireFresh?: boolean;
       stickySessionId?: string;
+    };
+    // Verification options (COMP-015)
+    verify?: {
+      enabled?: boolean; // default: true for basic mode
+      mode?: 'basic' | 'standard' | 'thorough'; // default: 'basic'
     };
   };
   session?: {
@@ -59,6 +65,17 @@ interface FormatOptions {
 }
 
 const browse = new Hono();
+
+// Workflow recorder singleton (COMP-009)
+// In production, this would be injected via dependency injection
+let workflowRecorder: WorkflowRecorder | null = null;
+
+export function getWorkflowRecorder(): WorkflowRecorder {
+  if (!workflowRecorder) {
+    workflowRecorder = new WorkflowRecorder();
+  }
+  return workflowRecorder;
+}
 
 // Apply auth, rate limiting, and proxy availability check to all routes
 browse.use('*', authMiddleware);
@@ -164,8 +181,61 @@ function formatBrowseResult(
     response.tables = result.tables;
   }
 
+  // Include verification result if present (COMP-015)
+  if (result.verification) {
+    response.verification = {
+      passed: result.verification.passed,
+      confidence: result.verification.confidence,
+      checksRun: result.verification.checks?.length || 0,
+      errors: result.verification.errors,
+      warnings: result.verification.warnings,
+    };
+  }
+
   return response;
 }
+
+/**
+ * POST /v1/browse/preview
+ * Preview what will happen when browsing a URL without executing
+ *
+ * Returns execution plan, time estimates, and confidence levels.
+ * Competitive advantage: <50ms preview vs 2-5s browser automation.
+ */
+browse.post('/browse/preview', requirePermission('browse'), browseValidator, async (c) => {
+  const body = c.req.valid('json') as BrowseRequest;
+  const startTime = Date.now();
+
+  try {
+    const client = await getBrowserClient();
+
+    const previewResult = await client.previewBrowse(body.url, {
+      waitForSelector: body.options?.waitForSelector,
+      scrollToLoad: body.options?.scrollToLoad,
+      maxLatencyMs: body.options?.maxLatencyMs,
+      maxCostTier: body.options?.maxCostTier,
+    });
+
+    return c.json({
+      success: true,
+      data: previewResult,
+      metadata: {
+        previewDuration: Date.now() - startTime,
+      },
+    });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: 'PREVIEW_ERROR',
+          message: error instanceof Error ? error.message : 'Unknown error',
+        },
+      },
+      500
+    );
+  }
+});
 
 /**
  * POST /v1/browse
@@ -213,7 +283,20 @@ browse.post('/browse', requirePermission('browse'), browseValidator, async (c) =
           scrollToLoad: body.options?.scrollToLoad,
           maxLatencyMs: body.options?.maxLatencyMs,
           maxCostTier: body.options?.maxCostTier,
+          verify: body.options?.verify,
         });
+
+        // Capture step in workflow recording if session active (COMP-009)
+        const recordingSessionId = c.req.header('X-Recording-Session');
+        if (recordingSessionId) {
+          try {
+            const recorder = getWorkflowRecorder();
+            await recorder.recordStep(recordingSessionId, browseResult);
+          } catch (error) {
+            // Log but don't fail the request
+            console.warn('Failed to record workflow step:', error);
+          }
+        }
 
         const result = {
           success: true,
@@ -266,9 +349,22 @@ browse.post('/browse', requirePermission('browse'), browseValidator, async (c) =
       scrollToLoad: body.options?.scrollToLoad,
       maxLatencyMs: body.options?.maxLatencyMs,
       maxCostTier: body.options?.maxCostTier,
+      verify: body.options?.verify,
       // TODO: Pass proxy config to browser client when implemented
       // proxy: proxyInfo?.proxy.getPlaywrightProxy(),
     });
+
+    // Capture step in workflow recording if session active (COMP-009)
+    const recordingSessionId = c.req.header('X-Recording-Session');
+    if (recordingSessionId) {
+      try {
+        const recorder = getWorkflowRecorder();
+        await recorder.recordStep(recordingSessionId, browseResult);
+      } catch (error) {
+        // Log but don't fail the request
+        console.warn('Failed to record workflow step:', error);
+      }
+    }
 
     // Record usage for the tier used
     recordTierUsage(tenant.id, browseResult.learning?.renderTier || 'intelligence');
@@ -449,6 +545,7 @@ browse.post(
               scrollToLoad: body.options?.scrollToLoad,
               maxLatencyMs: body.options?.maxLatencyMs,
               maxCostTier: body.options?.maxCostTier,
+              verify: body.options?.verify,
             });
 
             // Record usage for the tier used
