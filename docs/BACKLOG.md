@@ -273,8 +273,8 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 | SK-004 | Create "Scrape Product Catalog" skill | S | Complete | Prompt: Use pagination to get all items, extract consistent fields, handle rate limiting. Created skills/prompts/scrape-catalog.md |
 | SK-005 | Create "Discover APIs" skill | S | Complete | Prompt: Browse site, identify API endpoints, test access, document patterns. Created skills/prompts/discover-apis.md |
 | SK-006 | Create "Compare Information Sources" skill | S | Complete | Prompt: Multi-site research, cross-reference facts, identify discrepancies. Created skills/prompts/compare-sources.md |
-| SK-007 | Create "Extract Government Forms" skill | S | In Progress | Prompt: Navigate gov sites, extract requirements, fees, timelines, documents |
-| SK-008 | Create "Track Competitor Sites" skill | S | In Progress | Prompt: Monitor multiple competitor sites, extract key metrics, detect changes |
+| SK-007 | Create "Extract Government Forms" skill | S | Complete | Prompt: Navigate gov sites, extract requirements, fees, timelines, documents. Created skills/prompts/extract-government-forms.md |
+| SK-008 | Create "Track Competitor Sites" skill | S | Complete | Prompt: Monitor multiple competitor sites, extract key metrics, detect changes. Created skills/prompts/track-competitors.md |
 | SK-009 | Test skills with real users | M | Not Started | Get feedback from 5-10 users. Iterate on prompts based on usage patterns |
 | SK-010 | Submit to Claude skills directory | S | Not Started | Package and submit approved skills. Include examples and documentation |
 | SK-011 | Create skill usage analytics | M | Not Started | Track which skills are most used, success rates, common modifications |

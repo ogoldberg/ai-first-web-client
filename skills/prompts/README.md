@@ -11,6 +11,8 @@ This directory contains Claude skill prompts that guide AI assistants in using U
 | Scrape Catalog | [scrape-catalog.md](scrape-catalog.md) | Extract product catalogs with pagination |
 | Discover APIs | [discover-apis.md](discover-apis.md) | Find and document website APIs |
 | Compare Sources | [compare-sources.md](compare-sources.md) | Cross-reference facts across multiple sources |
+| Extract Government Forms | [extract-government-forms.md](extract-government-forms.md) | Navigate gov sites, extract requirements, fees, timelines |
+| Track Competitors | [track-competitors.md](track-competitors.md) | Monitor competitor sites, extract metrics, detect changes |
 
 ## How to Use
 
