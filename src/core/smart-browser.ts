@@ -147,6 +147,11 @@ export interface SmartBrowseOptions extends BrowseOptions {
   // Record debug trace for this operation
   // Trace will be stored persistently for later analysis
   recordDebugTrace?: boolean;
+
+  // === Verification (COMP-012) ===
+
+  // Verify browse result automatically
+  verify?: import('../types/verification.js').VerifyOptions;
 }
 
 /**
@@ -179,6 +184,9 @@ export interface SmartBrowseResult extends BrowseResult {
 
   // Decision trace (CX-003)
   decisionTrace?: DecisionTrace;
+
+  // Verification result (COMP-012)
+  verification?: import('../types/verification.js').VerificationResult;
 
   // Learning insights
   learning: {
@@ -267,6 +275,7 @@ export class SmartBrowser {
   private learningEngine: LearningEngine;
   private proceduralMemory: ProceduralMemory;
   private tieredFetcher: TieredFetcher;
+  private verificationEngine: import('../core/verification-engine.js').VerificationEngine;
   private currentTrajectory: BrowsingTrajectory | null = null;
   private semanticInfrastructure: SemanticInfrastructure | null = null;
   private debugRecorder: DebugTraceRecorder;
@@ -282,12 +291,18 @@ export class SmartBrowser {
     this.proceduralMemory = new ProceduralMemory();
     this.tieredFetcher = new TieredFetcher(browserManager, contentExtractor);
     this.debugRecorder = getDebugTraceRecorder();
+
+    // Lazy load VerificationEngine to avoid circular dependencies
+    this.verificationEngine = new (require('../core/verification-engine.js').VerificationEngine)();
   }
 
   async initialize(): Promise<void> {
     await this.learningEngine.initialize();
     await this.proceduralMemory.initialize();
     await this.debugRecorder.initialize();
+
+    // Connect VerificationEngine to ProceduralMemory for learned verifications (COMP-014)
+    this.verificationEngine.setProceduralMemory(this.proceduralMemory);
 
     // Auto-initialize semantic matching if dependencies available (LI-001)
     const semanticResult = await initializeSemanticInfrastructure();
@@ -856,6 +871,35 @@ export class SmartBrowser {
       additionalPages,
     };
 
+    // Run verification if enabled (COMP-012)
+    if (options.verify?.enabled !== false) {
+      const verifyOptions = options.verify || { enabled: true, mode: 'basic' };
+      try {
+        browseResult.verification = await this.verificationEngine.verify(browseResult, verifyOptions);
+
+        logger.smartBrowser.debug('Verification complete', {
+          url,
+          passed: browseResult.verification.passed,
+          confidence: browseResult.verification.confidence,
+          checksRun: browseResult.verification.checks.length,
+        });
+
+        // Learn from verification result (COMP-014)
+        if (browseResult.verification && this.proceduralMemory) {
+          await this.proceduralMemory.learnFromVerification(
+            domain,
+            browseResult.verification,
+            browseResult.content?.markdown?.length > 0 // Consider browse successful if we got content
+          );
+        }
+      } catch (error) {
+        logger.smartBrowser.warn('Verification failed', {
+          url,
+          error: error instanceof Error ? error.message : 'Unknown error',
+        });
+      }
+    }
+
     // Record debug trace if enabled (O-005)
     if (options.recordDebugTrace) {
       await this.recordDebugTraceForResult(
@@ -1078,6 +1122,36 @@ export class SmartBrowser {
         fieldConfidence,
         decisionTrace,
       };
+
+      // Run verification if enabled (COMP-012)
+      if (options.verify?.enabled !== false) {
+        const verifyOptions = options.verify || { enabled: true, mode: 'basic' };
+        try {
+          tieredResult.verification = await this.verificationEngine.verify(tieredResult, verifyOptions);
+
+          logger.smartBrowser.debug('Verification complete (tiered)', {
+            url,
+            tier: result.tier,
+            passed: tieredResult.verification.passed,
+            confidence: tieredResult.verification.confidence,
+          });
+
+          // Learn from verification result (COMP-014)
+          if (tieredResult.verification && this.proceduralMemory) {
+            await this.proceduralMemory.learnFromVerification(
+              domain,
+              tieredResult.verification,
+              tieredResult.content?.markdown?.length > 0 // Consider browse successful if we got content
+            );
+          }
+        } catch (error) {
+          logger.smartBrowser.warn('Verification failed (tiered)', {
+            url,
+            tier: result.tier,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          });
+        }
+      }
 
       // Record debug trace if enabled (O-005)
       if (options.recordDebugTrace) {

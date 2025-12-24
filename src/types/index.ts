@@ -644,6 +644,12 @@ export interface BrowsingSkill {
   updatedAt: number;
   sourceUrl?: string;
   sourceDomain?: string;
+  // Verification checks (COMP-014: learned from successes/failures)
+  verificationChecks?: Array<{
+    check: import('./verification.js').VerificationCheck;
+    confidence: number;
+    learnedFrom: 'success' | 'failure';
+  }>;
 }
 
 /**
