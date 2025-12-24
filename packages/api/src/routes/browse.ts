@@ -222,7 +222,7 @@ browse.post('/browse', requirePermission('browse'), browseValidator, async (c) =
 
         // Record usage for the tier used
         const tenant = c.get('tenant');
-        recordTierUsage(tenant.id, browseResult.tier || 'intelligence');
+        recordTierUsage(tenant.id, browseResult.learning?.renderTier || 'intelligence');
 
         await stream.writeSSE({
           event: 'result',
@@ -271,7 +271,7 @@ browse.post('/browse', requirePermission('browse'), browseValidator, async (c) =
     });
 
     // Record usage for the tier used
-    recordTierUsage(tenant.id, browseResult.tier || 'intelligence');
+    recordTierUsage(tenant.id, browseResult.learning?.renderTier || 'intelligence');
 
     // Report success to proxy health tracker
     if (proxyInfo) {
@@ -452,7 +452,7 @@ browse.post(
             });
 
             // Record usage for the tier used
-            recordTierUsage(tenant.id, browseResult.tier || 'intelligence');
+            recordTierUsage(tenant.id, browseResult.learning?.renderTier || 'intelligence');
 
             return {
               url,
