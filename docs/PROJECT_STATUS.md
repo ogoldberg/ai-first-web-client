@@ -121,7 +121,7 @@ These items are tracked as CX-001 through CX-012 in `docs/BACKLOG.md` and `docs/
 
 ## MCP Tools Available
 
-The LLM Browser exposes **5 core tools** by default (TC-001 through TC-008), designed to minimize cognitive load for LLMs.
+Unbrowser exposes **5 core tools** by default (TC-001 through TC-008), designed to minimize cognitive load for LLMs.
 
 ### Core Tools (Always Visible)
 

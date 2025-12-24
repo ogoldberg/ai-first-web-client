@@ -79,7 +79,7 @@ A **tiered, learning-based browser** that:
 | Firecrawl | ~3s | None | Medium | Low |
 | Puppeteer MCP | ~3s | None | Low | High |
 | Chrome DevTools MCP | ~1s | None | Low | Medium |
-| **LLM Browser** | ~200ms* | Full | High | Medium |
+| **Unbrowser** | ~200ms* | Full | High | Medium |
 
 *For optimized/cached requests
 
