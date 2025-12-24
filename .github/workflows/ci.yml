@@ -25,10 +25,11 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      - name: Install dependencies (skip lifecycle scripts)
+      - name: Remove prepare script (runs build which needs Prisma first)
+        run: npm pkg delete scripts.prepare
+
+      - name: Install dependencies
         run: npm ci
-        env:
-          npm_config_ignore_scripts: true
 
       - name: Generate Prisma Client
         run: npx prisma generate --schema=packages/api/prisma/schema.prisma
@@ -50,10 +51,11 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      - name: Install dependencies (skip lifecycle scripts)
+      - name: Remove prepare script
+        run: npm pkg delete scripts.prepare
+
+      - name: Install dependencies
         run: npm ci
-        env:
-          npm_config_ignore_scripts: true
 
       - name: Generate Prisma Client
         run: npx prisma generate --schema=packages/api/prisma/schema.prisma
@@ -78,10 +80,11 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      - name: Install dependencies (skip lifecycle scripts)
+      - name: Remove prepare script
+        run: npm pkg delete scripts.prepare
+
+      - name: Install dependencies
         run: npm ci
-        env:
-          npm_config_ignore_scripts: true
 
       - name: Generate Prisma Client
         run: npx prisma generate --schema=packages/api/prisma/schema.prisma
@@ -106,10 +109,11 @@ jobs:
           node-version: '20'
           cache: 'npm'
 
-      - name: Install dependencies (skip lifecycle scripts)
+      - name: Remove prepare script
+        run: npm pkg delete scripts.prepare
+
+      - name: Install dependencies
         run: npm ci
-        env:
-          npm_config_ignore_scripts: true
 
       - name: Generate Prisma Client
         run: npx prisma generate --schema=packages/api/prisma/schema.prisma
