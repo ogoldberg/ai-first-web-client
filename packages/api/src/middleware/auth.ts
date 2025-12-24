@@ -20,11 +20,23 @@ declare module 'hono' {
 }
 
 /**
+ * API Key creation data
+ */
+export interface CreateApiKeyData {
+  tenantId: string;
+  keyHash: string;
+  keyPrefix: string;
+  name: string;
+  permissions: string[];
+}
+
+/**
  * API Key Store Interface
  * Allows for different backends (Prisma, in-memory, etc.)
  */
 export interface ApiKeyStore {
   findByHash(keyHash: string): Promise<(ApiKey & { tenant: Tenant }) | null>;
+  create?(data: CreateApiKeyData): Promise<ApiKey>;
   updateLastUsed?(keyId: string): Promise<void>;
   updateTenantLastActive?(tenantId: string): Promise<void>;
 }
@@ -183,11 +195,37 @@ export function requirePermission(permission: string) {
  * Create an in-memory API key store for testing
  */
 export function createInMemoryApiKeyStore(
-  keys: Map<string, ApiKey & { tenant: Tenant }>
+  keys: Map<string, ApiKey & { tenant: Tenant }>,
+  tenantLookup?: (tenantId: string) => Promise<Tenant | null>
 ): ApiKeyStore {
   return {
     async findByHash(keyHash: string) {
       return keys.get(keyHash) || null;
+    },
+    async create(data) {
+      const apiKey: ApiKey = {
+        id: `key_${Date.now().toString(36)}_${crypto.randomUUID().slice(0, 8)}`,
+        keyHash: data.keyHash,
+        keyPrefix: data.keyPrefix,
+        name: data.name,
+        permissions: data.permissions,
+        tenantId: data.tenantId,
+        revokedAt: null,
+        expiresAt: null,
+        lastUsedAt: null,
+        usageCount: 0,
+        createdAt: new Date(),
+      };
+
+      // If tenantLookup is provided, find the tenant and store the full record
+      if (tenantLookup) {
+        const tenant = await tenantLookup(data.tenantId);
+        if (tenant) {
+          keys.set(data.keyHash, { ...apiKey, tenant });
+        }
+      }
+
+      return apiKey;
     },
     async updateLastUsed(_keyId: string) {
       // No-op for in-memory
