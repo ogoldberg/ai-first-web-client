@@ -10,11 +10,11 @@ import { streamSSE } from 'hono/streaming';
 import { validator } from 'hono/validator';
 import { authMiddleware, requirePermission } from '../middleware/auth.js';
 import { rateLimitMiddleware } from '../middleware/rate-limit.js';
+import { getBrowserClient } from '../services/browser.js';
 
 interface BrowseRequest {
   url: string;
   options?: {
-    contentType?: 'markdown' | 'text' | 'html';
     waitForSelector?: string;
     scrollToLoad?: boolean;
     maxChars?: number;
@@ -32,6 +32,11 @@ interface BatchRequest {
   urls: string[];
   options?: BrowseRequest['options'];
   session?: BrowseRequest['session'];
+}
+
+interface FormatOptions {
+  maxChars?: number;
+  includeTables?: boolean;
 }
 
 const browse = new Hono();
@@ -78,13 +83,76 @@ const browseValidator = validator('json', (value, c) => {
 });
 
 /**
+ * Truncate content to max characters
+ */
+function truncateContent(content: string, maxChars: number): string {
+  if (content.length <= maxChars) return content;
+
+  let truncated = content.substring(0, maxChars);
+  const lastSpace = truncated.lastIndexOf(' ');
+  const lastNewline = truncated.lastIndexOf('\n');
+  const breakPoint = Math.max(lastSpace, lastNewline);
+
+  if (breakPoint > maxChars * 0.8) {
+    truncated = truncated.substring(0, breakPoint);
+  }
+
+  return truncated + '\n\n[Content truncated]';
+}
+
+/**
+ * Convert SmartBrowseResult to API response format
+ */
+function formatBrowseResult(result: any, startTime: number, options: FormatOptions = {}) {
+  let markdown = result.content?.markdown || '';
+  let text = result.content?.text || '';
+
+  // Apply maxChars truncation
+  if (options.maxChars) {
+    markdown = truncateContent(markdown, options.maxChars);
+    text = truncateContent(text, options.maxChars);
+  }
+
+  const response: Record<string, any> = {
+    url: result.url,
+    finalUrl: result.finalUrl || result.url,
+    title: result.title || '',
+    content: {
+      markdown,
+      text,
+    },
+    metadata: {
+      loadTime: Date.now() - startTime,
+      tier: result.tier || 'unknown',
+      tiersAttempted: result.tiersAttempted || [],
+      learningApplied: result.learning?.patternsApplied || false,
+      confidence: result.fieldConfidence?.aggregated?.score,
+    },
+    links: result.links,
+    apis: result.discoveredApis,
+  };
+
+  // Include tables if requested (default: true)
+  if (options.includeTables !== false && result.tables) {
+    response.tables = result.tables;
+  }
+
+  return response;
+}
+
+/**
  * POST /v1/browse
  * Browse a URL with intelligent rendering
  */
 browse.post('/browse', requirePermission('browse'), browseValidator, async (c) => {
   const body = c.req.valid('json') as BrowseRequest;
-  const tenant = c.get('tenant');
   const acceptHeader = c.req.header('Accept') || '';
+
+  // Format options (applied after browse)
+  const formatOptions: FormatOptions = {
+    maxChars: body.options?.maxChars,
+    includeTables: body.options?.includeTables,
+  };
 
   // Check if client wants SSE streaming
   if (acceptHeader.includes('text/event-stream')) {
@@ -103,36 +171,26 @@ browse.post('/browse', requirePermission('browse'), browseValidator, async (c) =
       });
 
       try {
-        // TODO: Integrate with actual SmartBrowser
-        // For now, return a placeholder response
+        const client = await getBrowserClient();
+
         await stream.writeSSE({
           event: 'progress',
           data: JSON.stringify({
             stage: 'rendering',
-            tier: 'intelligence',
             elapsed: Date.now() - startTime,
           }),
         });
 
-        // Simulate browse operation
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        const browseResult = await client.browse(body.url, {
+          waitForSelector: body.options?.waitForSelector,
+          scrollToLoad: body.options?.scrollToLoad,
+          maxLatencyMs: body.options?.maxLatencyMs,
+          maxCostTier: body.options?.maxCostTier,
+        });
 
         const result = {
           success: true,
-          data: {
-            url: body.url,
-            finalUrl: body.url,
-            title: 'Page Title',
-            content: {
-              markdown: '# Placeholder\n\nBrowse integration pending.',
-              text: 'Placeholder - Browse integration pending.',
-            },
-            metadata: {
-              loadTime: Date.now() - startTime,
-              tier: 'intelligence',
-              tiersAttempted: ['intelligence'],
-            },
-          },
+          data: formatBrowseResult(browseResult, startTime, formatOptions),
         };
 
         await stream.writeSSE({
@@ -158,27 +216,19 @@ browse.post('/browse', requirePermission('browse'), browseValidator, async (c) =
   const startTime = Date.now();
 
   try {
-    // TODO: Integrate with actual SmartBrowser
-    // This is a placeholder that will be replaced with real browsing logic
-    const result = {
-      success: true,
-      data: {
-        url: body.url,
-        finalUrl: body.url,
-        title: 'Page Title',
-        content: {
-          markdown: '# Placeholder\n\nBrowse integration pending.',
-          text: 'Placeholder - Browse integration pending.',
-        },
-        metadata: {
-          loadTime: Date.now() - startTime,
-          tier: 'intelligence',
-          tiersAttempted: ['intelligence'],
-        },
-      },
-    };
+    const client = await getBrowserClient();
 
-    return c.json(result);
+    const browseResult = await client.browse(body.url, {
+      waitForSelector: body.options?.waitForSelector,
+      scrollToLoad: body.options?.scrollToLoad,
+      maxLatencyMs: body.options?.maxLatencyMs,
+      maxCostTier: body.options?.maxCostTier,
+    });
+
+    return c.json({
+      success: true,
+      data: formatBrowseResult(browseResult, startTime, formatOptions),
+    });
   } catch (error) {
     return c.json(
       {
@@ -201,27 +251,47 @@ browse.post('/fetch', requirePermission('browse'), browseValidator, async (c) =>
   const body = c.req.valid('json') as BrowseRequest;
   const startTime = Date.now();
 
+  // Format options (applied after fetch)
+  const formatOptions: FormatOptions = {
+    maxChars: body.options?.maxChars,
+    includeTables: body.options?.includeTables,
+  };
+
   try {
-    // TODO: Integrate with TieredFetcher
-    const result = {
+    const client = await getBrowserClient();
+
+    // Use tiered fetcher for fast fetch
+    const fetchResult = await client.fetch(body.url, {
+      maxLatencyMs: body.options?.maxLatencyMs,
+      maxCostTier: body.options?.maxCostTier,
+    });
+
+    let markdown = fetchResult.content?.markdown || '';
+    let text = fetchResult.content?.text || '';
+
+    // Apply maxChars truncation
+    if (formatOptions.maxChars) {
+      markdown = truncateContent(markdown, formatOptions.maxChars);
+      text = truncateContent(text, formatOptions.maxChars);
+    }
+
+    return c.json({
       success: true,
       data: {
         url: body.url,
-        finalUrl: body.url,
-        title: 'Fetched Page',
+        finalUrl: fetchResult.finalUrl || body.url,
+        title: fetchResult.content?.title || '',
         content: {
-          markdown: '# Placeholder\n\nFetch integration pending.',
-          text: 'Placeholder - Fetch integration pending.',
+          markdown,
+          text,
         },
         metadata: {
           loadTime: Date.now() - startTime,
-          tier: 'intelligence',
-          tiersAttempted: ['intelligence'],
+          tier: fetchResult.tier || 'unknown',
+          tiersAttempted: fetchResult.tiersAttempted || [],
         },
       },
-    };
-
-    return c.json(result);
+    });
   } catch (error) {
     return c.json(
       {
@@ -295,33 +365,66 @@ browse.post(
     const urls = body.urls;
     const startTime = Date.now();
 
-    // TODO: Integrate with SmartBrowser batch processing
-    const results = urls.map((url) => ({
-      url,
-      success: true,
-      data: {
-        url,
-        finalUrl: url,
-        title: 'Batched Page',
-        content: {
-          markdown: '# Placeholder\n\nBatch integration pending.',
-          text: 'Placeholder - Batch integration pending.',
-        },
-        metadata: {
-          loadTime: Date.now() - startTime,
-          tier: 'intelligence',
-          tiersAttempted: ['intelligence'],
-        },
-      },
-    }));
+    // Format options (applied after browse)
+    const formatOptions: FormatOptions = {
+      maxChars: body.options?.maxChars,
+      includeTables: body.options?.includeTables,
+    };
 
-    return c.json({
-      success: true,
-      data: {
-        results,
-        totalTime: Date.now() - startTime,
-      },
-    });
+    try {
+      const client = await getBrowserClient();
+
+      // Process URLs in parallel with concurrency limit
+      const results = await Promise.all(
+        urls.map(async (url) => {
+          const urlStartTime = Date.now();
+          try {
+            const browseResult = await client.browse(url, {
+              waitForSelector: body.options?.waitForSelector,
+              scrollToLoad: body.options?.scrollToLoad,
+              maxLatencyMs: body.options?.maxLatencyMs,
+              maxCostTier: body.options?.maxCostTier,
+            });
+
+            return {
+              url,
+              success: true,
+              data: formatBrowseResult(browseResult, urlStartTime, formatOptions),
+            };
+          } catch (error) {
+            return {
+              url,
+              success: false,
+              error: {
+                code: 'BROWSE_ERROR',
+                message: error instanceof Error ? error.message : 'Unknown error',
+              },
+            };
+          }
+        })
+      );
+
+      return c.json({
+        success: true,
+        data: {
+          results,
+          totalTime: Date.now() - startTime,
+          successCount: results.filter((r) => r.success).length,
+          failureCount: results.filter((r) => !r.success).length,
+        },
+      });
+    } catch (error) {
+      return c.json(
+        {
+          success: false,
+          error: {
+            code: 'BATCH_ERROR',
+            message: error instanceof Error ? error.message : 'Unknown error',
+          },
+        },
+        500
+      );
+    }
   }
 );
 
@@ -369,23 +472,29 @@ browse.get('/usage', async (c) => {
 browse.get('/domains/:domain/intelligence', async (c) => {
   const domain = c.req.param('domain');
 
-  // TODO: Query actual patterns from database
-  // For now, return placeholder
-  return c.json({
-    success: true,
-    data: {
-      domain,
-      knownPatterns: 0,
-      selectorChains: 0,
-      validators: 0,
-      paginationPatterns: 0,
-      recentFailures: 0,
-      successRate: 0,
-      domainGroup: null,
-      recommendedWaitStrategy: 'networkidle',
-      shouldUseSession: false,
-    },
-  });
+  try {
+    const client = await getBrowserClient();
+    const intelligence = await client.getDomainIntelligence(domain);
+
+    return c.json({
+      success: true,
+      data: {
+        domain,
+        ...intelligence,
+      },
+    });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: 'INTELLIGENCE_ERROR',
+          message: error instanceof Error ? error.message : 'Unknown error',
+        },
+      },
+      500
+    );
+  }
 });
 
 export { browse };
