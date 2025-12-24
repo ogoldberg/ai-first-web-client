@@ -33,6 +33,65 @@ function isValidPlan(plan: string): plan is Plan {
 }
 
 /**
+ * Validate email format
+ */
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function isValidEmail(email: string): boolean {
+  return EMAIL_PATTERN.test(email);
+}
+
+/**
+ * Create validation error response for email
+ */
+function emailValidationError(c: any) {
+  return c.json(
+    {
+      success: false,
+      error: { code: 'INVALID_REQUEST', message: 'Invalid email format' },
+    },
+    400
+  );
+}
+
+/**
+ * Create validation error response for plan
+ */
+function planValidationError(c: any) {
+  return c.json(
+    {
+      success: false,
+      error: {
+        code: 'INVALID_REQUEST',
+        message: 'Invalid plan. Must be FREE, STARTER, TEAM, or ENTERPRISE',
+      },
+    },
+    400
+  );
+}
+
+/**
+ * Create store not configured error response
+ */
+function storeNotConfiguredError(c: any) {
+  return c.json(
+    {
+      success: false,
+      error: { code: 'STORE_ERROR', message: 'Tenant store not configured' },
+    },
+    500
+  );
+}
+
+/**
+ * Get tenant store with type guard
+ */
+function requireTenantStore(c: any): ReturnType<typeof getTenantStore> | null {
+  const store = getTenantStore();
+  return store;
+}
+
+/**
  * POST /v1/admin/tenants
  * Create a new tenant with an initial API key
  */
@@ -62,29 +121,13 @@ tenants.post(
     }
 
     // Validate email format
-    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailPattern.test(body.email)) {
-      return c.json(
-        {
-          success: false,
-          error: { code: 'INVALID_REQUEST', message: 'Invalid email format' },
-        },
-        400
-      );
+    if (!isValidEmail(body.email)) {
+      return emailValidationError(c);
     }
 
     // Validate plan if provided
     if (body.plan && !isValidPlan(body.plan)) {
-      return c.json(
-        {
-          success: false,
-          error: {
-            code: 'INVALID_REQUEST',
-            message: 'Invalid plan. Must be FREE, STARTER, TEAM, or ENTERPRISE',
-          },
-        },
-        400
-      );
+      return planValidationError(c);
     }
 
     return body;
@@ -163,13 +206,27 @@ tenants.get('/', async (c) => {
     );
   }
 
-  const limit = parseInt(c.req.query('limit') || '20', 10);
-  const offset = parseInt(c.req.query('offset') || '0', 10);
+  const limitParam = c.req.query('limit') || '20';
+  const offsetParam = c.req.query('offset') || '0';
   const plan = c.req.query('plan') as Plan | undefined;
+
+  const limit = parseInt(limitParam, 10);
+  const offset = parseInt(offsetParam, 10);
+
+  // Validate that limit and offset are non-negative numbers
+  if (Number.isNaN(limit) || Number.isNaN(offset) || limit < 0 || offset < 0) {
+    return c.json(
+      {
+        success: false,
+        error: { code: 'INVALID_REQUEST', message: 'limit and offset must be non-negative numbers' },
+      },
+      400
+    );
+  }
 
   const options: ListTenantsOptions = {
     limit: Math.min(limit, 100), // Cap at 100
-    offset: Math.max(offset, 0),
+    offset,
     plan: plan && isValidPlan(plan) ? plan : undefined,
   };
 
@@ -261,31 +318,13 @@ tenants.patch(
     const body = value as UpdateTenantInput;
 
     // Validate email format if provided
-    if (body.email) {
-      const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailPattern.test(body.email)) {
-        return c.json(
-          {
-            success: false,
-            error: { code: 'INVALID_REQUEST', message: 'Invalid email format' },
-          },
-          400
-        );
-      }
+    if (body.email && !isValidEmail(body.email)) {
+      return emailValidationError(c);
     }
 
     // Validate plan if provided
     if (body.plan && !isValidPlan(body.plan)) {
-      return c.json(
-        {
-          success: false,
-          error: {
-            code: 'INVALID_REQUEST',
-            message: 'Invalid plan. Must be FREE, STARTER, TEAM, or ENTERPRISE',
-          },
-        },
-        400
-      );
+      return planValidationError(c);
     }
 
     // Validate dailyLimit if provided

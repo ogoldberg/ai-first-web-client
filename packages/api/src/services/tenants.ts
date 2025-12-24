@@ -5,8 +5,9 @@
  * Uses a pluggable store interface for different backends.
  */
 
+import { randomUUID } from 'crypto';
 import type { Tenant, Plan } from '../middleware/types.js';
-import { generateApiKey, hashApiKey } from '../middleware/auth.js';
+import { generateApiKey, getApiKeyStore } from '../middleware/auth.js';
 
 /**
  * Tenant Store Interface
@@ -71,10 +72,10 @@ export function getTenantStore(): TenantStore | null {
 }
 
 /**
- * Generate a unique tenant ID
+ * Generate a unique tenant ID using crypto.randomUUID
  */
 function generateTenantId(): string {
-  return `tenant_${Date.now().toString(36)}_${Math.random().toString(36).substr(2, 9)}`;
+  return `tenant_${randomUUID()}`;
 }
 
 /**
@@ -212,8 +213,22 @@ export async function createTenantWithApiKey(
     throw new Error('Tenant store not configured');
   }
 
+  const apiKeyStore = getApiKeyStore();
+  if (!apiKeyStore?.create) {
+    throw new Error('API key store not configured or does not support creation');
+  }
+
   const tenant = await tenantStore.create(data);
-  const { key, keyPrefix } = generateApiKey('live');
+  const { key, keyHash, keyPrefix } = generateApiKey('live');
+
+  // Persist the API key to the store
+  await apiKeyStore.create({
+    tenantId: tenant.id,
+    keyHash,
+    keyPrefix,
+    name: apiKeyName,
+    permissions: ['browse', 'batch'],
+  });
 
   return {
     tenant,

@@ -88,7 +88,10 @@ describe('Tenant Management Routes', () => {
     const keys = new Map<string, ApiKey & { tenant: Tenant }>();
     keys.set(adminKeyHash, { ...adminApiKey, tenant: adminTenant });
     keys.set(userKeyHash, { ...userApiKey, tenant: adminTenant });
-    setApiKeyStore(createInMemoryApiKeyStore(keys));
+
+    // Provide tenant lookup for API key creation
+    const tenantLookup = async (tenantId: string) => tenantStore.findById(tenantId);
+    setApiKeyStore(createInMemoryApiKeyStore(keys, tenantLookup));
 
     app = new Hono();
     app.route('/v1/admin/tenants', tenants);
@@ -244,6 +247,32 @@ describe('Tenant Management Routes', () => {
       const body = await res.json();
       expect(body.error.message).toContain('plan');
     });
+
+    it('should create a functional API key', async () => {
+      // Create a new tenant
+      const createRes = await app.request('/v1/admin/tenants', {
+        method: 'POST',
+        headers: { ...adminAuthHeader, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: 'New Company',
+          email: 'new@company.com',
+        }),
+      });
+
+      expect(createRes.status).toBe(201);
+      const createBody = await createRes.json();
+      const newApiKey = createBody.data.apiKey.key;
+      const newTenantId = createBody.data.tenant.id;
+
+      // Verify the new key works by fetching the tenant
+      const verifyRes = await app.request(`/v1/admin/tenants/${newTenantId}`, {
+        headers: { Authorization: `Bearer ${newApiKey}` },
+      });
+
+      // The key should work but may not have admin permission (browse, batch only)
+      // So we expect 403 (no admin permission) rather than 401 (invalid key)
+      expect(verifyRes.status).toBe(403);
+    });
   });
 
   describe('GET /v1/admin/tenants', () => {
@@ -286,6 +315,27 @@ describe('Tenant Management Routes', () => {
       const body = await res.json();
       expect(body.data.tenants).toHaveLength(1);
       expect(body.data.tenants[0].plan).toBe('STARTER');
+    });
+
+    it('should reject invalid limit parameter', async () => {
+      const res = await app.request('/v1/admin/tenants?limit=abc', {
+        headers: adminAuthHeader,
+      });
+
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(body.error.code).toBe('INVALID_REQUEST');
+      expect(body.error.message).toContain('non-negative');
+    });
+
+    it('should reject negative offset parameter', async () => {
+      const res = await app.request('/v1/admin/tenants?offset=-5', {
+        headers: adminAuthHeader,
+      });
+
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(body.error.code).toBe('INVALID_REQUEST');
     });
   });
 
