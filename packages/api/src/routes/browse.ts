@@ -40,6 +40,11 @@ interface BrowseRequest {
       requireFresh?: boolean;
       stickySessionId?: string;
     };
+    // Verification options (COMP-015)
+    verify?: {
+      enabled?: boolean; // default: true for basic mode
+      mode?: 'basic' | 'standard' | 'thorough'; // default: 'basic'
+    };
   };
   session?: {
     cookies?: Array<{ name: string; value: string; domain?: string; path?: string }>;
@@ -164,6 +169,17 @@ function formatBrowseResult(
     response.tables = result.tables;
   }
 
+  // Include verification result if present (COMP-015)
+  if (result.verification) {
+    response.verification = {
+      passed: result.verification.passed,
+      confidence: result.verification.confidence,
+      checksRun: result.verification.checks?.length || 0,
+      errors: result.verification.errors,
+      warnings: result.verification.warnings,
+    };
+  }
+
   return response;
 }
 
@@ -255,6 +271,7 @@ browse.post('/browse', requirePermission('browse'), browseValidator, async (c) =
           scrollToLoad: body.options?.scrollToLoad,
           maxLatencyMs: body.options?.maxLatencyMs,
           maxCostTier: body.options?.maxCostTier,
+          verify: body.options?.verify,
         });
 
         const result = {
@@ -308,8 +325,12 @@ browse.post('/browse', requirePermission('browse'), browseValidator, async (c) =
       scrollToLoad: body.options?.scrollToLoad,
       maxLatencyMs: body.options?.maxLatencyMs,
       maxCostTier: body.options?.maxCostTier,
+<<<<<<< HEAD
       // TODO: Pass proxy config to browser client when implemented
       // proxy: proxyInfo?.proxy.getPlaywrightProxy(),
+=======
+      verify: body.options?.verify,
+>>>>>>> 988b20a (feat(COMP-015): Add verification options to API and SDK)
     });
 
     // Record usage for the tier used
@@ -491,6 +512,7 @@ browse.post(
               scrollToLoad: body.options?.scrollToLoad,
               maxLatencyMs: body.options?.maxLatencyMs,
               maxCostTier: body.options?.maxCostTier,
+              verify: body.options?.verify,
             });
 
             // Record usage for the tier used
