@@ -9,8 +9,9 @@ import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { validator } from 'hono/validator';
 import { authMiddleware, requirePermission } from '../middleware/auth.js';
-import { rateLimitMiddleware } from '../middleware/rate-limit.js';
+import { rateLimitMiddleware, recordTierUsage } from '../middleware/rate-limit.js';
 import { getBrowserClient } from '../services/browser.js';
+import { getUsageStats, exportUsage, getTodayUnits, type Tier } from '../services/usage.js';
 
 interface BrowseRequest {
   url: string;
@@ -193,6 +194,10 @@ browse.post('/browse', requirePermission('browse'), browseValidator, async (c) =
           data: formatBrowseResult(browseResult, startTime, formatOptions),
         };
 
+        // Record usage for the tier used
+        const tenant = c.get('tenant');
+        recordTierUsage(tenant.id, browseResult.tier || 'intelligence');
+
         await stream.writeSSE({
           event: 'result',
           data: JSON.stringify(result),
@@ -224,6 +229,10 @@ browse.post('/browse', requirePermission('browse'), browseValidator, async (c) =
       maxLatencyMs: body.options?.maxLatencyMs,
       maxCostTier: body.options?.maxCostTier,
     });
+
+    // Record usage for the tier used
+    const tenant = c.get('tenant');
+    recordTierUsage(tenant.id, browseResult.tier || 'intelligence');
 
     return c.json({
       success: true,
@@ -274,6 +283,10 @@ browse.post('/fetch', requirePermission('browse'), browseValidator, async (c) =>
       markdown = truncateContent(markdown, formatOptions.maxChars);
       text = truncateContent(text, formatOptions.maxChars);
     }
+
+    // Record usage for the tier used
+    const tenant = c.get('tenant');
+    recordTierUsage(tenant.id, fetchResult.tier || 'intelligence');
 
     return c.json({
       success: true,
@@ -364,6 +377,7 @@ browse.post(
     const body = c.req.valid('json') as BatchRequest;
     const urls = body.urls;
     const startTime = Date.now();
+    const tenant = c.get('tenant');
 
     // Format options (applied after browse)
     const formatOptions: FormatOptions = {
@@ -385,6 +399,9 @@ browse.post(
               maxLatencyMs: body.options?.maxLatencyMs,
               maxCostTier: body.options?.maxCostTier,
             });
+
+            // Record usage for the tier used
+            recordTierUsage(tenant.id, browseResult.tier || 'intelligence');
 
             return {
               url,
@@ -440,8 +457,17 @@ browse.get('/usage', async (c) => {
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
 
-  // TODO: Query actual usage from database
-  // For now, return placeholder
+  // Get today's usage stats
+  const todayStats = getUsageStats(tenant.id);
+  const currentUnits = getTodayUnits(tenant.id);
+
+  // Get monthly usage (export for the month range)
+  const monthlyUsage = exportUsage(
+    tenant.id,
+    startOfMonth.toISOString().split('T')[0],
+    endOfMonth.toISOString().split('T')[0]
+  );
+
   return c.json({
     success: true,
     data: {
@@ -449,17 +475,19 @@ browse.get('/usage', async (c) => {
         start: startOfMonth.toISOString(),
         end: endOfMonth.toISOString(),
       },
-      requests: {
-        total: 0,
-        byTier: {
-          intelligence: 0,
-          lightweight: 0,
-          playwright: 0,
-        },
+      today: {
+        requests: todayStats.requests,
+        units: todayStats.units,
+        byTier: todayStats.byTier,
+      },
+      month: {
+        requests: monthlyUsage.totals.requests,
+        units: monthlyUsage.totals.units,
+        byTier: monthlyUsage.byTier,
       },
       limits: {
         daily: tenant.dailyLimit,
-        remaining: tenant.dailyLimit,
+        remaining: Math.max(0, tenant.dailyLimit - currentUnits),
       },
     },
   });
