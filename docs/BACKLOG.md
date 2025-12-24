@@ -310,9 +310,9 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 |----|------|--------|--------|-------|
 | API-001 | Design REST API endpoints | M | Complete | POST /browse, POST /api-call, GET /patterns, etc. Map to SDK methods. OpenAPI spec. Created docs/api/openapi.yaml and docs/api/API_DESIGN.md |
 | API-002 | Implement API authentication | M | Complete | API key auth with SHA-256 hashing, permission middleware, in-memory store for testing. packages/api with Hono server, 39 tests |
-| API-003 | Add per-tenant rate limiting | M | Complete | In-memory rate limiter with plan-based limits. Different limits per tier (FREE, STARTER, TEAM, ENTERPRISE). Rate limit headers. |
-| API-004 | Implement usage metering for billing | L | Complete | Track requests by tier (intelligence=1, lightweight=5, playwright=25). Usage service with exportUsage(). 14 tests. PR #131 |
-| API-005 | Create tenant management endpoints | M | In Progress | POST /tenants, GET /tenants/:id, PATCH /tenants/:id. Admin API for managing customers |
+| API-003 | Add per-tenant rate limiting | M | Complete | In-memory rate limiter with plan-based limits (FREE=100/day, STARTER=1000, TEAM=10000, ENTERPRISE=100000) |
+| API-004 | Implement usage metering for billing | L | In Progress | Track requests by tier (intelligence=1, lightweight=5, playwright=25). Export to billing system |
+| API-005 | Create tenant management endpoints | M | Not Started | POST /tenants, GET /tenants/:id, PATCH /tenants/:id. Admin API for managing customers |
 | API-006 | Add API request/response logging | M | Not Started | Structured logging for debugging. Redact sensitive data. Queryable for support |
 | API-007 | Implement billing integration | L | Not Started | Stripe integration. Usage-based billing. Handle webhooks for subscription changes |
 | API-008 | Create admin dashboard | L | Not Started | Web UI for monitoring usage, managing tenants, viewing errors. Analytics charts |
@@ -325,6 +325,18 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 | API-015 | Security audit | M | Not Started | Penetration testing, OWASP top 10 review, dependency scanning |
 | API-016 | Create pricing calculator | M | Not Started | Help users estimate costs based on usage patterns. Interactive tool on website |
 | API-017 | Beta program launch | M | Not Started | Private beta with 10-20 users. Gather feedback, fix critical issues |
+
+### Cloud Operations (New)
+
+| ID | Task | Effort | Status | Notes |
+|----|------|--------|--------|-------|
+| CLOUD-001 | Wire SmartBrowser to browse endpoints | M | Complete | Connect API routes to SmartBrowser. JSON/SSE responses. packages/api/src/services/browser.ts |
+| CLOUD-002 | Add usage tracking service | M | In Progress | Track per-tenant requests, tier usage, costs. Foundation for billing |
+| CLOUD-003 | Implement proxy management for IP blocking | L | Complete | ProxyManager, ProxyHealthTracker, DomainRiskClassifier, ProxySelector. 4 tiers: datacenter, ISP, residential, premium. Plan-based access, health tracking, smart routing. 125 tests. See docs/PROXY_MANAGEMENT_PLAN.md |
+| CLOUD-004 | Add Supabase/Postgres persistence | L | Not Started | Replace in-memory stores with database. Tenant, API key, usage persistence |
+| CLOUD-005 | Implement Redis caching layer | M | Not Started | Session cache, rate limit state, pattern cache across instances |
+| CLOUD-006 | Add external proxy integration | M | Not Started | Connect Bright Data, datacenter pools. Proxy URL rotation within pools |
+| CLOUD-007 | Implement usage billing export | M | Not Started | Export usage data to Stripe. Metered billing integration |
 
 **Benefits:**
 - Primary monetization path
