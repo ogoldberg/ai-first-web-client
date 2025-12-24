@@ -220,10 +220,13 @@ PROXY_DATACENTER_URLS=http://user:pass@dc1.proxy.com:8080,http://user:pass@dc2.p
 # ISP proxies (mid-tier, better reputation)
 PROXY_ISP_URLS=http://user:pass@isp1.proxy.com:8080
 
-# Bright Data residential proxies (best for high-protection sites)
+# Bright Data proxies (best for high-protection sites)
 BRIGHTDATA_AUTH=customer_id:password
-BRIGHTDATA_ZONE=residential
-BRIGHTDATA_COUNTRY=us  # Optional geo-targeting
+BRIGHTDATA_ZONE=residential              # residential, unblocker, isp, datacenter
+BRIGHTDATA_COUNTRY=us                    # Optional single country
+BRIGHTDATA_COUNTRIES=us,uk,de            # Optional multi-country rotation
+BRIGHTDATA_SESSION_ROTATION=true         # Enable IP rotation per request (default: true)
+BRIGHTDATA_PORT=22225                    # Custom port (default: 22225)
 
 # Health tracking settings
 PROXY_HEALTH_WINDOW=100        # Requests to track per proxy
