@@ -474,9 +474,8 @@ export class DomainRiskClassifier {
 
     // Get historical data
     const historical = this.historicalData.get(domain);
-    const historicalBlockRate = historical
-      ? historical.failures / (historical.successes + historical.failures)
-      : 0;
+    const totalHistorical = historical ? historical.successes + historical.failures : 0;
+    const historicalBlockRate = totalHistorical > 0 ? historical!.failures / totalHistorical : 0;
 
     // Get detected protections
     const detectedProtections = this.detectedProtections.get(domain) || [];
@@ -489,7 +488,7 @@ export class DomainRiskClassifier {
     let confidence = staticRisk ? 0.8 : 0.3;
 
     // Adjust based on historical data
-    if (historical && historical.successes + historical.failures >= 10) {
+    if (totalHistorical >= 10) {
       const historicalRisk = getRiskLevelFromBlockRate(historicalBlockRate);
       // Weighted combination
       riskLevel = this.combineRiskLevels(riskLevel, historicalRisk, this.config.historicalWeight);

@@ -321,16 +321,30 @@ export class ProxyManager {
   // ============================================================================
 
   private loadConfigFromEnv(override?: ProxyConfig): ProxyConfig {
+    // Parse integer with validation (returns default if invalid)
+    const safeParseInt = (value: string | undefined, defaultVal: number): number => {
+      if (!value) return defaultVal;
+      const parsed = parseInt(value, 10);
+      return !isNaN(parsed) && parsed > 0 ? parsed : defaultVal;
+    };
+
+    // Parse float with validation (returns default if invalid)
+    const safeParseFloat = (value: string | undefined, defaultVal: number): number => {
+      if (!value) return defaultVal;
+      const parsed = parseFloat(value);
+      return !isNaN(parsed) && parsed >= 0 && parsed <= 1 ? parsed : defaultVal;
+    };
+
     return {
       datacenterUrls: override?.datacenterUrls || process.env.PROXY_DATACENTER_URLS,
       ispUrls: override?.ispUrls || process.env.PROXY_ISP_URLS,
       brightdataAuth: override?.brightdataAuth || process.env.BRIGHTDATA_AUTH,
       brightdataZone: override?.brightdataZone || process.env.BRIGHTDATA_ZONE || 'residential',
       brightdataCountry: override?.brightdataCountry || process.env.BRIGHTDATA_COUNTRY,
-      healthWindow: override?.healthWindow || parseInt(process.env.PROXY_HEALTH_WINDOW || '100'),
-      cooldownMinutes: override?.cooldownMinutes || parseInt(process.env.PROXY_COOLDOWN_MINUTES || '60'),
-      blockThreshold: override?.blockThreshold || parseFloat(process.env.PROXY_BLOCK_THRESHOLD || '0.3'),
-      riskCacheMinutes: override?.riskCacheMinutes || parseInt(process.env.DOMAIN_RISK_CACHE_MINUTES || '60'),
+      healthWindow: override?.healthWindow || safeParseInt(process.env.PROXY_HEALTH_WINDOW, 100),
+      cooldownMinutes: override?.cooldownMinutes || safeParseInt(process.env.PROXY_COOLDOWN_MINUTES, 60),
+      blockThreshold: override?.blockThreshold || safeParseFloat(process.env.PROXY_BLOCK_THRESHOLD, 0.3),
+      riskCacheMinutes: override?.riskCacheMinutes || safeParseInt(process.env.DOMAIN_RISK_CACHE_MINUTES, 60),
       enableRiskLearning: override?.enableRiskLearning ?? process.env.DOMAIN_RISK_LEARNING !== 'false',
     };
   }

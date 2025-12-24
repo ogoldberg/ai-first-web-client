@@ -247,10 +247,12 @@ browse.post('/browse', requirePermission('browse'), browseValidator, async (c) =
   const startTime = Date.now();
   const tenant = c.get('tenant');
 
+  // Parse URL once for reuse
+  const domain = new URL(body.url).hostname;
+
   // Select proxy if available
   let proxyInfo: Awaited<ReturnType<typeof selectProxyForRequest>> = null;
   try {
-    const domain = new URL(body.url).hostname;
     proxyInfo = await selectProxyForRequest(domain, tenant.id, tenant.plan, body.options?.proxy);
   } catch {
     // Continue without proxy if selection fails
@@ -274,7 +276,7 @@ browse.post('/browse', requirePermission('browse'), browseValidator, async (c) =
     // Report success to proxy health tracker
     if (proxyInfo) {
       const latencyMs = Date.now() - startTime;
-      reportProxySuccess(proxyInfo.proxy.id, new URL(body.url).hostname, latencyMs);
+      reportProxySuccess(proxyInfo.proxy.id, domain, latencyMs);
     }
 
     return c.json({
@@ -285,7 +287,7 @@ browse.post('/browse', requirePermission('browse'), browseValidator, async (c) =
     // Report failure to proxy health tracker
     if (proxyInfo) {
       const failureReason = detectFailureReason(error instanceof Error ? error : undefined);
-      reportProxyFailure(proxyInfo.proxy.id, new URL(body.url).hostname, failureReason);
+      reportProxyFailure(proxyInfo.proxy.id, domain, failureReason);
     }
 
     return c.json(
