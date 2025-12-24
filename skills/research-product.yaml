@@ -1,0 +1,173 @@
+# Skill: Research Product Information
+# ID: research_product
+# Version: 1.0.0
+
+name: Research Product Information
+id: research_product
+version: 1.0.0
+description: Research product information across multiple sources, extracting pricing, features, and reviews
+
+# Skill metadata for directory listing
+metadata:
+  author: Unbrowser
+  category: research
+  tags:
+    - product
+    - pricing
+    - comparison
+    - shopping
+  difficulty: beginner
+
+# What this skill accomplishes
+objective: |
+  Given a product name, model number, or URL, gather comprehensive product
+  information from multiple retail sources and present a unified comparison
+  with pricing, features, availability, and reviews.
+
+# Input parameters
+inputs:
+  - name: product
+    type: text
+    required: true
+    description: Product name, model number, or direct product URL
+    examples:
+      - "iPhone 15 Pro 256GB"
+      - "https://amazon.com/dp/B0..."
+      - "Sony WH-1000XM5"
+
+  - name: sources
+    type: list
+    required: false
+    description: Specific retailer sites to check
+    default: auto-discover
+    examples:
+      - ["amazon.com", "bestbuy.com", "walmart.com"]
+      - ["newegg.com", "bhphotovideo.com"]
+
+  - name: fields
+    type: list
+    required: false
+    description: Specific data fields to extract
+    default:
+      - price
+      - features
+      - reviews
+      - availability
+    examples:
+      - ["price", "shipping", "warranty"]
+
+# Workflow steps
+workflow:
+  - step: 1
+    name: Initial Product Browse
+    description: Browse the product page or search for the product
+    tool: smart_browse
+    parameters:
+      url: "{{ if product starts with 'http' }}{{ product }}{{ else }}search for {{ product }}{{ endif }}"
+      contentType: main_content
+      includeTables: true
+    extract:
+      - product_name
+      - price
+      - features
+      - availability
+      - image_url
+
+  - step: 2
+    name: Multi-Source Price Check
+    description: Check prices across multiple retailers
+    condition: "sources provided OR auto-discover enabled"
+    tool: batch_browse
+    parameters:
+      urls: "{{ retailer_search_urls }}"
+      options:
+        contentType: main_content
+        maxChars: 5000
+    extract:
+      - price_per_source
+      - shipping_per_source
+      - availability_per_source
+
+  - step: 3
+    name: Review Aggregation
+    description: Gather review data from sources
+    tool: smart_browse
+    parameters:
+      url: "{{ product_url }}"
+      contentType: main_content
+    extract:
+      - average_rating
+      - review_count
+      - review_summary
+
+  - step: 4
+    name: API Discovery (Optional)
+    description: Check for price/availability APIs
+    condition: "API discovery enabled"
+    tool: smart_browse
+    parameters:
+      url: "{{ domain }}"
+      includeNetwork: true
+    purpose: Identify faster API-based price checking
+
+# Expected output structure
+output:
+  format: json
+  schema:
+    product:
+      name: string
+      model: string
+      category: string
+      image: url
+    pricing:
+      type: array
+      items:
+        source: string
+        url: url
+        price: string
+        currency: string
+        inStock: boolean
+        shipping: string
+        lastChecked: datetime
+    features:
+      type: array
+      items: string
+    reviews:
+      averageRating: number
+      totalReviews: number
+      summary: string
+    recommendations: string
+
+# Error handling strategies
+error_handling:
+  product_not_found:
+    action: suggest_alternatives
+    message: "Product not found. Try alternative search terms or check the URL."
+
+  price_unavailable:
+    action: note_contact
+    message: "Price not listed. Contact retailer for quote."
+
+  site_blocked:
+    action: use_session
+    message: "Site requires login. Use session_management for authenticated access."
+
+  rate_limited:
+    action: partial_results
+    message: "Rate limited. Returning partial results."
+
+# Example invocations
+examples:
+  - input:
+      product: "MacBook Pro 14 M3"
+    expected_output: |
+      Searches multiple retailers for MacBook Pro 14 M3,
+      returns comparison table with prices from Apple, Amazon,
+      Best Buy, B&H Photo, including shipping and availability.
+
+  - input:
+      product: "https://amazon.com/dp/B0EXAMPLE"
+      sources: ["amazon.com", "walmart.com"]
+    expected_output: |
+      Direct comparison between Amazon and Walmart for the
+      specific product, with detailed pricing and stock status.

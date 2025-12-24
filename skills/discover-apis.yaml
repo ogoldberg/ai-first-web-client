@@ -1,0 +1,232 @@
+# Skill: Discover APIs
+# ID: discover_apis
+# Version: 1.0.0
+
+name: Discover APIs
+id: discover_apis
+version: 1.0.0
+description: Explore a website to discover, document, and test available APIs
+
+# Skill metadata for directory listing
+metadata:
+  author: Unbrowser
+  category: discovery
+  tags:
+    - api
+    - documentation
+    - endpoints
+    - integration
+  difficulty: intermediate
+
+# What this skill accomplishes
+objective: |
+  Explore a website to discover all available API endpoints, understand
+  their authentication requirements, test accessibility, and produce
+  comprehensive documentation for integration.
+
+# Input parameters
+inputs:
+  - name: domain
+    type: url
+    required: true
+    description: Website domain to explore for APIs
+    examples:
+      - "https://example.com"
+      - "https://api.service.com"
+
+  - name: focusAreas
+    type: list
+    required: false
+    description: Specific functionality areas to focus on
+    examples:
+      - ["search", "products", "users"]
+      - ["authentication", "data"]
+
+  - name: testApis
+    type: boolean
+    required: false
+    description: Whether to test discovered API endpoints
+    default: true
+
+  - name: includeGraphQL
+    type: boolean
+    required: false
+    description: Check for GraphQL endpoints
+    default: true
+
+# Workflow steps
+workflow:
+  - step: 1
+    name: Initial Network Analysis
+    description: Browse site and capture network requests
+    tool: smart_browse
+    parameters:
+      url: "{{ domain }}"
+      includeNetwork: true
+      scrollToLoad: true
+    extract:
+      - api_calls
+      - xhr_requests
+      - fetch_requests
+      - websocket_connections
+
+  - step: 2
+    name: Documentation Discovery
+    description: Check for API documentation
+    tool: batch_browse
+    parameters:
+      urls:
+        - "{{ domain }}/docs"
+        - "{{ domain }}/api"
+        - "{{ domain }}/developers"
+        - "{{ domain }}/swagger"
+        - "{{ domain }}/openapi.json"
+        - "{{ domain }}/api-docs"
+        - "{{ domain }}/.well-known/openapi"
+      options:
+        maxChars: 20000
+    extract:
+      - documentation_urls
+      - openapi_spec
+      - api_reference
+
+  - step: 3
+    name: GraphQL Discovery
+    description: Check for GraphQL endpoints
+    condition: "includeGraphQL is true"
+    tool: smart_browse
+    parameters:
+      url: "{{ domain }}/graphql"
+      includeNetwork: true
+    analyze:
+      - introspection_available
+      - schema_structure
+      - available_queries
+
+  - step: 4
+    name: Pattern Analysis
+    description: Analyze discovered endpoints
+    logic:
+      - group_by_path: Organize by URL pattern
+      - identify_rest: Detect RESTful patterns
+      - detect_versioning: API version detection
+      - map_resources: Resource/entity mapping
+
+  - step: 5
+    name: API Testing
+    description: Test discovered public endpoints
+    condition: "testApis is true"
+    tool: execute_api_call
+    parameters:
+      endpoint: "{{ discovered_endpoint }}"
+      method: GET
+    for_each: discovered_public_endpoints
+    extract:
+      - response_format
+      - status_code
+      - rate_limit_headers
+      - error_format
+
+  - step: 6
+    name: Auth Detection
+    description: Identify authentication requirements
+    tool: api_auth
+    parameters:
+      domain: "{{ domain }}"
+    analyze:
+      - auth_type
+      - oauth_endpoints
+      - api_key_location
+      - token_format
+
+# Expected output structure
+output:
+  format: json
+  schema:
+    domain: string
+    apis:
+      public:
+        type: array
+        items:
+          endpoint: string
+          method: string
+          description: string
+          parameters: array
+          responseFormat: string
+          rateLimit: string
+          tested: boolean
+          working: boolean
+      authenticated:
+        type: array
+        items:
+          endpoint: string
+          method: string
+          authType: string
+          description: string
+      graphql:
+        endpoint: string
+        schemaAvailable: boolean
+        introspectionEnabled: boolean
+        types: array
+    documentation:
+      available: boolean
+      url: url
+      format: string
+    authentication:
+      type: string
+      oauthEndpoints: object
+      apiKeyLocation: string
+    recommendations: array
+
+# Error handling strategies
+error_handling:
+  no_apis_found:
+    action: suggest_alternatives
+    message: "No APIs detected. Site may be fully server-rendered. Recommend content extraction instead."
+
+  auth_required:
+    action: document_auth
+    message: "APIs require authentication. Documenting auth flow for setup."
+
+  rate_limited:
+    action: partial_results
+    message: "Rate limited during testing. Partial results available."
+
+  introspection_disabled:
+    action: note_limitation
+    message: "GraphQL introspection disabled. Schema discovery limited."
+
+  cors_blocked:
+    action: document_cors
+    message: "CORS policy blocks browser access. APIs may work from server-side."
+
+# Example invocations
+examples:
+  - input:
+      domain: "https://api.github.com"
+    expected_output: |
+      {
+        "domain": "api.github.com",
+        "apis": {
+          "public": [
+            {"endpoint": "/users/{username}", "method": "GET", "working": true},
+            {"endpoint": "/repos/{owner}/{repo}", "method": "GET", "working": true}
+          ],
+          "authenticated": [
+            {"endpoint": "/user", "authType": "Bearer token"}
+          ]
+        },
+        "documentation": {
+          "available": true,
+          "url": "https://docs.github.com/en/rest",
+          "format": "OpenAPI"
+        }
+      }
+
+  - input:
+      domain: "https://example.com"
+      focusAreas: ["products", "search"]
+      testApis: true
+    expected_output: |
+      Focused discovery on product and search APIs,
+      with live testing of discovered endpoints.

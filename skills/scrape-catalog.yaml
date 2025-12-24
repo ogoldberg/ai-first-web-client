@@ -1,0 +1,223 @@
+# Skill: Scrape Product Catalog
+# ID: scrape_catalog
+# Version: 1.0.0
+
+name: Scrape Product Catalog
+id: scrape_catalog
+version: 1.0.0
+description: Extract all items from a product catalog with pagination handling
+
+# Skill metadata for directory listing
+metadata:
+  author: Unbrowser
+  category: extraction
+  tags:
+    - catalog
+    - products
+    - pagination
+    - bulk
+  difficulty: intermediate
+
+# What this skill accomplishes
+objective: |
+  Systematically extract all items from a product catalog or listing page,
+  handling pagination automatically, respecting rate limits, and producing
+  consistent structured data for each item.
+
+# Input parameters
+inputs:
+  - name: catalogUrl
+    type: url
+    required: true
+    description: Starting URL of the catalog or listing page
+    examples:
+      - "https://store.com/products"
+      - "https://example.com/category/electronics"
+
+  - name: fields
+    type: list
+    required: false
+    description: Fields to extract for each product
+    default:
+      - name
+      - price
+      - url
+      - image
+    examples:
+      - ["name", "price", "sku", "description", "stock"]
+
+  - name: maxItems
+    type: number
+    required: false
+    description: Maximum number of items to extract
+    default: 100
+    examples:
+      - 50
+      - 500
+      - 1000
+
+  - name: maxPages
+    type: number
+    required: false
+    description: Maximum pages to process
+    default: 10
+    examples:
+      - 5
+      - 20
+
+  - name: filters
+    type: object
+    required: false
+    description: Filter criteria to apply
+    examples:
+      - category: electronics
+        priceMin: 100
+        priceMax: 500
+      - inStock: true
+
+# Workflow steps
+workflow:
+  - step: 1
+    name: Catalog Analysis
+    description: Analyze catalog structure and pagination
+    tool: smart_browse
+    parameters:
+      url: "{{ catalogUrl }}"
+      contentType: table
+      includeTables: true
+    analyze:
+      - pagination_pattern
+      - total_items
+      - item_selectors
+      - page_structure
+
+  - step: 2
+    name: API Discovery
+    description: Check for catalog API (often faster)
+    tool: smart_browse
+    parameters:
+      url: "{{ catalogUrl }}"
+      includeNetwork: true
+    purpose: |
+      Many catalogs have underlying APIs that provide
+      structured data more reliably than HTML scraping.
+    extract:
+      - api_endpoints
+      - api_parameters
+
+  - step: 3
+    name: API-Based Extraction
+    description: Use discovered API if available
+    condition: "API discovered"
+    tool: execute_api_call
+    parameters:
+      endpoint: "{{ discovered_api }}"
+      method: GET
+      params:
+        page: "{{ page_number }}"
+        limit: 100
+    loop: until all items or maxItems reached
+
+  - step: 4
+    name: HTML-Based Extraction
+    description: Fall back to paginated HTML scraping
+    condition: "no API available"
+    tool: smart_browse
+    parameters:
+      url: "{{ catalogUrl }}"
+      followPagination: true
+      maxPages: "{{ maxPages }}"
+      contentType: table
+    extract:
+      - items_per_page
+      - pagination_links
+
+  - step: 5
+    name: Data Normalization
+    description: Clean and standardize extracted data
+    logic:
+      - deduplicate: Remove duplicate items by URL or ID
+      - normalize_prices: Convert to consistent currency format
+      - validate_required: Ensure required fields present
+      - handle_missing: Mark or skip items with missing data
+
+# Expected output structure
+output:
+  format: json
+  schema:
+    catalog:
+      source: string
+      url: url
+      totalItems: number
+      extractedItems: number
+      extractedAt: datetime
+    items:
+      type: array
+      items:
+        id: string
+        name: string
+        price: string
+        url: url
+        image: url
+        category: string
+        inStock: boolean
+        customFields: object
+    pagination:
+      totalPages: number
+      pagesProcessed: number
+      hasMore: boolean
+    apiDiscovered:
+      available: boolean
+      endpoint: string
+      recommendation: string
+
+# Error handling strategies
+error_handling:
+  blocked:
+    action: suggest_auth
+    message: "Site blocking requests. Consider using session_management for authenticated access."
+
+  rate_limited:
+    action: respect_backoff
+    message: "Rate limited by site. Waiting before retry. Partial results available."
+
+  structure_varies:
+    action: flexible_extraction
+    message: "Product structure varies. Using flexible extraction, flagging inconsistencies."
+
+  missing_pagination:
+    action: single_page
+    message: "No pagination detected. Extracting from single page only."
+
+  partial_failure:
+    action: continue_extraction
+    message: "Some pages failed. Continuing with successful extractions."
+
+# Example invocations
+examples:
+  - input:
+      catalogUrl: "https://store.com/products"
+      maxItems: 50
+    expected_output: |
+      {
+        "catalog": {
+          "source": "store.com",
+          "totalItems": 500,
+          "extractedItems": 50
+        },
+        "items": [
+          {"name": "Product 1", "price": "$29.99", "url": "..."},
+          ...
+        ],
+        "pagination": {"pagesProcessed": 2, "hasMore": true}
+      }
+
+  - input:
+      catalogUrl: "https://example.com/electronics"
+      fields: ["name", "price", "sku", "description"]
+      filters:
+        priceMin: 100
+    expected_output: |
+      Filtered catalog of electronics over $100,
+      with extended field extraction including SKU
+      and description.
