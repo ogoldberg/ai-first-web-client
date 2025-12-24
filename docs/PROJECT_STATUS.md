@@ -360,7 +360,7 @@ All 10 phases complete:
 | Priority | Initiative | Status |
 |----------|-----------|--------|
 | P1 | Design skill templates | Complete |
-| P1 | Create 5 core skills (Research, Monitor, Scrape, Discover, Compare) | In Progress |
+| P1 | Create 5 core skills (Research, Monitor, Scrape, Discover, Compare) | Complete |
 | P2 | Test with users and submit to directory | Not Started |
 
 **Benefits:** Simplest entry point, drives MCP adoption
