@@ -275,7 +275,7 @@ export class SmartBrowser {
   private learningEngine: LearningEngine;
   private proceduralMemory: ProceduralMemory;
   private tieredFetcher: TieredFetcher;
-  private verificationEngine: import('../core/verification-engine.js').VerificationEngine;
+  private verificationEngine: import('./verification-engine.js').VerificationEngine | null = null;
   private currentTrajectory: BrowsingTrajectory | null = null;
   private semanticInfrastructure: SemanticInfrastructure | null = null;
   private debugRecorder: DebugTraceRecorder;
@@ -291,15 +291,17 @@ export class SmartBrowser {
     this.proceduralMemory = new ProceduralMemory();
     this.tieredFetcher = new TieredFetcher(browserManager, contentExtractor);
     this.debugRecorder = getDebugTraceRecorder();
-
-    // Lazy load VerificationEngine to avoid circular dependencies
-    this.verificationEngine = new (require('../core/verification-engine.js').VerificationEngine)();
+    // verificationEngine is loaded lazily in initialize() to avoid circular dependencies
   }
 
   async initialize(): Promise<void> {
     await this.learningEngine.initialize();
     await this.proceduralMemory.initialize();
     await this.debugRecorder.initialize();
+
+    // Lazy load VerificationEngine to avoid circular dependencies
+    const { VerificationEngine } = await import('./verification-engine.js');
+    this.verificationEngine = new VerificationEngine();
 
     // Connect VerificationEngine to ProceduralMemory for learned verifications (COMP-014)
     this.verificationEngine.setProceduralMemory(this.proceduralMemory);
@@ -872,7 +874,7 @@ export class SmartBrowser {
     };
 
     // Run verification if enabled (COMP-012)
-    if (options.verify?.enabled !== false) {
+    if (options.verify?.enabled !== false && this.verificationEngine) {
       const verifyOptions = options.verify || { enabled: true, mode: 'basic' };
       try {
         browseResult.verification = await this.verificationEngine.verify(browseResult, verifyOptions);
@@ -1124,7 +1126,7 @@ export class SmartBrowser {
       };
 
       // Run verification if enabled (COMP-012)
-      if (options.verify?.enabled !== false) {
+      if (options.verify?.enabled !== false && this.verificationEngine) {
         const verifyOptions = options.verify || { enabled: true, mode: 'basic' };
         try {
           tieredResult.verification = await this.verificationEngine.verify(tieredResult, verifyOptions);
