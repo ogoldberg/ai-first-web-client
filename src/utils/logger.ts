@@ -264,6 +264,7 @@ export const logger = {
   tieredFetcher: new Logger('TieredFetcher'),
   smartBrowser: new Logger('SmartBrowser'),
   verificationEngine: new Logger('VerificationEngine'),
+  workflowRecorder: new Logger('WorkflowRecorder'),
 
   // Learning components
   learning: new Logger('LearningEngine'),
