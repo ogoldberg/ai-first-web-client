@@ -118,34 +118,37 @@ describe('Health Routes', () => {
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body.status).toBe('healthy');
-      expect(body.checks.core).toBe('healthy');
+      expect(body.checks.core).toBeDefined();
+      expect(body.checks.core.status).toBe('healthy');
       expect(body.version).toBeDefined();
       expect(body.uptime).toBeGreaterThanOrEqual(0);
       expect(body.responseTime).toBeGreaterThanOrEqual(0);
     });
 
-    it('should return degraded status when checks fail', async () => {
+    it('should return unhealthy status when checks fail', async () => {
       setHealthCheck(async () => false);
 
       const res = await app.request('/health');
 
-      expect(res.status).toBe(200);
+      // Now returns 503 when unhealthy
+      expect(res.status).toBe(503);
       const body = await res.json();
-      expect(body.status).toBe('degraded');
-      expect(body.checks.core).toBe('unhealthy');
+      expect(body.status).toBe('unhealthy');
+      expect(body.checks.core.status).toBe('unhealthy');
     });
 
-    it('should return degraded status when checks throw', async () => {
+    it('should return unhealthy status when checks throw', async () => {
       setHealthCheck(async () => {
         throw new Error('Connection refused');
       });
 
       const res = await app.request('/health');
 
-      expect(res.status).toBe(200);
+      // Now returns 503 when unhealthy
+      expect(res.status).toBe(503);
       const body = await res.json();
-      expect(body.status).toBe('degraded');
-      expect(body.checks.core).toBe('unhealthy');
+      expect(body.status).toBe('unhealthy');
+      expect(body.checks.core.status).toBe('unhealthy');
     });
   });
 
