@@ -16,7 +16,8 @@
     "@hono/node-server": "^1.11.0",
     "@prisma/client": "^6.19.1",
     "hono": "^4.4.0",
-    "llm-browser": "file:../../"
+    "llm-browser": "file:../../",
+    "stripe": "^20.1.0"
   },
   "optionalDependencies": {
     "ioredis": "^5.4.1"
