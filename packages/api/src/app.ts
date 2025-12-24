@@ -15,6 +15,7 @@ import { browse } from './routes/browse.js';
 import { admin } from './routes/admin.js';
 import workflows from './routes/workflows.js';
 import { billing } from './routes/billing.js';
+import { docs } from './routes/docs.js';
 import { requestLoggerMiddleware } from './middleware/request-logger.js';
 
 // Create the main Hono app
@@ -38,6 +39,7 @@ app.use(
 
 // Mount routes
 app.route('/health', health);
+app.route('/docs', docs); // API-011: Interactive API documentation
 app.route('/v1', browse);
 app.route('/v1/admin', admin);
 app.route('/v1/workflows', workflows); // COMP-009: Workflow recording
@@ -48,8 +50,11 @@ app.get('/', (c) => {
   return c.json({
     name: 'Unbrowser API',
     version: '0.1.0',
-    docs: 'https://unbrowser.ai/docs',
+    docs: '/docs',
     endpoints: {
+      docs: '/docs',
+      openapi: '/docs/openapi.json',
+      gettingStarted: '/docs/getting-started',
       health: '/health',
       browse: '/v1/browse',
       batch: '/v1/batch',
