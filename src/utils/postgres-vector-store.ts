@@ -29,6 +29,23 @@ export interface PostgresVectorStoreOptions {
 export type EntityType = 'pattern' | 'skill' | 'content' | 'error';
 
 /**
+ * Valid entity types set for runtime validation
+ */
+const VALID_ENTITY_TYPES: Set<string> = new Set(['pattern', 'skill', 'content', 'error']);
+
+/**
+ * Validate and parse entity type from database value
+ * Falls back to 'pattern' for unknown values to ensure type safety
+ */
+function parseEntityType(value: string): EntityType {
+  if (VALID_ENTITY_TYPES.has(value)) {
+    return value as EntityType;
+  }
+  log.warn('Unknown entity type in database, defaulting to pattern', { value });
+  return 'pattern';
+}
+
+/**
  * Embedding record to store
  */
 export interface EmbeddingRecord {
@@ -360,7 +377,7 @@ export class PostgresVectorStore {
           id: row.id,
           score,
           metadata: {
-            entityType: row.entityType as EntityType,
+            entityType: parseEntityType(row.entityType),
             domain: row.domain || undefined,
             tenantId: row.tenantId || undefined,
             model: row.model,
@@ -417,7 +434,7 @@ export class PostgresVectorStore {
       model: row.model,
       version: row.version,
       createdAt: row.createdAt.getTime(),
-      entityType: row.entityType as EntityType,
+      entityType: parseEntityType(row.entityType),
       domain: row.domain || undefined,
       tenantId: row.tenantId || undefined,
       text: row.text || undefined,
