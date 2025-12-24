@@ -280,17 +280,21 @@ export class VerificationEngine {
 
   /**
    * Verify state assertions
-   * Note: This requires SmartBrowser instance, will be enhanced in integration phase
+   *
+   * STUB: State verification is not yet implemented.
+   * This requires a secondary browse operation via SmartBrowser.
+   * Will be enhanced in TieredFetcher integration phase (see COMP-013).
+   * Currently returns true (pass-through) - state checks are skipped.
    */
   private async verifyState(
     result: SmartBrowseResult,
     assertion: VerificationAssertion
   ): Promise<boolean> {
-    // State verification requires secondary browse - will be wired in TieredFetcher integration
-    // For now, return true (pass-through)
-    logger.verificationEngine.debug('State verification not yet implemented', {
+    // TODO(COMP-013): Implement state verification with secondary browse
+    logger.verificationEngine.warn('State verification STUB: returning true without verification', {
       checkUrl: assertion.checkUrl,
       checkApi: assertion.checkApi,
+      note: 'State verification not yet implemented - will be added in COMP-013',
     });
     return true;
   }

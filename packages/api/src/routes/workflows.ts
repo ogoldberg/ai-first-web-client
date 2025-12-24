@@ -20,6 +20,7 @@ import { authMiddleware, requirePermission } from '../middleware/auth.js';
 import { rateLimitMiddleware } from '../middleware/rate-limit.js';
 import { ProceduralMemory } from '../../../src/core/procedural-memory.js';
 import { getWorkflowRecorder } from './browse.js';
+import { getBrowserClient } from '../services/browser.js';
 
 const workflows = new Hono();
 
@@ -251,12 +252,13 @@ workflows.post('/:id/replay', requirePermission('browse'), replayWorkflowValidat
   const body = c.req.valid('json');
 
   try {
-    // Note: SmartBrowser instance would be injected in production
-    // For now, this will fail with proper error message
+    // Get SmartBrowser client for workflow replay
+    const browserClient = await getBrowserClient();
+
     const result = await proceduralMemory.replayWorkflow(
       workflowId,
       body.variables,
-      undefined // SmartBrowser instance needed
+      browserClient
     );
 
     return c.json({

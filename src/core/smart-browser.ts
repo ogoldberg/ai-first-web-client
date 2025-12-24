@@ -2903,7 +2903,7 @@ export class SmartBrowser {
     const failureRate = failurePatterns.recentFailureRate;
 
     // Determine recommended tier
-    const needsFullBrowser = options.followPagination || options.waitForSelector || skills.length > 0;
+    const needsFullBrowser = !!(options.followPagination || options.waitForSelector || skills.length > 0);
     let recommendedTier: RenderTier;
 
     if (options.forceTier) {
