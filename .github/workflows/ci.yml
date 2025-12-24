@@ -26,7 +26,9 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies (skip lifecycle scripts)
-        run: npm config set ignore-scripts true && npm ci
+        run: npm ci
+        env:
+          npm_config_ignore_scripts: true
 
       - name: Generate Prisma Client
         run: npx prisma generate --schema=packages/api/prisma/schema.prisma
@@ -49,7 +51,9 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies (skip lifecycle scripts)
-        run: npm config set ignore-scripts true && npm ci
+        run: npm ci
+        env:
+          npm_config_ignore_scripts: true
 
       - name: Generate Prisma Client
         run: npx prisma generate --schema=packages/api/prisma/schema.prisma
@@ -75,7 +79,9 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies (skip lifecycle scripts)
-        run: npm config set ignore-scripts true && npm ci
+        run: npm ci
+        env:
+          npm_config_ignore_scripts: true
 
       - name: Generate Prisma Client
         run: npx prisma generate --schema=packages/api/prisma/schema.prisma
@@ -101,7 +107,9 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies (skip lifecycle scripts)
-        run: npm config set ignore-scripts true && npm ci
+        run: npm ci
+        env:
+          npm_config_ignore_scripts: true
 
       - name: Generate Prisma Client
         run: npx prisma generate --schema=packages/api/prisma/schema.prisma
