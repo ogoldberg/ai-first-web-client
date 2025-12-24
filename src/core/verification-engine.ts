@@ -23,6 +23,9 @@ import type { SmartBrowseResult } from './smart-browser.js';
 import type { ProceduralMemory } from './procedural-memory.js';
 import { logger } from '../utils/logger.js';
 
+// Minimum confidence threshold for learned verifications
+const MIN_LEARNED_VERIFICATION_CONFIDENCE = 0.7;
+
 export class VerificationEngine {
   private proceduralMemory?: ProceduralMemory;
 
@@ -48,7 +51,7 @@ export class VerificationEngine {
       ...this.getBuiltInChecks(options.mode),
 
       // 2. Learned checks from ProceduralMemory (COMP-014)
-      ...(this.proceduralMemory && domain ? this.proceduralMemory.getLearnedVerifications(domain, 0.7) : []),
+      ...(this.proceduralMemory && domain ? this.proceduralMemory.getLearnedVerifications(domain, MIN_LEARNED_VERIFICATION_CONFIDENCE) : []),
 
       // 3. User-specified checks
       ...(options.checks || []),
