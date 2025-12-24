@@ -18,6 +18,9 @@
     "hono": "^4.4.0",
     "llm-browser": "file:../../"
   },
+  "optionalDependencies": {
+    "ioredis": "^5.4.1"
+  },
   "devDependencies": {
     "@types/node": "^22.0.0",
     "prisma": "^6.19.1",
