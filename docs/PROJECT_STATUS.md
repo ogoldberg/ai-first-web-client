@@ -1,10 +1,10 @@
 # LLM Browser MCP Server - Project Status
 
-**Last Updated:** 2025-12-22
+**Last Updated:** 2025-12-24
 **Version:** 0.5.0
 **Current Phase:** Production Readiness (Phase 2)
-**Total Code:** ~16,000 lines TypeScript
-**Tests:** 2161 passing + 44 live tests
+**Total Code:** ~20,000 lines TypeScript
+**Tests:** 2286 passing + 44 live tests
 
 ---
 
@@ -372,9 +372,11 @@ All 10 phases complete:
 |----------|-----------|--------|
 | P1 | Design endpoints, auth, rate limiting (API-001) | Complete |
 | P1 | Implement API authentication (API-002) | Complete |
+| P1 | Add per-tenant rate limiting (API-003) | Complete |
 | P1 | Wire SmartBrowser to browse endpoints (CLOUD-001) | Complete |
-| P1 | Implement usage metering (API-004) | Complete |
-| P1 | Create tenant management endpoints (API-005) | In Progress |
+| P1 | Add proxy management for IP blocking (CLOUD-003) | Complete |
+| P1 | Implement usage metering and billing (CLOUD-002) | In Progress |
+| P2 | Add Supabase/Postgres persistence (CLOUD-004) | Not Started |
 | P2 | Production infrastructure and monitoring | Not Started |
 | P2 | Beta program launch | Not Started |
 
@@ -814,6 +816,21 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for ful
 ---
 
 ## Changelog
+
+### v0.5.0 (2025-12-24)
+
+- Added CLOUD-003: Proxy management for IP blocking prevention
+  - ProxyManager: Central orchestrator for proxy selection and health tracking
+  - ProxyHealthTracker: Per-proxy, per-domain success/failure tracking with cooldowns
+  - DomainRiskClassifier: Static rules + learning for 30+ high-risk domains (Google, Amazon, social media, etc.)
+  - ProxySelector: Smart tier-based selection with fallback escalation
+  - 4 proxy tiers: datacenter ($), ISP ($$), residential ($$$), premium ($$$$)
+  - Plan-based tier access (FREE=datacenter, STARTER+=ISP, TEAM+=residential, ENTERPRISE=all)
+  - Sticky sessions for consistent browsing
+  - New API endpoints: GET /v1/proxy/stats, GET /v1/proxy/risk/:domain
+  - Environment configuration: PROXY_DATACENTER_URLS, PROXY_ISP_URLS, BRIGHTDATA_AUTH
+  - 125 new tests across 4 test files
+  - See docs/PROXY_MANAGEMENT_PLAN.md for full architecture
 
 ### v0.5.0 (2025-12-22)
 
