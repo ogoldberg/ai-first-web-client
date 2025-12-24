@@ -335,7 +335,7 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 | CLOUD-001 | Wire SmartBrowser to browse endpoints | M | Complete | Connect API routes to SmartBrowser. JSON/SSE responses. packages/api/src/services/browser.ts |
 | CLOUD-002 | Add usage tracking service | M | Complete | Track per-tenant requests, tier usage, costs. Foundation for billing. Implemented in packages/api/src/services/usage.ts |
 | CLOUD-003 | Implement proxy management for IP blocking | L | Complete | ProxyManager, ProxyHealthTracker, DomainRiskClassifier, ProxySelector. 4 tiers: datacenter, ISP, residential, premium. Plan-based access, health tracking, smart routing. 125 tests. See docs/PROXY_MANAGEMENT_PLAN.md |
-| CLOUD-004 | Add Supabase/Postgres persistence | L | Not Started | Replace in-memory stores with database. Tenant, API key, usage persistence |
+| CLOUD-004 | Add Supabase/Postgres persistence | L | In Progress | Replace in-memory stores with database. Tenant, API key, usage persistence |
 | CLOUD-005 | Implement Redis caching layer | M | Not Started | Session cache, rate limit state, pattern cache across instances |
 | CLOUD-006 | Add external proxy integration | M | Not Started | Connect Bright Data, datacenter pools. Proxy URL rotation within pools |
 | CLOUD-007 | Implement usage billing export | M | Not Started | Export usage data to Stripe. Metered billing integration |
