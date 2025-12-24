@@ -292,7 +292,7 @@ export async function createUnifiedStore(): Promise<UnifiedStore> {
 
   if (backend === 'postgres') {
     // Use Postgres backends
-    const prisma = getPrismaClient();
+    const prisma = await getPrismaClient();
     if (!prisma) {
       throw new Error('Failed to get Prisma client for Postgres backend');
     }

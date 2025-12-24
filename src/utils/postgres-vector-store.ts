@@ -24,6 +24,28 @@ export interface PostgresVectorStoreOptions {
 }
 
 /**
+ * Entity types that can be stored
+ */
+export type EntityType = 'pattern' | 'skill' | 'content' | 'error';
+
+/**
+ * Valid entity types set for runtime validation
+ */
+const VALID_ENTITY_TYPES: Set<string> = new Set(['pattern', 'skill', 'content', 'error']);
+
+/**
+ * Validate and parse entity type from database value
+ * Falls back to 'pattern' for unknown values to ensure type safety
+ */
+function parseEntityType(value: string): EntityType {
+  if (VALID_ENTITY_TYPES.has(value)) {
+    return value as EntityType;
+  }
+  log.warn('Unknown entity type in database, defaulting to pattern', { value });
+  return 'pattern';
+}
+
+/**
  * Embedding record to store
  */
 export interface EmbeddingRecord {
@@ -31,7 +53,8 @@ export interface EmbeddingRecord {
   vector: number[] | Float32Array;
   model: string;
   version: number;
-  entityType: string;
+  createdAt: number;
+  entityType: EntityType;
   domain?: string;
   tenantId?: string;
   text?: string;
@@ -41,7 +64,7 @@ export interface EmbeddingRecord {
  * Filter for vector searches
  */
 export interface VectorSearchFilter {
-  entityType?: string;
+  entityType?: EntityType;
   domain?: string;
   tenantId?: string;
   minVersion?: number;
@@ -63,7 +86,7 @@ export interface VectorSearchResult {
   id: string;
   score: number;
   metadata: {
-    entityType: string;
+    entityType: EntityType;
     domain?: string;
     tenantId?: string;
     model: string;
@@ -79,7 +102,7 @@ export interface VectorSearchResult {
  */
 export interface VectorStoreStats {
   totalRecords: number;
-  recordsByType: Record<string, number>;
+  recordsByType: Record<EntityType, number>;
   tableExists: boolean;
   dimensions: number;
   lastModified?: number;
@@ -354,7 +377,7 @@ export class PostgresVectorStore {
           id: row.id,
           score,
           metadata: {
-            entityType: row.entityType,
+            entityType: parseEntityType(row.entityType),
             domain: row.domain || undefined,
             tenantId: row.tenantId || undefined,
             model: row.model,
@@ -410,7 +433,8 @@ export class PostgresVectorStore {
       vector: JSON.parse(row.vector),
       model: row.model,
       version: row.version,
-      entityType: row.entityType,
+      createdAt: row.createdAt.getTime(),
+      entityType: parseEntityType(row.entityType),
       domain: row.domain || undefined,
       tenantId: row.tenantId || undefined,
       text: row.text || undefined,
