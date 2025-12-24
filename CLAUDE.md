@@ -4,7 +4,16 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is an **LLM Browser MCP Server** - an intelligent browser designed specifically for LLM interactions, not humans. Unlike traditional web scraping tools that just extract content, this learns from browsing patterns, discovers API endpoints automatically, and progressively optimizes to bypass browser rendering entirely.
+**Unbrowser** is an intelligent web browsing API for AI agents. It learns from browsing patterns, discovers API endpoints automatically, and progressively optimizes to bypass browser rendering entirely.
+
+### Current Focus: Cloud API Launch
+
+We're building a cloud-hosted API at `api.unbrowser.ai`. The SDK and MCP packages become thin HTTP clients while all intelligence runs in the cloud.
+
+**Three access methods:**
+1. **REST API** - Direct HTTP calls at `api.unbrowser.ai`
+2. **SDK** - `@unbrowser/core` npm package
+3. **MCP** - `@unbrowser/mcp` for Claude Desktop
 
 ### Core Philosophy: "Browser Minimizer"
 
@@ -13,6 +22,7 @@ The goal is to **progressively eliminate the need for rendering**:
 - **First visit**: Use Content Intelligence (fastest) or lightweight rendering
 - **Learning**: Discover APIs, learn patterns, build procedural skills
 - **Future visits**: Direct API calls or cached patterns = 10x faster
+- **Collective intelligence**: Patterns learned by all users benefit everyone
 
 ### Key Features
 
@@ -21,23 +31,105 @@ The goal is to **progressively eliminate the need for rendering**:
 3. **Procedural Memory**: Learns and replays browsing skills with versioning and rollback
 4. **API Discovery**: Automatically discovers and caches API patterns
 5. **Session Management**: Persistent authenticated sessions
-6. **Anomaly Detection**: Identifies bot challenges, error pages, rate limiting
+6. **Stealth Mode**: Fingerprint evasion, behavioral delays, bot detection avoidance
+7. **Collective Learning**: Shared pattern pool across tenants
 
-### Design Principles
+## Package Manager and Workspaces
 
-- **Smart Execution, Dumb Orchestration**: Server is smart about HOW, LLM controls WHAT
-- **Tools, Not Agents**: Provides intelligent primitives that LLMs compose
-- **Playwright Optional**: Works without full browser for most sites
+**IMPORTANT**: This project uses **npm workspaces** (NOT pnpm).
+
+- The root `package.json` has `"workspaces": ["packages/*"]`
+- Some packages (like `@unbrowser/mcp`) use `workspace:*` syntax for local dependencies
+- This `workspace:*` syntax is pnpm-compatible but npm also understands it in recent versions
+- If you see errors about `workspace:*`, run `npm install` from the root directory
+- Do NOT create `pnpm-workspace.yaml` - the project uses npm
+
+```bash
+# Correct: Install from root
+npm install
+
+# Correct: Build a specific package
+npm run build -w packages/core
+
+# Wrong: Don't use pnpm
+# pnpm install  # Don't do this
+```
+
+## Architecture
+
+### Cloud API Architecture (Current Focus)
+
+```
++------------------+     +------------------+     +------------------+
+|   Claude/LLM     |     |   SDK Users      |     |   Direct API     |
+|   via MCP        |     |   (Node.js)      |     |   (curl/fetch)   |
++--------+---------+     +--------+---------+     +--------+---------+
+         |                        |                        |
+         v                        v                        v
++------------------------------------------------------------------------+
+|                         @unbrowser/core                                 |
+|                    UnbrowserClient (HTTP)                               |
++------------------------------------------------------------------------+
+                                  |
+                                  v
++------------------------------------------------------------------------+
+|                    Unbrowser Cloud API                                  |
+|                    api.unbrowser.ai                                     |
+|  +---------------+  +---------------+  +---------------+               |
+|  | /v1/browse    |  | /v1/batch     |  | /v1/fetch     |               |
+|  +---------------+  +---------------+  +---------------+               |
+|  +---------------+  +---------------+  +---------------+               |
+|  | Auth (API Key)|  | Rate Limiting |  | Usage Tracking|               |
+|  +---------------+  +---------------+  +---------------+               |
++------------------------------------------------------------------------+
+                                  |
+         +------------------------+------------------------+
+         |                        |                        |
+         v                        v                        v
++----------------+      +------------------+      +------------------+
+| SmartBrowser   |      | LearningEngine   |      | SharedPatterns   |
+| TieredFetcher  |      | ProceduralMemory |      | (Collective AI)  |
++----------------+      +------------------+      +------------------+
+```
+
+### Package Structure
+
+```
+packages/
+  api/           # Cloud API server (Hono + Node.js) - NO Prisma dependency yet
+  core/          # SDK with HTTP client
+  mcp/           # MCP server (thin wrapper around SDK)
+```
+
+**Note on packages/api**: The API package uses an abstracted `ApiKeyStore` interface for database operations. This allows:
+- Running without a database for development/testing (in-memory store)
+- Adding Prisma or other database backends later
+- Easy testing with mock stores
+
+### API Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/v1/browse` | Browse URL, extract content |
+| `POST` | `/v1/batch` | Browse multiple URLs |
+| `POST` | `/v1/fetch` | Fast tiered fetch |
+| `GET` | `/v1/domains/:domain/intelligence` | Domain learning summary |
+| `GET` | `/v1/usage` | Usage stats for billing period |
+| `GET` | `/health` | Health check |
 
 ## Development Commands
 
 ```bash
-# Install dependencies
+# Install dependencies (from root - uses npm workspaces)
 npm install
 npx playwright install chromium  # Optional - works without Playwright
 
-# Build TypeScript
+# Build all packages
 npm run build
+
+# Build specific package
+npm run build -w packages/core
+npm run build -w packages/api
 
 # Run tests
 npm test
@@ -45,176 +137,109 @@ npm test
 # Development (watch mode)
 npm run dev
 
-# Start server
-npm start
+# Start API server (packages/api)
+cd packages/api && npm start
 
-# Manual testing scripts (in scripts/ directory)
-node scripts/dogfood.js browse https://example.com
+# Manual testing
+cd packages/api && npx tsx scripts/test-e2e.ts
 ```
 
-## Architecture
+## Core Components
 
-### The Hybrid Intelligence Layer
+### API Server (packages/api/)
 
-The system uses **confidence scoring** to decide when to bypass rendering:
+- **app.ts** - Hono app with middleware
+- **routes/browse.ts** - Browse, batch, fetch endpoints
+- **routes/health.ts** - Health checks
+- **middleware/auth.ts** - API key authentication (SHA-256 hashing)
+- **middleware/rate-limit.ts** - Per-tenant rate limiting (in-memory)
+- **middleware/types.ts** - Shared types (Tenant, ApiKey, Plan)
 
-```
-High Confidence → Direct API Call (fast, no rendering)
-├─ Simple REST endpoints with predictable patterns
-├─ Standard authentication (cookies, bearer tokens)
-└─ Static request structures
+### SDK HTTP Client (packages/core/)
 
-Medium Confidence → Lightweight JS Execution
-├─ Some client-side logic required
-└─ Try to extract and replay JS functions
+- **http-client.ts** - `UnbrowserClient` class for API access
+- **createUnbrowser()** - Factory function for client creation
 
-Low Confidence → Full Browser Rendering
-├─ Complex JS-generated request signatures
-├─ Anti-bot measures requiring full browser fingerprint
-└─ State-dependent payloads
-```
+```typescript
+import { createUnbrowser } from '@unbrowser/core';
 
-**The JS-Heavy Challenge**: Some sites require rendering to understand request generation logic. The system learns which sites can be bypassed and which require the full browser, optimizing over time.
+const client = createUnbrowser({
+  apiKey: process.env.UNBROWSER_API_KEY,
+});
 
-### Core Components (src/core/)
-
-1. **SmartBrowser** (`smart-browser.ts`)
-   - Main orchestrator for intelligent browsing
-   - Integrates learning, procedural memory, and tiered rendering
-   - Handles anomaly detection and bot challenges
-
-2. **TieredFetcher** (`tiered-fetcher.ts`)
-   - Manages the rendering tier cascade (intelligence -> lightweight -> playwright)
-   - Tracks domain preferences and success rates
-   - Falls back gracefully when tiers fail
-
-3. **ContentIntelligence** (`content-intelligence.ts`)
-   - Fastest tier: extracts data without browser rendering
-   - Framework detection (Next.js, Nuxt, Gatsby, Remix)
-   - Structured data extraction (JSON-LD, OpenGraph)
-   - API prediction and Google Cache fallbacks
-
-4. **LightweightRenderer** (`lightweight-renderer.ts`)
-   - Medium tier: linkedom + Node VM for simple JS execution
-   - Handles pages needing basic JavaScript
-   - Much faster than full browser
-
-5. **ProceduralMemory** (`procedural-memory.ts`)
-   - Learns browsing skills from trajectories
-   - Skill versioning with rollback support
-   - Anti-patterns (what NOT to do)
-   - User feedback integration
-
-6. **LearningEngine** (`learning-engine.ts`)
-   - API pattern discovery and validation
-   - Selector learning with fallback chains
-   - Content change detection
-   - Anomaly detection (bot challenges, errors)
-
-7. **BrowserManager**, **SessionManager**, **KnowledgeBase**, **ApiAnalyzer**
-   - Core infrastructure components
-
-### Directory Structure
-
-```text
-src/
-├── core/           # Core components
-├── tools/          # MCP tool implementations
-├── types/          # TypeScript type definitions
-└── utils/          # Utility functions (cache, retry, rate-limiter)
-
-tests/              # Vitest test suites
-scripts/            # Manual testing tools
-docs/               # Project documentation
+const result = await client.browse('https://example.com');
+console.log(result.content.markdown);
 ```
 
-## MCP Integration
+### Core Intelligence (src/core/)
 
-This server is designed to be used with Claude Desktop. Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+1. **SmartBrowser** - Main orchestrator for intelligent browsing
+2. **TieredFetcher** - Tier cascade (intelligence -> lightweight -> playwright)
+3. **ContentIntelligence** - Framework extraction, structured data, API prediction
+4. **LightweightRenderer** - linkedom + Node VM for simple JS
+5. **ProceduralMemory** - Skill learning with versioning
+6. **LearningEngine** - API pattern discovery, selector learning
 
-```json
-{
-  "mcpServers": {
-    "llm-browser": {
-      "command": "node",
-      "args": ["/absolute/path/to/ai-first-web-client/dist/index.js"]
-    }
-  }
-}
+## Environment Variables
+
+### API Server (Production)
+
+```bash
+DATABASE_URL=postgresql://...@supabase.co:5432/postgres
+NODE_ENV=production
+PORT=3001
 ```
 
-After changes, rebuild (`npm run build`) and restart Claude Desktop.
+### SDK/MCP (Client-side)
+
+```bash
+UNBROWSER_API_KEY=ub_live_xxxxx
+UNBROWSER_API_URL=https://api.unbrowser.ai  # optional, default
+```
+
+### Local Development
+
+```bash
+# Use local SQLite instead of Postgres
+# Just don't set DATABASE_URL
+
+# Optional stealth mode
+LLM_BROWSER_STEALTH=true
+```
 
 ## TypeScript Configuration
 
 - **Module System**: ES2022 with Node16 module resolution
 - **Output**: Compiled to `dist/` directory
-- **Import Extensions**: All imports use `.js` extension (even for `.ts` files) due to Node16 module resolution
+- **Import Extensions**: All imports use `.js` extension (Node16 requirement)
 - **Strict Mode**: Enabled
 
-## Data Flow
+## Key Documentation
 
-1. **Browse Request** → BrowseTool → BrowserManager (creates Page with listeners) → page navigates → captures network/console → ContentExtractor (HTML→markdown) → ApiAnalyzer (discovers patterns) → KnowledgeBase (stores patterns) → SessionManager (checks for saved session) → returns BrowseResult
+- **[docs/PROJECT_STATUS.md](docs/PROJECT_STATUS.md)** - Current implementation status
+- **[docs/ROADMAP.md](docs/ROADMAP.md)** - Development roadmap and milestones
+- **[docs/BACKLOG.md](docs/BACKLOG.md)** - Task backlog with priorities (P0-P3)
+- **[docs/GO_TO_MARKET.md](docs/GO_TO_MARKET.md)** - Business strategy
+- **[docs/PRICING.md](docs/PRICING.md)** - Pricing tiers
+- **[docs/api/API_DESIGN.md](docs/api/API_DESIGN.md)** - REST API design
+- **[docs/api/openapi.yaml](docs/api/openapi.yaml)** - OpenAPI 3.1 specification
 
-2. **API Call Request** → ApiCallTool → SessionManager (loads session cookies) → BrowserManager (gets context) → makes direct request with auth → returns response (bypassing rendering)
+## Current Sprint: Cloud API Launch
 
-## How It Works in Practice
+Priority tasks from BACKLOG.md P0 section:
 
-### Example: First Visit to E-commerce Site
-```
-User: "Get products from example.com"
-
-1. BrowseTool loads page in browser (full rendering)
-2. BrowserManager captures all network traffic
-3. ApiAnalyzer discovers: GET /api/products?page=1
-4. KnowledgeBase stores pattern with confidence: "high"
-5. Returns: page content + discovered APIs
-```
-
-### Example: Subsequent Visit (Optimized)
-```
-User: "Get more products from example.com"
-
-1. BrowseTool checks KnowledgeBase
-2. Finds high-confidence pattern: /api/products
-3. ApiCallTool makes direct API call (no rendering!)
-4. Returns: data in ~200ms vs ~3s for full render
-5. Result: 15x faster, no browser overhead
-```
-
-### Example: Authenticated Access
-```
-User: "Get my dashboard data from app.com"
-
-1. First time: Manual login, SessionManager saves cookies
-2. Future requests: Automatically loads saved session
-3. Access authenticated APIs directly
-4. No re-login needed
-```
-
-## What Makes This Different
-
-### vs Traditional Scraping Tools (Jina, Firecrawl)
-- **They return**: Clean markdown/HTML from full page renders every time
-- **We return**: Content + network data + discovered APIs, then bypass rendering when possible
-- **Result**: They're fast for one-offs, we're optimized for repeated access
-
-### vs Browser Automation (Puppeteer, Playwright)
-- **They provide**: Browser control APIs requiring code generation
-- **We provide**: MCP tools that LLMs use naturally with built-in intelligence
-- **Result**: No code generation needed, automatic optimization over time
-
-### vs Chrome DevTools MCP
-- **They expose**: Network requests and console logs for debugging
-- **We add**: API discovery, pattern learning, direct API execution, session management
-- **Result**: Not just inspection, but progressive optimization
+1. **API-002**: Implement API authentication (IN PROGRESS)
+2. **API-003**: Implement rate limiting
+3. **CLOUD-001**: Wire SmartBrowser to browse endpoint
+4. **CLOUD-002**: Add usage tracking service
+5. **DEPLOY-001**: Set up Supabase production database
 
 ## Important Notes
 
-- Sessions and knowledge base are gitignored - they contain potentially sensitive auth data
-- Browser contexts are profile-specific - multiple sessions can coexist
-- API discovery is automatic and passive - no explicit analysis needed
-- JSON responses and common API URL patterns are automatically flagged
-- Console logs include source location when available
-- The system learns from every browse operation and gets smarter over time
-- First render of a site is slower (learning phase), subsequent accesses are much faster
+- API keys use format `ub_live_xxx` or `ub_test_xxx`
+- Only the SHA-256 hash of API keys is stored
+- Sessions and patterns are tenant-isolated
+- Collective learning is opt-in per tenant
+- The system learns from every browse operation
+- First render is slower (learning phase), subsequent accesses are faster
+- The API package currently uses in-memory stores - Prisma will be added for production

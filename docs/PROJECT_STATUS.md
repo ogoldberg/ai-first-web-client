@@ -370,7 +370,8 @@ All 10 phases complete:
 
 | Priority | Initiative | Status |
 |----------|-----------|--------|
-| P1 | Design endpoints, auth, rate limiting | In Progress |
+| P1 | Design endpoints, auth, rate limiting (API-001) | Complete |
+| P1 | Implement API authentication (API-002) | Not Started |
 | P1 | Implement usage metering and billing | Not Started |
 | P2 | Production infrastructure and monitoring | Not Started |
 | P2 | Beta program launch | Not Started |
