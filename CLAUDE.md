@@ -115,6 +115,8 @@ packages/
 | `POST` | `/v1/fetch` | Fast tiered fetch |
 | `GET` | `/v1/domains/:domain/intelligence` | Domain learning summary |
 | `GET` | `/v1/usage` | Usage stats for billing period |
+| `GET` | `/v1/proxy/stats` | Proxy pool statistics |
+| `GET` | `/v1/proxy/risk/:domain` | Domain risk assessment |
 | `GET` | `/health` | Health check |
 
 ## Development Commands
@@ -206,6 +208,49 @@ UNBROWSER_API_URL=https://api.unbrowser.ai  # optional, default
 # Optional stealth mode
 LLM_BROWSER_STEALTH=true
 ```
+
+### Proxy Configuration (IP Blocking Prevention)
+
+The API supports intelligent proxy routing to prevent IP blocking. Proxies are optional - the system works without them but may face blocking on high-protection sites.
+
+```bash
+# Datacenter proxies (cheapest, for low-risk sites)
+PROXY_DATACENTER_URLS=http://user:pass@dc1.proxy.com:8080,http://user:pass@dc2.proxy.com:8080
+
+# ISP proxies (mid-tier, better reputation)
+PROXY_ISP_URLS=http://user:pass@isp1.proxy.com:8080
+
+# Bright Data residential proxies (best for high-protection sites)
+BRIGHTDATA_AUTH=customer_id:password
+BRIGHTDATA_ZONE=residential
+BRIGHTDATA_COUNTRY=us  # Optional geo-targeting
+
+# Health tracking settings
+PROXY_HEALTH_WINDOW=100        # Requests to track per proxy
+PROXY_COOLDOWN_MINUTES=60      # Cooldown after blocking
+PROXY_BLOCK_THRESHOLD=0.3      # Failure rate to trigger cooldown
+
+# Domain risk settings
+DOMAIN_RISK_CACHE_MINUTES=60   # Cache risk assessments
+DOMAIN_RISK_LEARNING=true      # Learn from failures
+```
+
+**Proxy Tiers by Plan:**
+| Plan | Available Tiers |
+|------|-----------------|
+| FREE | Datacenter only |
+| STARTER | Datacenter, ISP |
+| TEAM | Datacenter, ISP, Residential |
+| ENTERPRISE | All tiers including Premium |
+
+**How it works:**
+1. Domain risk is assessed (static rules + learned patterns)
+2. Appropriate proxy tier is selected based on risk + plan
+3. Health is tracked per-proxy per-domain
+4. Failing proxies enter cooldown, requests escalate to higher tiers
+5. Learning from blocks improves future routing
+
+See [docs/PROXY_MANAGEMENT_PLAN.md](docs/PROXY_MANAGEMENT_PLAN.md) for full architecture.
 
 ## TypeScript Configuration
 

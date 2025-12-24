@@ -11,7 +11,18 @@ import { validator } from 'hono/validator';
 import { authMiddleware, requirePermission } from '../middleware/auth.js';
 import { rateLimitMiddleware, recordTierUsage } from '../middleware/rate-limit.js';
 import { getBrowserClient } from '../services/browser.js';
-import { getUsageStats, exportUsage, getTodayUnits, type Tier } from '../services/usage.js';
+import { getUsageStats, exportUsage, getTodayUnits } from '../services/usage.js';
+import {
+  selectProxyForRequest,
+  reportProxySuccess,
+  reportProxyFailure,
+  detectFailureReason,
+  formatProxyMetadata,
+  proxyAvailabilityMiddleware,
+  getProxyStats,
+} from '../middleware/proxy.js';
+import { getProxyManager, hasProxiesConfigured } from '../services/proxy-manager.js';
+import type { ProxyTier } from '../services/proxy-types.js';
 
 interface BrowseRequest {
   url: string;
@@ -22,6 +33,13 @@ interface BrowseRequest {
     includeTables?: boolean;
     maxLatencyMs?: number;
     maxCostTier?: 'intelligence' | 'lightweight' | 'playwright';
+    // Proxy options
+    proxy?: {
+      preferredTier?: ProxyTier;
+      preferredCountry?: string;
+      requireFresh?: boolean;
+      stickySessionId?: string;
+    };
   };
   session?: {
     cookies?: Array<{ name: string; value: string; domain?: string; path?: string }>;
@@ -42,9 +60,10 @@ interface FormatOptions {
 
 const browse = new Hono();
 
-// Apply auth and rate limiting to all routes
+// Apply auth, rate limiting, and proxy availability check to all routes
 browse.use('*', authMiddleware);
 browse.use('*', rateLimitMiddleware);
+browse.use('*', proxyAvailabilityMiddleware);
 
 // URL validation helper
 function isValidUrl(url: string): boolean {
@@ -104,7 +123,12 @@ function truncateContent(content: string, maxChars: number): string {
 /**
  * Convert SmartBrowseResult to API response format
  */
-function formatBrowseResult(result: any, startTime: number, options: FormatOptions = {}) {
+function formatBrowseResult(
+  result: any,
+  startTime: number,
+  options: FormatOptions = {},
+  proxyMetadata?: Record<string, unknown>
+) {
   let markdown = result.content?.markdown || '';
   let text = result.content?.text || '';
 
@@ -128,6 +152,8 @@ function formatBrowseResult(result: any, startTime: number, options: FormatOptio
       tiersAttempted: result.tiersAttempted || [],
       learningApplied: result.learning?.patternsApplied || false,
       confidence: result.fieldConfidence?.aggregated?.score,
+      // Include proxy information if available
+      ...(proxyMetadata && { proxy: proxyMetadata }),
     },
     links: result.links,
     apis: result.discoveredApis,
@@ -219,6 +245,16 @@ browse.post('/browse', requirePermission('browse'), browseValidator, async (c) =
 
   // Regular JSON response
   const startTime = Date.now();
+  const tenant = c.get('tenant');
+
+  // Select proxy if available
+  let proxyInfo: Awaited<ReturnType<typeof selectProxyForRequest>> = null;
+  try {
+    const domain = new URL(body.url).hostname;
+    proxyInfo = await selectProxyForRequest(domain, tenant.id, tenant.plan, body.options?.proxy);
+  } catch {
+    // Continue without proxy if selection fails
+  }
 
   try {
     const client = await getBrowserClient();
@@ -228,17 +264,30 @@ browse.post('/browse', requirePermission('browse'), browseValidator, async (c) =
       scrollToLoad: body.options?.scrollToLoad,
       maxLatencyMs: body.options?.maxLatencyMs,
       maxCostTier: body.options?.maxCostTier,
+      // TODO: Pass proxy config to browser client when implemented
+      // proxy: proxyInfo?.proxy.getPlaywrightProxy(),
     });
 
     // Record usage for the tier used
-    const tenant = c.get('tenant');
     recordTierUsage(tenant.id, browseResult.tier || 'intelligence');
+
+    // Report success to proxy health tracker
+    if (proxyInfo) {
+      const latencyMs = Date.now() - startTime;
+      reportProxySuccess(proxyInfo.proxy.id, new URL(body.url).hostname, latencyMs);
+    }
 
     return c.json({
       success: true,
-      data: formatBrowseResult(browseResult, startTime, formatOptions),
+      data: formatBrowseResult(browseResult, startTime, formatOptions, formatProxyMetadata(proxyInfo)),
     });
   } catch (error) {
+    // Report failure to proxy health tracker
+    if (proxyInfo) {
+      const failureReason = detectFailureReason(error instanceof Error ? error : undefined);
+      reportProxyFailure(proxyInfo.proxy.id, new URL(body.url).hostname, failureReason);
+    }
+
     return c.json(
       {
         success: false,
@@ -523,6 +572,53 @@ browse.get('/domains/:domain/intelligence', async (c) => {
       500
     );
   }
+});
+
+/**
+ * GET /v1/proxy/stats
+ * Get proxy pool statistics (admin/monitoring)
+ */
+browse.get('/proxy/stats', async (c) => {
+  const stats = getProxyStats();
+
+  return c.json({
+    success: true,
+    data: stats,
+  });
+});
+
+/**
+ * GET /v1/proxy/risk/:domain
+ * Get risk assessment for a domain
+ */
+browse.get('/proxy/risk/:domain', async (c) => {
+  const domain = c.req.param('domain');
+
+  if (!hasProxiesConfigured()) {
+    return c.json({
+      success: true,
+      data: {
+        enabled: false,
+        message: 'Proxy management not configured',
+      },
+    });
+  }
+
+  const proxyManager = getProxyManager();
+  const risk = proxyManager.getDomainRisk(domain);
+
+  return c.json({
+    success: true,
+    data: {
+      domain,
+      riskLevel: risk.riskLevel,
+      confidence: risk.confidence,
+      recommendedTier: risk.recommendedProxyTier,
+      recommendedDelayMs: risk.recommendedDelayMs,
+      factors: risk.factors,
+      specialHandling: risk.specialHandling,
+    },
+  });
 });
 
 export { browse };
