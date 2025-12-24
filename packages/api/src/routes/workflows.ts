@@ -18,7 +18,7 @@ import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
 import { authMiddleware, requirePermission } from '../middleware/auth.js';
 import { rateLimitMiddleware } from '../middleware/rate-limit.js';
-import { ProceduralMemory } from '../../../src/core/procedural-memory.js';
+import { ProceduralMemory } from '../../../../src/core/procedural-memory.js';
 import { getWorkflowRecorder } from './browse.js';
 import { getBrowserClient } from '../services/browser.js';
 

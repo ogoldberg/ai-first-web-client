@@ -23,7 +23,7 @@ import {
 } from '../middleware/proxy.js';
 import { getProxyManager, hasProxiesConfigured } from '../services/proxy-manager.js';
 import type { ProxyTier } from '../services/proxy-types.js';
-import { WorkflowRecorder } from '../../../src/core/workflow-recorder.js';
+import { WorkflowRecorder } from '../../../../src/core/workflow-recorder.js';
 
 interface BrowseRequest {
   url: string;
