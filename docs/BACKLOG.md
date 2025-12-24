@@ -268,11 +268,11 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 | ID | Task | Effort | Status | Notes |
 |----|------|--------|--------|-------|
 | SK-001 | Design skill templates | M | Complete | Research Product, Monitor Changes, Scrape Catalog, Discover APIs, Compare Sources. Map to simplified MCP tools. Created docs/SKILL_TEMPLATES.md and 5 YAML skill definitions |
-| SK-002 | Create "Research Product Information" skill | S | In Progress | Prompt: Browse product pages, extract structured data (price, features, reviews), compare across sites |
-| SK-003 | Create "Monitor Website Changes" skill | S | Not Started | Prompt: Track URL for updates, alert on changes, provide diff summary |
-| SK-004 | Create "Scrape Product Catalog" skill | S | Not Started | Prompt: Use pagination to get all items, extract consistent fields, handle rate limiting |
-| SK-005 | Create "Discover APIs" skill | S | Not Started | Prompt: Browse site, identify API endpoints, test access, document patterns |
-| SK-006 | Create "Compare Information Sources" skill | S | Not Started | Prompt: Multi-site research, cross-reference facts, identify discrepancies |
+| SK-002 | Create "Research Product Information" skill | S | Complete | Prompt: Browse product pages, extract structured data (price, features, reviews), compare across sites. Created skills/prompts/research-product.md |
+| SK-003 | Create "Monitor Website Changes" skill | S | Complete | Prompt: Track URL for updates, alert on changes, provide diff summary. Created skills/prompts/monitor-changes.md |
+| SK-004 | Create "Scrape Product Catalog" skill | S | Complete | Prompt: Use pagination to get all items, extract consistent fields, handle rate limiting. Created skills/prompts/scrape-catalog.md |
+| SK-005 | Create "Discover APIs" skill | S | Complete | Prompt: Browse site, identify API endpoints, test access, document patterns. Created skills/prompts/discover-apis.md |
+| SK-006 | Create "Compare Information Sources" skill | S | Complete | Prompt: Multi-site research, cross-reference facts, identify discrepancies. Created skills/prompts/compare-sources.md |
 | SK-007 | Create "Extract Government Forms" skill | S | Not Started | Prompt: Navigate gov sites, extract requirements, fees, timelines, documents |
 | SK-008 | Create "Track Competitor Sites" skill | S | Not Started | Prompt: Monitor multiple competitor sites, extract key metrics, detect changes |
 | SK-009 | Test skills with real users | M | Not Started | Get feedback from 5-10 users. Iterate on prompts based on usage patterns |
