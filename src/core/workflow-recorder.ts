@@ -73,7 +73,7 @@ export class WorkflowRecorder {
       url: browseResult.url,
       description: `Browse ${browseResult.url}`,
       importance: 'important',
-      tier: browseResult.learning?.tier,
+      tier: browseResult.learning?.renderTier,
       duration: browseResult.metadata?.loadTime,
       success: true,
       selectors: browseResult.learning?.selectorsUsed,
@@ -82,7 +82,7 @@ export class WorkflowRecorder {
         content: browseResult.content,
         tables: browseResult.tables,
       },
-      patternsUsed: browseResult.learning?.patternsApplied ? ['pattern'] : undefined,
+      patternsUsed: browseResult.learning?.skillApplied ? [browseResult.learning.skillApplied] : undefined,
     };
 
     recording.steps.push(step);

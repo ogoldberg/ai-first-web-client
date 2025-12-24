@@ -3415,16 +3415,12 @@ export class ProceduralMemory {
    */
   async replayWorkflow(
     workflowId: string,
-    variables?: import('../types/workflow.js').WorkflowVariables,
-    smartBrowser?: any // Avoid circular dependency
+    variables: import('../types/workflow.js').WorkflowVariables | undefined,
+    smartBrowser: { browse: (url: string, options?: any) => Promise<any> } // Browser client interface
   ): Promise<import('../types/workflow.js').WorkflowReplayResult> {
     const workflow = this.getWorkflowById(workflowId);
     if (!workflow) {
       throw new Error(`Workflow not found: ${workflowId}`);
-    }
-
-    if (!smartBrowser) {
-      throw new Error('SmartBrowser instance required for workflow replay');
     }
 
     const results: import('../types/workflow.js').WorkflowStepResult[] = [];
