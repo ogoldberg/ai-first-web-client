@@ -17,7 +17,8 @@
     "@prisma/client": "^6.19.1",
     "hono": "^4.4.0",
     "llm-browser": "file:../../",
-    "stripe": "^20.1.0"
+    "stripe": "^20.1.0",
+    "swagger-ui-dist": "^5.31.0"
   },
   "optionalDependencies": {
     "ioredis": "^5.4.1"
