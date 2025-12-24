@@ -308,7 +308,7 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 
 | ID | Task | Effort | Status | Notes |
 |----|------|--------|--------|-------|
-| API-001 | Design REST API endpoints | M | In Progress | POST /browse, POST /api-call, GET /patterns, etc. Map to SDK methods. OpenAPI spec |
+| API-001 | Design REST API endpoints | M | Complete | POST /browse, POST /api-call, GET /patterns, etc. Map to SDK methods. OpenAPI spec. Created docs/api/openapi.yaml and docs/api/API_DESIGN.md |
 | API-002 | Implement API authentication | M | Not Started | API key auth, tenant ID extraction, JWT for OAuth flow |
 | API-003 | Add per-tenant rate limiting | M | Not Started | Redis-based rate limiter. Different limits per tier (Starter, Team, Enterprise) |
 | API-004 | Implement usage metering for billing | L | Not Started | Track requests by tier (intelligence=1, lightweight=5, playwright=25). Export to billing system |
