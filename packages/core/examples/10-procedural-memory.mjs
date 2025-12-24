@@ -15,11 +15,11 @@ async function main() {
   });
 
   try {
-    // Browse with trajectory recording
+    // Browse with workflow recording
     console.log('=== Browse with Skill Learning ===\n');
 
     const result = await browser.browse('https://news.ycombinator.com/', {
-      recordTrajectory: true,
+      recordWorkflow: true,
       useSkills: true,
     });
 

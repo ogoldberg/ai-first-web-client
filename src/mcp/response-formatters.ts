@@ -178,7 +178,7 @@ export function formatBrowseResult(
       // Procedural memory insights
       skillApplied: result.learning.skillApplied,
       skillsMatched: result.learning.skillsMatched?.length || 0,
-      trajectoryRecorded: result.learning.trajectoryRecorded,
+      workflowRecorded: result.learning.workflowRecorded,
       // Tiered rendering insights
       renderTier: result.learning.renderTier,
       tierFellBack: result.learning.tierFellBack,

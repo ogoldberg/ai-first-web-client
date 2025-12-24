@@ -318,10 +318,10 @@ describe('E2E: Full Browse Cycle', () => {
     it('should record trajectory when enabled', async () => {
       const result = await smartBrowser.browse('https://example.com', {
         useTieredFetching: true,
-        recordTrajectory: true,
+        recordWorkflow: true,
       });
 
-      expect(result.learning.trajectoryRecorded).toBe(true);
+      expect(result.learning.workflowRecorded).toBe(true);
     });
 
     it('should provide domain intelligence after browsing', async () => {

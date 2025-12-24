@@ -45,7 +45,7 @@ export type {
   BrowseOptions,
   BrowsingAction,
   BrowsingSkill,
-  BrowsingTrajectory,
+  BrowsingWorkflow,
   PageContext,
   SkillMatch,
 } from './types/index.js';
@@ -153,7 +153,7 @@ export class LLMBrowserClient {
     return this.smartBrowser.browse(url, {
       enableLearning: this.config.enableLearning ?? true,
       useSkills: this.config.enableProceduralMemory ?? true,
-      recordTrajectory: this.config.enableProceduralMemory ?? true,
+      recordWorkflow: this.config.enableProceduralMemory ?? true,
       ...options,
     });
   }

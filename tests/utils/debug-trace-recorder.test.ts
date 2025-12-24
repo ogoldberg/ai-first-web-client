@@ -544,14 +544,14 @@ describe('createDebugTrace', () => {
         skills: {
           matched: ['skill1', 'skill2'],
           applied: 'skill1',
-          trajectoryRecorded: true,
+          workflowRecorded: true,
         },
       }
     );
 
     expect(trace.skills?.matched).toEqual(['skill1', 'skill2']);
     expect(trace.skills?.applied).toBe('skill1');
-    expect(trace.skills?.trajectoryRecorded).toBe(true);
+    expect(trace.skills?.workflowRecorded).toBe(true);
   });
 
   it('should populate anomaly info', () => {

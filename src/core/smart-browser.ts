@@ -22,7 +22,7 @@ import type {
   SelectorPattern,
   PaginationPattern,
   BrowsingAction,
-  BrowsingTrajectory,
+  BrowsingWorkflow,
   PageContext,
   SkillMatch,
   SkillExecutionTrace,
@@ -115,7 +115,7 @@ export interface SmartBrowseOptions extends BrowseOptions {
 
   // Procedural memory / skills
   useSkills?: boolean; // Try to apply learned skills (default: true)
-  recordTrajectory?: boolean; // Record this session for skill learning (default: true)
+  recordWorkflow?: boolean; // Record this session for skill learning (default: true)
 
   // Tiered rendering
   useTieredFetching?: boolean; // Use lightweight rendering when possible (default: true)
@@ -195,7 +195,7 @@ export interface SmartBrowseResult extends BrowseResult {
     skillsMatched?: SkillMatch[];
     skillApplied?: string;
     skillExecutionTrace?: SkillExecutionTrace;  // TC-003: Detailed execution trace
-    trajectoryRecorded?: boolean;
+    workflowRecorded?: boolean;
     // Anomaly detection results
     anomalyDetected?: boolean;
     anomalyType?: 'challenge_page' | 'error_page' | 'empty_content' | 'redirect_notice' | 'captcha' | 'rate_limited';
@@ -267,7 +267,7 @@ export class SmartBrowser {
   private learningEngine: LearningEngine;
   private proceduralMemory: ProceduralMemory;
   private tieredFetcher: TieredFetcher;
-  private currentTrajectory: BrowsingTrajectory | null = null;
+  private currentWorkflow: BrowsingWorkflow | null = null;
   private semanticInfrastructure: SemanticInfrastructure | null = null;
   private debugRecorder: DebugTraceRecorder;
 
@@ -321,7 +321,7 @@ export class SmartBrowser {
     const domain = new URL(url).hostname;
     const enableLearning = options.enableLearning !== false;
     const useSkills = options.useSkills !== false;
-    const recordTrajectory = options.recordTrajectory !== false;
+    const recordWorkflow = options.recordWorkflow !== false;
 
     // Initialize learning result
     const learning: SmartBrowseResult['learning'] = {
@@ -341,9 +341,9 @@ export class SmartBrowser {
       });
     }
 
-    // Start trajectory recording for procedural memory
-    if (recordTrajectory) {
-      this.startTrajectory(url, domain);
+    // Start workflow recording for procedural memory
+    if (recordWorkflow) {
+      this.startWorkflow(url, domain);
     }
 
     // Check for domain group and apply shared patterns
@@ -771,11 +771,11 @@ export class SmartBrowser {
       }
     }
 
-    // Complete trajectory recording for procedural memory (with error boundary)
-    if (recordTrajectory && this.currentTrajectory) {
+    // Complete workflow recording for procedural memory (with error boundary)
+    if (recordWorkflow && this.currentWorkflow) {
       try {
         const success = learning.confidenceLevel !== 'low' && extractedContent.text.length > MIN_SUCCESS_TEXT_LENGTH;
-        await this.completeTrajectory(
+        await this.completeWorkflow(
           finalUrl,
           success,
           Date.now() - startTime,
@@ -785,9 +785,9 @@ export class SmartBrowser {
             apis: discoveredApis.length,
           }
         );
-        learning.trajectoryRecorded = true;
-      } catch (trajectoryError) {
-        logger.smartBrowser.error(`Trajectory recording failed (non-fatal): ${trajectoryError}`);
+        learning.workflowRecorded = true;
+      } catch (workflowError) {
+        logger.smartBrowser.error(`Workflow recording failed (non-fatal): ${workflowError}`);
         // Continue without recording - non-critical feature
       }
     }
@@ -906,7 +906,7 @@ export class SmartBrowser {
   ): Promise<SmartBrowseResult | null> {
     const domain = new URL(url).hostname;
     const enableLearning = options.enableLearning !== false;
-    const recordTrajectory = options.recordTrajectory !== false;
+    const recordWorkflow = options.recordWorkflow !== false;
 
     try {
       const result = await this.tieredFetcher.fetch(url, {
@@ -1002,11 +1002,11 @@ export class SmartBrowser {
         }
       }
 
-      // Record trajectory for procedural memory (with error boundary)
-      if (recordTrajectory && this.currentTrajectory) {
+      // Record workflow for procedural memory (with error boundary)
+      if (recordWorkflow && this.currentWorkflow) {
         try {
           const success = learning.confidenceLevel !== 'low' && result.content.text.length > MIN_SUCCESS_TEXT_LENGTH;
-          await this.completeTrajectory(
+          await this.completeWorkflow(
             result.finalUrl,
             success,
             Date.now() - startTime,
@@ -1016,9 +1016,9 @@ export class SmartBrowser {
               apis: result.discoveredApis.length,
             }
           );
-          learning.trajectoryRecorded = true;
-        } catch (trajectoryError) {
-          logger.smartBrowser.error(`Trajectory recording failed (non-fatal): ${trajectoryError}`);
+          learning.workflowRecorded = true;
+        } catch (workflowError) {
+          logger.smartBrowser.error(`Workflow recording failed (non-fatal): ${workflowError}`);
         }
       }
 
@@ -1965,11 +1965,11 @@ export class SmartBrowser {
   }
 
   /**
-   * Start recording a new browsing trajectory
+   * Start recording a new browsing workflow
    */
-  private startTrajectory(url: string, domain: string): void {
-    this.currentTrajectory = {
-      id: `traj_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+  private startWorkflow(url: string, domain: string): void {
+    this.currentWorkflow = {
+      id: `wf_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       startUrl: url,
       endUrl: url,
       domain,
@@ -1989,35 +1989,35 @@ export class SmartBrowser {
   }
 
   /**
-   * Record an action in the current trajectory
+   * Record an action in the current workflow
    */
   recordAction(action: BrowsingAction): void {
-    if (this.currentTrajectory) {
-      this.currentTrajectory.actions.push(action);
+    if (this.currentWorkflow) {
+      this.currentWorkflow.actions.push(action);
     }
   }
 
   /**
-   * Complete and submit the current trajectory for skill learning
+   * Complete and submit the current workflow for skill learning
    */
-  private async completeTrajectory(
+  private async completeWorkflow(
     endUrl: string,
     success: boolean,
     totalDuration: number,
     extractedContent?: { text: string; tables: number; apis: number }
   ): Promise<void> {
-    if (!this.currentTrajectory) return;
+    if (!this.currentWorkflow) return;
 
-    this.currentTrajectory.endUrl = endUrl;
-    this.currentTrajectory.success = success;
-    this.currentTrajectory.totalDuration = totalDuration;
-    this.currentTrajectory.extractedContent = extractedContent;
+    this.currentWorkflow.endUrl = endUrl;
+    this.currentWorkflow.success = success;
+    this.currentWorkflow.totalDuration = totalDuration;
+    this.currentWorkflow.extractedContent = extractedContent;
 
     // Submit to procedural memory for potential skill extraction
-    await this.proceduralMemory.recordTrajectory(this.currentTrajectory);
+    await this.proceduralMemory.recordWorkflow(this.currentWorkflow);
 
-    // Clear the current trajectory
-    this.currentTrajectory = null;
+    // Clear the current workflow
+    this.currentWorkflow = null;
   }
 
   /**
@@ -2025,7 +2025,7 @@ export class SmartBrowser {
    */
   getProceduralMemoryStats(): {
     totalSkills: number;
-    totalTrajectories: number;
+    totalWorkflows: number;
     skillsByDomain: Record<string, number>;
     avgSuccessRate: number;
     mostUsedSkills: Array<{ name: string; uses: number }>;
@@ -2480,7 +2480,7 @@ export class SmartBrowser {
           ? {
               matched: result.learning.skillsMatched.map(s => s.skill.name),
               applied: result.learning.skillApplied,
-              trajectoryRecorded: result.learning.trajectoryRecorded ?? false,
+              workflowRecorded: result.learning.workflowRecorded ?? false,
             }
           : undefined,
         anomaly: result.learning.anomalyDetected

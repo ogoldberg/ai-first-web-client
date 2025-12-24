@@ -2,7 +2,7 @@
  * Procedural Memory - Skill-based learning system for intelligent browsing
  *
  * This module implements a procedural memory agent that:
- * - Learns reusable browsing skills from successful trajectories
+ * - Learns reusable browsing skills from successful workflows
  * - Stores skills with vector embeddings for similarity matching
  * - Retrieves relevant skills based on page context using cosine similarity
  * - Merges similar skills to prevent redundancy
@@ -24,7 +24,7 @@ import type { EmbeddingProvider, EmbeddingResult } from '../utils/embedding-prov
 import type {
   BrowsingSkill,
   BrowsingAction,
-  BrowsingTrajectory,
+  BrowsingWorkflow,
   SkillPreconditions,
   SkillMatch,
   PageContext,
@@ -125,7 +125,7 @@ const SKILL_TEMPLATES: Partial<BrowsingSkill>[] = [
 interface ProceduralMemoryData {
   skills: BrowsingSkill[];
   workflows: SkillWorkflow[];
-  trajectoryBuffer: BrowsingTrajectory[];
+  workflowBuffer: BrowsingWorkflow[];
   visitedDomains: string[];
   visitedPageTypes: { [key: string]: number };
   failedExtractions: { [key: string]: number };
@@ -139,7 +139,7 @@ interface ProceduralMemoryData {
 export class ProceduralMemory {
   private skills: Map<string, BrowsingSkill> = new Map();
   private workflows: Map<string, SkillWorkflow> = new Map();
-  private trajectoryBuffer: BrowsingTrajectory[] = [];
+  private workflowBuffer: BrowsingWorkflow[] = [];
   private config: ProceduralMemoryConfig;
   private store: PersistentStore<ProceduralMemoryData>;
 
@@ -658,35 +658,35 @@ export class ProceduralMemory {
   // ============================================
 
   /**
-   * Record a browsing trajectory for potential skill extraction
+   * Record a browsing workflow for potential skill extraction
    */
-  async recordTrajectory(trajectory: BrowsingTrajectory): Promise<void> {
-    this.trajectoryBuffer.push(trajectory);
+  async recordWorkflow(workflow: BrowsingWorkflow): Promise<void> {
+    this.workflowBuffer.push(workflow);
 
     // Limit buffer size
-    if (this.trajectoryBuffer.length > 100) {
-      this.trajectoryBuffer = this.trajectoryBuffer.slice(-100);
+    if (this.workflowBuffer.length > 100) {
+      this.workflowBuffer = this.workflowBuffer.slice(-100);
     }
 
-    // Attempt to extract skills from successful trajectories
-    if (trajectory.success && trajectory.actions.length >= this.config.minTrajectoryLength) {
-      await this.extractAndLearnSkill(trajectory);
+    // Attempt to extract skills from successful workflows
+    if (workflow.success && workflow.actions.length >= this.config.minTrajectoryLength) {
+      await this.extractAndLearnSkill(workflow);
     }
   }
 
   /**
-   * Extract a skill from a successful trajectory
+   * Extract a skill from a successful workflow
    */
-  private async extractAndLearnSkill(trajectory: BrowsingTrajectory): Promise<BrowsingSkill | null> {
+  private async extractAndLearnSkill(workflow: BrowsingWorkflow): Promise<BrowsingSkill | null> {
     // Extract the meaningful action sequence (last N actions that led to success)
-    const meaningfulActions = this.extractMeaningfulActions(trajectory.actions);
+    const meaningfulActions = this.extractMeaningfulActions(workflow.actions);
 
     if (meaningfulActions.length < this.config.minTrajectoryLength) {
       return null;
     }
 
-    // Generate preconditions from the trajectory
-    const preconditions = this.inferPreconditions(trajectory);
+    // Generate preconditions from the workflow
+    const preconditions = this.inferPreconditions(workflow);
 
     // Create embedding
     const embedding = this.createSkillEmbedding(preconditions, meaningfulActions);
@@ -696,28 +696,28 @@ export class ProceduralMemory {
 
     if (existingSkill && this.cosineSimilarity(embedding, existingSkill.embedding) > this.config.mergeThreshold) {
       // Merge with existing skill
-      return await this.mergeSkill(existingSkill, meaningfulActions, trajectory);
+      return await this.mergeSkill(existingSkill, meaningfulActions, workflow);
     }
 
     // Create new skill
     const skill: BrowsingSkill = {
       id: this.generateSkillId(),
-      name: this.generateSkillName(trajectory, meaningfulActions),
-      description: this.generateSkillDescription(trajectory, meaningfulActions),
+      name: this.generateSkillName(workflow, meaningfulActions),
+      description: this.generateSkillDescription(workflow, meaningfulActions),
       preconditions,
       actionSequence: meaningfulActions,
       embedding,
       metrics: {
         successCount: 1,
         failureCount: 0,
-        avgDuration: trajectory.totalDuration,
+        avgDuration: workflow.totalDuration,
         lastUsed: Date.now(),
         timesUsed: 1,
       },
       createdAt: Date.now(),
       updatedAt: Date.now(),
-      sourceUrl: trajectory.startUrl,
-      sourceDomain: trajectory.domain,
+      sourceUrl: workflow.startUrl,
+      sourceDomain: workflow.domain,
     };
 
     await this.addSkill(skill);
@@ -727,7 +727,7 @@ export class ProceduralMemory {
   }
 
   /**
-   * Extract meaningful actions from a trajectory
+   * Extract meaningful actions from a workflow
    */
   private extractMeaningfulActions(actions: BrowsingAction[]): BrowsingAction[] {
     // Filter out failed actions and redundant waits
@@ -746,27 +746,27 @@ export class ProceduralMemory {
   }
 
   /**
-   * Infer preconditions from a trajectory
+   * Infer preconditions from a workflow
    */
-  private inferPreconditions(trajectory: BrowsingTrajectory): SkillPreconditions {
+  private inferPreconditions(workflow: BrowsingWorkflow): SkillPreconditions {
     const preconditions: SkillPreconditions = {};
 
     // Domain pattern
-    preconditions.domainPatterns = [trajectory.domain];
+    preconditions.domainPatterns = [workflow.domain];
 
     // URL pattern (generalize the URL)
-    preconditions.urlPatterns = [this.extractUrlPattern(trajectory.startUrl)];
+    preconditions.urlPatterns = [this.extractUrlPattern(workflow.startUrl)];
 
     // Detect page type from actions
-    const actionTypes = trajectory.actions.map(a => a.type);
+    const actionTypes = workflow.actions.map(a => a.type);
     if (actionTypes.includes('fill')) {
       preconditions.pageType = 'form';
-    } else if (trajectory.extractedContent?.tables && trajectory.extractedContent.tables > 0) {
+    } else if (workflow.extractedContent?.tables && workflow.extractedContent.tables > 0) {
       preconditions.pageType = 'list';
     }
 
     // Extract required selectors from successful actions
-    const selectors = trajectory.actions
+    const selectors = workflow.actions
       .filter(a => a.success && a.selector)
       .map(a => a.selector!)
       .filter((s, i, arr) => arr.indexOf(s) === i); // unique
@@ -797,18 +797,18 @@ export class ProceduralMemory {
   }
 
   /**
-   * Merge a new trajectory into an existing skill
+   * Merge a new workflow into an existing skill
    */
   private async mergeSkill(
     existing: BrowsingSkill,
     newActions: BrowsingAction[],
-    trajectory: BrowsingTrajectory
+    workflow: BrowsingWorkflow
   ): Promise<BrowsingSkill> {
     // Update metrics
     existing.metrics.successCount++;
     existing.metrics.timesUsed++;
     existing.metrics.avgDuration =
-      (existing.metrics.avgDuration * (existing.metrics.timesUsed - 1) + trajectory.totalDuration) /
+      (existing.metrics.avgDuration * (existing.metrics.timesUsed - 1) + workflow.totalDuration) /
       existing.metrics.timesUsed;
     existing.metrics.lastUsed = Date.now();
 
@@ -819,10 +819,10 @@ export class ProceduralMemory {
     }
 
     // Update domain patterns
-    if (!existing.preconditions.domainPatterns?.includes(trajectory.domain)) {
+    if (!existing.preconditions.domainPatterns?.includes(workflow.domain)) {
       existing.preconditions.domainPatterns = [
         ...(existing.preconditions.domainPatterns || []),
-        trajectory.domain,
+        workflow.domain,
       ];
     }
 
@@ -927,9 +927,9 @@ export class ProceduralMemory {
   /**
    * Generate a human-readable skill name
    */
-  private generateSkillName(trajectory: BrowsingTrajectory, actions: BrowsingAction[]): string {
+  private generateSkillName(workflow: BrowsingWorkflow, actions: BrowsingAction[]): string {
     const actionTypes = [...new Set(actions.map(a => a.type))];
-    const domain = trajectory.domain.replace(/^www\./, '').split('.')[0];
+    const domain = workflow.domain.replace(/^www\./, '').split('.')[0];
 
     if (actionTypes.includes('fill')) {
       return `${domain}_form_submission`;
@@ -950,9 +950,9 @@ export class ProceduralMemory {
   /**
    * Generate a skill description
    */
-  private generateSkillDescription(trajectory: BrowsingTrajectory, actions: BrowsingAction[]): string {
+  private generateSkillDescription(workflow: BrowsingWorkflow, actions: BrowsingAction[]): string {
     const actionSummary = actions.map(a => a.type).join(' → ');
-    return `Learned from ${trajectory.domain}: ${actionSummary}`;
+    return `Learned from ${workflow.domain}: ${actionSummary}`;
   }
 
   /**
@@ -977,7 +977,7 @@ export class ProceduralMemory {
    */
   getStats(): {
     totalSkills: number;
-    totalTrajectories: number;
+    totalWorkflows: number;
     skillsByDomain: Record<string, number>;
     avgSuccessRate: number;
     mostUsedSkills: Array<{ name: string; uses: number }>;
@@ -1005,7 +1005,7 @@ export class ProceduralMemory {
 
     return {
       totalSkills: this.skills.size,
-      totalTrajectories: this.trajectoryBuffer.length,
+      totalWorkflows: this.workflowBuffer.length,
       skillsByDomain,
       avgSuccessRate: totalExecutions > 0 ? totalSuccesses / totalExecutions : 1,
       mostUsedSkills: skillUsage.slice(0, 10),
@@ -1211,8 +1211,8 @@ export class ProceduralMemory {
         }
       }
 
-      if (data.trajectoryBuffer) {
-        this.trajectoryBuffer = data.trajectoryBuffer;
+      if (data.workflowBuffer) {
+        this.workflowBuffer = data.workflowBuffer;
       }
 
       // Load active learning data
@@ -1252,7 +1252,7 @@ export class ProceduralMemory {
     const data: ProceduralMemoryData = {
       skills: Array.from(this.skills.values()),
       workflows: Array.from(this.workflows.values()),
-      trajectoryBuffer: this.trajectoryBuffer.slice(-50), // Keep last 50
+      workflowBuffer: this.workflowBuffer.slice(-50), // Keep last 50
       // Active learning data
       visitedDomains: Array.from(this.visitedDomains),
       visitedPageTypes: Object.fromEntries(this.visitedPageTypes),

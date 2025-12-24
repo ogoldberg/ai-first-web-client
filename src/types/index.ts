@@ -647,9 +647,9 @@ export interface BrowsingSkill {
 }
 
 /**
- * A recorded browsing trajectory (for skill extraction)
+ * A recorded browsing workflow (for skill extraction)
  */
-export interface BrowsingTrajectory {
+export interface BrowsingWorkflow {
   id: string;
   startUrl: string;
   endUrl: string;

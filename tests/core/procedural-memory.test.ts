@@ -23,7 +23,7 @@ import * as path from 'path';
 import * as os from 'os';
 import type {
   BrowsingAction,
-  BrowsingTrajectory,
+  BrowsingWorkflow,
   PageContext,
   SkillPreconditions,
 } from '../../src/types/index.js';
@@ -43,8 +43,8 @@ function createTestAction(
 
 function createTestTrajectory(
   domain: string,
-  options: Partial<BrowsingTrajectory> = {}
-): BrowsingTrajectory {
+  options: Partial<BrowsingWorkflow> = {}
+): BrowsingWorkflow {
   return {
     id: `traj_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     startUrl: `https://${domain}/page`,
@@ -232,7 +232,7 @@ describe('ProceduralMemory', () => {
   describe('Trajectory Recording and Learning', () => {
     it('should record a successful trajectory', async () => {
       const trajectory = createTestTrajectory('learning.com');
-      await memory.recordTrajectory(trajectory);
+      await memory.recordWorkflow(trajectory);
 
       const stats = memory.getStats();
       expect(stats.totalTrajectories).toBeGreaterThanOrEqual(1);
@@ -248,7 +248,7 @@ describe('ProceduralMemory', () => {
         ],
       });
 
-      await memory.recordTrajectory(trajectory);
+      await memory.recordWorkflow(trajectory);
 
       const stats = memory.getStats();
       expect(stats.totalSkills).toBeGreaterThanOrEqual(1);
@@ -260,7 +260,7 @@ describe('ProceduralMemory', () => {
 
     it('should not learn from failed trajectory', async () => {
       const trajectory = createTestTrajectory('failed.com', { success: false });
-      await memory.recordTrajectory(trajectory);
+      await memory.recordWorkflow(trajectory);
 
       const skillsByDomain = memory.getSkillsByDomain();
       expect(skillsByDomain.has('failed.com')).toBe(false);
@@ -270,7 +270,7 @@ describe('ProceduralMemory', () => {
       const trajectory = createTestTrajectory('short.com', {
         actions: [createTestAction('click')], // Only 1 action
       });
-      await memory.recordTrajectory(trajectory);
+      await memory.recordWorkflow(trajectory);
 
       const skillsByDomain = memory.getSkillsByDomain();
       expect(skillsByDomain.has('short.com')).toBe(false);
@@ -278,7 +278,7 @@ describe('ProceduralMemory', () => {
 
     it('should merge similar trajectories into same skill', async () => {
       // First trajectory
-      await memory.recordTrajectory(
+      await memory.recordWorkflow(
         createTestTrajectory('merge.com', {
           actions: [
             createTestAction('navigate'),
@@ -291,7 +291,7 @@ describe('ProceduralMemory', () => {
       const skillsBefore = memory.getAllSkills().length;
 
       // Similar trajectory for same domain
-      await memory.recordTrajectory(
+      await memory.recordWorkflow(
         createTestTrajectory('merge.com', {
           actions: [
             createTestAction('navigate'),
@@ -309,7 +309,7 @@ describe('ProceduralMemory', () => {
     it('should limit trajectory buffer size', async () => {
       // Record more than buffer limit
       for (let i = 0; i < 110; i++) {
-        await memory.recordTrajectory(
+        await memory.recordWorkflow(
           createTestTrajectory(`domain${i}.com`, { success: false })
         );
       }
@@ -409,7 +409,7 @@ describe('ProceduralMemory', () => {
 
       // Step 2: Learn a new trajectory that will be merged into the skill
       // (mergeSkill creates a version before merging)
-      await memory.recordTrajectory(
+      await memory.recordWorkflow(
         createTestTrajectory('version-test.com', {
           actions: [
             createTestAction('click', { selector: '.original-button' }),
@@ -625,7 +625,7 @@ describe('ProceduralMemory', () => {
     it('should detect potential workflows from trajectory patterns', async () => {
       // Record similar trajectories multiple times (need 3+ to trigger detection)
       for (let i = 0; i < 5; i++) {
-        await memory.recordTrajectory(
+        await memory.recordWorkflow(
           createTestTrajectory('pattern.com', {
             actions: [
               createTestAction('navigate'),
@@ -971,7 +971,7 @@ describe('ProceduralMemory', () => {
       memory.trackVisit('uncovered.com', 'form', true);
 
       // Learn a skill via trajectory (which sets sourceDomain correctly)
-      await memory.recordTrajectory(
+      await memory.recordWorkflow(
         createTestTrajectory('covered.com', {
           actions: [
             createTestAction('navigate', { url: 'https://covered.com/page' }),
@@ -1103,7 +1103,7 @@ describe('ProceduralMemory', () => {
   describe('Skills by Domain', () => {
     it('should group skills by domain', async () => {
       // Learn skills via trajectories (which sets sourceDomain correctly)
-      await memory.recordTrajectory(
+      await memory.recordWorkflow(
         createTestTrajectory('domain-a.com', {
           actions: [
             createTestAction('navigate', { url: 'https://domain-a.com/page1' }),
@@ -1113,7 +1113,7 @@ describe('ProceduralMemory', () => {
         })
       );
 
-      await memory.recordTrajectory(
+      await memory.recordWorkflow(
         createTestTrajectory('domain-b.com', {
           actions: [
             createTestAction('navigate', { url: 'https://domain-b.com/page' }),
