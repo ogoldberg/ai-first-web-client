@@ -50,12 +50,15 @@ let lastError: string | undefined;
  * Get Redis configuration from environment
  */
 export function getRedisConfig(): RedisConfig {
+  const parsedPort = parseInt(process.env.REDIS_PORT || '6379', 10);
+  const parsedDb = parseInt(process.env.REDIS_DB || '0', 10);
+
   return {
     url: process.env.REDIS_URL,
     host: process.env.REDIS_HOST || 'localhost',
-    port: parseInt(process.env.REDIS_PORT || '6379', 10),
+    port: isNaN(parsedPort) ? 6379 : parsedPort,
     password: process.env.REDIS_PASSWORD,
-    db: parseInt(process.env.REDIS_DB || '0', 10),
+    db: isNaN(parsedDb) ? 0 : parsedDb,
     keyPrefix: process.env.REDIS_KEY_PREFIX || 'unbrowser:',
     connectTimeout: 5000,
     maxRetriesPerRequest: 3,
@@ -122,8 +125,9 @@ async function createRedisClient(config: RedisConfig): Promise<Redis | null> {
     });
 
     return client;
-  } catch {
-    // ioredis not installed
+  } catch (err) {
+    // ioredis not installed or other error
+    console.error('[Redis] Failed to create client:', err);
     return null;
   }
 }

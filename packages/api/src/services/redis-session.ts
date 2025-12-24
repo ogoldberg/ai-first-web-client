@@ -119,6 +119,9 @@ export async function loadSession(
     const cached: CachedSession = JSON.parse(data);
     cached.lastUsed = Date.now();
 
+    // Persist the updated lastUsed back to Redis, keeping the existing TTL
+    await redis.set(key, JSON.stringify(cached), 'KEEPTTL');
+
     const { cachedAt: _c, tenantId: _t, profile: _p, ...session } = cached;
     return session;
   } catch (error) {

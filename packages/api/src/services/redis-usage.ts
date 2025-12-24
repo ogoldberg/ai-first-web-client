@@ -38,14 +38,16 @@ function getToday(): string {
 }
 
 /**
- * Calculate seconds until next midnight UTC + 7 days
+ * Calculate seconds until midnight UTC 8 days from now.
+ * This retains 7 full days of historical data.
  */
 function getTTLSeconds(): number {
   const now = new Date();
-  const tomorrow = new Date(now);
-  tomorrow.setUTCDate(tomorrow.getUTCDate() + 8); // 7 days after tomorrow
-  tomorrow.setUTCHours(0, 0, 0, 0);
-  return Math.floor((tomorrow.getTime() - now.getTime()) / 1000);
+  const expiryDate = new Date(now);
+  // Set to midnight 8 days from now, retaining 7 full days of history
+  expiryDate.setUTCDate(expiryDate.getUTCDate() + 8);
+  expiryDate.setUTCHours(0, 0, 0, 0);
+  return Math.floor((expiryDate.getTime() - now.getTime()) / 1000);
 }
 
 /**
