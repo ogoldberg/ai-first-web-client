@@ -25,10 +25,14 @@ import { ProxySelector, getProxySelector, resetProxySelector } from './proxy-sel
 import {
   parseBrightDataConfig,
   createBrightDataEndpoints,
-  zoneToTier,
   resetBrightDataCounters,
-  type BrightDataZone,
 } from './brightdata-provider.js';
+
+// Number of endpoints to create per country for each Bright Data tier
+const BRIGHTDATA_ENDPOINTS_RESIDENTIAL = 3;
+const BRIGHTDATA_ENDPOINTS_UNLOCKER = 2;
+const BRIGHTDATA_ENDPOINTS_DATACENTER = 5;
+const BRIGHTDATA_ENDPOINTS_ISP = 3;
 
 /**
  * Result of a proxy request
@@ -106,12 +110,20 @@ export class ProxyManager {
     }
 
     // Configure Bright Data proxies with session rotation
-    const brightDataConfig = parseBrightDataConfig();
+    // Use envConfig values (which may have overrides) or fall back to environment
+    const brightDataConfig = envConfig.brightdataAuth
+      ? {
+          auth: envConfig.brightdataAuth,
+          zone: (envConfig.brightdataZone as 'residential' | 'unblocker' | 'datacenter' | 'isp') || 'residential',
+          countries: envConfig.brightdataCountry ? [envConfig.brightdataCountry] : undefined,
+          sessionRotation: true,
+        }
+      : parseBrightDataConfig();
     if (brightDataConfig) {
       // Create residential endpoints with session-based rotation
       const residentialEndpoints = createBrightDataEndpoints(brightDataConfig, {
         zone: 'residential',
-        endpointsPerCountry: 3, // Multiple endpoints for better distribution
+        endpointsPerCountry: BRIGHTDATA_ENDPOINTS_RESIDENTIAL,
       });
 
       if (residentialEndpoints.length > 0) {
@@ -127,7 +139,7 @@ export class ProxyManager {
       // Create premium/unlocker endpoints
       const unlockerEndpoints = createBrightDataEndpoints(brightDataConfig, {
         zone: 'unblocker',
-        endpointsPerCountry: 2,
+        endpointsPerCountry: BRIGHTDATA_ENDPOINTS_UNLOCKER,
       });
 
       if (unlockerEndpoints.length > 0) {
@@ -144,7 +156,7 @@ export class ProxyManager {
       if (brightDataConfig.zone === 'datacenter') {
         const datacenterEndpoints = createBrightDataEndpoints(brightDataConfig, {
           zone: 'datacenter',
-          endpointsPerCountry: 5,
+          endpointsPerCountry: BRIGHTDATA_ENDPOINTS_DATACENTER,
         });
 
         if (datacenterEndpoints.length > 0) {
@@ -162,7 +174,7 @@ export class ProxyManager {
       if (brightDataConfig.zone === 'isp') {
         const ispEndpoints = createBrightDataEndpoints(brightDataConfig, {
           zone: 'isp',
-          endpointsPerCountry: 3,
+          endpointsPerCountry: BRIGHTDATA_ENDPOINTS_ISP,
         });
 
         if (ispEndpoints.length > 0) {
@@ -175,25 +187,6 @@ export class ProxyManager {
           });
         }
       }
-    } else if (envConfig.brightdataAuth) {
-      // Legacy fallback: use old method if new config parsing fails
-      const brightdataProxy = this.createBrightDataProxy(envConfig);
-      this.proxySelector.addPool({
-        id: 'brightdata-residential',
-        tier: 'residential',
-        name: 'Bright Data Residential',
-        proxies: [brightdataProxy],
-        rotationStrategy: 'round-robin',
-      });
-
-      const brightdataUnlocker = this.createBrightDataUnlockerProxy(envConfig);
-      this.proxySelector.addPool({
-        id: 'brightdata-unlocker',
-        tier: 'premium',
-        name: 'Bright Data Unlocker',
-        proxies: [brightdataUnlocker],
-        rotationStrategy: 'round-robin',
-      });
     }
 
     this.initialized = true;
@@ -432,43 +425,6 @@ export class ProxyManager {
       id: `${prefix}-${index}`,
       url,
     }));
-  }
-
-  private createBrightDataProxy(config: ProxyConfig): ProxyEndpoint {
-    const [username, password] = (config.brightdataAuth || '').split(':');
-    const zone = config.brightdataZone || 'residential';
-    const country = config.brightdataCountry;
-
-    let proxyUrl = `http://${username}-zone-${zone}`;
-    if (country) {
-      proxyUrl += `-country-${country}`;
-    }
-    proxyUrl += `:${password}@brd.superproxy.io:22225`;
-
-    return {
-      id: 'brightdata-residential-1',
-      url: proxyUrl,
-      country: country,
-      isResidential: true,
-    };
-  }
-
-  private createBrightDataUnlockerProxy(config: ProxyConfig): ProxyEndpoint {
-    const [username, password] = (config.brightdataAuth || '').split(':');
-    const country = config.brightdataCountry;
-
-    let proxyUrl = `http://${username}-zone-unblocker`;
-    if (country) {
-      proxyUrl += `-country-${country}`;
-    }
-    proxyUrl += `:${password}@brd.superproxy.io:22225`;
-
-    return {
-      id: 'brightdata-unlocker-1',
-      url: proxyUrl,
-      country: country,
-      isResidential: true,
-    };
   }
 }
 

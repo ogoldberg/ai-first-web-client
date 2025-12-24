@@ -232,7 +232,7 @@ export function parseBrightDataConfig(): BrightDataConfig | null {
 
   const zone = (process.env.BRIGHTDATA_ZONE as BrightDataZone) || 'residential';
   const countriesStr = process.env.BRIGHTDATA_COUNTRIES || process.env.BRIGHTDATA_COUNTRY;
-  const countries = countriesStr ? countriesStr.split(',').map((c) => c.trim().toLowerCase()) : undefined;
+  const countries = countriesStr ? countriesStr.split(',').map((c) => c.trim().toLowerCase()).filter(Boolean) : undefined;
   const sessionRotation = process.env.BRIGHTDATA_SESSION_ROTATION !== 'false';
   const portStr = process.env.BRIGHTDATA_PORT;
   const port = portStr ? parseInt(portStr, 10) : undefined;

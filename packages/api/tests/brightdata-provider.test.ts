@@ -231,6 +231,42 @@ describe('Bright Data Provider', () => {
       expect(config?.countries).toEqual(['us', 'uk', 'de']);
     });
 
+    it('should handle trailing commas in countries list', () => {
+      process.env.BRIGHTDATA_AUTH = 'customer:password';
+      process.env.BRIGHTDATA_COUNTRIES = 'us, uk, de,';
+
+      const config = parseBrightDataConfig();
+
+      expect(config?.countries).toEqual(['us', 'uk', 'de']);
+    });
+
+    it('should handle leading commas in countries list', () => {
+      process.env.BRIGHTDATA_AUTH = 'customer:password';
+      process.env.BRIGHTDATA_COUNTRIES = ',us, uk';
+
+      const config = parseBrightDataConfig();
+
+      expect(config?.countries).toEqual(['us', 'uk']);
+    });
+
+    it('should handle multiple consecutive commas in countries list', () => {
+      process.env.BRIGHTDATA_AUTH = 'customer:password';
+      process.env.BRIGHTDATA_COUNTRIES = 'us,, uk,,de';
+
+      const config = parseBrightDataConfig();
+
+      expect(config?.countries).toEqual(['us', 'uk', 'de']);
+    });
+
+    it('should handle whitespace-only entries in countries list', () => {
+      process.env.BRIGHTDATA_AUTH = 'customer:password';
+      process.env.BRIGHTDATA_COUNTRIES = 'us,   , uk';
+
+      const config = parseBrightDataConfig();
+
+      expect(config?.countries).toEqual(['us', 'uk']);
+    });
+
     it('should parse session rotation setting', () => {
       process.env.BRIGHTDATA_AUTH = 'customer:password';
       process.env.BRIGHTDATA_SESSION_ROTATION = 'false';
