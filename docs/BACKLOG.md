@@ -236,7 +236,7 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 | SDK-007 | Add SDK usage examples | M | Complete | 12 examples: basic browse, tier control, API discovery, sessions, batch processing, content extraction, stealth mode, error handling, change tracking, procedural memory, analytics, TypeScript |
 | SDK-008 | Write SDK documentation | L | Complete | Comprehensive README with config options, TypeScript examples, options reference, API documentation |
 | SDK-009 | Refactor MCP tools as thin wrappers | L | Complete | Modular MCP architecture: tool-schemas.ts, response-formatters.ts, sdk-client.ts, handlers/ directory. Index.ts reduced from 3588 to ~400 lines |
-| SDK-010 | Publish SDK to npm | S | Complete | Package renamed to @unbrowser/core v0.1.0-alpha.1. GitHub Actions workflow created for manual publish. Ready for npm publish when user authorizes |
+| SDK-010 | Publish SDK to npm | S | Suspended | Branch `practical-williams-backup` has TS errors (missing @types/node, @lancedb/lancedb). Package.json prep done but build fails |
 | SDK-011 | Create SDK migration guide | M | Complete | How to migrate from MCP-only to SDK usage. Include code examples for common patterns. New doc: docs/SDK_MIGRATION_GUIDE.md |
 | SDK-012 | Add SDK integration tests | M | Complete | Test SDK in isolation (no MCP). Ensure all features work programmatically. 30 tests added in tests/sdk/http-client.test.ts |
 
@@ -373,6 +373,29 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 | DX-010 | Improve error messages with suggestions | M | Not Started | E.g., "LightweightRenderer requires URL. Use ContentExtractor for HTML." |
 
 **Quick Wins (completed):** DX-001, DX-002, DX-003, DX-005, DX-006, DX-007, DX-008
+
+---
+
+## P2: Competitive Feature Parity (From Competitive Analysis)
+
+See [COMPETITIVE_ANALYSIS.md](COMPETITIVE_ANALYSIS.md) for context on why these features matter.
+
+**Goal:** Add features identified from competitive analysis of Anthropic Chrome extension while maintaining our speed advantage.
+
+| ID | Task | Effort | Status | Notes |
+|----|------|--------|--------|-------|
+| COMP-002 | Plan Preview | M | Suspended | Show users what will happen before execution. Branch: `claude/explore-browser-extension-XXNlH-backup` has partial impl with TS errors |
+| COMP-007 | Workflow Recording Core | L | Suspended | Record browse operations as replayable workflows. Branch has `src/core/workflow-recorder.ts` with TS errors (missing logger components) |
+| COMP-008 | Workflow ProceduralMemory Integration | M | Suspended | Store workflows in ProceduralMemory for persistence. Branch has partial impl |
+| COMP-009 | Workflow API Endpoints | M | Suspended | POST /v1/workflows/record/start, stop, replay. Branch has `packages/api/src/routes/workflows.ts` with TS errors |
+| COMP-010 | Workflow SDK Methods | M | Suspended | SDK methods for workflow recording. Branch has `packages/core/src/http-client.ts` updates |
+| COMP-014 | Verification Learning | M | Suspended | Learn which checks prevent failures. Branch has `src/core/verification-engine.ts` with TS errors (missing ProceduralMemory.getLearnedVerifications) |
+| COMP-015 | Verification API Options | S | Suspended | Add verify options to browse API. Branch has partial impl |
+
+**Notes:**
+- Branch `claude/explore-browser-extension-XXNlH-backup` contains ~2,800 lines of partial implementation
+- 10 TypeScript errors need fixing: missing logger components (`workflowRecorder`, `verificationEngine`) and missing `ProceduralMemory.getLearnedVerifications()` method
+- Estimated 2-4 hours to fix and complete
 
 ---
 
