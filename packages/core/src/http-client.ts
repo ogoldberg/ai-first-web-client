@@ -37,6 +37,13 @@ export interface BrowseOptions {
   maxLatencyMs?: number;
   /** Maximum cost tier to use */
   maxCostTier?: 'intelligence' | 'lightweight' | 'playwright';
+  /** Verification options (COMP-015) */
+  verify?: {
+    /** Enable verification (default: true for basic mode) */
+    enabled?: boolean;
+    /** Verification mode: basic, standard, or thorough */
+    mode?: 'basic' | 'standard' | 'thorough';
+  };
 }
 
 export interface SessionData {
@@ -85,6 +92,19 @@ export interface BrowseResult {
   };
   /** New cookies set during the request */
   newCookies?: Cookie[];
+  /** Verification result (COMP-015) */
+  verification?: {
+    /** Whether all checks passed */
+    passed: boolean;
+    /** Overall confidence (0-1) */
+    confidence: number;
+    /** Number of checks run */
+    checksRun: number;
+    /** Error messages from failed checks */
+    errors?: string[];
+    /** Warning messages */
+    warnings?: string[];
+  };
 }
 
 export interface BatchResult {
