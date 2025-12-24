@@ -22,6 +22,17 @@ import { PROXY_TIER_COSTS, parseProxyUrl } from './proxy-types.js';
 import { ProxyHealthTracker, getHealthTracker, resetHealthTracker } from './proxy-health.js';
 import { DomainRiskClassifier, getDomainRiskClassifier, resetDomainRiskClassifier } from './domain-risk.js';
 import { ProxySelector, getProxySelector, resetProxySelector } from './proxy-selector.js';
+import {
+  parseBrightDataConfig,
+  createBrightDataEndpoints,
+  resetBrightDataCounters,
+} from './brightdata-provider.js';
+
+// Number of endpoints to create per country for each Bright Data tier
+const BRIGHTDATA_ENDPOINTS_RESIDENTIAL = 3;
+const BRIGHTDATA_ENDPOINTS_UNLOCKER = 2;
+const BRIGHTDATA_ENDPOINTS_DATACENTER = 5;
+const BRIGHTDATA_ENDPOINTS_ISP = 3;
 
 /**
  * Result of a proxy request
@@ -98,26 +109,84 @@ export class ProxyManager {
       }
     }
 
-    // Configure Bright Data residential proxies
-    if (envConfig.brightdataAuth) {
-      const brightdataProxy = this.createBrightDataProxy(envConfig);
-      this.proxySelector.addPool({
-        id: 'brightdata-residential',
-        tier: 'residential',
-        name: 'Bright Data Residential',
-        proxies: [brightdataProxy],
-        rotationStrategy: 'round-robin',
+    // Configure Bright Data proxies with session rotation
+    // Use envConfig values (which may have overrides) or fall back to environment
+    const brightDataConfig = envConfig.brightdataAuth
+      ? {
+          auth: envConfig.brightdataAuth,
+          zone: (envConfig.brightdataZone as 'residential' | 'unblocker' | 'datacenter' | 'isp') || 'residential',
+          countries: envConfig.brightdataCountry ? [envConfig.brightdataCountry] : undefined,
+          sessionRotation: true,
+        }
+      : parseBrightDataConfig();
+    if (brightDataConfig) {
+      // Create residential endpoints with session-based rotation
+      const residentialEndpoints = createBrightDataEndpoints(brightDataConfig, {
+        zone: 'residential',
+        endpointsPerCountry: BRIGHTDATA_ENDPOINTS_RESIDENTIAL,
       });
 
-      // Also add as premium tier for unlocker access
-      const brightdataUnlocker = this.createBrightDataUnlockerProxy(envConfig);
-      this.proxySelector.addPool({
-        id: 'brightdata-unlocker',
-        tier: 'premium',
-        name: 'Bright Data Unlocker',
-        proxies: [brightdataUnlocker],
-        rotationStrategy: 'round-robin',
+      if (residentialEndpoints.length > 0) {
+        this.proxySelector.addPool({
+          id: 'brightdata-residential',
+          tier: 'residential',
+          name: 'Bright Data Residential (Session Rotating)',
+          proxies: residentialEndpoints,
+          rotationStrategy: 'round-robin',
+        });
+      }
+
+      // Create premium/unlocker endpoints
+      const unlockerEndpoints = createBrightDataEndpoints(brightDataConfig, {
+        zone: 'unblocker',
+        endpointsPerCountry: BRIGHTDATA_ENDPOINTS_UNLOCKER,
       });
+
+      if (unlockerEndpoints.length > 0) {
+        this.proxySelector.addPool({
+          id: 'brightdata-unlocker',
+          tier: 'premium',
+          name: 'Bright Data Unlocker (Premium)',
+          proxies: unlockerEndpoints,
+          rotationStrategy: 'round-robin',
+        });
+      }
+
+      // If datacenter zone is configured, add datacenter pool from Bright Data
+      if (brightDataConfig.zone === 'datacenter') {
+        const datacenterEndpoints = createBrightDataEndpoints(brightDataConfig, {
+          zone: 'datacenter',
+          endpointsPerCountry: BRIGHTDATA_ENDPOINTS_DATACENTER,
+        });
+
+        if (datacenterEndpoints.length > 0) {
+          this.proxySelector.addPool({
+            id: 'brightdata-datacenter',
+            tier: 'datacenter',
+            name: 'Bright Data Datacenter',
+            proxies: datacenterEndpoints,
+            rotationStrategy: 'round-robin',
+          });
+        }
+      }
+
+      // If ISP zone is configured, add ISP pool from Bright Data
+      if (brightDataConfig.zone === 'isp') {
+        const ispEndpoints = createBrightDataEndpoints(brightDataConfig, {
+          zone: 'isp',
+          endpointsPerCountry: BRIGHTDATA_ENDPOINTS_ISP,
+        });
+
+        if (ispEndpoints.length > 0) {
+          this.proxySelector.addPool({
+            id: 'brightdata-isp',
+            tier: 'isp',
+            name: 'Bright Data ISP',
+            proxies: ispEndpoints,
+            rotationStrategy: 'least-used',
+          });
+        }
+      }
     }
 
     this.initialized = true;
@@ -310,6 +379,7 @@ export class ProxyManager {
     resetHealthTracker();
     resetDomainRiskClassifier();
     resetProxySelector();
+    resetBrightDataCounters();
     this.healthTracker = getHealthTracker();
     this.riskClassifier = getDomainRiskClassifier();
     this.proxySelector = getProxySelector();
@@ -355,43 +425,6 @@ export class ProxyManager {
       id: `${prefix}-${index}`,
       url,
     }));
-  }
-
-  private createBrightDataProxy(config: ProxyConfig): ProxyEndpoint {
-    const [username, password] = (config.brightdataAuth || '').split(':');
-    const zone = config.brightdataZone || 'residential';
-    const country = config.brightdataCountry;
-
-    let proxyUrl = `http://${username}-zone-${zone}`;
-    if (country) {
-      proxyUrl += `-country-${country}`;
-    }
-    proxyUrl += `:${password}@brd.superproxy.io:22225`;
-
-    return {
-      id: 'brightdata-residential-1',
-      url: proxyUrl,
-      country: country,
-      isResidential: true,
-    };
-  }
-
-  private createBrightDataUnlockerProxy(config: ProxyConfig): ProxyEndpoint {
-    const [username, password] = (config.brightdataAuth || '').split(':');
-    const country = config.brightdataCountry;
-
-    let proxyUrl = `http://${username}-zone-unblocker`;
-    if (country) {
-      proxyUrl += `-country-${country}`;
-    }
-    proxyUrl += `:${password}@brd.superproxy.io:22225`;
-
-    return {
-      id: 'brightdata-unlocker-1',
-      url: proxyUrl,
-      country: country,
-      isResidential: true,
-    };
   }
 }
 
