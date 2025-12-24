@@ -4,7 +4,7 @@
  * Tests for browse, health, and other API routes.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { Hono } from 'hono';
 import { health, setHealthCheck } from '../src/routes/health.js';
 import { browse } from '../src/routes/browse.js';
@@ -13,7 +13,59 @@ import {
   setApiKeyStore,
   createInMemoryApiKeyStore,
 } from '../src/middleware/auth.js';
+import { setBrowserClient } from '../src/services/browser.js';
 import type { Tenant, ApiKey } from '../src/middleware/types.js';
+
+// Mock browser client for testing
+function createMockBrowserClient() {
+  return {
+    browse: vi.fn().mockResolvedValue({
+      url: 'https://example.com',
+      finalUrl: 'https://example.com',
+      title: 'Example Domain',
+      content: {
+        markdown: '# Example Domain\n\nThis domain is for use in illustrative examples.',
+        text: 'Example Domain\n\nThis domain is for use in illustrative examples.',
+        html: '<html>...</html>',
+      },
+      tier: 'intelligence',
+      tiersAttempted: ['intelligence'],
+      tables: [],
+      links: [],
+      discoveredApis: [],
+      learning: {
+        patternsApplied: false,
+      },
+      fieldConfidence: {
+        aggregated: { score: 0.9 },
+      },
+    }),
+    fetch: vi.fn().mockResolvedValue({
+      url: 'https://example.com',
+      finalUrl: 'https://example.com',
+      content: {
+        markdown: '# Example Domain\n\nThis domain is for use in illustrative examples.',
+        text: 'Example Domain\n\nThis domain is for use in illustrative examples.',
+        title: 'Example Domain',
+      },
+      tier: 'intelligence',
+      tiersAttempted: ['intelligence'],
+    }),
+    getDomainIntelligence: vi.fn().mockResolvedValue({
+      knownPatterns: 2,
+      selectorChains: 1,
+      validators: 0,
+      paginationPatterns: 0,
+      recentFailures: 0,
+      successRate: 0.95,
+      domainGroup: null,
+      recommendedWaitStrategy: 'networkidle',
+      shouldUseSession: false,
+    }),
+    initialize: vi.fn().mockResolvedValue(undefined),
+    cleanup: vi.fn().mockResolvedValue(undefined),
+  } as any;
+}
 
 // Helper to create test data
 function createTestTenant(overrides: Partial<Tenant> = {}): Tenant {
@@ -130,11 +182,16 @@ describe('Health Routes', () => {
 
 describe('Browse Routes', () => {
   let app: Hono;
+  let mockClient: ReturnType<typeof createMockBrowserClient>;
   const testKey = 'ub_live_' + 'a'.repeat(32);
   const testKeyHash = hashApiKey(testKey);
   const authHeader = { Authorization: `Bearer ${testKey}` };
 
   beforeEach(() => {
+    // Set up mock browser client
+    mockClient = createMockBrowserClient();
+    setBrowserClient(mockClient);
+
     // Set up in-memory store with test data
     const tenant = createTestTenant();
     const apiKey = createTestApiKey({ keyHash: testKeyHash });
@@ -148,6 +205,7 @@ describe('Browse Routes', () => {
 
   afterEach(() => {
     setApiKeyStore(null as any);
+    setBrowserClient(null as any);
   });
 
   describe('POST /v1/browse', () => {
@@ -209,7 +267,32 @@ describe('Browse Routes', () => {
       expect(body.success).toBe(true);
       expect(body.data.url).toBe('https://example.com');
       expect(body.data.content).toBeDefined();
+      expect(body.data.content.markdown).toContain('Example Domain');
       expect(body.data.metadata).toBeDefined();
+      expect(mockClient.browse).toHaveBeenCalledWith('https://example.com', expect.any(Object));
+    });
+
+    it('should pass options to browser client', async () => {
+      const res = await app.request('/v1/browse', {
+        method: 'POST',
+        headers: { ...authHeader, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url: 'https://example.com',
+          options: {
+            waitForSelector: '.content',
+            scrollToLoad: true,
+            maxLatencyMs: 5000,
+          },
+        }),
+      });
+
+      expect(res.status).toBe(200);
+      expect(mockClient.browse).toHaveBeenCalledWith('https://example.com', {
+        waitForSelector: '.content',
+        scrollToLoad: true,
+        maxLatencyMs: 5000,
+        maxCostTier: undefined,
+      });
     });
   });
 
@@ -225,6 +308,7 @@ describe('Browse Routes', () => {
       const body = await res.json();
       expect(body.success).toBe(true);
       expect(body.data.url).toBe('https://example.com');
+      expect(mockClient.fetch).toHaveBeenCalledWith('https://example.com', expect.any(Object));
     });
   });
 
@@ -293,6 +377,8 @@ describe('Browse Routes', () => {
       expect(body.success).toBe(true);
       expect(body.data.results).toHaveLength(2);
       expect(body.data.totalTime).toBeGreaterThanOrEqual(0);
+      expect(body.data.successCount).toBe(2);
+      expect(mockClient.browse).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -321,6 +407,8 @@ describe('Browse Routes', () => {
       const body = await res.json();
       expect(body.success).toBe(true);
       expect(body.data.domain).toBe('example.com');
+      expect(body.data.knownPatterns).toBe(2);
+      expect(mockClient.getDomainIntelligence).toHaveBeenCalledWith('example.com');
     });
   });
 });

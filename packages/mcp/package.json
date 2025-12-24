@@ -36,7 +36,7 @@
     "directory": "packages/mcp"
   },
   "dependencies": {
-    "@unbrowser/core": "workspace:*",
+    "@unbrowser/core": "file:../core",
     "@modelcontextprotocol/sdk": "^0.6.0"
   },
   "devDependencies": {
