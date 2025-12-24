@@ -322,7 +322,7 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 | API-010 | Implement health checks and monitoring | M | Not Started | /health endpoint, metrics export (Prometheus), alerting (PagerDuty) |
 | API-011 | Add API documentation | L | Not Started | OpenAPI/Swagger UI, getting started guide, code examples (curl, Python, Node.js) |
 | API-012 | Create API client libraries | L | Not Started | Official clients: JavaScript/TypeScript (wraps fetch), Python (requests-based) |
-| API-013 | Set up CI/CD pipeline | M | Not Started | Automated testing, deployment to staging/production, rollback capability |
+| API-013 | Set up CI/CD pipeline | M | In Progress | Automated testing, deployment to staging/production, rollback capability |
 | API-014 | Load testing and optimization | L | Not Started | Test at 1000+ req/s, identify bottlenecks, optimize database queries |
 | API-015 | Security audit | M | Not Started | Penetration testing, OWASP top 10 review, dependency scanning |
 | API-016 | Create pricing calculator | M | Not Started | Help users estimate costs based on usage patterns. Interactive tool on website |
