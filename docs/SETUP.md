@@ -14,7 +14,7 @@ npm run build
 
 # 4. Test that it works
 node dist/index.js
-# You should see: "LLM Browser MCP Server running"
+# You should see: "Unbrowser MCP Server running"
 # Press Ctrl+C to stop
 \`\`\`
 
@@ -33,7 +33,7 @@ node dist/index.js
    touch ~/Library/Application\ Support/Claude/claude_desktop_config.json
    \`\`\`
 
-3. **Add the LLM Browser server:**
+3. **Add the Unbrowser server:**
    \`\`\`json
    {
      "mcpServers": {

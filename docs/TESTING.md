@@ -1,6 +1,6 @@
 # Testing Guide
 
-Quick guide for testing the LLM Browser MCP Server without full Claude Desktop setup.
+Quick guide for testing the Unbrowser MCP Server without full Claude Desktop setup.
 
 ## Quick Start
 

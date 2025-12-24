@@ -1,8 +1,8 @@
-# LLM Browser Vision & Strategy
+# Unbrowser Vision & Strategy
 
 ## Executive Vision
 
-**The LLM Browser is the intelligent interface between AI and the web** - a system that learns, adapts, and optimizes how AI agents interact with websites, progressively eliminating the need for heavy browser rendering while maintaining full capability.
+**Unbrowser is the intelligent interface between AI and the web** - a system that learns, adapts, and optimizes how AI agents interact with websites, progressively eliminating the need for heavy browser rendering while maintaining full capability.
 
 ### The Problem We Solve
 

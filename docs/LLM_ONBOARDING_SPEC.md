@@ -1,6 +1,6 @@
 # LLM Client Onboarding Specification
 
-This document defines the trust contract between the LLM Browser MCP Server and LLM clients. It explains how to interpret confidence scores, handle errors, understand pattern lifecycle, and make decisions based on response metadata.
+This document defines the trust contract between the Unbrowser MCP Server and LLM clients. It explains how to interpret confidence scores, handle errors, understand pattern lifecycle, and make decisions based on response metadata.
 
 ## Table of Contents
 

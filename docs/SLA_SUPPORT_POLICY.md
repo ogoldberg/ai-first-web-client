@@ -1,4 +1,4 @@
-# LLM Browser SLA & Support Policy
+# Unbrowser SLA & Support Policy
 
 **Version:** 1.0
 **Last Updated:** 2025-12-21
@@ -8,7 +8,7 @@
 
 ## Overview
 
-This document defines the Service Level Agreement (SLA) and support policies for the LLM Browser hosted service. It outlines uptime commitments, support response times, escalation procedures, and service credit policies.
+This document defines the Service Level Agreement (SLA) and support policies for the Unbrowser hosted service. It outlines uptime commitments, support response times, escalation procedures, and service credit policies.
 
 ---
 

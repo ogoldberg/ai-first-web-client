@@ -1,4 +1,4 @@
-# LLM Browser MCP Server - Session Summary
+# Unbrowser MCP Server - Session Summary
 
 **Date:** 2025-10-23
 **Status:** ✅ Phase 1 MVP Complete & Learning Component Verified

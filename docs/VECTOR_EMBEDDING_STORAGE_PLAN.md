@@ -6,7 +6,7 @@
 
 ## Executive Summary
 
-This document describes how to add vector embedding storage to the LLM Browser MCP Server using LanceDB as a complementary database to our existing SQLite storage. This enables semantic similarity search for patterns, skills, and content, dramatically improving the system's ability to find relevant learned knowledge.
+This document describes how to add vector embedding storage to Unbrowser using LanceDB as a complementary database to our existing SQLite storage. This enables semantic similarity search for patterns, skills, and content, dramatically improving the system's ability to find relevant learned knowledge.
 
 ## Problem Statement
 

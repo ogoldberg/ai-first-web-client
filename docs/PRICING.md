@@ -1,4 +1,4 @@
-# LLM Browser Pricing & Packaging
+# Unbrowser Pricing & Packaging
 
 **Version:** 1.0
 **Last Updated:** 2025-12-21
@@ -7,7 +7,7 @@
 
 ## Overview
 
-LLM Browser offers flexible pricing designed for LLM application builders, data pipeline teams, and enterprises. Pay for what you use, with predictable scaling.
+Unbrowser offers flexible pricing designed for LLM application builders, data pipeline teams, and enterprises. Pay for what you use, with predictable scaling.
 
 ---
 

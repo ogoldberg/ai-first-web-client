@@ -1,7 +1,7 @@
-# LLM Browser - Go-To-Market Plan & Pricing
+# Unbrowser - Go-To-Market Plan & Pricing
 
 **Date:** 2025-12-20
-**Goal:** Turn the LLM Browser into a sustainable business while preserving open-source adoption.
+**Goal:** Turn Unbrowser into a sustainable business while preserving open-source adoption.
 
 ---
 

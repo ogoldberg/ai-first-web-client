@@ -8,7 +8,7 @@
 
 ## Overview
 
-This checklist tracks the requirements for deploying the LLM Browser as a hosted service for alpha customers. The goal is a managed MCP endpoint with basic analytics and limited stored patterns, as defined in the Starter tier.
+This checklist tracks the requirements for deploying Unbrowser as a hosted service for alpha customers. The goal is a managed MCP endpoint with basic analytics and limited stored patterns, as defined in the Starter tier.
 
 ---
 

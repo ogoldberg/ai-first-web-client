@@ -229,16 +229,18 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 |----|------|--------|--------|-------|
 | SDK-001 | Audit core dependencies and interfaces | S | Complete | Identify what belongs in SDK vs wrappers. Document current coupling between core and MCP. See [SDK_ARCHITECTURE.md](SDK_ARCHITECTURE.md) |
 | SDK-002 | Create @unbrowser/core package structure | S | Complete | Set up npm workspaces monorepo with packages/core and packages/mcp |
-| SDK-003 | Extract SmartBrowser as SDK entry point | M | Complete | Clean public API: browse(), executeApi(), initialize(), getDomainInsights(), etc. |
-| SDK-004 | Extract learning components to SDK | M | Complete | LearningEngine, ProceduralMemory, ApiPatternRegistry. Zero MCP dependencies. Full exports in packages/core |
-| SDK-005 | Extract session and auth to SDK | M | Complete | SessionManager, AuthWorkflow with full type exports. Clean credential storage abstraction |
-| SDK-006 | Create SDK type definitions | S | Complete | Comprehensive TypeScript types for all public APIs. Export interfaces, types, enums |
-| SDK-007 | Add SDK usage examples | M | Complete | 12 examples: basic browse, tier control, API discovery, sessions, batch processing, content extraction, stealth mode, error handling, change tracking, procedural memory, analytics, TypeScript |
-| SDK-008 | Write SDK documentation | L | Complete | Comprehensive README with config options, TypeScript examples, options reference, API documentation |
-| SDK-009 | Refactor MCP tools as thin wrappers | L | Complete | Modular MCP architecture: tool-schemas.ts, response-formatters.ts, sdk-client.ts, handlers/ directory. Index.ts reduced from 3588 to ~400 lines |
-| SDK-010 | Publish SDK to npm | S | Suspended | Branch `practical-williams-backup` has TS errors (missing @types/node, @lancedb/lancedb). Package.json prep done but build fails |
-| SDK-011 | Create SDK migration guide | M | Complete | How to migrate from MCP-only to SDK usage. Include code examples for common patterns. New doc: docs/SDK_MIGRATION_GUIDE.md |
-| SDK-012 | Add SDK integration tests | M | Complete | Test SDK in isolation (no MCP). Ensure all features work programmatically. 30 tests added in tests/sdk/http-client.test.ts |
+| SDK-003 | Extract SmartBrowser as SDK entry point | M | **Partial** | HTTP client wrapper created (packages/core/src/http-client.ts). Full SmartBrowser still in root src/core/ - not extracted |
+| SDK-004 | Extract learning components to SDK | M | **Not Started** | LearningEngine, ProceduralMemory still in root src/core/. Current SDK is HTTP wrapper only |
+| SDK-005 | Extract session and auth to SDK | M | **Not Started** | SessionManager still in root src/core/. Current SDK delegates to cloud API |
+| SDK-006 | Create SDK type definitions | S | **Partial** | Basic types in packages/core/src/index.ts (47 lines). Full types still in root src/types/ |
+| SDK-007 | Add SDK usage examples | M | Complete | 12 examples in packages/core/examples/ |
+| SDK-008 | Write SDK documentation | L | Complete | Comprehensive README in packages/core/ |
+| SDK-009 | Refactor MCP tools as thin wrappers | L | Complete | Modular MCP architecture: tool-schemas.ts, response-formatters.ts, sdk-client.ts, handlers/ directory |
+| SDK-010 | Publish SDK to npm | S | Complete | Branch `practical-williams-backup` builds and tests pass (2340 tests). Ready for npm publish as HTTP client SDK |
+| SDK-011 | Create SDK migration guide | M | Complete | docs/SDK_MIGRATION_GUIDE.md |
+| SDK-012 | Add SDK integration tests | M | Complete | tests/sdk/http-client.test.ts |
+
+**Note:** The current SDK (@unbrowser/core) is an **HTTP client wrapper** that calls the cloud API. The core intelligence (SmartBrowser, LearningEngine, ProceduralMemory) remains in root src/core/ and runs server-side. This is the intended architecture for the cloud-first approach - SDK-003 through SDK-006 were scoped for HTTP client, not full extraction.
 
 **Benefits:**
 - Scraping users can use SDK directly (no LLM overhead)
@@ -519,15 +521,15 @@ See [COMPETITIVE_ANALYSIS.md](COMPETITIVE_ANALYSIS.md) for context on why these 
 
 ## P2: LLM-Assisted Bypass Research (New Initiative)
 
-**Goal:** Create a self-improving feedback loop where the LLM Browser can research its own bypass techniques when blocked.
+**Goal:** Create a self-improving feedback loop where Unbrowser can research its own bypass techniques when blocked.
 
 **Concept:**
-1. LLM Browser gets blocked on a site (Cloudflare, DataDome, etc.)
+1. Unbrowser gets blocked on a site (Cloudflare, DataDome, etc.)
 2. Returns structured response with research suggestions
-3. LLM uses LLM Browser to search for bypass techniques
+3. LLM uses Unbrowser to search for bypass techniques
 4. LLM synthesizes research into actionable parameters
 5. LLM retries with new parameters
-6. If successful, LLM Browser learns and persists what worked
+6. If successful, Unbrowser learns and persists what worked
 
 **Why This Matters:**
 - Dynamic adaptation without code changes
