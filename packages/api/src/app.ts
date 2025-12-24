@@ -13,6 +13,7 @@ import { secureHeaders } from 'hono/secure-headers';
 import { HTTPException } from 'hono/http-exception';
 import { health } from './routes/health.js';
 import { browse } from './routes/browse.js';
+import workflows from './routes/workflows.js';
 
 // Create the main Hono app
 const app = new Hono();
@@ -36,6 +37,7 @@ app.use(
 // Mount routes
 app.route('/health', health);
 app.route('/v1', browse);
+app.route('/v1/workflows', workflows); // COMP-009: Workflow recording
 
 // Root endpoint
 app.get('/', (c) => {
@@ -50,6 +52,9 @@ app.get('/', (c) => {
       fetch: '/v1/fetch',
       intelligence: '/v1/domains/:domain/intelligence',
       usage: '/v1/usage',
+      workflows: '/v1/workflows',
+      recordWorkflow: '/v1/workflows/record/start',
+      replayWorkflow: '/v1/workflows/:id/replay',
     },
   });
 });

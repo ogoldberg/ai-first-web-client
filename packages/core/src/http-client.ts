@@ -461,6 +461,165 @@ export class UnbrowserClient {
 
     return response.json() as Promise<{ status: string; version: string; uptime?: number }>;
   }
+
+  // ============================================
+  // Workflow Recording (COMP-010)
+  // ============================================
+
+  /**
+   * Start a workflow recording session
+   *
+   * Records all browse operations for later replay.
+   * Use with browse() by passing the recordingId in headers.
+   *
+   * @example
+   * ```typescript
+   * // Start recording
+   * const session = await client.startRecording({
+   *   name: 'Extract product pricing',
+   *   description: 'Navigate to product page and extract price',
+   *   domain: 'example.com'
+   * });
+   *
+   * // Browse (auto-captured)
+   * await client.browse('https://example.com/products/123', {
+   *   headers: { 'X-Recording-Session': session.recordingId }
+   * });
+   *
+   * // Stop and save
+   * const workflow = await client.stopRecording(session.recordingId);
+   * ```
+   */
+  async startRecording(request: {
+    name: string;
+    description: string;
+    domain: string;
+    tags?: string[];
+  }): Promise<{ recordingId: string; status: string; startedAt: string }> {
+    return this.request('POST', '/v1/workflows/record/start', request);
+  }
+
+  /**
+   * Stop a recording session and optionally save as workflow
+   */
+  async stopRecording(recordingId: string, save: boolean = true): Promise<{
+    workflowId: string;
+    skillId: string;
+    name: string;
+    steps: number;
+    estimatedDuration: number;
+  } | null> {
+    return this.request('POST', `/v1/workflows/record/${recordingId}/stop`, { save });
+  }
+
+  /**
+   * Annotate a step in an active recording
+   *
+   * Mark steps as critical/important/optional and add descriptions.
+   */
+  async annotateRecording(recordingId: string, annotation: {
+    stepNumber: number;
+    annotation: string;
+    importance?: 'critical' | 'important' | 'optional';
+  }): Promise<{ recordingId: string; stepNumber: number; annotated: boolean }> {
+    return this.request('POST', `/v1/workflows/record/${recordingId}/annotate`, annotation);
+  }
+
+  /**
+   * Replay a saved workflow with optional variable substitution
+   *
+   * @example
+   * ```typescript
+   * // Replay with different product ID
+   * const results = await client.replayWorkflow('wf_xyz789', {
+   *   productId: '456'
+   * });
+   *
+   * console.log(results.overallSuccess); // true
+   * console.log(results.results[0].data); // First step result
+   * ```
+   */
+  async replayWorkflow(workflowId: string, variables?: Record<string, string | number | boolean>): Promise<{
+    workflowId: string;
+    overallSuccess: boolean;
+    totalDuration: number;
+    results: Array<{
+      stepNumber: number;
+      success: boolean;
+      duration: number;
+      tier?: 'intelligence' | 'lightweight' | 'playwright';
+      error?: string;
+    }>;
+  }> {
+    return this.request('POST', `/v1/workflows/${workflowId}/replay`, { variables });
+  }
+
+  /**
+   * List saved workflows
+   */
+  async listWorkflows(options?: {
+    domain?: string;
+    tags?: string[];
+  }): Promise<{
+    workflows: Array<{
+      id: string;
+      name: string;
+      description: string;
+      domain: string;
+      tags: string[];
+      steps: number;
+      version: number;
+      usageCount: number;
+      successRate: number;
+      createdAt: string;
+      updatedAt: string;
+    }>;
+    total: number;
+  }> {
+    const params = new URLSearchParams();
+    if (options?.domain) params.set('domain', options.domain);
+    if (options?.tags) params.set('tags', options.tags.join(','));
+
+    const query = params.toString();
+    return this.request('GET', `/v1/workflows${query ? `?${query}` : ''}`);
+  }
+
+  /**
+   * Get workflow details including full step information
+   */
+  async getWorkflow(workflowId: string): Promise<{
+    id: string;
+    name: string;
+    description: string;
+    domain: string;
+    tags: string[];
+    version: number;
+    usageCount: number;
+    successRate: number;
+    skillId?: string;
+    steps: Array<{
+      stepNumber: number;
+      action: string;
+      url?: string;
+      description: string;
+      userAnnotation?: string;
+      importance: 'critical' | 'important' | 'optional';
+      tier?: 'intelligence' | 'lightweight' | 'playwright';
+      duration?: number;
+      success: boolean;
+    }>;
+    createdAt: string;
+    updatedAt: string;
+  }> {
+    return this.request('GET', `/v1/workflows/${workflowId}`);
+  }
+
+  /**
+   * Delete a saved workflow
+   */
+  async deleteWorkflow(workflowId: string): Promise<{ workflowId: string; deleted: boolean }> {
+    return this.request('DELETE', `/v1/workflows/${workflowId}`);
+  }
 }
 
 // ============================================
