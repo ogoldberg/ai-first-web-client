@@ -329,7 +329,7 @@ For security incidents affecting customer data:
 
 The service is subject to fair use guidelines:
 - No automated abuse or DoS-style patterns
-- No scraping for competitive intelligence against LLM Browser
+- No scraping for competitive intelligence against Unbrowser
 - No reselling without partnership agreement
 
 ### Rate Limits
