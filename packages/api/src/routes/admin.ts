@@ -6,9 +6,13 @@
  */
 
 import { Hono } from 'hono';
+import { authMiddleware, requirePermission } from '../middleware/auth.js';
 import { getRequestLogger, type LogQueryFilter } from '../middleware/request-logger.js';
 
 export const admin = new Hono();
+
+// Protect all admin routes - require authentication and admin permission
+admin.use('*', authMiddleware, requirePermission('admin'));
 
 /**
  * GET /logs - Query request logs
@@ -36,18 +40,34 @@ admin.get('/logs', (c) => {
   if (query.method) filter.method = query.method.toUpperCase();
   if (query.path) filter.path = query.path;
   if (query.pathPrefix) filter.pathPrefix = query.pathPrefix;
-  if (query.status) filter.status = parseInt(query.status, 10);
+  if (query.status) {
+    const status = parseInt(query.status, 10);
+    if (!Number.isNaN(status)) filter.status = status;
+  }
   if (query.statusMin || query.statusMax) {
-    filter.statusRange = {
-      min: parseInt(query.statusMin || '0', 10),
-      max: parseInt(query.statusMax || '599', 10),
-    };
+    const min = parseInt(query.statusMin || '0', 10);
+    const max = parseInt(query.statusMax || '599', 10);
+    if (!Number.isNaN(min) && !Number.isNaN(max)) {
+      filter.statusRange = { min, max };
+    }
   }
   if (query.success !== undefined) filter.success = query.success === 'true';
-  if (query.startTime) filter.startTime = new Date(query.startTime);
-  if (query.endTime) filter.endTime = new Date(query.endTime);
-  if (query.limit) filter.limit = Math.min(parseInt(query.limit, 10), 1000);
-  if (query.offset) filter.offset = parseInt(query.offset, 10);
+  if (query.startTime) {
+    const startTime = new Date(query.startTime);
+    if (!Number.isNaN(startTime.getTime())) filter.startTime = startTime;
+  }
+  if (query.endTime) {
+    const endTime = new Date(query.endTime);
+    if (!Number.isNaN(endTime.getTime())) filter.endTime = endTime;
+  }
+  if (query.limit) {
+    const limit = parseInt(query.limit, 10);
+    if (!Number.isNaN(limit)) filter.limit = Math.min(limit, 1000);
+  }
+  if (query.offset) {
+    const offset = parseInt(query.offset, 10);
+    if (!Number.isNaN(offset)) filter.offset = offset;
+  }
 
   const logs = logger.query(filter);
 
@@ -94,9 +114,8 @@ admin.get('/logs/:requestId', (c) => {
   const requestId = c.req.param('requestId');
   const logger = getRequestLogger();
 
-  // Query all logs and find by requestId
-  const logs = logger.query({ limit: 10000 });
-  const entry = logs.find((l) => l.requestId === requestId);
+  // Query for the specific log entry by its ID
+  const [entry] = logger.query({ requestId, limit: 1 });
 
   if (!entry) {
     return c.json(

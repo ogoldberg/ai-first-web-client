@@ -43,6 +43,7 @@ export interface RequestLogEntry {
  * Filter options for querying logs
  */
 export interface LogQueryFilter {
+  requestId?: string;
   tenantId?: string;
   method?: string;
   path?: string;
@@ -104,6 +105,9 @@ export class InMemoryLogStore implements RequestLogger {
   query(filter: LogQueryFilter): RequestLogEntry[] {
     let results = [...this.logs];
 
+    if (filter.requestId) {
+      results = results.filter((e) => e.requestId === filter.requestId);
+    }
     if (filter.tenantId) {
       results = results.filter((e) => e.tenantId === filter.tenantId);
     }
@@ -377,8 +381,9 @@ export function createRequestLoggerMiddleware(config: RequestLoggerConfig = {}) 
         apiKeyId: apiKey?.id,
         apiKeyPrefix: apiKey?.keyPrefix,
         userAgent: c.req.header('user-agent'),
-        clientIp: c.req.header('x-forwarded-for') || c.req.header('x-real-ip'),
-        contentLength: parseInt(c.req.header('content-length') || '0', 10) || undefined,
+        clientIp: (c.req.header('x-forwarded-for') || c.req.header('x-real-ip'))?.split(',')[0].trim(),
+        contentLength: ((val) => (Number.isNaN(val) ? undefined : val))(parseInt(c.req.header('content-length') ?? '', 10)),
+        responseSize: ((val) => (Number.isNaN(val) ? undefined : val))(parseInt(c.res.headers.get('content-length') ?? '', 10)),
         error,
       };
 
