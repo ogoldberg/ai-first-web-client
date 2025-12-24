@@ -1,0 +1,316 @@
+// Unbrowser Database Schema
+// Replaces SQLite + LanceDB with Postgres + pgvector
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector]
+}
+
+// =============================================================================
+// TENANTS & API KEYS (multi-tenancy for cloud API)
+// =============================================================================
+
+model Tenant {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  plan         String   @default("FREE") // FREE, STARTER, TEAM, ENTERPRISE
+  dailyLimit   Int      @default(100) // requests per day
+  monthlyLimit Int?     // requests per month (null = unlimited based on plan)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  lastActiveAt DateTime?
+
+  // Pattern sharing settings
+  sharePatterns Boolean @default(true) // Contribute patterns to shared pool
+  consumeShared Boolean @default(true) // Use patterns from shared pool
+
+  apiKeys      ApiKey[]
+  usageRecords UsageRecord[]
+  requestLogs  RequestLog[]
+
+  @@map("tenants")
+}
+
+model ApiKey {
+  id          String    @id @default(cuid())
+  tenantId    String
+  keyHash     String    @unique // SHA-256 of full key
+  keyPrefix   String    // First 8 chars for identification (e.g., "ub_live_")
+  name        String    // User-provided name
+  permissions String[]  // ["browse", "batch", "admin"]
+  usageCount  Int       @default(0)
+  lastUsedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  expiresAt   DateTime?
+  revokedAt   DateTime?
+
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  requestLogs RequestLog[]
+
+  @@index([tenantId])
+  @@map("api_keys")
+}
+
+model UsageRecord {
+  id       String   @id @default(cuid())
+  tenantId String
+  date     DateTime @db.Date
+
+  // Request counts
+  requests Int @default(0)
+  units    Int @default(0) // Weighted units (intelligence=1, lightweight=5, playwright=25)
+
+  // Per-tier breakdown
+  intelligenceRequests Int @default(0)
+  intelligenceUnits    Int @default(0)
+  lightweightRequests  Int @default(0)
+  lightweightUnits     Int @default(0)
+  playwrightRequests   Int @default(0)
+  playwrightUnits      Int @default(0)
+
+  recordedAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, date])
+  @@index([tenantId])
+  @@index([date])
+  @@map("usage_records")
+}
+
+// =============================================================================
+// REQUEST LOGGING
+// =============================================================================
+
+model RequestLog {
+  id          BigInt   @id @default(autoincrement())
+  requestId   String   @unique
+  timestamp   DateTime
+  durationMs  Int
+  method      String
+  path        String
+  query       Json?
+  status      Int
+  success     Boolean
+  tenantId    String?
+  tenantName  String?
+  apiKeyId    String?
+  apiKeyPrefix String?
+  userAgent   String?
+  clientIp    String?
+  contentLength Int?
+  responseSize Int?
+  errorCode   String?
+  errorMessage String?
+  errorStack  String?
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  apiKey ApiKey? @relation(fields: [apiKeyId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId])
+  @@index([timestamp])
+  @@index([path])
+  @@index([status])
+  @@map("request_logs")
+}
+
+// =============================================================================
+// PROXY HEALTH TRACKING
+// =============================================================================
+
+model ProxyHealth {
+  id            BigInt    @id @default(autoincrement())
+  proxyId       String    @unique
+  poolId        String
+  tier          String    // datacenter, isp, residential, premium
+  successRate   Float     @default(1.0)
+  avgLatencyMs  Int       @default(0)
+  lastUsed      DateTime?
+  blockedDomains String[]
+  cooldownUntil DateTime?
+  cooldownReason String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  totalRequests Int       @default(0)
+  totalFailures Int       @default(0)
+  isHealthy     Boolean   @default(true)
+  isInCooldown  Boolean   @default(false)
+
+  domainStats   ProxyDomainStats[]
+
+  @@index([poolId])
+  @@index([tier])
+  @@index([isHealthy])
+  @@map("proxy_health")
+}
+
+model ProxyDomainStats {
+  id                  BigInt    @id @default(autoincrement())
+  proxyId             String
+  domain              String
+  successCount        Int       @default(0)
+  failureCount        Int       @default(0)
+  lastSuccess         DateTime?
+  lastFailure         DateTime?
+  isBlocked           Boolean   @default(false)
+  blockDetectedAt     DateTime?
+  consecutiveFailures Int       @default(0)
+
+  proxyHealth ProxyHealth @relation(fields: [proxyId], references: [proxyId], onDelete: Cascade)
+
+  @@unique([proxyId, domain])
+  @@index([proxyId])
+  @@index([domain])
+  @@index([isBlocked])
+  @@map("proxy_domain_stats")
+}
+
+// =============================================================================
+// DOMAIN RISK CLASSIFICATION
+// =============================================================================
+
+model DomainRisk {
+  id                   BigInt   @id @default(autoincrement())
+  domain               String   @unique
+  riskLevel            String   // low, medium, high, extreme
+  confidence           Float
+  historicalSuccesses  Int      @default(0)
+  historicalFailures   Int      @default(0)
+  knownProtections     String[]
+  requiresResidential  Boolean  @default(false)
+  requiresSession      Boolean  @default(false)
+  recommendedProxyTier String?
+  recommendedDelayMs   Int?
+  specialHandling      String[]
+  source               String   // static, historical, realtime, detected
+  assessedAt           DateTime
+  updatedAt            DateTime @default(now()) @updatedAt
+
+  @@index([riskLevel])
+  @@index([updatedAt])
+  @@map("domain_risk")
+}
+
+// =============================================================================
+// SHARED PATTERN POOL (collective intelligence)
+// =============================================================================
+
+model SharedPattern {
+  id          String @id @default(cuid())
+  domain      String // Domain this pattern applies to
+  patternType String // selector | api | skill | framework
+  patternKey  String // Unique identifier within domain+type
+  patternData Json   // The actual pattern data
+
+  // Aggregation stats
+  tenantCount     Int      @default(1) // Number of tenants who've validated this
+  successCount    Int      @default(0) // Total successful uses
+  failureCount    Int      @default(0) // Total failures
+  lastValidatedAt DateTime @default(now())
+
+  // Graduation status
+  isPublicDomain Boolean   @default(false) // Auto-shared (top 10k domains)
+  graduatedAt    DateTime? // When pattern graduated to shared (after N tenants)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  validations PatternValidation[]
+
+  @@unique([domain, patternType, patternKey])
+  @@index([domain])
+  @@index([patternType])
+  @@index([isPublicDomain])
+  @@map("shared_patterns")
+}
+
+model PatternValidation {
+  id          String   @id @default(cuid())
+  patternId   String
+  tenantId    String
+  isSuccess   Boolean
+  validatedAt DateTime @default(now())
+
+  pattern SharedPattern @relation(fields: [patternId], references: [id], onDelete: Cascade)
+
+  @@unique([patternId, tenantId])
+  @@index([patternId])
+  @@map("pattern_validations")
+}
+
+// =============================================================================
+// KEY-VALUE STORE (replaces EmbeddedStore SQLite tables)
+// =============================================================================
+
+model KeyValue {
+  tenantId  String   @default("default") // For multi-tenancy
+  namespace String
+  key       String
+  value     String   // JSON serialized
+  updatedAt DateTime @default(now()) @updatedAt
+
+  @@id([tenantId, namespace, key])
+  @@index([tenantId, namespace])
+  @@map("key_value")
+}
+
+// =============================================================================
+// VECTOR EMBEDDINGS (replaces LanceDB with pgvector)
+// =============================================================================
+
+model Embedding {
+  id         String                     @id @default(cuid())
+  vector     Unsupported("vector(384)") // 384 dimensions for all-MiniLM-L6-v2
+  model      String                     @default("all-MiniLM-L6-v2")
+  version    Int                        @default(1)
+  entityType String                     // pattern | skill | content | error
+  entityId   String?                    // Reference to the entity
+  domain     String?
+  tenantId   String?
+  text       String?                    // Original text for debugging
+  createdAt  DateTime                   @default(now())
+
+  @@index([entityType])
+  @@index([entityId])
+  @@index([domain])
+  @@index([tenantId])
+  @@map("embeddings")
+}
+
+// =============================================================================
+// SESSIONS (replaces file-based sessions)
+// =============================================================================
+
+model Session {
+  id        String    @id @default(cuid())
+  tenantId  String    @default("default")
+  domain    String
+  profile   String    @default("default")
+  data      String    // JSON: metadata only (cookies passed per-request, not stored)
+  encrypted Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  expiresAt DateTime?
+
+  @@unique([tenantId, domain, profile])
+  @@index([tenantId, domain])
+  @@map("sessions")
+}
+
+// =============================================================================
+// METADATA & MIGRATIONS
+// =============================================================================
+
+model StoreMetadata {
+  key   String @id
+  value String
+
+  @@map("store_metadata")
+}

@@ -18,7 +18,7 @@ import {
   getEvasionScripts,
   DEFAULT_STEALTH_CONFIG,
   type BrowserFingerprint,
-} from '../packages/core/src/core/stealth-browser.js';
+} from '../src/core/stealth-browser.js';
 
 describe('Fingerprint Generation', () => {
   it('should generate a complete fingerprint', () => {
