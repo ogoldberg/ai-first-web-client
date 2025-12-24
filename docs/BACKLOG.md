@@ -337,7 +337,7 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 | CLOUD-003 | Implement proxy management for IP blocking | L | Complete | ProxyManager, ProxyHealthTracker, DomainRiskClassifier, ProxySelector. 4 tiers: datacenter, ISP, residential, premium. Plan-based access, health tracking, smart routing. 125 tests. See docs/PROXY_MANAGEMENT_PLAN.md |
 | CLOUD-004 | Add Supabase/Postgres persistence | L | Complete | Recovered Postgres files (PR #138), integrated and fixed types (PR #139). database-config.ts, postgres-embedded-store.ts, postgres-vector-store.ts, unified-store.ts now in build |
 | CLOUD-005 | Implement Redis caching layer | M | Complete | redis-client.ts, redis-usage.ts, redis-session.ts with graceful fallback (PR #140) |
-| CLOUD-006 | Add external proxy integration | M | Not Started | Connect Bright Data, datacenter pools. Proxy URL rotation within pools |
+| CLOUD-006 | Add external proxy integration | M | In Progress | Connect Bright Data, datacenter pools. Proxy URL rotation within pools |
 | CLOUD-007 | Implement usage billing export | M | Not Started | Export usage data to Stripe. Metered billing integration |
 
 **Benefits:**
