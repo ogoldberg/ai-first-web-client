@@ -319,7 +319,7 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 | API-007 | Implement billing integration | L | Not Started | Stripe integration. Usage-based billing. Handle webhooks for subscription changes |
 | API-008 | Create admin dashboard | L | Not Started | Web UI for monitoring usage, managing tenants, viewing errors. Analytics charts |
 | API-009 | Set up production infrastructure | XL | Not Started | Docker containers, orchestration (K8s or ECS), load balancing, auto-scaling |
-| API-010 | Implement health checks and monitoring | M | Not Started | /health endpoint, metrics export (Prometheus), alerting (PagerDuty) |
+| API-010 | Implement health checks and monitoring | M | Complete | Comprehensive /health with service checks, Prometheus metrics at /health/metrics, K8s probes (/ready, /live). 27 tests |
 | API-011 | Add API documentation | L | Not Started | OpenAPI/Swagger UI, getting started guide, code examples (curl, Python, Node.js) |
 | API-012 | Create API client libraries | L | Not Started | Official clients: JavaScript/TypeScript (wraps fetch), Python (requests-based) |
 | API-013 | Set up CI/CD pipeline | M | Complete | GitHub Actions CI workflow: type checking, tests on PR/push. Deployment to staging/production TBD |

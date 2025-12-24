@@ -11,6 +11,7 @@
 
 import { createMiddleware } from 'hono/factory';
 import type { Context, Next } from 'hono';
+import { recordHttpRequest } from '../services/metrics.js';
 
 /**
  * Log entry for a single request/response cycle
@@ -389,6 +390,9 @@ export function createRequestLoggerMiddleware(config: RequestLoggerConfig = {}) 
 
       // Log to store
       requestLogger.log(entry);
+
+      // Record metrics (for Prometheus export)
+      recordHttpRequest(entry.method, entry.path, entry.status, entry.durationMs);
 
       // Optionally log to console
       if (logToConsole) {
