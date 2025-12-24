@@ -316,7 +316,7 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 | API-004 | Implement usage metering for billing | L | Complete | Track requests by tier (intelligence=1, lightweight=5, playwright=25). Usage tracking service with per-tenant aggregation. Commit 77d63c0 |
 | API-005 | Create tenant management endpoints | M | Complete | POST /tenants, GET /tenants/:id, PATCH /tenants/:id. Admin API for managing customers. Merged in PR #132 |
 | API-006 | Add API request/response logging | M | Complete | Request logging middleware with unique IDs, timing, redaction. Admin log endpoints. 28 tests. PR #135 |
-| API-007 | Implement billing integration | L | Not Started | Stripe integration. Usage-based billing. Handle webhooks for subscription changes |
+| API-007 | Implement billing integration | L | Complete | Stripe integration with customer/subscription management, usage-based billing via Meter Events API, webhook handling. PR #144 |
 | API-008 | Create admin dashboard | L | Not Started | Web UI for monitoring usage, managing tenants, viewing errors. Analytics charts |
 | API-009 | Set up production infrastructure | XL | Not Started | Docker containers, orchestration (K8s or ECS), load balancing, auto-scaling |
 | API-010 | Implement health checks and monitoring | M | Complete | Comprehensive /health with service checks, Prometheus metrics at /health/metrics, K8s probes (/ready, /live). 27 tests |
@@ -338,7 +338,7 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 | CLOUD-004 | Add Supabase/Postgres persistence | L | Complete | Recovered Postgres files (PR #138), integrated and fixed types (PR #139). database-config.ts, postgres-embedded-store.ts, postgres-vector-store.ts, unified-store.ts now in build |
 | CLOUD-005 | Implement Redis caching layer | M | Complete | redis-client.ts, redis-usage.ts, redis-session.ts with graceful fallback (PR #140) |
 | CLOUD-006 | Add external proxy integration | M | Complete | brightdata-provider.ts with session-based IP rotation, multi-country support (PR #141) |
-| CLOUD-007 | Implement usage billing export | M | Not Started | Export usage data to Stripe. Metered billing integration |
+| CLOUD-007 | Implement usage billing export | M | Complete | Usage exported via Stripe Billing Meter Events API. Included in API-007 |
 
 **Benefits:**
 - Primary monetization path

@@ -14,6 +14,7 @@ import { health } from './routes/health.js';
 import { browse } from './routes/browse.js';
 import { admin } from './routes/admin.js';
 import workflows from './routes/workflows.js';
+import { billing } from './routes/billing.js';
 import { requestLoggerMiddleware } from './middleware/request-logger.js';
 
 // Create the main Hono app
@@ -40,6 +41,7 @@ app.route('/health', health);
 app.route('/v1', browse);
 app.route('/v1/admin', admin);
 app.route('/v1/workflows', workflows); // COMP-009: Workflow recording
+app.route('/v1/billing', billing); // API-007: Stripe billing integration
 
 // Root endpoint
 app.get('/', (c) => {
@@ -58,6 +60,8 @@ app.get('/', (c) => {
       workflows: '/v1/workflows',
       recordWorkflow: '/v1/workflows/record/start',
       replayWorkflow: '/v1/workflows/:id/replay',
+      billing: '/v1/billing',
+      billingWebhook: '/v1/billing/webhook',
     },
   });
 });
