@@ -93,10 +93,12 @@ Unbrowser:          Intelligence → Lightweight → Browser (only if needed)
    }
    ```
 
-2. **Workflow Recording**
-   - Enhance Procedural Memory with explicit "teach mode"
-   - Record user actions during first browse
-   - Auto-generate procedural skills
+2. **Workflow Recording** ✅ **DONE (Renamed from Trajectory Recording)**
+   - Already exists in ProceduralMemory (`recordWorkflow` option)
+   - Automatically records AI browsing sessions
+   - Auto-generates skills from successful workflows
+   - **Decision:** NO human browser recording (scope creep)
+   - See [HUMAN_VERIFICATION_PATTERNS.md](HUMAN_VERIFICATION_PATTERNS.md)
 
 3. **Verification Patterns**
    ```typescript
@@ -114,9 +116,18 @@ Unbrowser:          Intelligence → Lightweight → Browser (only if needed)
 
 ### Should NOT Add:
 
-1. **Visual Spatial Tasks** - Not our core strength, browser automation handles this
-2. **Always-Ask Mode** - Adds latency, defeats speed advantage
-3. **Client-Side Learning** - Goes against our collective intelligence model
+1. **Human Browser Recording** - Scope creep, machine-first philosophy
+   - Anthropic extension does this (their differentiator)
+   - We differentiate on speed, not human recording
+   - Would require browser extension, visual UI, human action capture
+   - Conflicts with "Browser Minimizer" goal
+   - **Alternative:** Improve manual skill authoring tools (SKILL-001 to SKILL-006)
+
+2. **Visual Spatial Tasks** - Not our core strength, browser automation handles this
+
+3. **Always-Ask Mode** - Adds latency, defeats speed advantage
+
+4. **Client-Side Learning** - Goes against our collective intelligence model
 
 ---
 

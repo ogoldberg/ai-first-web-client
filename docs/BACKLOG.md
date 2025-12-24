@@ -399,6 +399,31 @@ See [COMPETITIVE_ANALYSIS.md](COMPETITIVE_ANALYSIS.md) for context on why these 
 
 ---
 
+## P2: Skill Authoring & Human Verification
+
+See [HUMAN_VERIFICATION_PATTERNS.md](HUMAN_VERIFICATION_PATTERNS.md) for the full design document.
+
+**Goal:** Improve human-in-the-loop verification and skill authoring **without scope creep into human browser recording**.
+
+**Context:** Considered adding human browser recording (like Anthropic Chrome extension) but decided against it:
+- ❌ Scope creep: Project is "machine-first, not human-first"
+- ❌ Would require browser extension, visual UI, human action capture
+- ❌ Conflicts with "Browser Minimizer" philosophy
+- ✅ Instead: Improve existing manual skill authoring and verification workflows
+
+| ID | Task | Effort | Status | Notes |
+|----|------|--------|--------|-------|
+| SKILL-001 | CLI tool for skill authoring | M | Planned | `unbrowser create-skill` with interactive prompts, validation, templates |
+| SKILL-002 | Skill verification API | M | Planned | `verifySkill(skillId, testUrls)` method for automated testing before deployment |
+| SKILL-003 | Skill templates library | L | Planned | Pre-built templates for common patterns (forms, tables, pagination), community skill packs |
+| SKILL-004 | Enhanced feedback system | M | Planned | Better UX for feedback, auto-rollback on negative ratings, feedback analytics |
+| SKILL-005 | Validation test framework | M | Planned | Test suite definition, CI/CD integration, regression detection |
+| SKILL-006 | Skill authoring documentation | S | Planned | Comprehensive guide for writing skills manually, examples, best practices |
+
+**Decision:** No human browser recording in core. If needed later, implement as separate optional package `@unbrowser/human-trainer`.
+
+---
+
 ## P2: Medium Priority (Plan For)
 
 ### Debugging & Observability
