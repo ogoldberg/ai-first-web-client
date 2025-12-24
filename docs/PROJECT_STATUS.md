@@ -372,7 +372,8 @@ All 10 phases complete:
 |----------|-----------|--------|
 | P1 | Design endpoints, auth, rate limiting (API-001) | Complete |
 | P1 | Implement API authentication (API-002) | Complete |
-| P1 | Implement usage metering and billing | Not Started |
+| P1 | Wire SmartBrowser to browse endpoints (CLOUD-001) | Complete |
+| P1 | Implement usage metering and billing | In Progress |
 | P2 | Production infrastructure and monitoring | Not Started |
 | P2 | Beta program launch | Not Started |
 
