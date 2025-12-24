@@ -1,0 +1,219 @@
+# Skill: Compare Information Sources
+# ID: compare_sources
+# Version: 1.0.0
+
+name: Compare Information Sources
+id: compare_sources
+version: 1.0.0
+description: Research a topic across multiple sources and cross-reference facts
+
+# Skill metadata for directory listing
+metadata:
+  author: Unbrowser
+  category: research
+  tags:
+    - research
+    - verification
+    - cross-reference
+    - facts
+  difficulty: intermediate
+
+# What this skill accomplishes
+objective: |
+  Research a topic across multiple authoritative sources, extract specific
+  facts and claims, cross-reference to identify agreements and discrepancies,
+  and synthesize findings with confidence levels.
+
+# Input parameters
+inputs:
+  - name: topic
+    type: text
+    required: true
+    description: Topic or question to research
+    examples:
+      - "When was the Eiffel Tower built?"
+      - "What are the side effects of ibuprofen?"
+      - "Company X quarterly revenue 2024"
+
+  - name: sources
+    type: list
+    required: false
+    description: Specific sources to check
+    default: auto-discover
+    examples:
+      - ["wikipedia.org", "britannica.com"]
+      - ["official company site", "sec.gov"]
+
+  - name: factTypes
+    type: list
+    required: false
+    description: Types of facts to extract
+    default:
+      - dates
+      - numbers
+      - claims
+      - definitions
+    examples:
+      - ["dates", "statistics"]
+      - ["prices", "specifications"]
+
+  - name: minSources
+    type: number
+    required: false
+    description: Minimum sources to check before synthesizing
+    default: 3
+
+# Workflow steps
+workflow:
+  - step: 1
+    name: Source Discovery
+    description: Find authoritative sources for the topic
+    tool: batch_browse
+    parameters:
+      urls: "{{ search_urls_for_topic }}"
+      options:
+        contentType: main_content
+        maxChars: 10000
+    analyze:
+      - source_authority
+      - content_relevance
+      - publication_date
+
+  - step: 2
+    name: Deep Content Extraction
+    description: Extract detailed content from each source
+    tool: smart_browse
+    parameters:
+      url: "{{ source_url }}"
+      contentType: main_content
+      maxChars: 20000
+    for_each: discovered_sources
+    extract:
+      - main_claims
+      - supporting_evidence
+      - citations
+      - publication_date
+      - author_credentials
+
+  - step: 3
+    name: Fact Extraction
+    description: Extract specific facts from each source
+    logic:
+      - identify_claims: Parse content for factual claims
+      - categorize: Group by factTypes (dates, numbers, etc.)
+      - attribute: Link each fact to its source
+      - extract_context: Capture surrounding context
+
+  - step: 4
+    name: Cross-Reference Analysis
+    description: Compare facts across sources
+    logic:
+      - match_claims: Find same/similar claims across sources
+      - detect_agreements: Note where sources agree
+      - identify_conflicts: Flag discrepancies
+      - weight_by_authority: Consider source credibility
+
+  - step: 5
+    name: Synthesis
+    description: Produce unified findings with confidence
+    logic:
+      - merge_agreed: Combine consistently reported facts
+      - resolve_conflicts: Analyze disagreements
+      - calculate_confidence: Score based on consensus and authority
+      - generate_recommendations: Suggest most reliable values
+
+# Expected output structure
+output:
+  format: json
+  schema:
+    topic: string
+    sources:
+      type: array
+      items:
+        name: string
+        url: url
+        authority:
+          type: enum
+          values: [high, medium, low]
+        lastUpdated: datetime
+        credibility: number
+    facts:
+      type: array
+      items:
+        claim: string
+        category: string
+        consensus:
+          status:
+            type: enum
+            values: [agreed, disputed, uncertain]
+          agreeSources: array
+          disputeSources: array
+          values: object
+        confidence: number
+        recommendation: string
+    summary: string
+    unresolvedDiscrepancies:
+      type: array
+      items:
+        claim: string
+        reason: string
+        recommendation: string
+    methodology: string
+
+# Error handling strategies
+error_handling:
+  sources_disagree:
+    action: present_both
+    message: "Sources report different values. Presenting both with authority weighting."
+
+  source_unavailable:
+    action: continue_others
+    message: "Source unavailable. Continuing with remaining sources."
+
+  topic_too_broad:
+    action: suggest_narrowing
+    message: "Topic too broad for reliable comparison. Consider narrowing focus."
+
+  insufficient_sources:
+    action: note_limitation
+    message: "Found fewer sources than requested. Results may have lower confidence."
+
+  no_verifiable_facts:
+    action: report_qualitative
+    message: "No quantifiable facts found. Reporting qualitative findings."
+
+# Example invocations
+examples:
+  - input:
+      topic: "When was the Eiffel Tower completed?"
+      minSources: 3
+    expected_output: |
+      {
+        "topic": "When was the Eiffel Tower completed?",
+        "sources": [
+          {"name": "Wikipedia", "authority": "high"},
+          {"name": "Britannica", "authority": "high"},
+          {"name": "Tour Eiffel official", "authority": "high"}
+        ],
+        "facts": [{
+          "claim": "Eiffel Tower completion date",
+          "category": "dates",
+          "consensus": {
+            "status": "agreed",
+            "agreeSources": ["Wikipedia", "Britannica", "Tour Eiffel"],
+            "values": {"all": "March 31, 1889"}
+          },
+          "confidence": 0.99,
+          "recommendation": "March 31, 1889 - all sources agree"
+        }],
+        "summary": "The Eiffel Tower was completed on March 31, 1889. All sources agree."
+      }
+
+  - input:
+      topic: "Tesla Model 3 range specifications"
+      sources: ["tesla.com", "epa.gov", "caranddriver.com"]
+      factTypes: ["numbers", "specifications"]
+    expected_output: |
+      Comparison of range claims from Tesla official site,
+      EPA testing data, and independent testing, highlighting
+      any discrepancies between advertised and tested range.

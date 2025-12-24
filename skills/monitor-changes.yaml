@@ -1,0 +1,183 @@
+# Skill: Monitor Website Changes
+# ID: monitor_changes
+# Version: 1.0.0
+
+name: Monitor Website Changes
+id: monitor_changes
+version: 1.0.0
+description: Track URLs for content changes and provide detailed diff summaries
+
+# Skill metadata for directory listing
+metadata:
+  author: Unbrowser
+  category: monitoring
+  tags:
+    - tracking
+    - changes
+    - alerts
+    - diff
+  difficulty: beginner
+
+# What this skill accomplishes
+objective: |
+  Monitor one or more URLs for content changes, comparing current content
+  to previous versions. Highlight what changed, categorize importance,
+  and provide actionable diff summaries.
+
+# Input parameters
+inputs:
+  - name: urls
+    type: list
+    required: true
+    description: URL or list of URLs to monitor for changes
+    examples:
+      - "https://example.com/pricing"
+      - ["https://site.com/page1", "https://site.com/page2"]
+
+  - name: sections
+    type: list
+    required: false
+    description: CSS selectors for specific sections to watch
+    examples:
+      - [".pricing-table", ".feature-list"]
+      - ["#main-content", "article"]
+
+  - name: ignorePatterns
+    type: list
+    required: false
+    description: Patterns to ignore in change detection
+    default:
+      - timestamps
+      - session_ids
+      - ad_content
+    examples:
+      - ["data-timestamp", "csrf-token"]
+
+  - name: baseline
+    type: text
+    required: false
+    description: Previous content hash or snapshot ID for comparison
+    examples:
+      - "snapshot_2024_01_15"
+
+# Workflow steps
+workflow:
+  - step: 1
+    name: Current State Capture
+    description: Capture current state of the monitored URLs
+    tool: smart_browse
+    parameters:
+      url: "{{ url }}"
+      checkForChanges: true
+      contentType: main_content
+      maxChars: 50000
+    extract:
+      - content
+      - content_hash
+      - page_title
+      - last_modified
+
+  - step: 2
+    name: Change Detection
+    description: Compare current state to baseline
+    tool: smart_browse
+    parameters:
+      url: "{{ url }}"
+      checkForChanges: true
+    analyze:
+      - content_diff
+      - structural_changes
+      - text_changes
+
+  - step: 3
+    name: Diff Analysis
+    description: Categorize and filter changes
+    logic:
+      - filter_noise: Remove ignored patterns
+      - categorize_changes: Group by type (added, removed, modified)
+      - assess_importance: Rate change significance
+      - generate_summary: Human-readable diff
+
+  - step: 4
+    name: Batch Monitoring
+    description: Monitor multiple URLs efficiently
+    condition: "multiple URLs provided"
+    tool: batch_browse
+    parameters:
+      urls: "{{ urls }}"
+      options:
+        checkForChanges: true
+        maxChars: 10000
+
+# Expected output structure
+output:
+  format: json
+  schema:
+    url: url
+    status:
+      type: enum
+      values: [changed, unchanged, error]
+    lastChecked: datetime
+    changes:
+      summary: string
+      importance:
+        type: enum
+        values: [high, medium, low, none]
+      sections:
+        type: array
+        items:
+          location: string
+          type:
+            type: enum
+            values: [added, removed, modified]
+          before: string
+          after: string
+    nextCheck: datetime
+    contentHash: string
+
+# Error handling strategies
+error_handling:
+  page_restructured:
+    action: flag_major_change
+    message: "Page structure changed significantly. Manual review recommended."
+
+  page_error:
+    action: retry_backoff
+    retries: 3
+    backoff: exponential
+    message: "Page returned error. Retrying..."
+
+  dynamic_content:
+    action: use_session
+    message: "Content appears dynamic/personalized. Using session for consistent view."
+
+  no_baseline:
+    action: create_baseline
+    message: "No baseline found. Creating initial snapshot for future comparison."
+
+# Example invocations
+examples:
+  - input:
+      urls: "https://example.com/pricing"
+    expected_output: |
+      {
+        "url": "https://example.com/pricing",
+        "status": "changed",
+        "changes": {
+          "summary": "Price increased from $99 to $129",
+          "importance": "high",
+          "sections": [{
+            "location": ".pricing-table",
+            "type": "modified",
+            "before": "$99/month",
+            "after": "$129/month"
+          }]
+        }
+      }
+
+  - input:
+      urls: ["https://site.com/a", "https://site.com/b"]
+      sections: [".main-content"]
+    expected_output: |
+      Batch results showing change status for each URL,
+      filtered to only main-content section changes.
