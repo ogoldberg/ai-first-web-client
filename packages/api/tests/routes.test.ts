@@ -392,8 +392,14 @@ describe('Browse Routes', () => {
       const body = await res.json();
       expect(body.success).toBe(true);
       expect(body.data.period).toBeDefined();
-      expect(body.data.requests).toBeDefined();
+      expect(body.data.today).toBeDefined();
+      expect(body.data.today.requests).toBeDefined();
+      expect(body.data.today.units).toBeDefined();
+      expect(body.data.today.byTier).toBeDefined();
+      expect(body.data.month).toBeDefined();
       expect(body.data.limits).toBeDefined();
+      expect(body.data.limits.daily).toBeDefined();
+      expect(body.data.limits.remaining).toBeDefined();
     });
   });
 
