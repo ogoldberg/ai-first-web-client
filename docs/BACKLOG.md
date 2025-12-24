@@ -310,9 +310,9 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 |----|------|--------|--------|-------|
 | API-001 | Design REST API endpoints | M | Complete | POST /browse, POST /api-call, GET /patterns, etc. Map to SDK methods. OpenAPI spec. Created docs/api/openapi.yaml and docs/api/API_DESIGN.md |
 | API-002 | Implement API authentication | M | Complete | API key auth with SHA-256 hashing, permission middleware, in-memory store for testing. packages/api with Hono server, 39 tests |
-| API-003 | Add per-tenant rate limiting | M | Not Started | Redis-based rate limiter. Different limits per tier (Starter, Team, Enterprise) |
-| API-004 | Implement usage metering for billing | L | Not Started | Track requests by tier (intelligence=1, lightweight=5, playwright=25). Export to billing system |
-| API-005 | Create tenant management endpoints | M | Not Started | POST /tenants, GET /tenants/:id, PATCH /tenants/:id. Admin API for managing customers |
+| API-003 | Add per-tenant rate limiting | M | Complete | In-memory rate limiter with plan-based limits. Different limits per tier (FREE, STARTER, TEAM, ENTERPRISE). Rate limit headers. |
+| API-004 | Implement usage metering for billing | L | Complete | Track requests by tier (intelligence=1, lightweight=5, playwright=25). Usage service with exportUsage(). 14 tests. PR #131 |
+| API-005 | Create tenant management endpoints | M | In Progress | POST /tenants, GET /tenants/:id, PATCH /tenants/:id. Admin API for managing customers |
 | API-006 | Add API request/response logging | M | Not Started | Structured logging for debugging. Redact sensitive data. Queryable for support |
 | API-007 | Implement billing integration | L | Not Started | Stripe integration. Usage-based billing. Handle webhooks for subscription changes |
 | API-008 | Create admin dashboard | L | Not Started | Web UI for monitoring usage, managing tenants, viewing errors. Analytics charts |
