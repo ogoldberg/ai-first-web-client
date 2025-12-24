@@ -3072,6 +3072,259 @@ export class ProceduralMemory {
   }
 
   // ============================================
+  // VERIFICATION LEARNING (COMP-014)
+  // ============================================
+
+  /**
+   * Learn verification checks from a browse result
+   *
+   * This method analyzes verification results to:
+   * - Store successful checks as learned verifications
+   * - Track failed checks to prevent similar failures
+   * - Update confidence scores based on historical performance
+   */
+  async learnFromVerification(
+    domain: string,
+    verificationResult: import('../types/verification.js').VerificationResult,
+    browseSuccess: boolean
+  ): Promise<void> {
+    if (!verificationResult.checks || verificationResult.checks.length === 0) {
+      return;
+    }
+
+    // Find or create skill for this domain
+    let domainSkill = Array.from(this.skills.values()).find(
+      s => s.sourceDomain === domain && s.name.includes('verification')
+    );
+
+    if (!domainSkill) {
+      // Create a new verification skill for this domain
+      domainSkill = {
+        id: this.generateSkillId(),
+        name: `${domain}_verification`,
+        description: `Learned verification checks for ${domain}`,
+        preconditions: {
+          domainPatterns: [domain],
+        },
+        actionSequence: [],
+        embedding: new Array(this.config.embeddingDim).fill(0),
+        metrics: {
+          successCount: 0,
+          failureCount: 0,
+          avgDuration: 0,
+          lastUsed: Date.now(),
+          timesUsed: 0,
+        },
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        sourceDomain: domain,
+        verificationChecks: [],
+      };
+      this.skills.set(domainSkill.id, domainSkill);
+    }
+
+    // Ensure verificationChecks array exists
+    if (!domainSkill.verificationChecks) {
+      domainSkill.verificationChecks = [];
+    }
+
+    // Process each check result
+    for (const checkResult of verificationResult.checks) {
+      // Only learn from checks that passed or have meaningful failures
+      if (!checkResult.passed && checkResult.severity === 'warning') {
+        continue; // Skip warnings - not critical enough to learn from
+      }
+
+      // Create a verification check from this result
+      // Note: We're inferring the check structure from the result
+      // In practice, the VerificationEngine should pass the original check
+      const learnedFrom = checkResult.passed && browseSuccess ? 'success' : 'failure';
+      const checkType = checkResult.type as 'content' | 'action' | 'state' | 'custom';
+
+      // Find existing check of the same type
+      const existingCheckIndex = domainSkill.verificationChecks.findIndex(
+        vc => vc.check.type === checkType && vc.learnedFrom === learnedFrom
+      );
+
+      if (existingCheckIndex >= 0) {
+        // Update existing check confidence
+        const existing = domainSkill.verificationChecks[existingCheckIndex];
+        const successRate = checkResult.passed ? 1.0 : 0.0;
+        existing.confidence = existing.confidence * 0.8 + successRate * 0.2; // Exponential moving average
+      } else {
+        // Add new learned check
+        const assertion = this.inferAssertionFromCheckResult(checkResult, checkType);
+        domainSkill.verificationChecks.push({
+          check: {
+            type: checkType,
+            assertion,
+            severity: checkResult.severity,
+            retryable: checkResult.severity !== 'critical',
+          },
+          confidence: checkResult.passed ? 0.8 : 0.3,
+          learnedFrom,
+        });
+      }
+    }
+
+    // Update skill metrics
+    if (browseSuccess && verificationResult.passed) {
+      domainSkill.metrics.successCount++;
+    } else {
+      domainSkill.metrics.failureCount++;
+    }
+    domainSkill.metrics.lastUsed = Date.now();
+    domainSkill.metrics.timesUsed++;
+    domainSkill.updatedAt = Date.now();
+
+    await this.save();
+
+    logger.proceduralMemory.debug('Learned from verification', {
+      domain,
+      checksLearned: verificationResult.checks.length,
+      totalVerifications: domainSkill.verificationChecks.length,
+    });
+  }
+
+  /**
+   * Infer verification assertion from check result
+   *
+   * This is a heuristic method that attempts to create assertions based on
+   * the check result message. In practice, the VerificationEngine should
+   * pass the original check for more accurate learning.
+   */
+  private inferAssertionFromCheckResult(
+    checkResult: import('../types/verification.js').VerificationCheckResult,
+    checkType: 'content' | 'action' | 'state' | 'custom'
+  ): import('../types/verification.js').VerificationAssertion {
+    const assertion: import('../types/verification.js').VerificationAssertion = {};
+
+    // Parse check message to infer assertion details
+    if (checkType === 'content') {
+      // Infer from message patterns like "Content length (X chars) meets minimum"
+      const minLengthMatch = checkResult.message.match(/minimum \((\d+)\)/);
+      if (minLengthMatch) {
+        assertion.minLength = parseInt(minLengthMatch[1], 10);
+      }
+
+      // Check for field existence patterns
+      if (checkResult.message.includes('field') && checkResult.message.includes('exists')) {
+        // This is a simplified heuristic - in practice we'd extract actual field names
+        assertion.fieldExists = ['content.markdown', 'content.text'];
+      }
+    } else if (checkType === 'action') {
+      // Infer status code checks
+      const statusMatch = checkResult.message.match(/status code (\d+)/i);
+      if (statusMatch) {
+        assertion.statusCode = parseInt(statusMatch[1], 10);
+      }
+
+      // Check for error text exclusions
+      if (checkResult.message.includes('error text')) {
+        assertion.excludesText = 'access denied';
+      }
+    }
+
+    return assertion;
+  }
+
+  /**
+   * Get learned verification checks for a domain
+   *
+   * Returns high-confidence verification checks that should be applied
+   * when browsing URLs on this domain.
+   */
+  getLearnedVerifications(domain: string, minConfidence = 0.6): import('../types/verification.js').VerificationCheck[] {
+    // Find verification skill for this domain
+    const domainSkill = Array.from(this.skills.values()).find(
+      s => s.sourceDomain === domain && s.name.includes('verification')
+    );
+
+    if (!domainSkill || !domainSkill.verificationChecks) {
+      return [];
+    }
+
+    // Return checks that meet minimum confidence threshold
+    return domainSkill.verificationChecks
+      .filter(vc => vc.confidence >= minConfidence)
+      .map(vc => vc.check);
+  }
+
+  /**
+   * Get all learned verifications across all domains
+   *
+   * Useful for understanding what verifications have been learned system-wide.
+   */
+  getAllLearnedVerifications(): Array<{
+    domain: string;
+    check: import('../types/verification.js').VerificationCheck;
+    confidence: number;
+    learnedFrom: 'success' | 'failure';
+  }> {
+    const allVerifications: Array<{
+      domain: string;
+      check: import('../types/verification.js').VerificationCheck;
+      confidence: number;
+      learnedFrom: 'success' | 'failure';
+    }> = [];
+
+    for (const skill of this.skills.values()) {
+      if (!skill.verificationChecks || !skill.sourceDomain) {
+        continue;
+      }
+
+      for (const vc of skill.verificationChecks) {
+        allVerifications.push({
+          domain: skill.sourceDomain,
+          check: vc.check,
+          confidence: vc.confidence,
+          learnedFrom: vc.learnedFrom,
+        });
+      }
+    }
+
+    return allVerifications;
+  }
+
+  /**
+   * Update verification confidence based on actual usage
+   *
+   * Called after applying a learned verification to update its confidence
+   * based on whether it correctly predicted success/failure.
+   */
+  async updateVerificationConfidence(
+    domain: string,
+    checkType: 'content' | 'action' | 'state' | 'custom',
+    wasCorrect: boolean
+  ): Promise<void> {
+    const domainSkill = Array.from(this.skills.values()).find(
+      s => s.sourceDomain === domain && s.name.includes('verification')
+    );
+
+    if (!domainSkill || !domainSkill.verificationChecks) {
+      return;
+    }
+
+    // Find and update the check
+    const check = domainSkill.verificationChecks.find(vc => vc.check.type === checkType);
+    if (check) {
+      // Use exponential moving average to update confidence
+      const adjustment = wasCorrect ? 0.1 : -0.15; // Penalize incorrect predictions more
+      check.confidence = Math.max(0.1, Math.min(1.0, check.confidence + adjustment));
+
+      domainSkill.updatedAt = Date.now();
+      await this.save();
+
+      logger.proceduralMemory.debug('Updated verification confidence', {
+        domain,
+        checkType,
+        wasCorrect,
+        newConfidence: check.confidence,
+      });
+    }
+  }
+
+  // ============================================
   // BOOTSTRAP FROM TEMPLATES
   // ============================================
 

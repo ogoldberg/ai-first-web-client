@@ -263,6 +263,7 @@ export const logger = {
   intelligence: new Logger('ContentIntelligence'),
   tieredFetcher: new Logger('TieredFetcher'),
   smartBrowser: new Logger('SmartBrowser'),
+  verificationEngine: new Logger('VerificationEngine'),
 
   // Learning components
   learning: new Logger('LearningEngine'),
