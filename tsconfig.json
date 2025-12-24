@@ -19,10 +19,6 @@
   "exclude": [
     "node_modules",
     "dist",
-    "src/utils/database-config.ts",
-    "src/utils/postgres-embedded-store.ts",
-    "src/utils/postgres-vector-store.ts",
-    "src/utils/unified-store.ts",
     "src/core/skill-generalizer.ts"
   ]
 }
