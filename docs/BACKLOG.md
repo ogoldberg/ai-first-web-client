@@ -590,12 +590,12 @@ Browser: { success: true, ... }  // Learns this for future
 | ID | Task | Effort | Category | Notes |
 |----|------|--------|----------|-------|
 | F-007 | Pattern import/export | M | Features | Share learned patterns |
-| F-008 | Debug mode toggle | S | Features | Verbose output mode |
+| F-008 | Debug mode toggle | S | Features | Verbose output mode (DONE - LLM_BROWSER_DEBUG_MODE=1 enables debug tools) |
 | F-009 | Trace visualization | L | Features | Visual request flow |
 | F-010 | Diff generation for changes | M | Features | Show what changed |
 | F-011 | Webhook notifications | L | Features | External integrations |
 | F-013 | Human-in-the-loop inspection UI | L | Features | Minimal UI to see selectors, extracted content, tier decisions |
-| F-014 | Advanced anti-bot strategies | L | Features | Superseded by AB-001 through AB-008 (Anti-Bot Evasion initiative) |
+| F-014 | Advanced anti-bot strategies | L | Features | N/A - Superseded by AB-001 through AB-008 (DONE - playwright-extra stealth, fingerprinting, behavioral delays) |
 
 ### Technical Debt
 
@@ -604,7 +604,7 @@ Browser: { success: true, ... }  // Learns this for future
 | D-005 | Configuration file support | M | Debt | .llmbrowserrc |
 | D-006 | Dependency injection refactor | L | Debt | Better testability |
 | D-007 | Improve URL pattern matching | M | Debt | Regex/wildcards |
-| D-008 | Session encryption improvement | M | Debt | Use OS keychain (superseded by S-003) |
+| D-008 | Session encryption improvement | M | Debt | N/A - Superseded by S-003 (AES-256-GCM encryption with PBKDF2 key derivation) |
 | D-009 | Type-safe configuration | S | Debt | Validate config at runtime (DONE - PR #157) |
 | D-010 | Split large god files | M | Debt | `src/index.ts` and `content-intelligence.ts` are too large; refactor into smaller modules |
 | D-011 | Clean up untracked src files | S | N/A | Files are already tracked in git (skill-generalizer.ts in src/core/, embedding-provider.ts in src/utils/) |
