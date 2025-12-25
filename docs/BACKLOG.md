@@ -604,7 +604,7 @@ Browser: { success: true, ... }  // Learns this for future
 
 | ID | Task | Effort | Category | Notes |
 |----|------|--------|----------|-------|
-| D-005 | Configuration file support | M | Debt | IN PROGRESS | .llmbrowserrc |
+| D-005 | Configuration file support | M | Debt | DONE | .llmbrowserrc/.unbrowserrc config file support with Zod validation. Env vars take precedence (PR #171) |
 | D-006 | Dependency injection refactor | L | Debt | Better testability |
 | D-007 | Improve URL pattern matching | M | Debt | Regex/wildcards |
 | D-008 | Session encryption improvement | M | Debt | N/A - Superseded by S-003 (AES-256-GCM encryption with PBKDF2 key derivation) |
