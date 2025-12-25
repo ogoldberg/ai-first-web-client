@@ -13,6 +13,7 @@ import {
   recordContentCheck,
   getVolatilityFactor,
   getDomainVolatilityStats,
+  clearVolatilityData,
   AdaptiveCache,
   AdaptiveContentCache,
   DEFAULT_PAGE_TTL_MS,
@@ -407,8 +408,8 @@ describe('AdaptiveCache', () => {
 
   describe('Volatility Tracking', () => {
     beforeEach(() => {
-      // Clear volatility data between tests by recording fresh data
-      // Note: In a real scenario, we'd expose a clear method
+      // Clear volatility data between tests for proper isolation
+      clearVolatilityData();
     });
 
     it('should return null for URLs with insufficient data', () => {
@@ -755,6 +756,8 @@ describe('AdaptiveCache', () => {
 
     beforeEach(() => {
       cache = new AdaptiveContentCache(100);
+      // Clear volatility data for proper isolation
+      clearVolatilityData();
     });
 
     describe('content hashing', () => {

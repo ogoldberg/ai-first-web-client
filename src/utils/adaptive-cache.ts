@@ -263,6 +263,14 @@ const volatilityData = new Map<string, VolatilityRecord>();
 const MAX_VOLATILITY_RECORDS = 1000;
 
 /**
+ * Clear all volatility data.
+ * Useful for testing to ensure test isolation.
+ */
+export function clearVolatilityData(): void {
+  volatilityData.clear();
+}
+
+/**
  * Get the volatility key for a URL (domain + path pattern).
  */
 function getVolatilityKey(url: string): string {
@@ -606,8 +614,8 @@ export interface AdaptiveCacheStats {
  * @typeParam T - Type of cached values
  */
 export class AdaptiveCache<T = unknown> {
-  private cache: Map<string, AdaptiveCacheEntry<T>> = new Map();
-  private readonly maxEntries: number;
+  protected cache: Map<string, AdaptiveCacheEntry<T>> = new Map();
+  protected readonly maxEntries: number;
   private hits = 0;
   private misses = 0;
 
@@ -618,7 +626,7 @@ export class AdaptiveCache<T = unknown> {
   /**
    * Generate a cache key from URL and optional parameters.
    */
-  private generateKey(url: string, params?: Record<string, string>): string {
+  protected generateKey(url: string, params?: Record<string, string>): string {
     if (!params || Object.keys(params).length === 0) {
       return url;
     }
@@ -724,14 +732,17 @@ export class AdaptiveCache<T = unknown> {
 
   /**
    * Evict the oldest entries to make room.
+   * Uses FIFO eviction leveraging Map's insertion order for O(1) performance.
    */
   private evictOldest(count: number = 1): void {
-    const entries = Array.from(this.cache.entries())
-      .sort(([, a], [, b]) => a.timestamp - b.timestamp)
-      .slice(0, count);
-
-    for (const [key] of entries) {
-      this.cache.delete(key);
+    const keys = this.cache.keys();
+    for (let i = 0; i < count; i++) {
+      const oldestKey = keys.next().value;
+      if (oldestKey) {
+        this.cache.delete(oldestKey);
+      } else {
+        break; // No more keys to evict
+      }
     }
   }
 
@@ -933,12 +944,14 @@ export class AdaptiveContentCache extends AdaptiveCache<ContentEntry> {
   ): AdaptiveTTLResult {
     const contentHash = AdaptiveContentCache.hashContent(html);
 
-    // Check for change before storing
-    const cached = this.get(url);
-    if (cached) {
-      const changed = cached.contentHash !== contentHash;
-      recordContentCheck(url, changed);
-    }
+    // Check for change before storing - access cache directly to avoid
+    // triggering expiry deletion which would prevent volatility tracking
+    const key = this.generateKey(url);
+    const cachedEntry = this.cache.get(key);
+    const changed = cachedEntry ? cachedEntry.value.contentHash !== contentHash : true;
+
+    // Always record for volatility tracking (including first-time content)
+    recordContentCheck(url, changed);
 
     return this.set(
       url,
