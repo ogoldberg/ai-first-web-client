@@ -245,7 +245,7 @@ These tools are deprecated and hidden by default. Use the consolidated alternati
 
 | Issue | Severity | Notes |
 |-------|----------|-------|
-| Large god files | Low | `src/index.ts` and `content-intelligence.ts` need splitting (D-010) |
+| Large god files | Low | `src/index.ts` and `content-intelligence.ts` need splitting (D-010) - **IN PROGRESS** |
 
 ### Resolved Issues
 
