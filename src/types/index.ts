@@ -436,6 +436,20 @@ export interface ProblemResponse {
 
   /** Result of automatic challenge solving attempt */
   challengeSolveResult?: 'success' | 'failed' | 'not_attempted' | 'requires_human' | 'no_change';
+
+  /**
+   * Current research depth (LR-005).
+   * Tracks how many research-assisted retries have been attempted.
+   * When this reaches MAX_RESEARCH_DEPTH, no more research suggestions are provided.
+   */
+  researchDepth: number;
+
+  /**
+   * Whether maximum research depth has been reached (LR-005).
+   * When true, the LLM should not attempt further research-based retries
+   * and should report the issue as unresolvable via automated means.
+   */
+  maxResearchDepthReached: boolean;
 }
 
 /** @deprecated Use ProblemResponse instead */
@@ -465,6 +479,13 @@ export interface RetryConfig {
 
   /** Number of retry attempts already made */
   retryAttempt?: number;
+
+  /**
+   * Number of research-assisted retries already attempted (LR-005).
+   * Used to prevent infinite LLM research loops.
+   * Max 2 research attempts per blocked site.
+   */
+  researchDepth?: number;
 
   /** Wait for a specific selector before extraction */
   waitForSelector?: string;
