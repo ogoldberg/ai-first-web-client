@@ -435,7 +435,7 @@ See [COMPETITIVE_ANALYSIS.md](COMPETITIVE_ANALYSIS.md) for context on why these 
 | ID | Task | Effort | Category | Notes |
 |----|------|--------|----------|-------|
 | F-001 | Batch browse operations | L | Features | Multiple URLs in one call (DONE - PR #97) |
-| F-002 | Parallel request handling | L | Features | Concurrent browsing |
+| F-002 | Parallel request handling | L | Features | Concurrent browsing (DONE - included in F-001/batch_browse with configurable concurrency) |
 | F-003 | Content change detection alerts | M | Features | Notify when content changes (DONE - PR #94) |
 | F-004 | Skill composition (chain skills) | L | Features | Combine skills into workflows |
 | F-005 | Screenshot capture on demand | M | Features | Visual debugging (DONE - PR #91) |
