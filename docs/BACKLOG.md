@@ -549,7 +549,7 @@ See [COMPETITIVE_ANALYSIS.md](COMPETITIVE_ANALYSIS.md) for context on why these 
 | LR-002 | Generate detection-specific search queries | M | DONE | Detection-specific queries for all bot protection types plus problem-type queries |
 | LR-003 | Add retryWith parameter to browse tool | M | DONE | RetryConfig support in SmartBrowseOptions with userAgent, headers, delays, etc. |
 | LR-004 | Curate trusted source list | S | DONE | TRUSTED_SOURCES: github.com, stackoverflow.com, MDN, web.dev, playwright.dev |
-| LR-005 | Add recursion depth limit | S | Planned | Max 2 research attempts per blocked site |
+| LR-005 | Add recursion depth limit | S | In Progress | Max 2 research attempts per blocked site |
 | LR-006 | Integrate successful retries with stealth learning | M | Planned | Persist what worked via recordStealthSuccess() |
 
 **Example Flow:**
