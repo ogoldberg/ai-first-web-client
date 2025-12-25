@@ -17,6 +17,9 @@ export * from './errors.js';
 // Re-export provenance types (CX-006)
 export * from './provenance.js';
 
+// Re-export progress event types (DX-009)
+export * from './progress.js';
+
 export interface NetworkRequest {
   url: string;
   method: string;

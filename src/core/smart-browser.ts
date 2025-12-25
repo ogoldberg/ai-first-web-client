@@ -33,7 +33,12 @@ import type {
   FieldConfidence,
   TableConfidence,
   ApiConfidence,
+  OnProgressCallback,
 } from '../types/index.js';
+import {
+  createProgressEvent,
+  estimateProgressPercent,
+} from '../types/progress.js';
 import {
   createFieldConfidence,
   aggregateConfidence,
@@ -152,6 +157,14 @@ export interface SmartBrowseOptions extends BrowseOptions {
 
   // Verify browse result automatically
   verify?: import('../types/verification.js').VerifyOptions;
+
+  // === Progress Reporting (DX-009) ===
+
+  // Callback for progress updates during browse operation
+  // Called at key stages: initializing, skill_matching, tiered_fetching,
+  // page_loading, waiting, skill_executing, content_extracting, validating,
+  // pagination, complete
+  onProgress?: OnProgressCallback;
 }
 
 /**
@@ -327,10 +340,39 @@ export class SmartBrowser {
   }
 
   /**
+   * Helper to emit progress events if callback is provided
+   */
+  private emitProgress(
+    onProgress: OnProgressCallback | undefined,
+    stage: import('../types/progress.js').BrowseProgressStage,
+    message: string,
+    url: string,
+    startTime: number,
+    details?: import('../types/progress.js').BrowseProgressEvent['details']
+  ): void {
+    if (!onProgress) return;
+    try {
+      const event = createProgressEvent(
+        stage,
+        message,
+        url,
+        startTime,
+        details,
+        estimateProgressPercent(stage)
+      );
+      onProgress(event);
+    } catch (error) {
+      // Don't let callback errors break the browse operation
+      logger.smartBrowser.warn('Progress callback error (non-fatal)', { error });
+    }
+  }
+
+  /**
    * Intelligent browse with automatic learning and optimization
    */
   async browse(url: string, options: SmartBrowseOptions = {}): Promise<SmartBrowseResult> {
     const startTime = Date.now();
+    const { onProgress } = options;
 
     // SSRF Protection: Validate URL before any processing
     validateUrlOrThrow(url);
@@ -339,6 +381,9 @@ export class SmartBrowser {
     const enableLearning = options.enableLearning !== false;
     const useSkills = options.useSkills !== false;
     const recordTrajectory = options.recordTrajectory !== false;
+
+    // Emit initializing progress
+    this.emitProgress(onProgress, 'initializing', `Starting browse for ${domain}`, url, startTime);
 
     // Initialize learning result
     const learning: SmartBrowseResult['learning'] = {
@@ -372,6 +417,8 @@ export class SmartBrowser {
 
     // Check for applicable skills from procedural memory
     if (useSkills) {
+      this.emitProgress(onProgress, 'skill_matching', 'Checking for applicable browsing skills', url, startTime);
+
       const pageContext: PageContext = {
         url,
         domain,
@@ -415,8 +462,10 @@ export class SmartBrowser {
     const needsFullBrowser = options.followPagination || options.waitForSelector || learning.skillApplied;
 
     if (useTieredFetching && !needsFullBrowser) {
+      this.emitProgress(onProgress, 'tiered_fetching', 'Trying lightweight rendering tiers', url, startTime);
+
       try {
-        const tieredResult = await this.browseWithTieredFetching(url, options, learning, startTime);
+        const tieredResult = await this.browseWithTieredFetching(url, options, learning, startTime, onProgress);
         if (tieredResult) {
           // Tiered fetching succeeded without needing Playwright
           return tieredResult;
@@ -427,6 +476,9 @@ export class SmartBrowser {
         logger.smartBrowser.warn(`Tiered fetching failed, falling back to Playwright: ${error}`);
       }
     }
+
+    // Emit page loading progress (Playwright path)
+    this.emitProgress(onProgress, 'page_loading', 'Loading page with browser', url, startTime);
 
     // The core browsing operation with intelligent enhancements
     const browseWithLearning = async (): Promise<{
@@ -461,6 +513,9 @@ export class SmartBrowser {
 
       // Wait for specific selector if requested
       if (options.waitForSelector) {
+        this.emitProgress(onProgress, 'waiting', `Waiting for selector: ${options.waitForSelector}`, url, startTime, {
+          waitingFor: options.waitForSelector,
+        });
         await this.waitForSelectorWithFallback(result.page, options.waitForSelector, domain, learning);
       }
 
@@ -620,6 +675,10 @@ export class SmartBrowser {
     if (useSkills && learning.skillsMatched && learning.skillsMatched.length > 0) {
       const bestMatch = learning.skillsMatched[0];
       if (bestMatch.preconditionsMet && bestMatch.similarity > SKILL_APPLICATION_THRESHOLD) {
+        this.emitProgress(onProgress, 'skill_executing', `Applying skill: ${bestMatch.skill.name}`, url, startTime, {
+          skillName: bestMatch.skill.name,
+        });
+
         try {
           logger.smartBrowser.info(`Auto-applying skill: ${bestMatch.skill.name}`);
           const skillTrace = await this.executeSkillWithFallbacks(
@@ -648,6 +707,8 @@ export class SmartBrowser {
     }
 
     // Try to extract content with learned selectors (with error boundary)
+    this.emitProgress(onProgress, 'content_extracting', 'Extracting page content', url, startTime);
+
     let extractedContent: { markdown: string; text: string; title: string };
     try {
       extractedContent = await this.extractContentWithLearning(
@@ -687,6 +748,8 @@ export class SmartBrowser {
 
     // Validate content with learned rules (with error boundary)
     if (options.validateContent !== false && enableLearning) {
+      this.emitProgress(onProgress, 'validating', 'Validating extracted content', url, startTime);
+
       try {
         const validationResult = this.learningEngine.validateContent(
           domain,
@@ -761,11 +824,17 @@ export class SmartBrowser {
     // Follow pagination if requested (with error boundary)
     let additionalPages: SmartBrowseResult['additionalPages'];
     if (options.followPagination && paginationPattern) {
+      const maxPages = options.maxPages || 5;
+      this.emitProgress(onProgress, 'pagination', `Following pagination (max ${maxPages} pages)`, url, startTime, {
+        currentPage: 1,
+        totalPages: maxPages,
+      });
+
       try {
         additionalPages = await this.followPagination(
           page,
           paginationPattern,
-          options.maxPages || 5,
+          maxPages,
           domain
         );
       } catch (followError) {
@@ -915,6 +984,11 @@ export class SmartBrowser {
       );
     }
 
+    // Emit complete progress
+    this.emitProgress(onProgress, 'complete', 'Browse complete (playwright tier)', url, startTime, {
+      tier: 'playwright',
+    });
+
     return browseResult;
   }
 
@@ -948,7 +1022,8 @@ export class SmartBrowser {
     url: string,
     options: SmartBrowseOptions,
     learning: SmartBrowseResult['learning'],
-    startTime: number
+    startTime: number,
+    onProgress?: OnProgressCallback
   ): Promise<SmartBrowseResult | null> {
     const domain = new URL(url).hostname;
     const enableLearning = options.enableLearning !== false;
@@ -998,6 +1073,11 @@ export class SmartBrowser {
 
       logger.smartBrowser.debug(`Used ${result.tier} tier for ${domain} (${result.timing.total}ms)`);
 
+      // Emit content extracting progress (tables/language)
+      this.emitProgress(onProgress, 'content_extracting', 'Extracting additional content', url, startTime, {
+        tier: result.tier,
+      });
+
       // Extract tables (with error boundary)
       let tables: TableAsJSON[] = [];
       try {
@@ -1018,6 +1098,8 @@ export class SmartBrowser {
 
       // Validate content with learned rules (with error boundary)
       if (options.validateContent !== false && enableLearning) {
+        this.emitProgress(onProgress, 'validating', 'Validating extracted content', url, startTime);
+
         try {
           const validationResult = this.learningEngine.validateContent(
             domain,
@@ -1167,6 +1249,12 @@ export class SmartBrowser {
           options
         );
       }
+
+      // Emit complete progress
+      this.emitProgress(onProgress, 'complete', `Browse complete (${result.tier} tier)`, url, startTime, {
+        tier: result.tier,
+        tiersAttempted: result.tiersAttempted?.length,
+      });
 
       return tieredResult;
     } catch (error) {
