@@ -41,10 +41,12 @@ export {
   handleGetAnalyticsDashboard,
   handleGetSystemStatus,
   handleToolSelectionMetrics,
+  handleSkillPromptAnalytics,
   type TierAction,
   type ContentTrackingAction,
   type UsageAnalyticsAction,
   type ToolSelectionMetricsAction,
+  type SkillPromptAnalyticsAction,
 } from './admin-handlers.js';
 
 // Skill handlers

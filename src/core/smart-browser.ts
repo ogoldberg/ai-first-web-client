@@ -78,6 +78,10 @@ import type {
   HarExportOptions,
   HarExportResult,
 } from '../types/har.js';
+import {
+  recordSkillPromptExecution,
+  type SkillPromptExecution,
+} from '../utils/skill-prompt-analytics.js';
 
 // Procedural memory thresholds
 const SKILL_APPLICATION_THRESHOLD = 0.8;  // Minimum similarity to auto-apply a skill
@@ -170,6 +174,16 @@ export interface SmartBrowseOptions extends BrowseOptions {
   // page_loading, waiting, skill_executing, content_extracting, validating,
   // pagination, complete
   onProgress?: OnProgressCallback;
+
+  // === Skill Prompt Analytics (SK-011) ===
+
+  // ID of the skill prompt being executed (e.g., 'research_product', 'monitor_changes')
+  // When provided, analytics will track usage, success rates, and parameter overrides
+  skillPromptId?: string;
+
+  // Workflow step number within the skill prompt (1-based)
+  // Helps track multi-step skill workflows
+  skillPromptStep?: number;
 }
 
 /**
@@ -483,6 +497,14 @@ export class SmartBrowser {
         const tieredResult = await this.browseWithTieredFetching(url, options, learning, startTime, onProgress);
         if (tieredResult) {
           // Tiered fetching succeeded without needing Playwright
+          // Record skill prompt analytics (SK-011)
+          if (options.skillPromptId) {
+            recordSkillPromptExecution(options.skillPromptId, true, {
+              workflowStep: options.skillPromptStep,
+              domain,
+              durationMs: Date.now() - startTime,
+            });
+          }
           return tieredResult;
         }
         // If tieredResult is null, it fell back to playwright - continue below
@@ -591,6 +613,15 @@ export class SmartBrowser {
           errorMessage: error.message,
           recoveryAttempted: retryCount > 0,
           recoverySucceeded: false,
+        });
+      }
+      // Record skill prompt failure analytics (SK-011)
+      if (options.skillPromptId) {
+        recordSkillPromptExecution(options.skillPromptId, false, {
+          workflowStep: options.skillPromptStep,
+          domain,
+          durationMs: Date.now() - startTime,
+          errorMessage: error instanceof Error ? error.message : String(error),
         });
       }
       throw error;
@@ -1033,6 +1064,15 @@ export class SmartBrowser {
     this.emitProgress(onProgress, 'complete', 'Browse complete (playwright tier)', url, startTime, {
       tier: 'playwright',
     });
+
+    // Record skill prompt analytics (SK-011)
+    if (options.skillPromptId) {
+      recordSkillPromptExecution(options.skillPromptId, true, {
+        workflowStep: options.skillPromptStep,
+        domain,
+        durationMs: Date.now() - startTime,
+      });
+    }
 
     return browseResult;
   }
