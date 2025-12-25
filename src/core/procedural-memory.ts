@@ -42,6 +42,14 @@ import type {
   SkillImportOptions,
   SkillImportResult,
   SkillVertical,
+  // Skill composition types (F-004)
+  SkillExecutionResult,
+  WorkflowExecutionResult,
+  WorkflowTransitionContext,
+  WorkflowTransitionCondition,
+  CreateWorkflowOptions,
+  WorkflowMatch,
+  WorkflowExecutionOptions,
 } from '../types/index.js';
 
 // Default configuration
@@ -1983,6 +1991,711 @@ export class ProceduralMemory {
     }
 
     return skillNames;
+  }
+
+  // ============================================
+  // SKILL COMPOSITION (F-004)
+  // ============================================
+
+  /**
+   * Create a workflow with advanced options
+   */
+  createWorkflowAdvanced(options: CreateWorkflowOptions): SkillWorkflow | null {
+    const { name, skillIds, description, transitions: customTransitions, preconditions: customPreconditions } = options;
+
+    // Validate all skills exist
+    const skills: BrowsingSkill[] = [];
+    for (const id of skillIds) {
+      const skill = this.skills.get(id);
+      if (!skill) {
+        logger.proceduralMemory.warn(`Skill not found for workflow: ${id}`);
+        return null;
+      }
+      skills.push(skill);
+    }
+
+    if (skills.length < 2) {
+      logger.proceduralMemory.warn('Workflow requires at least 2 skills');
+      return null;
+    }
+
+    // Merge preconditions from first skill or use custom
+    const preconditions: SkillPreconditions = customPreconditions || { ...skills[0].preconditions };
+
+    // Create transitions (use custom or default to 'success')
+    const transitions: SkillWorkflow['transitions'] = customTransitions || [];
+    if (transitions.length === 0) {
+      for (let i = 0; i < skillIds.length - 1; i++) {
+        transitions.push({
+          fromSkillId: skillIds[i],
+          toSkillId: skillIds[i + 1],
+          condition: 'success',
+        });
+      }
+    }
+
+    // Create workflow embedding for retrieval
+    const embedding = this.createWorkflowEmbedding(skills);
+
+    const workflow: SkillWorkflow = {
+      id: `wf_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+      name,
+      description: description || `Workflow: ${skills.map(s => s.name).join(' -> ')}`,
+      skillIds,
+      preconditions,
+      transitions,
+      embedding,
+      metrics: {
+        successCount: 0,
+        failureCount: 0,
+        avgDuration: 0,
+        lastUsed: Date.now(),
+        timesUsed: 0,
+      },
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+
+    this.workflows.set(workflow.id, workflow);
+    this.save();
+
+    logger.proceduralMemory.info(`Created workflow: ${name} with ${skills.length} skills`);
+    return workflow;
+  }
+
+  /**
+   * Create an embedding for a workflow based on its constituent skills
+   */
+  private createWorkflowEmbedding(skills: BrowsingSkill[]): number[] {
+    // Average the embeddings of all skills in the workflow
+    const embedding = new Array(this.config.embeddingDim).fill(0);
+
+    for (const skill of skills) {
+      const skillEmbedding = this.createSkillEmbedding(skill.preconditions, skill.actionSequence);
+      for (let i = 0; i < embedding.length; i++) {
+        embedding[i] += skillEmbedding[i] / skills.length;
+      }
+    }
+
+    return this.normalizeVector(embedding);
+  }
+
+  /**
+   * Evaluate a transition condition
+   */
+  private evaluateTransitionCondition(
+    condition: SkillWorkflow['transitions'][0]['condition'],
+    context: WorkflowTransitionContext
+  ): boolean {
+    switch (condition) {
+      case 'always':
+        return true;
+      case 'success':
+        return context.previousResult?.success ?? true;
+      case 'failure':
+        return !(context.previousResult?.success ?? true);
+      case 'has_pagination':
+        return context.hasPagination ?? context.pageContext?.hasPagination ?? false;
+      case 'has_next':
+        return context.hasNext ?? false;
+      case 'has_form':
+        return context.pageContext?.hasForm ?? false;
+      case 'has_table':
+        return context.pageContext?.hasTable ?? false;
+      case 'content_extracted':
+        return context.previousResult?.output !== undefined;
+      case 'custom':
+        // Custom conditions require a callback in options
+        return context.customData?.conditionMet === true;
+      default:
+        return true;
+    }
+  }
+
+  /**
+   * Execute a workflow, running skills in sequence with transition evaluation
+   *
+   * Note: This returns the execution result. The actual skill execution logic
+   * must be provided via the executeSkill callback, as skill execution involves
+   * browser operations that are outside this class's scope.
+   */
+  async executeWorkflow(
+    workflowId: string,
+    executeSkill: (skill: BrowsingSkill, context: PageContext) => Promise<{ success: boolean; output?: unknown; error?: string }>,
+    pageContext: PageContext,
+    options: WorkflowExecutionOptions = {}
+  ): Promise<WorkflowExecutionResult> {
+    const workflow = this.workflows.get(workflowId);
+    if (!workflow) {
+      return {
+        workflowId,
+        workflowName: 'unknown',
+        success: false,
+        totalDuration: 0,
+        skillResults: [],
+        executedAt: Date.now(),
+        aggregatedOutput: { error: 'Workflow not found' },
+      };
+    }
+
+    const startTime = Date.now();
+    const skillResults: SkillExecutionResult[] = [];
+    const aggregatedOutput: Record<string, unknown> = {};
+    let transitionContext: WorkflowTransitionContext = {
+      pageContext,
+      customData: options.contextData,
+    };
+
+    const timeout = options.timeout ?? 60000; // Default 60s timeout
+    const stopOnFailure = options.stopOnFailure ?? true;
+
+    for (let i = 0; i < workflow.skillIds.length; i++) {
+      // Check timeout
+      if (Date.now() - startTime > timeout) {
+        skillResults.push({
+          skillId: workflow.skillIds[i],
+          skillName: 'timeout',
+          success: false,
+          duration: 0,
+          error: 'Workflow timeout exceeded',
+          continueExecution: false,
+        });
+        break;
+      }
+
+      const skillId = workflow.skillIds[i];
+      const skill = this.skills.get(skillId);
+
+      if (!skill) {
+        skillResults.push({
+          skillId,
+          skillName: 'unknown',
+          success: false,
+          duration: 0,
+          error: `Skill not found: ${skillId}`,
+          continueExecution: false,
+        });
+        break;
+      }
+
+      // Check transition condition from previous skill
+      if (i > 0) {
+        const transition = workflow.transitions.find(
+          t => t.fromSkillId === workflow.skillIds[i - 1] && t.toSkillId === skillId
+        );
+        if (transition) {
+          const shouldContinue = this.evaluateTransitionCondition(
+            transition.condition,
+            transitionContext
+          );
+          if (!shouldContinue) {
+            logger.proceduralMemory.debug(`Transition condition '${transition.condition}' not met, skipping ${skillId}`);
+            continue;
+          }
+        }
+      }
+
+      // Execute the skill
+      const skillStartTime = Date.now();
+      try {
+        const result = await executeSkill(skill, pageContext);
+        const duration = Date.now() - skillStartTime;
+
+        const executionResult: SkillExecutionResult = {
+          skillId,
+          skillName: skill.name,
+          success: result.success,
+          duration,
+          output: result.output,
+          error: result.error,
+          continueExecution: result.success || !stopOnFailure,
+        };
+
+        skillResults.push(executionResult);
+        options.onSkillComplete?.(executionResult);
+
+        // Update transition context
+        transitionContext = {
+          ...transitionContext,
+          previousResult: executionResult,
+          hasPagination: typeof result.output === 'object' && result.output !== null && 'hasPagination' in result.output
+            ? (result.output as Record<string, unknown>).hasPagination === true
+            : transitionContext.hasPagination,
+          hasNext: typeof result.output === 'object' && result.output !== null && 'hasNext' in result.output
+            ? (result.output as Record<string, unknown>).hasNext === true
+            : transitionContext.hasNext,
+        };
+
+        // Aggregate output
+        aggregatedOutput[skill.name] = result.output;
+
+        // Stop on failure if configured
+        if (!result.success && stopOnFailure) {
+          return this.completeWorkflowExecution(workflow, skillResults, startTime, false, i, aggregatedOutput);
+        }
+      } catch (error) {
+        const duration = Date.now() - skillStartTime;
+        skillResults.push({
+          skillId,
+          skillName: skill.name,
+          success: false,
+          duration,
+          error: error instanceof Error ? error.message : String(error),
+          continueExecution: false,
+        });
+
+        if (stopOnFailure) {
+          return this.completeWorkflowExecution(workflow, skillResults, startTime, false, i, aggregatedOutput);
+        }
+      }
+    }
+
+    // All skills completed successfully
+    const allSucceeded = skillResults.every(r => r.success);
+    return this.completeWorkflowExecution(workflow, skillResults, startTime, allSucceeded, undefined, aggregatedOutput);
+  }
+
+  /**
+   * Helper to complete workflow execution and update metrics
+   */
+  private completeWorkflowExecution(
+    workflow: SkillWorkflow,
+    skillResults: SkillExecutionResult[],
+    startTime: number,
+    success: boolean,
+    failedAtIndex?: number,
+    aggregatedOutput?: unknown
+  ): WorkflowExecutionResult {
+    const totalDuration = Date.now() - startTime;
+
+    // Update workflow metrics
+    workflow.metrics.timesUsed++;
+    workflow.metrics.lastUsed = Date.now();
+    if (success) {
+      workflow.metrics.successCount++;
+    } else {
+      workflow.metrics.failureCount++;
+    }
+    // Update average duration
+    workflow.metrics.avgDuration =
+      (workflow.metrics.avgDuration * (workflow.metrics.timesUsed - 1) + totalDuration) /
+      workflow.metrics.timesUsed;
+    workflow.updatedAt = Date.now();
+
+    this.save();
+
+    logger.proceduralMemory.info(
+      `Workflow '${workflow.name}' ${success ? 'completed successfully' : 'failed'}` +
+      ` in ${totalDuration}ms (${skillResults.length} skills)`
+    );
+
+    return {
+      workflowId: workflow.id,
+      workflowName: workflow.name,
+      success,
+      totalDuration,
+      skillResults,
+      failedAtSkillIndex: failedAtIndex,
+      aggregatedOutput,
+      executedAt: Date.now(),
+    };
+  }
+
+  /**
+   * Retrieve workflows matching a page context
+   */
+  retrieveWorkflows(context: PageContext, topK: number = 3): WorkflowMatch[] {
+    const contextEmbedding = this.createContextEmbedding(context);
+    const matches: WorkflowMatch[] = [];
+
+    for (const workflow of this.workflows.values()) {
+      // Check preconditions first
+      if (!this.matchesPreconditions(workflow.preconditions, context)) {
+        continue;
+      }
+
+      // Calculate similarity
+      const embedding = workflow.embedding || this.createWorkflowEmbedding(
+        workflow.skillIds.map(id => this.skills.get(id)).filter(Boolean) as BrowsingSkill[]
+      );
+      const similarity = this.cosineSimilarity(contextEmbedding, embedding);
+
+      if (similarity >= this.config.similarityThreshold) {
+        matches.push({
+          workflow,
+          similarity,
+          reason: this.explainWorkflowMatch(workflow, context, similarity),
+        });
+      }
+    }
+
+    // Sort by similarity and return top K
+    return matches
+      .sort((a, b) => b.similarity - a.similarity)
+      .slice(0, topK);
+  }
+
+  /**
+   * Check if preconditions match a page context
+   */
+  private matchesPreconditions(preconditions: SkillPreconditions, context: PageContext): boolean {
+    // Check domain patterns
+    if (preconditions.domainPatterns?.length) {
+      const domainMatches = preconditions.domainPatterns.some(pattern => {
+        if (pattern.includes('*')) {
+          const regex = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$');
+          return regex.test(context.domain);
+        }
+        return context.domain === pattern || context.domain.endsWith('.' + pattern);
+      });
+      if (!domainMatches) return false;
+    }
+
+    // Check URL patterns
+    if (preconditions.urlPatterns?.length) {
+      const urlMatches = preconditions.urlPatterns.some(pattern => {
+        if (pattern.includes('*')) {
+          const regex = new RegExp('^' + pattern.replace(/\*/g, '.*') + '$');
+          return regex.test(context.url);
+        }
+        return context.url.includes(pattern);
+      });
+      if (!urlMatches) return false;
+    }
+
+    // Check page type
+    if (preconditions.pageType && preconditions.pageType !== context.pageType) {
+      return false;
+    }
+
+    // Check required selectors
+    if (preconditions.requiredSelectors?.length) {
+      const hasAllSelectors = preconditions.requiredSelectors.every(
+        selector => context.availableSelectors?.includes(selector)
+      );
+      if (!hasAllSelectors) return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * Explain why a workflow matches
+   */
+  private explainWorkflowMatch(
+    workflow: SkillWorkflow,
+    context: PageContext,
+    similarity: number
+  ): string {
+    const reasons: string[] = [];
+
+    if (workflow.preconditions.domainPatterns?.some(p => context.domain.includes(p.replace('*', '')))) {
+      reasons.push('domain match');
+    }
+    if (workflow.preconditions.pageType === context.pageType) {
+      reasons.push(`page type: ${context.pageType}`);
+    }
+    if (similarity > 0.9) {
+      reasons.push('high embedding similarity');
+    } else if (similarity > 0.8) {
+      reasons.push('good embedding similarity');
+    }
+
+    const successRate = workflow.metrics.timesUsed > 0
+      ? workflow.metrics.successCount / workflow.metrics.timesUsed
+      : 0;
+    if (successRate > 0.8) {
+      reasons.push(`${Math.round(successRate * 100)}% success rate`);
+    }
+
+    return reasons.join(', ') || 'general match';
+  }
+
+  /**
+   * Insert a skill into an existing workflow at a specific position
+   */
+  insertSkillIntoWorkflow(
+    workflowId: string,
+    skillId: string,
+    position: number,
+    transitionCondition: WorkflowTransitionCondition = 'success'
+  ): boolean {
+    const workflow = this.workflows.get(workflowId);
+    if (!workflow) {
+      logger.proceduralMemory.warn(`Workflow not found: ${workflowId}`);
+      return false;
+    }
+
+    const skill = this.skills.get(skillId);
+    if (!skill) {
+      logger.proceduralMemory.warn(`Skill not found: ${skillId}`);
+      return false;
+    }
+
+    // Validate position
+    if (position < 0 || position > workflow.skillIds.length) {
+      logger.proceduralMemory.warn(`Invalid position: ${position}`);
+      return false;
+    }
+
+    // Insert skill ID
+    workflow.skillIds.splice(position, 0, skillId);
+
+    // Update transitions
+    const newTransitions: SkillWorkflow['transitions'] = [];
+    for (let i = 0; i < workflow.skillIds.length - 1; i++) {
+      const existing = workflow.transitions.find(
+        t => t.fromSkillId === workflow.skillIds[i] && t.toSkillId === workflow.skillIds[i + 1]
+      );
+      if (existing) {
+        newTransitions.push(existing);
+      } else {
+        // New transition involving the inserted skill
+        newTransitions.push({
+          fromSkillId: workflow.skillIds[i],
+          toSkillId: workflow.skillIds[i + 1],
+          condition: transitionCondition,
+        });
+      }
+    }
+    workflow.transitions = newTransitions;
+
+    // Update embedding
+    const skills = workflow.skillIds.map(id => this.skills.get(id)).filter(Boolean) as BrowsingSkill[];
+    workflow.embedding = this.createWorkflowEmbedding(skills);
+
+    workflow.updatedAt = Date.now();
+    this.save();
+
+    logger.proceduralMemory.info(`Inserted skill '${skill.name}' into workflow '${workflow.name}' at position ${position}`);
+    return true;
+  }
+
+  /**
+   * Remove a skill from a workflow
+   */
+  removeSkillFromWorkflow(workflowId: string, skillId: string): boolean {
+    const workflow = this.workflows.get(workflowId);
+    if (!workflow) {
+      logger.proceduralMemory.warn(`Workflow not found: ${workflowId}`);
+      return false;
+    }
+
+    const index = workflow.skillIds.indexOf(skillId);
+    if (index === -1) {
+      logger.proceduralMemory.warn(`Skill not in workflow: ${skillId}`);
+      return false;
+    }
+
+    // Ensure at least 2 skills remain
+    if (workflow.skillIds.length <= 2) {
+      logger.proceduralMemory.warn('Cannot remove skill: workflow needs at least 2 skills');
+      return false;
+    }
+
+    // Remove skill ID
+    workflow.skillIds.splice(index, 1);
+
+    // Update transitions (remove ones involving the removed skill)
+    workflow.transitions = workflow.transitions.filter(
+      t => t.fromSkillId !== skillId && t.toSkillId !== skillId
+    );
+
+    // Ensure transitions are still contiguous
+    const newTransitions: SkillWorkflow['transitions'] = [];
+    for (let i = 0; i < workflow.skillIds.length - 1; i++) {
+      const existing = workflow.transitions.find(
+        t => t.fromSkillId === workflow.skillIds[i] && t.toSkillId === workflow.skillIds[i + 1]
+      );
+      newTransitions.push(existing || {
+        fromSkillId: workflow.skillIds[i],
+        toSkillId: workflow.skillIds[i + 1],
+        condition: 'success',
+      });
+    }
+    workflow.transitions = newTransitions;
+
+    // Update embedding
+    const skills = workflow.skillIds.map(id => this.skills.get(id)).filter(Boolean) as BrowsingSkill[];
+    workflow.embedding = this.createWorkflowEmbedding(skills);
+
+    workflow.updatedAt = Date.now();
+    this.save();
+
+    logger.proceduralMemory.info(`Removed skill from workflow '${workflow.name}'`);
+    return true;
+  }
+
+  /**
+   * Reorder skills within a workflow
+   */
+  reorderWorkflowSkills(workflowId: string, newOrder: string[]): boolean {
+    const workflow = this.workflows.get(workflowId);
+    if (!workflow) {
+      logger.proceduralMemory.warn(`Workflow not found: ${workflowId}`);
+      return false;
+    }
+
+    // Validate new order has same skills
+    const currentSet = new Set(workflow.skillIds);
+    const newSet = new Set(newOrder);
+    if (currentSet.size !== newSet.size ||
+        !Array.from(currentSet).every(id => newSet.has(id))) {
+      logger.proceduralMemory.warn('New order must contain the same skills');
+      return false;
+    }
+
+    // Update skill order
+    workflow.skillIds = [...newOrder];
+
+    // Rebuild transitions for new order
+    const newTransitions: SkillWorkflow['transitions'] = [];
+    for (let i = 0; i < workflow.skillIds.length - 1; i++) {
+      newTransitions.push({
+        fromSkillId: workflow.skillIds[i],
+        toSkillId: workflow.skillIds[i + 1],
+        condition: 'success',
+      });
+    }
+    workflow.transitions = newTransitions;
+
+    // Update embedding
+    const skills = workflow.skillIds.map(id => this.skills.get(id)).filter(Boolean) as BrowsingSkill[];
+    workflow.embedding = this.createWorkflowEmbedding(skills);
+
+    workflow.updatedAt = Date.now();
+    this.save();
+
+    logger.proceduralMemory.info(`Reordered skills in workflow '${workflow.name}'`);
+    return true;
+  }
+
+  /**
+   * Delete a workflow
+   */
+  deleteWorkflow(workflowId: string): boolean {
+    if (!this.workflows.has(workflowId)) {
+      return false;
+    }
+    this.workflows.delete(workflowId);
+    this.save();
+    logger.proceduralMemory.info(`Deleted workflow: ${workflowId}`);
+    return true;
+  }
+
+  /**
+   * Optimize a workflow by reordering skills based on performance metrics
+   * Skills with higher success rates and shorter durations are moved earlier
+   */
+  optimizeWorkflow(workflowId: string): boolean {
+    const workflow = this.workflows.get(workflowId);
+    if (!workflow) {
+      return false;
+    }
+
+    // Get skill metrics
+    const skillMetrics = workflow.skillIds.map(id => {
+      const skill = this.skills.get(id);
+      if (!skill) return { id, score: 0 };
+      const successRate = skill.metrics.timesUsed > 0
+        ? skill.metrics.successCount / skill.metrics.timesUsed
+        : 0.5;
+      const speedScore = skill.metrics.avgDuration > 0
+        ? 1 / (1 + skill.metrics.avgDuration / 1000)  // Faster is better
+        : 0.5;
+      return {
+        id,
+        score: successRate * 0.7 + speedScore * 0.3,
+        successRate,
+        avgDuration: skill.metrics.avgDuration,
+      };
+    });
+
+    // Sort by score (higher is better) but keep first and last in place
+    // as they're often entry/exit points
+    if (skillMetrics.length > 2) {
+      const first = skillMetrics[0];
+      const last = skillMetrics[skillMetrics.length - 1];
+      const middle = skillMetrics.slice(1, -1).sort((a, b) => b.score - a.score);
+      const optimizedOrder = [first, ...middle, last].map(m => m.id);
+      return this.reorderWorkflowSkills(workflowId, optimizedOrder);
+    }
+
+    return false; // No optimization needed for 2-skill workflows
+  }
+
+  /**
+   * Clone a workflow with a new name
+   */
+  cloneWorkflow(workflowId: string, newName: string): SkillWorkflow | null {
+    const workflow = this.workflows.get(workflowId);
+    if (!workflow) {
+      return null;
+    }
+
+    const cloned: SkillWorkflow = {
+      ...workflow,
+      id: `wf_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+      name: newName,
+      metrics: {
+        successCount: 0,
+        failureCount: 0,
+        avgDuration: 0,
+        lastUsed: Date.now(),
+        timesUsed: 0,
+      },
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+
+    this.workflows.set(cloned.id, cloned);
+    this.save();
+
+    logger.proceduralMemory.info(`Cloned workflow '${workflow.name}' as '${newName}'`);
+    return cloned;
+  }
+
+  /**
+   * Get workflow statistics
+   */
+  getWorkflowStats(): {
+    totalWorkflows: number;
+    avgSkillsPerWorkflow: number;
+    topWorkflows: Array<{ name: string; successRate: number; timesUsed: number }>;
+    avgSuccessRate: number;
+  } {
+    const workflows = Array.from(this.workflows.values());
+
+    if (workflows.length === 0) {
+      return {
+        totalWorkflows: 0,
+        avgSkillsPerWorkflow: 0,
+        topWorkflows: [],
+        avgSuccessRate: 0,
+      };
+    }
+
+    const totalSkills = workflows.reduce((sum, w) => sum + w.skillIds.length, 0);
+
+    const workflowStats = workflows.map(w => ({
+      name: w.name,
+      successRate: w.metrics.timesUsed > 0
+        ? w.metrics.successCount / w.metrics.timesUsed
+        : 0,
+      timesUsed: w.metrics.timesUsed,
+    }));
+
+    const avgSuccessRate = workflowStats.reduce((sum, w) => sum + w.successRate, 0) / workflows.length;
+
+    return {
+      totalWorkflows: workflows.length,
+      avgSkillsPerWorkflow: totalSkills / workflows.length,
+      topWorkflows: workflowStats
+        .filter(w => w.timesUsed > 0)
+        .sort((a, b) => b.successRate - a.successRate)
+        .slice(0, 5),
+      avgSuccessRate,
+    };
   }
 
   // ============================================
