@@ -277,7 +277,7 @@ export function handleGetPerformanceMetrics(
 // CONTENT TRACKING
 // ============================================
 
-export type ContentTrackingAction = 'track' | 'check' | 'list' | 'history' | 'untrack' | 'stats';
+export type ContentTrackingAction = 'track' | 'check' | 'list' | 'history' | 'untrack' | 'stats' | 'diff';
 
 export async function handleContentTracking(
   smartBrowser: SmartBrowser,
@@ -452,8 +452,48 @@ export async function handleContentTracking(
       });
     }
 
+    case 'diff': {
+      // Generate a line-by-line diff between two content versions
+      const oldContent = args.oldContent;
+      const newContent = args.newContent;
+
+      // Use typeof check to allow empty strings as valid input
+      if (typeof oldContent !== 'string' || typeof newContent !== 'string') {
+        throw new Error(missingArgumentsError('content_tracking:diff', ['oldContent', 'newContent']));
+      }
+
+      const diffResult = tracker.generateDiff(
+        oldContent,
+        newContent,
+        url || 'content',
+        {
+          // Use nullish coalescing to allow 0 as a valid value
+          contextLines: (args.contextLines as number) ?? 3,
+          ignoreWhitespace: (args.ignoreWhitespace as boolean) ?? false,
+          ignoreCase: (args.ignoreCase as boolean) ?? false,
+          maxLineLength: (args.maxLineLength as number) ?? 0,
+        }
+      );
+
+      return jsonResponse({
+        action: 'diff',
+        url: url || 'content',
+        hasChanges: diffResult.hasChanges,
+        summary: diffResult.summary,
+        stats: {
+          oldLineCount: diffResult.stats.oldLineCount,
+          newLineCount: diffResult.stats.newLineCount,
+          linesAdded: diffResult.stats.linesAdded,
+          linesDeleted: diffResult.stats.linesDeleted,
+          linesUnchanged: diffResult.stats.linesUnchanged,
+          hunkCount: diffResult.stats.hunkCount,
+        },
+        unifiedDiff: diffResult.unifiedDiff,
+      });
+    }
+
     default:
-      throw new Error(unknownActionError(action, 'content_tracking', ['track', 'check', 'list', 'history', 'untrack', 'stats']));
+      throw new Error(unknownActionError(action, 'content_tracking', ['track', 'check', 'list', 'history', 'untrack', 'stats', 'diff']));
   }
 }
 

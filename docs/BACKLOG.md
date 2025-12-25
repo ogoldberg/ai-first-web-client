@@ -595,7 +595,7 @@ Browser: { success: true, ... }  // Learns this for future
 | F-008 | Debug mode toggle | S | Features | Verbose output mode (DONE - LLM_BROWSER_DEBUG_MODE=1 enables debug tools) |
 | F-015 | AI feedback system | L | Features | DONE | Secure feedback for AI users to report browsing quality issues. Rate limiting, anomaly detection, real-time adjustments (5% cap). MCP tool: ai_feedback (PR #167) |
 | F-009 | Trace visualization | L | Features | Visual request flow |
-| F-010 | Diff generation for changes | M | Features | Show what changed |
+| F-010 | Diff generation for changes | M | Features | DONE | Line-level diff generation with unified diff format, side-by-side view, inline word-level diffs. Integrated with content_tracking MCP tool (PR #168) |
 | F-011 | Webhook notifications | L | Features | External integrations |
 | F-013 | Human-in-the-loop inspection UI | L | Features | Minimal UI to see selectors, extracted content, tier decisions |
 | F-014 | Advanced anti-bot strategies | L | Features | N/A - Superseded by AB-001 through AB-008 (DONE - playwright-extra stealth, fingerprinting, behavioral delays) |

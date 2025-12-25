@@ -551,17 +551,25 @@ Actions:
 - list: List tracked URLs
 - history: Get change history
 - untrack: Stop tracking a URL
-- stats: Get tracking statistics`,
+- stats: Get tracking statistics
+- diff: Generate a line-by-line diff between two content versions (F-010)`,
   inputSchema: {
     type: 'object',
     properties: {
-      action: { type: 'string', enum: ['track', 'check', 'list', 'history', 'untrack', 'stats'] },
-      url: { type: 'string' },
+      action: { type: 'string', enum: ['track', 'check', 'list', 'history', 'untrack', 'stats', 'diff'] },
+      url: { type: 'string', description: 'URL for tracking actions or label for diff' },
       label: { type: 'string' },
       tags: { type: 'array', items: { type: 'string' } },
       domain: { type: 'string' },
       hasChanges: { type: 'boolean' },
       limit: { type: 'number' },
+      // Diff-specific parameters (action: diff)
+      oldContent: { type: 'string', description: 'Previous content version (for diff action)' },
+      newContent: { type: 'string', description: 'Current content version (for diff action)' },
+      contextLines: { type: 'number', description: 'Context lines around changes (default: 3)' },
+      ignoreWhitespace: { type: 'boolean', description: 'Ignore whitespace changes (default: false)' },
+      ignoreCase: { type: 'boolean', description: 'Ignore case changes (default: false)' },
+      maxLineLength: { type: 'number', description: 'Max line length before truncation (default: no limit)' },
     },
     required: ['action'],
   },
