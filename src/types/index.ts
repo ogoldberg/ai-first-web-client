@@ -803,7 +803,9 @@ export interface SkillWorkflow {
   transitions: Array<{
     fromSkillId: string;
     toSkillId: string;
-    condition?: 'success' | 'always' | 'has_pagination' | 'has_next';
+    condition?: 'success' | 'always' | 'has_pagination' | 'has_next' | 'failure' | 'has_form' | 'has_table' | 'content_extracted' | 'custom';
+    /** Custom condition function name (for serialization) */
+    customConditionName?: string;
   }>;
   // Performance metrics
   metrics: {
@@ -813,8 +815,118 @@ export interface SkillWorkflow {
     lastUsed: number;
     timesUsed: number;
   };
+  // Embedding for workflow retrieval
+  embedding?: number[];
   createdAt: number;
   updatedAt: number;
+}
+
+// ============================================
+// SKILL COMPOSITION (F-004)
+// ============================================
+
+/**
+ * Result of executing a single skill within a workflow
+ */
+export interface SkillExecutionResult {
+  skillId: string;
+  skillName: string;
+  success: boolean;
+  duration: number;
+  output?: unknown;
+  error?: string;
+  /** The transition condition that was evaluated */
+  transitionEvaluated?: string;
+  /** Whether to continue to next skill */
+  continueExecution: boolean;
+}
+
+/**
+ * Result of executing an entire workflow
+ */
+export interface WorkflowExecutionResult {
+  workflowId: string;
+  workflowName: string;
+  success: boolean;
+  totalDuration: number;
+  skillResults: SkillExecutionResult[];
+  /** Index of the skill that failed (if any) */
+  failedAtSkillIndex?: number;
+  /** Aggregated output from all skills */
+  aggregatedOutput?: unknown;
+  executedAt: number;
+}
+
+/**
+ * Context for evaluating workflow transitions
+ */
+export interface WorkflowTransitionContext {
+  /** Result from the previous skill */
+  previousResult?: SkillExecutionResult;
+  /** Current page context */
+  pageContext?: PageContext;
+  /** Whether pagination is detected */
+  hasPagination?: boolean;
+  /** Whether a "next" element is detected */
+  hasNext?: boolean;
+  /** Custom data from skill execution */
+  customData?: Record<string, unknown>;
+}
+
+/**
+ * Extended transition with more condition types
+ */
+export type WorkflowTransitionCondition =
+  | 'success'
+  | 'always'
+  | 'has_pagination'
+  | 'has_next'
+  | 'failure'
+  | 'has_form'
+  | 'has_table'
+  | 'content_extracted'
+  | 'custom';
+
+/**
+ * Options for creating a workflow
+ */
+export interface CreateWorkflowOptions {
+  name: string;
+  skillIds: string[];
+  description?: string;
+  /** Custom transition conditions (default: 'success' between all) */
+  transitions?: Array<{
+    fromSkillId: string;
+    toSkillId: string;
+    condition: WorkflowTransitionCondition;
+    /** Custom condition evaluator (for 'custom' condition type) */
+    customCondition?: (ctx: WorkflowTransitionContext) => boolean;
+  }>;
+  /** Preconditions that must be met to start the workflow */
+  preconditions?: SkillPreconditions;
+}
+
+/**
+ * Match result when retrieving workflows
+ */
+export interface WorkflowMatch {
+  workflow: SkillWorkflow;
+  similarity: number;
+  reason: string;
+}
+
+/**
+ * Options for workflow execution
+ */
+export interface WorkflowExecutionOptions {
+  /** Maximum time for entire workflow (ms) */
+  timeout?: number;
+  /** Whether to stop on first failure */
+  stopOnFailure?: boolean;
+  /** Custom transition context data */
+  contextData?: Record<string, unknown>;
+  /** Callback for each skill completion */
+  onSkillComplete?: (result: SkillExecutionResult) => void;
 }
 
 /**
