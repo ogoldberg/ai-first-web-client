@@ -72,4 +72,8 @@ export {
   handleAiFeedback,
   type FeedbackAction,
   type AiFeedbackArgs,
+  // Webhook handlers
+  handleWebhookManagement,
+  type WebhookAction,
+  type WebhookManagementArgs,
 } from './handlers/index.js';

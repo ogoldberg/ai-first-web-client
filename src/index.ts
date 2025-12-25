@@ -55,6 +55,7 @@ import {
   handleToolSelectionMetrics,
   handleSkillManagement,
   handleAiFeedback,
+  handleWebhookManagement,
   type SmartBrowseArgs,
   type BatchBrowseArgs,
   type DebugTracesAction,
@@ -65,6 +66,7 @@ import {
   type ToolSelectionMetricsAction,
   type SkillAction,
   type FeedbackAction,
+  type WebhookAction,
 } from './mcp/index.js';
 
 // Auth helpers (not yet extracted to handlers)
@@ -539,6 +541,16 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
           args.action as FeedbackAction,
           args as unknown as Parameters<typeof handleAiFeedback>[2],
           sessionId
+        );
+        await recordToolInvocation(true);
+        return result;
+      }
+
+      case 'webhook_management': {
+        const result = await handleWebhookManagement(
+          smartBrowser,
+          args.action as WebhookAction,
+          args as unknown as Parameters<typeof handleWebhookManagement>[2]
         );
         await recordToolInvocation(true);
         return result;
