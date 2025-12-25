@@ -279,7 +279,7 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 | SK-008 | Create "Track Competitor Sites" skill | S | Complete | Prompt: Monitor multiple competitor sites, extract key metrics, detect changes. Created skills/prompts/track-competitors.md |
 | SK-009 | Test skills with real users | M | Not Started | Get feedback from 5-10 users. Iterate on prompts based on usage patterns |
 | SK-010 | Submit to Claude skills directory | S | Not Started | Package and submit approved skills. Include examples and documentation |
-| SK-011 | Create skill usage analytics | M | In Progress | Track which skills are most used, success rates, common modifications |
+| SK-011 | Create skill usage analytics | M | Complete | Track which skills are most used, success rates, common modifications. PR #155 |
 
 **Benefits:**
 - Easiest UX (just describe what you want)
