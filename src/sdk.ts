@@ -49,7 +49,17 @@ export type {
   BrowsingTrajectory,
   PageContext,
   SkillMatch,
+  // Progress event types (DX-009)
+  BrowseProgressStage,
+  BrowseProgressEvent,
+  OnProgressCallback,
 } from './types/index.js';
+
+// Re-export progress helpers (DX-009)
+export {
+  createProgressEvent,
+  estimateProgressPercent,
+} from './types/progress.js';
 
 // Re-export core classes for advanced usage
 export {
