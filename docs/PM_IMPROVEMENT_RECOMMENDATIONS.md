@@ -5,7 +5,7 @@
 
 ## Executive Summary
 
-The @llm-browser/core SDK is feature-rich but has usability gaps that create friction for developers. The core issues fall into three themes:
+The @unbrowser/core SDK is feature-rich but has usability gaps that create friction for developers. The core issues fall into three themes:
 
 1. **Initialization is non-obvious** - Async setup requirements are buried
 2. **Documentation is minimal** - TypeScript examples and options missing

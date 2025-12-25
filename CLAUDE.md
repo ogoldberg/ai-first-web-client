@@ -184,9 +184,12 @@ packages/
 
 ### API Endpoints
 
+**Core Endpoints:**
+
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `POST` | `/v1/browse` | Browse URL, extract content |
+| `POST` | `/v1/browse/preview` | Preview execution plan without running (COMP-002) |
 | `POST` | `/v1/batch` | Browse multiple URLs |
 | `POST` | `/v1/fetch` | Fast tiered fetch |
 | `GET` | `/v1/domains/:domain/intelligence` | Domain learning summary |
@@ -194,6 +197,33 @@ packages/
 | `GET` | `/v1/proxy/stats` | Proxy pool statistics |
 | `GET` | `/v1/proxy/risk/:domain` | Domain risk assessment |
 | `GET` | `/health` | Health check |
+
+**Workflow Management (COMP-009):**
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/v1/workflows/record/start` | Start workflow recording session |
+| `POST` | `/v1/workflows/record/:id/stop` | Stop recording and save workflow |
+| `POST` | `/v1/workflows/record/:id/annotate` | Annotate workflow step |
+| `POST` | `/v1/workflows/:id/replay` | Replay saved workflow |
+| `GET` | `/v1/workflows` | List saved workflows |
+| `GET` | `/v1/workflows/:id` | Get workflow details |
+| `DELETE` | `/v1/workflows/:id` | Delete workflow |
+
+**Admin & Management:**
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/v1/tenants` | Create new tenant (API-005) |
+| `GET` | `/v1/tenants/:id` | Get tenant details |
+| `PATCH` | `/v1/tenants/:id` | Update tenant settings |
+| `POST` | `/v1/billing/webhook` | Stripe webhook handler (API-007) |
+| `GET` | `/v1/admin/dashboard` | Admin dashboard data (API-008) |
+| `GET` | `/admin` | Admin UI (HTML) |
+| `GET` | `/docs` | API documentation (Swagger UI) (API-011) |
+| `GET` | `/pricing` | Pricing calculator (API-016) |
+
+**Complete API specification:** See [`docs/api/openapi.yaml`](docs/api/openapi.yaml) for full OpenAPI 3.1 spec with request/response schemas.
 
 ## Development Commands
 

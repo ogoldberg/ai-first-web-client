@@ -59,7 +59,7 @@ export {
 
 **Verification:**
 ```javascript
-import { validateUrl } from '@llm-browser/core';
+import { validateUrl } from '@unbrowser/core';
 
 validateUrl('http://[::1]/admin');      // { safe: false, category: 'localhost' }
 validateUrl('http://[fe80::1]/');       // { safe: false, category: 'link_local' }
@@ -86,7 +86,7 @@ validateUrl('http://[fd00::1]/');       // { safe: false, category: 'private_ip'
 
 **Verification:**
 ```javascript
-import { classifyFailure } from '@llm-browser/core';
+import { classifyFailure } from '@unbrowser/core';
 
 classifyFailure(undefined, { status: 403 });                    // Returns { category: 'unknown', ... }
 classifyFailure(undefined, new Error('Connection timeout'));    // Returns { category: 'timeout', ... }

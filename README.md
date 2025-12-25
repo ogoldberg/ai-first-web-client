@@ -31,6 +31,15 @@ Next visit:   LLM -> smart_browse -> API call (~200ms)   -> Same content, much f
 npm install llm-browser
 ```
 
+**If cloning from source**: Run `npm run build` before using. The package exports point to compiled code in `dist/` which isn't checked into git:
+
+```bash
+git clone https://github.com/anthropics/llm-browser
+cd llm-browser
+npm install
+npm run build  # Required! Compiles src/ → dist/
+```
+
 ### Optional Dependencies
 
 Both of these are optional and the package works without them:

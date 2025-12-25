@@ -1,4 +1,18 @@
-# @llm-browser/core Examples
+# @unbrowser/core Examples
+
+⚠️ **WARNING: These examples are outdated and use incorrect imports.**
+
+**Problem**: These examples import `createLLMBrowser` from the local dist, but `@unbrowser/core` only exports `createUnbrowser` (HTTP client wrapper). The `createLLMBrowser` function is from the root `llm-browser` package (local MCP server).
+
+**Status**: These examples need to be either:
+1. **Moved to root package** (`/examples/`) where `createLLMBrowser` actually exists
+2. **Rewritten** to use `createUnbrowser()` and demonstrate HTTP client usage
+
+**For now**: Use the root package examples at `/examples/` instead, or see the main README for HTTP client usage with `createUnbrowser()`.
+
+---
+
+## Original Documentation (Outdated)
 
 This directory contains runnable examples demonstrating various SDK features.
 

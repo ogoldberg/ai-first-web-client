@@ -216,7 +216,7 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 **Context:** Current MCP-only architecture limits use cases. Scraping/automation users need direct SDK access without LLM overhead. SDK-first design allows building multiple interfaces (MCP, API, CLI, Skills) on single foundation.
 
 **Success Criteria:**
-- Core published as `@llm-browser/core` npm package
+- Core published as `@unbrowser/core` npm package
 - MCP tools are thin wrappers (<50 lines each)
 - Full TypeScript types and documentation
 - Zero interface-specific code in core
@@ -462,12 +462,17 @@ See [COMPETITIVE_ANALYSIS.md](COMPETITIVE_ANALYSIS.md) for context on why these 
 
 ### Documentation
 
-| ID | Task | Effort | Category | Notes |
-|----|------|--------|----------|-------|
-| D-001 | Update PROJECT_STATUS.md | S | Documentation | Reflect current state |
-| D-002 | API documentation for MCP tools | M | Documentation | Clear parameter docs |
-| D-003 | Architecture diagrams | M | Documentation | Visual system overview |
-| D-004 | Usage examples and tutorials | L | Documentation | Getting started guide |
+| ID | Task | Effort | Category | Status | Notes |
+|----|------|--------|----------|--------|-------|
+| D-001 | Update PROJECT_STATUS.md | S | Documentation | Complete | Updated with 2025-12-25 audit results |
+| D-002 | API documentation for MCP tools | M | Documentation | Pending | Clear parameter docs |
+| D-003 | Architecture diagrams | M | Documentation | Pending | Visual system overview |
+| D-004 | Usage examples and tutorials | L | Documentation | Pending | Getting started guide |
+| **DOC-001** | **Documentation audit** | **L** | **Documentation** | **Complete** | Comprehensive audit completed 2025-12-25. Report: `docs/DOCUMENTATION_AUDIT_2025-12-25.md`. Fixed critical issues (import paths, package names, architecture overview). 22 issues identified and tracked. |
+| DOC-002 | Fix package name references | M | Documentation | Complete | Global find-replace `@llm-browser/*` → `@unbrowser/*` in 11 doc files |
+| DOC-003 | Mark outdated examples | S | Documentation | Complete | Added warning to `packages/core/examples/README.md` about wrong imports |
+| DOC-004 | Document all API endpoints | S | Documentation | Complete | Updated CLAUDE.md with complete endpoint list + openapi.yaml reference |
+| DOC-005 | Add build warning to README | S | Documentation | Complete | Added note about running `npm run build` after cloning |
 
 ---
 

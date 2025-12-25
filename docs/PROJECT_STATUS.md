@@ -1,10 +1,33 @@
 # Unbrowser - Project Status
 
-**Last Updated:** 2025-12-24
+**Last Updated:** 2025-12-25
 **Version:** 0.5.0
 **Current Phase:** Production Readiness (Phase 2)
 **Total Code:** ~20,000 lines TypeScript
 **Tests:** 2340+ passing + 44 live tests
+
+---
+
+## Recent: Documentation Audit (2025-12-25)
+
+A comprehensive documentation audit was completed to align documentation with code reality.
+
+**Audit Report:** `docs/DOCUMENTATION_AUDIT_2025-12-25.md`
+
+**Key Findings:**
+- 22 total issues identified (7 critical, 9 high priority, 6 medium)
+- Two distinct architectures clarified: Local MCP Server (production) vs Cloud API (alpha)
+- Naming convention established: "Unbrowser" (product) vs "llm-browser" (npm package) vs "@unbrowser/*" (workspace packages)
+- Critical import path errors fixed in SDK documentation
+- Architecture overview added to CLAUDE.md
+
+**Fixes Completed:**
+- ✅ Fixed incorrect import path in `src/sdk.ts` (`llm-browser-mcp/sdk` → `llm-browser/sdk`)
+- ✅ Fixed package name references in `packages/mcp/src/index.ts` (`@llm-browser/mcp` → `@unbrowser/mcp`)
+- ✅ Added comprehensive architecture overview to CLAUDE.md (2 deployment modes explained)
+- ✅ Created detailed audit report with severity ratings and fix recommendations
+
+**Status:** Critical issues resolved. Medium-priority documentation cleanup in progress.
 
 ---
 
