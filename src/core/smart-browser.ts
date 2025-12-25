@@ -105,6 +105,11 @@ export interface SmartBrowseOptions extends BrowseOptions {
   extractContent?: boolean;
   contentType?: SelectorPattern['contentType'];
 
+  // === Retry Configuration (LR-006) ===
+  // Retry parameters from LLM research-assisted bypass
+  // When present, successful browse will record what worked for future use
+  retryConfig?: import('../types/index.js').RetryConfig;
+
   // Validation
   validateContent?: boolean;
 
@@ -247,6 +252,16 @@ export interface SmartBrowseResult extends BrowseResult {
 
     // Domain knowledge summary (TC-002)
     domainKnowledge?: DomainKnowledgeSummary;
+
+    // Stealth learning from retryConfig (LR-006)
+    // Indicates if this browse used LLM-researched retry parameters
+    // and whether they were successfully persisted for future use
+    stealthLearning?: {
+      // The retry config that was applied
+      appliedRetryConfig: import('../types/index.js').RetryConfig;
+      // Whether the config was learned for future use
+      learnedForFuture: boolean;
+    };
   };
 
   // Additional pages if pagination was followed
@@ -892,6 +907,36 @@ export class SmartBrowser {
       } catch (successError) {
         logger.smartBrowser.error(`Success profile recording failed (non-fatal): ${successError}`);
       }
+
+      // Record stealth success if retryConfig was provided (LR-006)
+      // This persists what worked for future use when LLM-assisted bypass succeeds
+      if (options.retryConfig) {
+        let learnedForFuture = false;
+        try {
+          this.learningEngine.recordStealthSuccess(domain, {
+            userAgent: options.retryConfig.userAgent,
+            platform: options.retryConfig.platform,
+            fingerprintSeed: options.retryConfig.fingerprintSeed,
+            headers: options.retryConfig.headers,
+            usedFullBrowser: options.retryConfig.useFullBrowser ?? true, // Playwright path always uses full browser
+          });
+          learnedForFuture = true;
+          logger.smartBrowser.info('Recorded stealth success from retryConfig (Playwright)', {
+            domain,
+            hasUserAgent: !!options.retryConfig.userAgent,
+            hasPlatform: !!options.retryConfig.platform,
+            hasHeaders: !!options.retryConfig.headers,
+          });
+        } catch (stealthError) {
+          logger.smartBrowser.error(`Stealth success recording failed (non-fatal): ${stealthError}`);
+        }
+
+        // Add stealth learning info to response so LLM knows what worked
+        learning.stealthLearning = {
+          appliedRetryConfig: options.retryConfig,
+          learnedForFuture,
+        };
+      }
     }
 
     // Compute field-level confidence (CX-002)
@@ -1164,6 +1209,36 @@ export class SmartBrowser {
           });
         } catch (successError) {
           logger.smartBrowser.error(`Success profile recording failed (non-fatal): ${successError}`);
+        }
+
+        // Record stealth success if retryConfig was provided (LR-006)
+        // This persists what worked for future use when LLM-assisted bypass succeeds
+        if (options.retryConfig) {
+          let learnedForFuture = false;
+          try {
+            this.learningEngine.recordStealthSuccess(domain, {
+              userAgent: options.retryConfig.userAgent,
+              platform: options.retryConfig.platform,
+              fingerprintSeed: options.retryConfig.fingerprintSeed,
+              headers: options.retryConfig.headers,
+              usedFullBrowser: options.retryConfig.useFullBrowser ?? (result.tier === 'playwright'),
+            });
+            learnedForFuture = true;
+            logger.smartBrowser.info('Recorded stealth success from retryConfig', {
+              domain,
+              hasUserAgent: !!options.retryConfig.userAgent,
+              hasPlatform: !!options.retryConfig.platform,
+              hasHeaders: !!options.retryConfig.headers,
+            });
+          } catch (stealthError) {
+            logger.smartBrowser.error(`Stealth success recording failed (non-fatal): ${stealthError}`);
+          }
+
+          // Add stealth learning info to response so LLM knows what worked
+          learning.stealthLearning = {
+            appliedRetryConfig: options.retryConfig,
+            learnedForFuture,
+          };
         }
       }
 
