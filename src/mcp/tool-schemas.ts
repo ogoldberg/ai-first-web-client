@@ -930,6 +930,136 @@ Rate limits: 10 per minute per session, 100 per hour per tenant.`,
 };
 
 // ==========================================================================
+// WEBHOOK MANAGEMENT TOOL (F-011)
+// ==========================================================================
+
+/**
+ * Webhook management tool schema for external integrations
+ */
+export const webhookManagementSchema: Tool = {
+  name: 'webhook_management',
+  description: `Manage webhook endpoints for external integrations.
+
+This tool allows you to configure webhooks that receive notifications about:
+- Browse operation events (completed, failed, tier escalation)
+- Content change alerts (detected, significant changes)
+- Pattern events (discovered, failed, updated)
+- Error events (rate limits, bot detection, timeouts)
+- Feedback events (submitted, escalated, anomalies)
+- System events (health, quota warnings, maintenance)
+
+Actions:
+- create: Create a new webhook endpoint
+- update: Update an existing endpoint
+- delete: Delete an endpoint
+- get: Get endpoint details
+- list: List all endpoints
+- enable: Enable a disabled endpoint
+- disable: Disable an endpoint
+- test: Send a test event to verify configuration
+- history: Get delivery history for an endpoint
+- stats: Get webhook delivery statistics
+
+Security:
+- All payloads are signed with HMAC-SHA256
+- Secrets must be at least 32 characters
+- Failed endpoints are automatically disabled after consecutive failures`,
+  inputSchema: {
+    type: 'object',
+    properties: {
+      action: {
+        type: 'string',
+        enum: ['create', 'update', 'delete', 'get', 'list', 'enable', 'disable', 'test', 'history', 'stats'],
+        description: 'The action to perform',
+      },
+      // For create/update actions
+      name: {
+        type: 'string',
+        description: 'Display name for the webhook endpoint',
+      },
+      description: {
+        type: 'string',
+        description: 'Optional description of the endpoint purpose',
+      },
+      url: {
+        type: 'string',
+        description: 'Target URL for webhook delivery (must be HTTPS in production)',
+      },
+      secret: {
+        type: 'string',
+        description: 'Secret for HMAC-SHA256 signature verification (min 32 characters)',
+      },
+      enabledEvents: {
+        type: 'array',
+        items: {
+          type: 'string',
+          enum: [
+            'browse.completed', 'browse.failed', 'browse.tier_escalation',
+            'content_change.detected', 'content_change.significant',
+            'pattern.discovered', 'pattern.failed', 'pattern.updated',
+            'error.rate_limit', 'error.bot_detected', 'error.timeout', 'error.auth_failure',
+            'feedback.submitted', 'feedback.escalated', 'feedback.anomaly',
+            'system.health', 'system.quota_warning', 'system.maintenance',
+          ],
+        },
+        description: 'Event types to receive (required for create)',
+      },
+      enabledCategories: {
+        type: 'array',
+        items: {
+          type: 'string',
+          enum: ['browse', 'content_change', 'pattern', 'error', 'feedback', 'system'],
+        },
+        description: 'Optional category filter (receive all events in these categories)',
+      },
+      domainFilter: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'Optional domain filter (only receive events for these domains)',
+      },
+      minSeverity: {
+        type: 'string',
+        enum: ['low', 'medium', 'high', 'critical'],
+        description: 'Minimum severity level to receive (default: all)',
+      },
+      maxRetries: {
+        type: 'number',
+        description: 'Maximum retry attempts for failed deliveries (default: 3)',
+      },
+      initialRetryDelayMs: {
+        type: 'number',
+        description: 'Initial retry delay in milliseconds (default: 1000)',
+      },
+      maxRetryDelayMs: {
+        type: 'number',
+        description: 'Maximum retry delay in milliseconds (default: 60000)',
+      },
+      headers: {
+        type: 'object',
+        additionalProperties: { type: 'string' },
+        description: 'Custom headers to include in webhook requests',
+      },
+      // For get/update/delete/enable/disable/test/history actions
+      endpointId: {
+        type: 'string',
+        description: 'Endpoint ID for get/update/delete/enable/disable/test/history actions',
+      },
+      // For history action
+      limit: {
+        type: 'number',
+        description: 'Maximum number of records to return (default: 20)',
+      },
+      // For stats action
+      periodHours: {
+        type: 'number',
+        description: 'Period for statistics in hours (default: 24)',
+      },
+    },
+    required: ['action'],
+  },
+};
+
+// ==========================================================================
 // TOOL LIST BUILDER
 // ==========================================================================
 
@@ -946,6 +1076,8 @@ export function getAllToolSchemas(): Tool[] {
     apiAuthSchema,
     // Feedback tool
     aiFeedbackSchema,
+    // Webhook management tool
+    webhookManagementSchema,
     // Debug tools
     captureScreenshotSchema,
     exportHarSchema,

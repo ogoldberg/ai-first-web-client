@@ -83,6 +83,7 @@ import {
   type SkillPromptExecution,
 } from '../utils/skill-prompt-analytics.js';
 import { FeedbackService, type FeedbackServiceConfig } from './feedback-service.js';
+import { WebhookService, type WebhookServiceConfig } from './webhook-service.js';
 
 // Procedural memory thresholds
 const SKILL_APPLICATION_THRESHOLD = 0.8;  // Minimum similarity to auto-apply a skill
@@ -323,6 +324,7 @@ export class SmartBrowser {
   private semanticInfrastructure: SemanticInfrastructure | null = null;
   private debugRecorder: DebugTraceRecorder;
   private feedbackService: FeedbackService;
+  private webhookService: WebhookService;
 
   constructor(
     private browserManager: BrowserManager,
@@ -336,6 +338,7 @@ export class SmartBrowser {
     this.tieredFetcher = new TieredFetcher(browserManager, contentExtractor);
     this.debugRecorder = getDebugTraceRecorder();
     this.feedbackService = new FeedbackService();
+    this.webhookService = new WebhookService();
     // verificationEngine is loaded lazily in initialize() to avoid circular dependencies
   }
 
@@ -2183,6 +2186,13 @@ export class SmartBrowser {
    */
   getFeedbackService(): FeedbackService {
     return this.feedbackService;
+  }
+
+  /**
+   * Get webhook service for external integrations
+   */
+  getWebhookService(): WebhookService {
+    return this.webhookService;
   }
 
   /**

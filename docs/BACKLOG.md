@@ -596,7 +596,7 @@ Browser: { success: true, ... }  // Learns this for future
 | F-015 | AI feedback system | L | Features | DONE | Secure feedback for AI users to report browsing quality issues. Rate limiting, anomaly detection, real-time adjustments (5% cap). MCP tool: ai_feedback (PR #167) |
 | F-009 | Trace visualization | L | Features | DONE | Visual request flow with multiple formats (ASCII, compact, detailed, HTML, JSON). Adds visualize/compare actions to debug_traces MCP tool. 40 tests (PR #169) |
 | F-010 | Diff generation for changes | M | Features | DONE | Line-level diff generation with unified diff format, side-by-side view, inline word-level diffs. Integrated with content_tracking MCP tool (PR #168) |
-| F-011 | Webhook notifications | L | Features | IN PROGRESS | General-purpose webhook system for external integrations. MCP tool: webhook_management |
+| F-011 | Webhook notifications | L | Features | DONE | General-purpose webhook system for external integrations. HMAC-SHA256 signing, retry with exponential backoff, circuit breaker, event filtering. MCP tool: webhook_management (PR #170) |
 | F-013 | Human-in-the-loop inspection UI | L | Features | Minimal UI to see selectors, extracted content, tier decisions |
 | F-014 | Advanced anti-bot strategies | L | Features | N/A - Superseded by AB-001 through AB-008 (DONE - playwright-extra stealth, fingerprinting, behavioral delays) |
 
