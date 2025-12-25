@@ -440,6 +440,8 @@ See [COMPETITIVE_ANALYSIS.md](COMPETITIVE_ANALYSIS.md) for context on why these 
 | F-004 | Skill composition (chain skills) | L | Features | Combine skills into workflows (DONE - PR #164) |
 | F-005 | Screenshot capture on demand | M | Features | Visual debugging (DONE - PR #91) |
 | F-006 | HAR file export | M | Features | Network debugging (DONE - PR #92) |
+| F-007 | Pattern import/export for knowledge bases | M | Features | Export/import API patterns and learning data (DONE - PR #165) |
+| F-008 | AI Feedback System | L | Features | Secure feedback system for AI users to report issues. Includes rate limiting, anomaly detection, real-time adjustments (capped at 5%), webhook notifications with HMAC signing. MCP tool: `ai_feedback` (DONE) |
 | F-012 | Skill sharing + portability | M | Features | Export/import skill packs by domain vertical (gov, ecommerce, docs) (DONE - PR #93) |
 
 ### Intelligence

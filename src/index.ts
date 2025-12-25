@@ -54,6 +54,7 @@ import {
   handleGetSystemStatus,
   handleToolSelectionMetrics,
   handleSkillManagement,
+  handleAiFeedback,
   type SmartBrowseArgs,
   type BatchBrowseArgs,
   type DebugTracesAction,
@@ -63,6 +64,7 @@ import {
   type UsageAnalyticsAction,
   type ToolSelectionMetricsAction,
   type SkillAction,
+  type FeedbackAction,
 } from './mcp/index.js';
 
 // Auth helpers (not yet extracted to handlers)
@@ -524,6 +526,19 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
           smartBrowser,
           args.action as SkillAction,
           args as Record<string, unknown>
+        );
+        await recordToolInvocation(true);
+        return result;
+      }
+
+      case 'ai_feedback': {
+        // Generate a session ID for rate limiting
+        const sessionId = `session-${Date.now()}`;
+        const result = await handleAiFeedback(
+          smartBrowser,
+          args.action as FeedbackAction,
+          args as unknown as Parameters<typeof handleAiFeedback>[2],
+          sessionId
         );
         await recordToolInvocation(true);
         return result;

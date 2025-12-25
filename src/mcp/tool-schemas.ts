@@ -749,6 +749,155 @@ export const listConfiguredAuthSchema: Tool = {
 };
 
 // ==========================================================================
+// AI FEEDBACK TOOL
+// ==========================================================================
+
+/**
+ * AI Feedback tool schema for reporting issues and providing feedback
+ */
+export const aiFeedbackSchema: Tool = {
+  name: 'ai_feedback',
+  description: `Report feedback about browsing quality, accuracy, and performance issues.
+
+This tool allows AI users to provide feedback that helps improve the system:
+- Report content quality issues (missing, garbled, incomplete)
+- Flag accuracy problems (incorrect data, outdated content)
+- Report performance issues (slow response, timeouts)
+- Suggest feature improvements
+- Report security concerns (always triggers human review)
+
+Actions:
+- submit: Submit new feedback about a browsing operation
+- list: View recent feedback you've submitted
+- stats: Get feedback statistics
+- anomalies: View detected feedback anomalies (admin)
+
+Feedback is processed in real-time when possible:
+- Pattern confidence adjustments (capped at 5% per feedback)
+- Tier routing hints for future requests
+- Security alerts always escalate to human review
+
+Rate limits: 10 per minute per session, 100 per hour per tenant.`,
+  inputSchema: {
+    type: 'object',
+    properties: {
+      action: {
+        type: 'string',
+        enum: ['submit', 'list', 'stats', 'anomalies'],
+        description: 'The action to perform',
+      },
+      // For submit action
+      category: {
+        type: 'string',
+        enum: ['content_quality', 'accuracy', 'performance', 'functionality', 'security', 'feature_request'],
+        description: 'High-level feedback category',
+      },
+      sentiment: {
+        type: 'string',
+        enum: ['positive', 'negative', 'neutral'],
+        description: 'Overall sentiment of the feedback',
+      },
+      subtype: {
+        type: 'string',
+        enum: [
+          'missing_content', 'garbled_content', 'incomplete_content', 'wrong_format',
+          'incorrect_data', 'outdated_content', 'misattribution', 'hallucination',
+          'slow_response', 'timeout', 'resource_exhaustion', 'rate_limited',
+          'pattern_failure', 'api_discovery_miss', 'selector_broken', 'auth_failure',
+          'credential_exposure', 'xss_detected', 'injection_risk',
+          'new_capability', 'improvement', 'other',
+        ],
+        description: 'Specific subtype within the category',
+      },
+      severity: {
+        type: 'string',
+        enum: ['low', 'medium', 'high', 'critical'],
+        description: 'Severity level of the issue',
+      },
+      url: {
+        type: 'string',
+        description: 'URL where the issue occurred (required for submit)',
+      },
+      domain: {
+        type: 'string',
+        description: 'Domain where the issue occurred',
+      },
+      message: {
+        type: 'string',
+        description: 'Free-form description of the issue (max 2000 chars)',
+      },
+      expectedBehavior: {
+        type: 'string',
+        description: 'What you expected to happen',
+      },
+      actualBehavior: {
+        type: 'string',
+        description: 'What actually happened',
+      },
+      patternId: {
+        type: 'string',
+        description: 'Pattern ID if feedback is about a specific pattern',
+      },
+      skillId: {
+        type: 'string',
+        description: 'Skill ID if feedback is about a specific skill',
+      },
+      requestId: {
+        type: 'string',
+        description: 'Request ID for correlation',
+      },
+      suggestedAction: {
+        type: 'string',
+        enum: ['adjust_pattern', 'disable_pattern', 'retry_with_render', 'report_only', 'escalate'],
+        description: 'Suggested action for the system to take',
+      },
+      // Evidence fields
+      contentSnippet: {
+        type: 'string',
+        description: 'Small sample of problematic content (max 500 chars)',
+      },
+      errorMessage: {
+        type: 'string',
+        description: 'Error message if applicable',
+      },
+      responseTime: {
+        type: 'number',
+        description: 'Response time in milliseconds',
+      },
+      statusCode: {
+        type: 'number',
+        description: 'HTTP status code if applicable',
+      },
+      // For list action
+      limit: {
+        type: 'number',
+        description: 'Maximum number of records to return (default: 50)',
+      },
+      offset: {
+        type: 'number',
+        description: 'Offset for pagination',
+      },
+      filterCategory: {
+        type: 'string',
+        enum: ['content_quality', 'accuracy', 'performance', 'functionality', 'security', 'feature_request'],
+        description: 'Filter by category',
+      },
+      filterSentiment: {
+        type: 'string',
+        enum: ['positive', 'negative', 'neutral'],
+        description: 'Filter by sentiment',
+      },
+      // For stats action
+      periodHours: {
+        type: 'number',
+        description: 'Period for statistics in hours (default: 24)',
+      },
+    },
+    required: ['action'],
+  },
+};
+
+// ==========================================================================
 // TOOL LIST BUILDER
 // ==========================================================================
 
@@ -763,6 +912,8 @@ export function getAllToolSchemas(): Tool[] {
     executeApiCallSchema,
     sessionManagementSchema,
     apiAuthSchema,
+    // Feedback tool
+    aiFeedbackSchema,
     // Debug tools
     captureScreenshotSchema,
     exportHarSchema,
