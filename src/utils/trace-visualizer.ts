@@ -246,7 +246,6 @@ function renderHtml(trace: DebugTrace, opts: Required<VisualizationOptions>): st
   const statusText = trace.success ? 'Success' : 'Failure';
 
   const tierRows = trace.tiers.attempts.map(t => {
-    const statusIcon = t.success ? 'check' : 'x';
     const rowClass = t.success ? 'tier-success' : 'tier-failure';
     return `
       <tr class="${rowClass}">
@@ -447,15 +446,16 @@ function renderTimeline(trace: DebugTrace, c: typeof Colors, opts: Required<Visu
 
   // Create visual bar
   let bar = '';
+  let currentWidth = 0;
   for (const seg of segments) {
     const width = Math.max(1, Math.round((seg.duration / totalMs) * barWidth));
+    currentWidth += width;
     const char = seg.success ? '=' : '-';
     const color = getTierColor(seg.tier);
     bar += `${color}${char.repeat(width)}${c.reset}`;
   }
 
   // Pad to full width
-  const currentWidth = segments.reduce((sum, s) => sum + Math.max(1, Math.round((s.duration / totalMs) * barWidth)), 0);
   if (currentWidth < barWidth) {
     bar += ' '.repeat(barWidth - currentWidth);
   }

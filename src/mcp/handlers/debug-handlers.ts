@@ -458,24 +458,32 @@ export async function handleDebugTraces(
         return errorResponse('id1 and id2 are required for compare action');
       }
 
-      const trace1 = await debugRecorder.getTrace(id1);
-      const trace2 = await debugRecorder.getTrace(id2);
+      const [trace1, trace2] = await Promise.all([
+        debugRecorder.getTrace(id1),
+        debugRecorder.getTrace(id2),
+      ]);
 
+      const notFoundErrors: string[] = [];
       if (!trace1) {
-        return jsonResponse({
-          schemaVersion: addSchemaVersion({}).schemaVersion,
-          error: `Trace not found: ${id1}`,
-        });
+        notFoundErrors.push(`Trace not found: ${id1}`);
       }
       if (!trace2) {
+        notFoundErrors.push(`Trace not found: ${id2}`);
+      }
+
+      if (notFoundErrors.length > 0) {
         return jsonResponse({
           schemaVersion: addSchemaVersion({}).schemaVersion,
-          error: `Trace not found: ${id2}`,
+          error: notFoundErrors.join('; '),
         });
       }
 
+      // TypeScript needs help knowing these are non-null after the check above
+      const t1 = trace1!;
+      const t2 = trace2!;
+
       const useColor = args.useColor as boolean ?? true;
-      const comparison = compareTraces(trace1, trace2, useColor);
+      const comparison = compareTraces(t1, t2, useColor);
 
       return jsonResponse({
         schemaVersion: addSchemaVersion({}).schemaVersion,
@@ -483,11 +491,11 @@ export async function handleDebugTraces(
         trace2Id: id2,
         comparison,
         differences: {
-          success: trace1.success !== trace2.success,
-          tier: trace1.tiers.finalTier !== trace2.tiers.finalTier,
-          duration: Math.abs(trace1.durationMs - trace2.durationMs),
-          contentLength: Math.abs(trace1.content.textLength - trace2.content.textLength),
-          errorCount: Math.abs(trace1.errors.length - trace2.errors.length),
+          success: t1.success !== t2.success,
+          tier: t1.tiers.finalTier !== t2.tiers.finalTier,
+          duration: Math.abs(t1.durationMs - t2.durationMs),
+          contentLength: Math.abs(t1.content.textLength - t2.content.textLength),
+          errorCount: Math.abs(t1.errors.length - t2.errors.length),
         },
       });
     }
