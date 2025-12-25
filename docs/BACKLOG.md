@@ -324,7 +324,7 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 | API-012 | Create API client libraries | L | Complete | TypeScript SDK in packages/core, Python client in clients/python with full type hints, dataclasses, error handling. 25 Python tests. PR #146 |
 | API-013 | Set up CI/CD pipeline | M | Complete | GitHub Actions CI workflow: type checking, tests on PR/push. Deployment to staging/production TBD |
 | API-014 | Load testing and optimization | L | Not Started | Test at 1000+ req/s, identify bottlenecks, optimize database queries |
-| API-015 | Security audit | M | Not Started | Penetration testing, OWASP top 10 review, dependency scanning |
+| API-015 | Security audit | M | In Progress | Penetration testing, OWASP top 10 review, dependency scanning |
 | API-016 | Create pricing calculator | M | Not Started | Help users estimate costs based on usage patterns. Interactive tool on website |
 | API-017 | Beta program launch | M | Not Started | Private beta with 10-20 users. Gather feedback, fix critical issues |
 
