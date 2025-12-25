@@ -14,7 +14,7 @@
  *
  * Usage:
  * ```typescript
- * import { createLLMBrowser, SmartBrowser } from 'llm-browser-mcp/sdk';
+ * import { createLLMBrowser, SmartBrowser } from 'llm-browser/sdk';
  *
  * const browser = await createLLMBrowser();
  * const result = await browser.browse('https://example.com');

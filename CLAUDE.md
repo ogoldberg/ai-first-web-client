@@ -4,16 +4,92 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Unbrowser** is an intelligent web browsing API for AI agents. It learns from browsing patterns, discovers API endpoints automatically, and progressively optimizes to bypass browser rendering entirely.
+**Unbrowser** (npm: `llm-browser`) is an intelligent web browsing API for AI agents. It learns from browsing patterns, discovers API endpoints automatically, and progressively optimizes to bypass browser rendering entirely.
+
+### Two Deployment Architectures
+
+This project supports **two distinct deployment modes** with different use cases:
+
+#### 1. Local MCP Server (PRODUCTION - v0.5.0)
+
+The primary, production-ready architecture for local deployment.
+
+- **Package**: `llm-browser` on npm
+- **Use Cases**: Claude Desktop MCP integration, local Node.js embedding
+- **Factory Function**: `createLLMBrowser()` from `llm-browser/sdk`
+- **Components**: Full SmartBrowser, TieredFetcher, LearningEngine, ProceduralMemory (all in `src/core/`)
+- **Storage**: Local filesystem (`./sessions/`, `./enhanced-knowledge-base.json`, etc.)
+- **Status**: ✅ **Production Ready** (2340+ tests passing)
+
+```typescript
+// Local SDK usage
+import { createLLMBrowser } from 'llm-browser/sdk';
+const browser = await createLLMBrowser();
+const result = await browser.browse('https://example.com');
+```
+
+```json
+// Claude Desktop MCP config
+{
+  "mcpServers": {
+    "llm-browser": {
+      "command": "npx",
+      "args": ["llm-browser"]
+    }
+  }
+}
+```
+
+#### 2. Cloud API (ALPHA - In Development)
+
+A cloud-hosted SaaS deployment for multi-tenant access.
+
+- **Package**: `@unbrowser/core` on npm (HTTP client wrapper)
+- **Use Cases**: REST API access, multi-tenant SaaS, platform-agnostic usage (Python, Ruby, etc.)
+- **Factory Function**: `createUnbrowser()` from `@unbrowser/core`
+- **Components**: HTTP client wrapper (thin) - server runs Architecture #1 in cloud
+- **Storage**: Cloud database (Supabase/Postgres), multi-tenant isolation
+- **Status**: 🚧 **Alpha** (API server functional, see BACKLOG.md tasks API-001 through API-017)
+
+```typescript
+// Cloud SDK usage (HTTP wrapper)
+import { createUnbrowser } from '@unbrowser/core';
+const client = createUnbrowser({
+  apiKey: process.env.UNBROWSER_API_KEY,
+});
+const result = await client.browse('https://example.com');
+```
+
+```bash
+# Direct REST API usage
+curl -X POST https://api.unbrowser.ai/v1/browse \
+  -H "Authorization: Bearer $UNBROWSER_API_KEY" \
+  -d '{"url": "https://example.com"}'
+```
+
+#### Which Should You Use?
+
+**Most users**: Use the **Local MCP Server** (`llm-browser`)
+- Works with Claude Desktop out of the box
+- All data stays local (privacy)
+- No API keys or billing required
+- Full feature set available
+
+**Cloud API** users need:
+- Multi-tenant isolation
+- Usage-based billing and quotas
+- Platform-agnostic access (non-Node.js languages)
+- No local setup/dependencies
+- Centralized learning (shared pattern pool across tenants)
 
 ### Current Focus: Cloud API Launch
 
-We're building a cloud-hosted API at `api.unbrowser.ai`. The SDK and MCP packages become thin HTTP clients while all intelligence runs in the cloud.
+We're building a cloud-hosted API at `api.unbrowser.ai` where all intelligence runs server-side. The cloud deployment uses the Local MCP Server architecture internally but exposes it via REST API for multi-tenant access.
 
-**Three access methods:**
+**Three access methods to cloud API:**
 1. **REST API** - Direct HTTP calls at `api.unbrowser.ai`
-2. **SDK** - `@unbrowser/core` npm package
-3. **MCP** - `@unbrowser/mcp` for Claude Desktop
+2. **SDK** - `@unbrowser/core` npm package (thin HTTP client)
+3. **MCP** - `@unbrowser/mcp` for Claude Desktop (planned - SDK-009)
 
 ### Core Philosophy: "Browser Minimizer"
 
