@@ -23,16 +23,69 @@ const app = new Hono();
 
 // Global middleware
 app.use('*', requestLoggerMiddleware);
-app.use('*', secureHeaders());
+app.use(
+  '*',
+  secureHeaders({
+    // Content Security Policy - restrict resource loading
+    contentSecurityPolicy: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"], // unsafe-inline needed for Swagger UI
+      styleSrc: ["'self'", "'unsafe-inline'"], // unsafe-inline needed for Swagger UI
+      imgSrc: ["'self'", 'data:', 'https:'],
+      connectSrc: ["'self'"],
+      fontSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      mediaSrc: ["'none'"],
+      frameSrc: ["'none'"],
+      formAction: ["'self'"],
+      frameAncestors: ["'none'"],
+      baseUri: ["'self'"],
+      upgradeInsecureRequests: [],
+    },
+    // Prevent MIME type sniffing
+    xContentTypeOptions: 'nosniff',
+    // Prevent clickjacking
+    xFrameOptions: 'DENY',
+    // Enable XSS filter in older browsers
+    xXssProtection: '1; mode=block',
+    // Referrer policy - only send origin for cross-origin requests
+    referrerPolicy: 'strict-origin-when-cross-origin',
+    // Strict Transport Security - enforce HTTPS
+    strictTransportSecurity: 'max-age=31536000; includeSubDomains',
+    // Prevent browser features we don't need
+    permissionsPolicy: {
+      camera: [],
+      microphone: [],
+      geolocation: [],
+      accelerometer: [],
+      gyroscope: [],
+      magnetometer: [],
+      payment: [],
+      usb: [],
+    },
+  })
+);
 app.use('*', prettyJSON());
+// CORS configuration - environment-aware origin handling
+const corsOrigins =
+  process.env.NODE_ENV === 'production'
+    ? ['https://unbrowser.ai', 'https://www.unbrowser.ai', 'https://api.unbrowser.ai']
+    : ['https://unbrowser.ai', 'http://localhost:3000', 'http://localhost:3001'];
+
 app.use(
   '*',
   cors({
-    origin: ['https://unbrowser.ai', 'http://localhost:3000'],
+    origin: corsOrigins,
     allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowHeaders: ['Content-Type', 'Authorization'],
-    exposeHeaders: ['X-Request-Id', 'X-RateLimit-Limit', 'X-RateLimit-Remaining', 'X-RateLimit-Reset'],
-    maxAge: 86400,
+    allowHeaders: ['Content-Type', 'Authorization', 'X-Request-Id'],
+    exposeHeaders: [
+      'X-Request-Id',
+      'X-RateLimit-Limit',
+      'X-RateLimit-Remaining',
+      'X-RateLimit-Reset',
+      'Retry-After',
+    ],
+    maxAge: 86400, // 24 hours
     credentials: true,
   })
 );
