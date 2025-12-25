@@ -33,6 +33,14 @@ import type {
 } from '../types/index.js';
 
 /**
+ * Maximum research depth (LR-005).
+ * Limits LLM research attempts to prevent infinite loops.
+ * After this many research-assisted retries, the problem should be
+ * reported as unresolvable via automated means.
+ */
+export const MAX_RESEARCH_DEPTH = 2;
+
+/**
  * Trusted sources for bypass research
  * These are curated to provide reliable, technical information
  */
@@ -438,6 +446,10 @@ export function classifyProblem(
 
 /**
  * Create a full problem response with research suggestion
+ *
+ * @param url - The URL that had the problem
+ * @param problemType - Category of problem encountered
+ * @param options - Additional options including research depth tracking
  */
 export function createProblemResponse(
   url: string,
@@ -448,22 +460,55 @@ export function createProblemResponse(
     error?: Error | string;
     attemptedStrategies?: string[];
     partialContent?: string;
+    /** Current research depth (LR-005) - incremented from previous attempt */
+    researchDepth?: number;
   } = {}
 ): ProblemResponse {
   const domain = new URL(url).hostname;
-  const { statusCode, detectionType, error, attemptedStrategies = [], partialContent } = options;
+  const {
+    statusCode,
+    detectionType,
+    error,
+    attemptedStrategies = [],
+    partialContent,
+    researchDepth = 0,
+  } = options;
+
+  // Calculate if max research depth has been reached (LR-005)
+  const maxResearchDepthReached = researchDepth >= MAX_RESEARCH_DEPTH;
+
+  // Generate reason with depth info if max reached
+  let reason = generateProblemReason(problemType, detectionType, error);
+  if (maxResearchDepthReached) {
+    reason += ` Maximum research depth (${MAX_RESEARCH_DEPTH}) reached. Manual intervention may be required.`;
+  }
 
   return {
     needsAssistance: true,
     problemType,
     statusCode,
     detectionType,
-    reason: generateProblemReason(problemType, detectionType, error),
-    researchSuggestion: generateResearchSuggestion(problemType, domain, detectionType),
+    reason,
+    // Only provide research suggestions if depth limit not reached
+    researchSuggestion: maxResearchDepthReached
+      ? {
+          problemType,
+          searchQuery: '',
+          recommendedSources: [],
+          retryParameters: [],
+          hints: [
+            `Maximum research depth (${MAX_RESEARCH_DEPTH}) reached.`,
+            'Automated research-based retries have been exhausted.',
+            'Consider: manual browser inspection, contacting site owner, or using alternative data sources.',
+          ],
+        }
+      : generateResearchSuggestion(problemType, domain, detectionType),
     attemptedStrategies,
     partialContent,
     url,
     domain,
+    researchDepth,
+    maxResearchDepthReached,
   };
 }
 
