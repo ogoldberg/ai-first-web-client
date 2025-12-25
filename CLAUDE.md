@@ -32,7 +32,7 @@ const result = await browser.browse('https://example.com');
 // Claude Desktop MCP config
 {
   "mcpServers": {
-    "llm-browser": {
+    "unbrowser": {
       "command": "npx",
       "args": ["llm-browser"]
     }

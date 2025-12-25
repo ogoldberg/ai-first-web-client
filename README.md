@@ -62,7 +62,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
-    "llm-browser": {
+    "unbrowser": {
       "command": "npx",
       "args": ["llm-browser"]
     }
@@ -75,7 +75,7 @@ Or if installed globally:
 ```json
 {
   "mcpServers": {
-    "llm-browser": {
+    "unbrowser": {
       "command": "llm-browser"
     }
   }

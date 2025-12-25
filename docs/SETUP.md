@@ -37,7 +37,7 @@ node dist/index.js
    \`\`\`json
    {
      "mcpServers": {
-       "llm-browser": {
+       "unbrowser": {
          "command": "node",
          "args": [
            "/Users/YOUR_USERNAME/path/to/ai-first-web-client/dist/index.js"
