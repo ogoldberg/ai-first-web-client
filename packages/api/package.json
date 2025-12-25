@@ -10,7 +10,11 @@
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "loadtest": "tsx load-tests/run-load-tests.ts",
+    "loadtest:baseline": "tsx load-tests/run-load-tests.ts baseline",
+    "loadtest:stress": "tsx load-tests/run-load-tests.ts stress",
+    "loadtest:full": "tsx load-tests/run-load-tests.ts full"
   },
   "dependencies": {
     "@hono/node-server": "^1.11.0",
@@ -25,7 +29,9 @@
     "ioredis": "^5.4.1"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0",
+    "@types/autocannon": "^7.12.7",
+    "@types/node": "^22.19.3",
+    "autocannon": "^8.0.0",
     "prisma": "^6.19.1",
     "tsx": "^4.19.0",
     "typescript": "^5.9.3",
