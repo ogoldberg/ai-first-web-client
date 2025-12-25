@@ -1175,4 +1175,195 @@ describe('LearningEngine', () => {
       expect(engine.getAntiPatternStats().total).toBe(0);
     });
   });
+
+  // ============================================
+  // PATHNAME INDEX OPTIMIZATION (P-002)
+  // ============================================
+
+  describe('findPattern with pathname index (P-002)', () => {
+    it('should find exact pathname match via O(1) index lookup', () => {
+      const pattern: ApiPattern = {
+        endpoint: 'https://api.example.com/v1/users',
+        method: 'GET',
+        confidence: 'high',
+        canBypass: true,
+      };
+
+      engine.learnApiPattern('api.example.com', pattern);
+
+      const found = engine.findPattern('https://api.example.com/v1/users');
+      expect(found).not.toBeNull();
+      expect(found?.endpoint).toBe('https://api.example.com/v1/users');
+    });
+
+    it('should return null for non-existent domain', () => {
+      const found = engine.findPattern('https://nonexistent.com/api/data');
+      expect(found).toBeNull();
+    });
+
+    it('should return null for non-existent pathname', () => {
+      const pattern: ApiPattern = {
+        endpoint: 'https://api.example.com/v1/products',
+        method: 'GET',
+        confidence: 'high',
+        canBypass: true,
+      };
+
+      engine.learnApiPattern('api.example.com', pattern);
+
+      // No prefix match and no exact match
+      const found = engine.findPattern('https://api.example.com/v2/different');
+      expect(found).toBeNull();
+    });
+
+    it('should find prefix match when no exact match exists', () => {
+      const pattern: ApiPattern = {
+        endpoint: 'https://api.example.com/v1',
+        method: 'GET',
+        confidence: 'high',
+        canBypass: true,
+      };
+
+      engine.learnApiPattern('api.example.com', pattern);
+
+      // /v1/users starts with /v1, should match
+      const found = engine.findPattern('https://api.example.com/v1/users');
+      expect(found).not.toBeNull();
+      expect(found?.endpoint).toBe('https://api.example.com/v1');
+    });
+
+    it('should prefer exact match over prefix match', () => {
+      // Add a prefix pattern first
+      const prefixPattern: ApiPattern = {
+        endpoint: 'https://api.example.com/v1',
+        method: 'GET',
+        confidence: 'medium',
+        canBypass: false,
+      };
+      engine.learnApiPattern('api.example.com', prefixPattern);
+
+      // Add an exact match pattern
+      const exactPattern: ApiPattern = {
+        endpoint: 'https://api.example.com/v1/users',
+        method: 'GET',
+        confidence: 'high',
+        canBypass: true,
+      };
+      engine.learnApiPattern('api.example.com', exactPattern);
+
+      // Should return exact match
+      const found = engine.findPattern('https://api.example.com/v1/users');
+      expect(found).not.toBeNull();
+      expect(found?.endpoint).toBe('https://api.example.com/v1/users');
+      expect(found?.confidence).toBe('high');
+    });
+
+    it('should handle multiple patterns with same pathname but different methods', () => {
+      const getPattern: ApiPattern = {
+        endpoint: 'https://api.example.com/v1/items',
+        method: 'GET',
+        confidence: 'high',
+        canBypass: true,
+      };
+      const postPattern: ApiPattern = {
+        endpoint: 'https://api.example.com/v1/items',
+        method: 'POST',
+        confidence: 'medium',
+        canBypass: false,
+      };
+
+      engine.learnApiPattern('api.example.com', getPattern);
+      engine.learnApiPattern('api.example.com', postPattern);
+
+      // Should return first indexed pattern (GET was added first)
+      const found = engine.findPattern('https://api.example.com/v1/items');
+      expect(found).not.toBeNull();
+      expect(found?.endpoint).toBe('https://api.example.com/v1/items');
+      expect(found?.method).toBe('GET');
+    });
+
+    it('should handle patterns with query parameters in endpoint', () => {
+      const pattern: ApiPattern = {
+        endpoint: 'https://api.example.com/search?type=all',
+        method: 'GET',
+        confidence: 'high',
+        canBypass: true,
+      };
+
+      engine.learnApiPattern('api.example.com', pattern);
+
+      // Pattern has query params, so pathname is /search
+      // Looking for /search should match via O(1) index
+      const found = engine.findPattern('https://api.example.com/search');
+      expect(found).not.toBeNull();
+      expect(found?.endpoint).toBe('https://api.example.com/search?type=all');
+    });
+
+    it('should clear index when clear() is called', () => {
+      const pattern: ApiPattern = {
+        endpoint: 'https://api.example.com/v1/data',
+        method: 'GET',
+        confidence: 'high',
+        canBypass: true,
+      };
+
+      engine.learnApiPattern('api.example.com', pattern);
+      expect(engine.findPattern('https://api.example.com/v1/data')).not.toBeNull();
+
+      engine.clear();
+
+      expect(engine.findPattern('https://api.example.com/v1/data')).toBeNull();
+    });
+
+    it('should handle invalid URLs gracefully', () => {
+      const found = engine.findPattern('not-a-valid-url');
+      expect(found).toBeNull();
+    });
+
+    it('should handle patterns with invalid endpoint URLs gracefully', () => {
+      // This tests the extractPathnameFromEndpoint error handling
+      const entry = engine.getOrCreateEntry('api.example.com');
+      // Manually add a pattern with invalid endpoint (bypasses normal validation)
+      entry.apiPatterns.push({
+        endpoint: 'not-a-url',
+        method: 'GET',
+        confidence: 'low',
+        canBypass: false,
+        createdAt: Date.now(),
+        lastVerified: Date.now(),
+        verificationCount: 1,
+        failureCount: 0,
+      } as any);
+
+      // Should not crash, just skip invalid pattern
+      const found = engine.findPattern('https://api.example.com/v1/test');
+      expect(found).toBeNull();
+    });
+
+    it('should maintain index across multiple domains', () => {
+      const pattern1: ApiPattern = {
+        endpoint: 'https://api1.example.com/users',
+        method: 'GET',
+        confidence: 'high',
+        canBypass: true,
+      };
+      const pattern2: ApiPattern = {
+        endpoint: 'https://api2.example.com/users',
+        method: 'GET',
+        confidence: 'medium',
+        canBypass: false,
+      };
+
+      engine.learnApiPattern('api1.example.com', pattern1);
+      engine.learnApiPattern('api2.example.com', pattern2);
+
+      const found1 = engine.findPattern('https://api1.example.com/users');
+      const found2 = engine.findPattern('https://api2.example.com/users');
+
+      expect(found1?.endpoint).toBe('https://api1.example.com/users');
+      expect(found1?.confidence).toBe('high');
+      expect(found2?.endpoint).toBe('https://api2.example.com/users');
+      expect(found2?.confidence).toBe('medium');
+    });
+  });
 });
