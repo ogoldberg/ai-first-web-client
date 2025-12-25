@@ -296,6 +296,7 @@ function loadConfigFile(filePath: string): ConfigFile {
 // ============================================
 
 let cachedConfigFile: ConfigFile | null = null;
+let cachedConfigFilePath: string | null = null;
 let configFileLoaded = false;
 
 /**
@@ -303,9 +304,9 @@ let configFileLoaded = false;
  */
 export function getConfigFile(): ConfigFile {
   if (!configFileLoaded) {
-    const filePath = findConfigFile();
-    if (filePath) {
-      cachedConfigFile = loadConfigFile(filePath);
+    cachedConfigFilePath = findConfigFile();
+    if (cachedConfigFilePath) {
+      cachedConfigFile = loadConfigFile(cachedConfigFilePath);
     } else {
       cachedConfigFile = {};
     }
@@ -320,6 +321,7 @@ export function getConfigFile(): ConfigFile {
  */
 export function clearConfigFileCache(): void {
   cachedConfigFile = null;
+  cachedConfigFilePath = null;
   configFileLoaded = false;
 }
 
@@ -522,18 +524,22 @@ export function getMergedSdkConfig(): SdkConfig {
 
 /**
  * Get the path to the loaded config file, if any.
+ * Uses cached path to avoid redundant filesystem scans.
  */
 export function getConfigFilePath(): string | null {
-  // Force loading if not loaded yet
+  // Force loading if not loaded yet (also caches the path)
   getConfigFile();
-  return findConfigFile();
+  return cachedConfigFilePath;
 }
 
 /**
  * Check if a config file exists.
+ * Uses cached result to avoid redundant filesystem scans.
  */
 export function hasConfigFile(): boolean {
-  return findConfigFile() !== null;
+  // Force loading if not loaded yet (also caches the path)
+  getConfigFile();
+  return cachedConfigFilePath !== null;
 }
 
 /**
