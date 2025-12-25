@@ -442,14 +442,15 @@ describe('SmartBrowser.batchBrowse()', () => {
 
     it('should track duration for failed URLs', async () => {
       vi.spyOn(smartBrowser, 'browse').mockImplementation(async () => {
-        await new Promise(resolve => setTimeout(resolve, 30));
+        await new Promise(resolve => setTimeout(resolve, 35));
         throw new Error('Failed');
       });
 
       const results = await smartBrowser.batchBrowse(['https://example.com']);
 
       expect(results[0].status).toBe('error');
-      expect(results[0].durationMs).toBeGreaterThanOrEqual(30);
+      // Use a small buffer for timing precision (35ms wait, expect >= 25ms)
+      expect(results[0].durationMs).toBeGreaterThanOrEqual(25);
     });
   });
 
