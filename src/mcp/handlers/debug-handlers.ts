@@ -6,13 +6,20 @@
  * - export_har
  * - get_learning_stats (deprecated)
  * - get_learning_effectiveness (deprecated)
- * - debug_traces
+ * - debug_traces (with visualization support - F-009)
  */
 
 import type { SmartBrowser } from '../../core/smart-browser.js';
 import { jsonResponse, errorResponse, type McpResponse } from '../response-formatters.js';
 import { addSchemaVersion } from '../../types/schema-version.js';
 import { computeLearningEffectiveness } from '../../core/learning-effectiveness.js';
+import {
+  visualizeTrace,
+  createTraceSummaryCard,
+  compareTraces,
+  type VisualizationFormat,
+  type VisualizationOptions,
+} from '../../utils/trace-visualizer.js';
 
 /**
  * Handle capture_screenshot tool call
@@ -224,7 +231,9 @@ export type DebugTracesAction =
   | 'configure'
   | 'export'
   | 'delete'
-  | 'clear';
+  | 'clear'
+  | 'visualize'
+  | 'compare';
 
 /**
  * Handle debug_traces tool call
@@ -387,6 +396,107 @@ export async function handleDebugTraces(
         success: true,
         deletedCount: count,
         message: `Deleted ${count} traces`,
+      });
+    }
+
+    case 'visualize': {
+      // Visualize a trace in various formats (F-009)
+      if (!args.id) {
+        return errorResponse('id is required for visualize action');
+      }
+
+      const trace = await debugRecorder.getTrace(args.id as string);
+      if (!trace) {
+        return jsonResponse({
+          schemaVersion: addSchemaVersion({}).schemaVersion,
+          error: `Trace not found: ${args.id}`,
+        });
+      }
+
+      const format = (args.format as VisualizationFormat) || 'ascii';
+      const options: VisualizationOptions = {
+        format,
+        includeNetwork: args.includeNetwork as boolean ?? true,
+        includeSelectors: args.includeSelectors as boolean ?? true,
+        includeTitle: args.includeTitle as boolean ?? false,
+        includeErrors: args.includeErrors as boolean ?? true,
+        includeSkills: args.includeSkills as boolean ?? true,
+        maxWidth: args.maxWidth as number ?? 80,
+        useColor: args.useColor as boolean ?? (format !== 'html'),
+      };
+
+      const visualization = visualizeTrace(trace, options);
+
+      // For HTML format, return the full HTML document
+      if (format === 'html') {
+        return jsonResponse({
+          schemaVersion: addSchemaVersion({}).schemaVersion,
+          id: trace.id,
+          format: 'html',
+          contentType: 'text/html',
+          visualization,
+        });
+      }
+
+      // For text formats, return the visualization string
+      return jsonResponse({
+        schemaVersion: addSchemaVersion({}).schemaVersion,
+        id: trace.id,
+        format,
+        visualization,
+        // Also include a compact summary for quick reference
+        summary: createTraceSummaryCard(trace),
+      });
+    }
+
+    case 'compare': {
+      // Compare two traces side by side (F-009)
+      const id1 = args.id1 as string;
+      const id2 = args.id2 as string;
+
+      if (!id1 || !id2) {
+        return errorResponse('id1 and id2 are required for compare action');
+      }
+
+      const [trace1, trace2] = await Promise.all([
+        debugRecorder.getTrace(id1),
+        debugRecorder.getTrace(id2),
+      ]);
+
+      const notFoundErrors: string[] = [];
+      if (!trace1) {
+        notFoundErrors.push(`Trace not found: ${id1}`);
+      }
+      if (!trace2) {
+        notFoundErrors.push(`Trace not found: ${id2}`);
+      }
+
+      if (notFoundErrors.length > 0) {
+        return jsonResponse({
+          schemaVersion: addSchemaVersion({}).schemaVersion,
+          error: notFoundErrors.join('; '),
+        });
+      }
+
+      // TypeScript needs help knowing these are non-null after the check above
+      const t1 = trace1!;
+      const t2 = trace2!;
+
+      const useColor = args.useColor as boolean ?? true;
+      const comparison = compareTraces(t1, t2, useColor);
+
+      return jsonResponse({
+        schemaVersion: addSchemaVersion({}).schemaVersion,
+        trace1Id: id1,
+        trace2Id: id2,
+        comparison,
+        differences: {
+          success: t1.success !== t2.success,
+          tier: t1.tiers.finalTier !== t2.tiers.finalTier,
+          duration: Math.abs(t1.durationMs - t2.durationMs),
+          contentLength: Math.abs(t1.content.textLength - t2.content.textLength),
+          errorCount: Math.abs(t1.errors.length - t2.errors.length),
+        },
       });
     }
 
