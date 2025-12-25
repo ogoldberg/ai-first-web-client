@@ -230,17 +230,25 @@ function normalizeLines(lines: string[], opts: Required<DiffOptions>): string[] 
 }
 
 /**
- * Compute diff using Myers algorithm (LCS-based approach)
- * This is a simplified implementation that's efficient for typical content sizes
+ * Generic LCS-based diff computation
+ * Used by both line-level and word-level diff functions
+ *
+ * @param oldItems - Original items to compare
+ * @param newItems - New items to compare
+ * @param compareOld - Normalized old items for comparison (or same as oldItems)
+ * @param compareNew - Normalized new items for comparison (or same as newItems)
+ * @param mapResult - Function to map each operation to the desired output format
+ * @returns Array of diff operations
  */
-function computeDiff(
-  oldLines: string[],
-  newLines: string[],
-  compareOld: string[],
-  compareNew: string[]
-): DiffOp[] {
-  const m = oldLines.length;
-  const n = newLines.length;
+function computeLcsDiff<T, R>(
+  oldItems: T[],
+  newItems: T[],
+  compareOld: T[],
+  compareNew: T[],
+  mapResult: (type: 'equal' | 'insert' | 'delete', item: T, oldIdx: number, newIdx: number) => R
+): R[] {
+  const m = oldItems.length;
+  const n = newItems.length;
 
   // Build LCS table
   const lcs: number[][] = Array(m + 1)
@@ -258,43 +266,54 @@ function computeDiff(
   }
 
   // Backtrack to build diff
-  const operations: DiffOp[] = [];
+  const operations: R[] = [];
   let i = 0;
   let j = 0;
-  let oldLineNum = 1;
-  let newLineNum = 1;
+  let oldIdx = 1;
+  let newIdx = 1;
 
   while (i < m || j < n) {
     if (i < m && j < n && compareOld[i] === compareNew[j]) {
-      // Lines are equal
-      operations.push({
-        type: 'equal',
-        line: newLines[j],
-        oldLineNumber: oldLineNum++,
-        newLineNumber: newLineNum++,
-      });
+      // Items are equal
+      operations.push(mapResult('equal', newItems[j], oldIdx++, newIdx++));
       i++;
       j++;
     } else if (j < n && (i >= m || lcs[i][j + 1] >= lcs[i + 1][j])) {
       // Insert
-      operations.push({
-        type: 'insert',
-        line: newLines[j],
-        newLineNumber: newLineNum++,
-      });
+      operations.push(mapResult('insert', newItems[j], -1, newIdx++));
       j++;
     } else {
       // Delete
-      operations.push({
-        type: 'delete',
-        line: oldLines[i],
-        oldLineNumber: oldLineNum++,
-      });
+      operations.push(mapResult('delete', oldItems[i], oldIdx++, -1));
       i++;
     }
   }
 
   return operations;
+}
+
+/**
+ * Compute diff using Myers algorithm (LCS-based approach)
+ * This is a simplified implementation that's efficient for typical content sizes
+ */
+function computeDiff(
+  oldLines: string[],
+  newLines: string[],
+  compareOld: string[],
+  compareNew: string[]
+): DiffOp[] {
+  return computeLcsDiff(
+    oldLines,
+    newLines,
+    compareOld,
+    compareNew,
+    (type, line, oldIdx, newIdx): DiffOp => ({
+      type,
+      line,
+      oldLineNumber: oldIdx > 0 ? oldIdx : undefined,
+      newLineNumber: newIdx > 0 ? newIdx : undefined,
+    })
+  );
 }
 
 /**
@@ -335,6 +354,7 @@ function computeStats(
 
 /**
  * Generate hunks from operations
+ * Uses incremental line number tracking to avoid O(N*M) complexity
  */
 function generateHunks(operations: DiffOp[], contextLines: number): DiffHunk[] {
   const hunks: DiffHunk[] = [];
@@ -351,6 +371,26 @@ function generateHunks(operations: DiffOp[], contextLines: number): DiffHunk[] {
     return [];
   }
 
+  // Track line numbers incrementally as we process hunks
+  let trackedOldLine = 1;
+  let trackedNewLine = 1;
+  let trackedIndex = 0;
+
+  // Helper to advance line tracking to a given index
+  const advanceTrackingTo = (targetIndex: number): { oldLine: number; newLine: number } => {
+    while (trackedIndex < targetIndex) {
+      const op = operations[trackedIndex];
+      if (op.type === 'equal' || op.type === 'delete') {
+        trackedOldLine++;
+      }
+      if (op.type === 'equal' || op.type === 'insert') {
+        trackedNewLine++;
+      }
+      trackedIndex++;
+    }
+    return { oldLine: trackedOldLine, newLine: trackedNewLine };
+  };
+
   // Group changes that are close together
   let hunkStart = Math.max(0, changeIndices[0] - contextLines);
   let hunkEnd = Math.min(operations.length - 1, changeIndices[0] + contextLines);
@@ -363,8 +403,9 @@ function generateHunks(operations: DiffOp[], contextLines: number): DiffHunk[] {
     if (potentialStart <= hunkEnd + 1) {
       hunkEnd = Math.min(operations.length - 1, changeIdx + contextLines);
     } else {
-      // Create hunk from current range
-      hunks.push(createHunk(operations, hunkStart, hunkEnd));
+      // Advance tracking to hunk start and create hunk
+      const lineNumbers = advanceTrackingTo(hunkStart);
+      hunks.push(createHunk(operations, hunkStart, hunkEnd, lineNumbers.oldLine, lineNumbers.newLine));
 
       // Start new hunk
       hunkStart = potentialStart;
@@ -373,31 +414,24 @@ function generateHunks(operations: DiffOp[], contextLines: number): DiffHunk[] {
   }
 
   // Add final hunk
-  hunks.push(createHunk(operations, hunkStart, hunkEnd));
+  const lineNumbers = advanceTrackingTo(hunkStart);
+  hunks.push(createHunk(operations, hunkStart, hunkEnd, lineNumbers.oldLine, lineNumbers.newLine));
 
   return hunks;
 }
 
 /**
  * Create a hunk from a range of operations
+ * Takes pre-computed starting line numbers to avoid redundant iteration
  */
-function createHunk(operations: DiffOp[], start: number, end: number): DiffHunk {
+function createHunk(
+  operations: DiffOp[],
+  start: number,
+  end: number,
+  oldStart: number,
+  newStart: number
+): DiffHunk {
   const hunkOps = operations.slice(start, end + 1);
-
-  // Calculate line numbers
-  let oldStart = 1;
-  let newStart = 1;
-
-  // Find the first operation with line numbers
-  for (let i = 0; i < start; i++) {
-    const op = operations[i];
-    if (op.type === 'equal' || op.type === 'delete') {
-      oldStart++;
-    }
-    if (op.type === 'equal' || op.type === 'insert') {
-      newStart++;
-    }
-  }
 
   // Count lines in hunk
   let oldCount = 0;
@@ -589,30 +623,15 @@ export function generateInlineDiff(
 
 /**
  * Tokenize a line into words and whitespace
+ * Uses regex split to separate words from whitespace while preserving both
  */
 function tokenize(line: string): string[] {
-  const tokens: string[] = [];
-  let current = '';
-  let inWord = false;
-
-  for (const char of line) {
-    const isWhitespace = /\s/.test(char);
-
-    if (inWord && isWhitespace) {
-      tokens.push(current);
-      current = char;
-      inWord = false;
-    } else if (!inWord && !isWhitespace) {
-      if (current) tokens.push(current);
-      current = char;
-      inWord = true;
-    } else {
-      current += char;
-    }
+  if (!line) {
+    return [];
   }
-
-  if (current) tokens.push(current);
-  return tokens;
+  // Split by whitespace, keeping the whitespace as a token
+  // The filter(Boolean) removes empty strings from leading/trailing whitespace
+  return line.split(/(\s+)/).filter(Boolean);
 }
 
 interface WordOp {
@@ -621,47 +640,16 @@ interface WordOp {
 }
 
 /**
- * Compute word-level diff
+ * Compute word-level diff using the generic LCS algorithm
  */
 function computeWordDiff(oldWords: string[], newWords: string[]): WordOp[] {
-  const m = oldWords.length;
-  const n = newWords.length;
-
-  // Build LCS table
-  const lcs: number[][] = Array(m + 1)
-    .fill(null)
-    .map(() => Array(n + 1).fill(0));
-
-  for (let i = m - 1; i >= 0; i--) {
-    for (let j = n - 1; j >= 0; j--) {
-      if (oldWords[i] === newWords[j]) {
-        lcs[i][j] = lcs[i + 1][j + 1] + 1;
-      } else {
-        lcs[i][j] = Math.max(lcs[i + 1][j], lcs[i][j + 1]);
-      }
-    }
-  }
-
-  // Backtrack
-  const operations: WordOp[] = [];
-  let i = 0;
-  let j = 0;
-
-  while (i < m || j < n) {
-    if (i < m && j < n && oldWords[i] === newWords[j]) {
-      operations.push({ type: 'equal', word: newWords[j] });
-      i++;
-      j++;
-    } else if (j < n && (i >= m || lcs[i][j + 1] >= lcs[i + 1][j])) {
-      operations.push({ type: 'insert', word: newWords[j] });
-      j++;
-    } else {
-      operations.push({ type: 'delete', word: oldWords[i] });
-      i++;
-    }
-  }
-
-  return operations;
+  return computeLcsDiff(
+    oldWords,
+    newWords,
+    oldWords,
+    newWords,
+    (type, word): WordOp => ({ type, word })
+  );
 }
 
 /**

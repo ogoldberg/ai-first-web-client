@@ -454,10 +454,11 @@ export async function handleContentTracking(
 
     case 'diff': {
       // Generate a line-by-line diff between two content versions
-      const oldContent = args.oldContent as string | undefined;
-      const newContent = args.newContent as string | undefined;
+      const oldContent = args.oldContent;
+      const newContent = args.newContent;
 
-      if (!oldContent || !newContent) {
+      // Use typeof check to allow empty strings as valid input
+      if (typeof oldContent !== 'string' || typeof newContent !== 'string') {
         throw new Error(missingArgumentsError('content_tracking:diff', ['oldContent', 'newContent']));
       }
 
@@ -466,10 +467,11 @@ export async function handleContentTracking(
         newContent,
         url || 'content',
         {
-          contextLines: (args.contextLines as number) || 3,
-          ignoreWhitespace: (args.ignoreWhitespace as boolean) || false,
-          ignoreCase: (args.ignoreCase as boolean) || false,
-          maxLineLength: (args.maxLineLength as number) || 0,
+          // Use nullish coalescing to allow 0 as a valid value
+          contextLines: (args.contextLines as number) ?? 3,
+          ignoreWhitespace: (args.ignoreWhitespace as boolean) ?? false,
+          ignoreCase: (args.ignoreCase as boolean) ?? false,
+          maxLineLength: (args.maxLineLength as number) ?? 0,
         }
       );
 
