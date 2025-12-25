@@ -36,6 +36,11 @@ import type {
   AnomalyFalsePositive,
   PatternSource,
   ProvenanceMetadata,
+  KnowledgePack,
+  KnowledgePackMetadata,
+  KnowledgeExportOptions,
+  KnowledgeImportOptions,
+  KnowledgeImportResult,
 } from '../types/index.js';
 import type { AntiPattern, FailureCategory, PatternLearningEvent } from '../types/api-patterns.js';
 import type { ApiPatternRegistry } from './api-pattern-learner.js';
@@ -2636,6 +2641,431 @@ export class LearningEngine {
     });
 
     return { unsubscribe, loadedAntiPatterns };
+  }
+
+  // ============================================
+  // PATTERN IMPORT/EXPORT (F-007)
+  // ============================================
+
+  /**
+   * Check if a domain matches a glob-like pattern
+   */
+  private matchesDomainPattern(domain: string, pattern: string): boolean {
+    // Convert glob to regex: * -> .*, ? -> .
+    const regexPattern = pattern
+      .replace(/\./g, '\\.')
+      .replace(/\*/g, '.*')
+      .replace(/\?/g, '.');
+    const regex = new RegExp(`^${regexPattern}$`, 'i');
+    return regex.test(domain);
+  }
+
+  /**
+   * Export knowledge base as a portable pack
+   */
+  exportKnowledgePack(options: KnowledgeExportOptions = {}): KnowledgePack {
+    const {
+      domainPatterns,
+      includeAntiPatterns = true,
+      includeLearningEvents = false,
+      minUsageCount = 0,
+      minSuccessRate = 0,
+      packName = 'Knowledge Pack',
+      packDescription = 'Exported knowledge base patterns',
+    } = options;
+
+    // Filter entries based on options
+    const filteredEntries: Record<string, EnhancedKnowledgeBaseEntry> = {};
+    let apiPatternCount = 0;
+    let selectorCount = 0;
+    let validatorCount = 0;
+    let paginationPatternCount = 0;
+
+    for (const [domain, entry] of this.entries) {
+      // Apply domain filter
+      if (domainPatterns && domainPatterns.length > 0) {
+        const matches = domainPatterns.some(pattern =>
+          this.matchesDomainPattern(domain, pattern)
+        );
+        if (!matches) continue;
+      }
+
+      // Apply usage filter
+      if (entry.usageCount < minUsageCount) continue;
+
+      // Apply success rate filter
+      if (entry.overallSuccessRate < minSuccessRate) continue;
+
+      // Convert Map to Record for serialization if needed
+      const serializedEntry: EnhancedKnowledgeBaseEntry = {
+        ...entry,
+        paginationPatterns:
+          entry.paginationPatterns instanceof Map
+            ? Object.fromEntries(entry.paginationPatterns)
+            : entry.paginationPatterns,
+      };
+
+      filteredEntries[domain] = serializedEntry;
+
+      // Count patterns
+      apiPatternCount += entry.apiPatterns.length;
+      selectorCount += entry.selectorChains.length;
+      validatorCount += entry.validators.length;
+      const paginationCount =
+        entry.paginationPatterns instanceof Map
+          ? entry.paginationPatterns.size
+          : Object.keys(entry.paginationPatterns).length;
+      paginationPatternCount += paginationCount;
+    }
+
+    // Get anti-patterns if requested (convert Map to array)
+    const antiPatternsArray = includeAntiPatterns
+      ? Array.from(this.antiPatterns.values())
+      : [];
+
+    // Get learning events if requested
+    const learningEvents = includeLearningEvents ? this.learningEvents : undefined;
+
+    const metadata: KnowledgePackMetadata = {
+      id: `kp_${Date.now()}_${crypto.randomBytes(4).toString('hex')}`,
+      name: packName,
+      description: packDescription,
+      version: '1.0.0',
+      createdAt: Date.now(),
+      domains: Object.keys(filteredEntries),
+      stats: {
+        domainCount: Object.keys(filteredEntries).length,
+        apiPatternCount,
+        selectorCount,
+        validatorCount,
+        paginationPatternCount,
+        antiPatternCount: antiPatternsArray.length,
+      },
+      compatibility: {
+        minVersion: '0.5.0',
+        schemaVersion: '1.0',
+      },
+    };
+
+    log.info('Exported knowledge pack', {
+      packId: metadata.id,
+      domains: metadata.stats.domainCount,
+      apiPatterns: apiPatternCount,
+      selectors: selectorCount,
+    });
+
+    return {
+      metadata,
+      entries: filteredEntries,
+      antiPatterns: includeAntiPatterns ? antiPatternsArray : undefined,
+      learningEvents,
+    };
+  }
+
+  /**
+   * Serialize knowledge pack to JSON string
+   */
+  serializeKnowledgePack(pack: KnowledgePack, pretty: boolean = true): string {
+    return JSON.stringify(pack, null, pretty ? 2 : undefined);
+  }
+
+  /**
+   * Import knowledge base from a pack
+   */
+  async importKnowledgePack(
+    packJson: string,
+    options: KnowledgeImportOptions = {}
+  ): Promise<KnowledgeImportResult> {
+    const {
+      conflictResolution = 'merge',
+      domainFilter,
+      importAntiPatterns = true,
+      importLearningEvents = false,
+      resetMetrics = false,
+      confidenceAdjustment = 1.0,
+    } = options;
+
+    const result: KnowledgeImportResult = {
+      success: false,
+      domainsImported: 0,
+      domainsSkipped: 0,
+      domainsMerged: 0,
+      apiPatternsImported: 0,
+      selectorsImported: 0,
+      validatorsImported: 0,
+      antiPatternsImported: 0,
+      errors: [],
+      warnings: [],
+    };
+
+    let pack: KnowledgePack;
+    try {
+      pack = JSON.parse(packJson);
+    } catch (error) {
+      result.errors.push(`Invalid JSON: ${error instanceof Error ? error.message : String(error)}`);
+      return result;
+    }
+
+    // Validate pack structure
+    if (!pack.metadata || !pack.entries) {
+      result.errors.push('Invalid knowledge pack: missing metadata or entries');
+      return result;
+    }
+
+    // Check schema version compatibility
+    const schemaVersion = pack.metadata.compatibility?.schemaVersion || '1.0';
+    if (schemaVersion !== '1.0') {
+      result.warnings.push(`Unknown schema version: ${schemaVersion}, attempting import anyway`);
+    }
+
+    // Import entries
+    for (const [domain, entry] of Object.entries(pack.entries)) {
+      // Apply domain filter
+      if (domainFilter && domainFilter.length > 0) {
+        const matches = domainFilter.some(pattern =>
+          this.matchesDomainPattern(domain, pattern)
+        );
+        if (!matches) {
+          result.domainsSkipped++;
+          continue;
+        }
+      }
+
+      const existingEntry = this.entries.get(domain);
+
+      if (existingEntry) {
+        switch (conflictResolution) {
+          case 'skip':
+            result.domainsSkipped++;
+            result.warnings.push(`Skipped existing domain: ${domain}`);
+            continue;
+
+          case 'overwrite':
+            // Replace entirely
+            this.entries.set(domain, this.prepareEntryForImport(entry, resetMetrics, confidenceAdjustment));
+            result.domainsImported++;
+            result.apiPatternsImported += entry.apiPatterns.length;
+            result.selectorsImported += entry.selectorChains.length;
+            result.validatorsImported += entry.validators.length;
+            break;
+
+          case 'merge':
+          default:
+            // Merge patterns from both
+            const merged = this.mergeEntries(existingEntry, entry, confidenceAdjustment);
+            this.entries.set(domain, merged);
+            result.domainsMerged++;
+            // Count new patterns (approximate)
+            result.apiPatternsImported += Math.max(0, entry.apiPatterns.length - existingEntry.apiPatterns.length);
+            result.selectorsImported += Math.max(0, entry.selectorChains.length - existingEntry.selectorChains.length);
+            result.validatorsImported += Math.max(0, entry.validators.length - existingEntry.validators.length);
+            break;
+        }
+      } else {
+        // New domain, just add it
+        this.entries.set(domain, this.prepareEntryForImport(entry, resetMetrics, confidenceAdjustment));
+        result.domainsImported++;
+        result.apiPatternsImported += entry.apiPatterns.length;
+        result.selectorsImported += entry.selectorChains.length;
+        result.validatorsImported += entry.validators.length;
+      }
+    }
+
+    // Import anti-patterns
+    if (importAntiPatterns && pack.antiPatterns && pack.antiPatterns.length > 0) {
+      for (const antiPattern of pack.antiPatterns) {
+        // Check if anti-pattern already exists by ID
+        if (!this.antiPatterns.has(antiPattern.id)) {
+          // Also check if a similar one exists (same failure category, domains, and URL patterns)
+          let exists = false;
+          for (const [, existing] of this.antiPatterns) {
+            if (
+              existing.failureCategory === antiPattern.failureCategory &&
+              JSON.stringify(existing.domains.sort()) === JSON.stringify(antiPattern.domains.sort()) &&
+              JSON.stringify(existing.urlPatterns.sort()) === JSON.stringify(antiPattern.urlPatterns.sort())
+            ) {
+              exists = true;
+              break;
+            }
+          }
+          if (!exists) {
+            this.antiPatterns.set(antiPattern.id, antiPattern);
+            result.antiPatternsImported++;
+          }
+        }
+      }
+    }
+
+    // Import learning events if requested
+    if (importLearningEvents && pack.learningEvents) {
+      for (const event of pack.learningEvents) {
+        // Add with modified timestamp to indicate import time
+        this.learningEvents.push({
+          ...event,
+          details: {
+            ...event.details,
+            importedAt: Date.now(),
+            originalTimestamp: event.timestamp,
+          },
+        });
+      }
+    }
+
+    // Save changes
+    await this.save();
+
+    result.success = true;
+    log.info('Imported knowledge pack', {
+      packId: pack.metadata.id,
+      domainsImported: result.domainsImported,
+      domainsMerged: result.domainsMerged,
+      domainsSkipped: result.domainsSkipped,
+      apiPatterns: result.apiPatternsImported,
+    });
+
+    return result;
+  }
+
+  /**
+   * Downgrade confidence level (high -> medium -> low)
+   */
+  private downgradeConfidence(
+    confidence: 'high' | 'medium' | 'low',
+    steps: number
+  ): 'high' | 'medium' | 'low' {
+    const levels: ('high' | 'medium' | 'low')[] = ['high', 'medium', 'low'];
+    const currentIndex = levels.indexOf(confidence);
+    const newIndex = Math.min(levels.length - 1, currentIndex + steps);
+    return levels[newIndex];
+  }
+
+  /**
+   * Calculate confidence downgrade steps from adjustment factor
+   * 1.0 = no change, 0.5 = 1 step down, 0.25 = 2 steps down
+   */
+  private getConfidenceDowngradeSteps(adjustment: number): number {
+    if (adjustment >= 1.0) return 0;
+    if (adjustment >= 0.5) return 1;
+    return 2;
+  }
+
+  /**
+   * Prepare an entry for import (reset metrics, adjust confidence)
+   */
+  private prepareEntryForImport(
+    entry: EnhancedKnowledgeBaseEntry,
+    resetMetrics: boolean,
+    confidenceAdjustment: number
+  ): EnhancedKnowledgeBaseEntry {
+    const now = Date.now();
+    const prepared: EnhancedKnowledgeBaseEntry = {
+      ...entry,
+      lastUpdated: now,
+    };
+
+    // Reset metrics if requested
+    if (resetMetrics) {
+      prepared.usageCount = 0;
+      prepared.overallSuccessRate = 0;
+      prepared.recentFailures = [];
+    }
+
+    // Adjust confidence on API patterns (downgrade levels)
+    if (confidenceAdjustment !== 1.0) {
+      const steps = this.getConfidenceDowngradeSteps(confidenceAdjustment);
+      prepared.apiPatterns = prepared.apiPatterns.map(pattern => ({
+        ...pattern,
+        confidence: this.downgradeConfidence(pattern.confidence, steps),
+      }));
+    }
+
+    // Convert paginationPatterns to Record if it's a Map
+    if (prepared.paginationPatterns instanceof Map) {
+      prepared.paginationPatterns = Object.fromEntries(prepared.paginationPatterns);
+    }
+
+    return prepared;
+  }
+
+  /**
+   * Create a unique key for a selector chain
+   */
+  private getSelectorChainKey(chain: SelectorChain): string {
+    return `${chain.contentType}:${chain.selectors.map(s => s.selector).join(',')}`;
+  }
+
+  /**
+   * Merge two domain entries
+   */
+  private mergeEntries(
+    existing: EnhancedKnowledgeBaseEntry,
+    imported: EnhancedKnowledgeBaseEntry,
+    confidenceAdjustment: number
+  ): EnhancedKnowledgeBaseEntry {
+    const now = Date.now();
+    const confidenceSteps = this.getConfidenceDowngradeSteps(confidenceAdjustment);
+
+    // Merge API patterns (avoid duplicates by endpoint)
+    const existingEndpoints = new Set(existing.apiPatterns.map(p => p.endpoint));
+    const newApiPatterns = imported.apiPatterns
+      .filter(p => !existingEndpoints.has(p.endpoint))
+      .map(p => ({
+        ...p,
+        confidence: this.downgradeConfidence(p.confidence, confidenceSteps),
+      }));
+
+    // Merge selector chains (avoid duplicates by key)
+    const existingSelectors = new Set(
+      existing.selectorChains.map(s => this.getSelectorChainKey(s))
+    );
+    const newSelectors = imported.selectorChains.filter(
+      s => !existingSelectors.has(this.getSelectorChainKey(s))
+    );
+
+    // Merge validators (avoid duplicates by content type)
+    const existingValidatorTypes = new Set(
+      existing.validators.map(v => JSON.stringify(v))
+    );
+    const newValidators = imported.validators.filter(
+      v => !existingValidatorTypes.has(JSON.stringify(v))
+    );
+
+    // Merge pagination patterns
+    const existingPagination =
+      existing.paginationPatterns instanceof Map
+        ? Object.fromEntries(existing.paginationPatterns)
+        : existing.paginationPatterns;
+    const importedPagination =
+      imported.paginationPatterns instanceof Map
+        ? Object.fromEntries(imported.paginationPatterns)
+        : imported.paginationPatterns;
+    const mergedPagination = { ...existingPagination, ...importedPagination };
+
+    // Merge refresh patterns
+    const existingRefreshUrls = new Set(existing.refreshPatterns.map(r => r.urlPattern));
+    const newRefreshPatterns = imported.refreshPatterns.filter(
+      r => !existingRefreshUrls.has(r.urlPattern)
+    );
+
+    return {
+      ...existing,
+      apiPatterns: [...existing.apiPatterns, ...newApiPatterns],
+      selectorChains: [...existing.selectorChains, ...newSelectors],
+      validators: [...existing.validators, ...newValidators],
+      paginationPatterns: mergedPagination,
+      refreshPatterns: [...existing.refreshPatterns, ...newRefreshPatterns],
+      lastUpdated: now,
+      // Keep the higher usage count and success rate
+      usageCount: Math.max(existing.usageCount, imported.usageCount),
+      overallSuccessRate: Math.max(existing.overallSuccessRate, imported.overallSuccessRate),
+    };
+  }
+
+  /**
+   * Get anti-patterns for export
+   */
+  getAntiPatterns(): AntiPattern[] {
+    return Array.from(this.antiPatterns.values());
   }
 }
 

@@ -1239,6 +1239,203 @@ export interface SkillImportResult {
 }
 
 // ============================================
+// PATTERN IMPORT/EXPORT TYPES (F-007)
+// ============================================
+
+/**
+ * Metadata for a knowledge base export pack
+ */
+export interface KnowledgePackMetadata {
+  // Pack identifier
+  id: string;
+  // Human-readable name
+  name: string;
+  // Description of what this pack contains
+  description: string;
+  // Version of this pack (semver)
+  version: string;
+  // When this pack was created
+  createdAt: number;
+  // Source instance identifier (optional)
+  sourceInstance?: string;
+  // Domains covered
+  domains: string[];
+  // Statistics
+  stats: {
+    domainCount: number;
+    apiPatternCount: number;
+    selectorCount: number;
+    validatorCount: number;
+    paginationPatternCount: number;
+    antiPatternCount: number;
+  };
+  // Compatibility info
+  compatibility: {
+    // Minimum version required to import
+    minVersion: string;
+    // Schema version of the export format
+    schemaVersion: string;
+  };
+}
+
+/**
+ * Exported knowledge base pack
+ */
+export interface KnowledgePack {
+  // Pack metadata
+  metadata: KnowledgePackMetadata;
+  // Knowledge base entries by domain
+  entries: Record<string, EnhancedKnowledgeBaseEntry>;
+  // Anti-patterns (what NOT to do) - uses API-level anti-patterns from api-patterns.ts
+  antiPatterns?: import('./api-patterns.js').AntiPattern[];
+  // Learning events (optional, for replay)
+  learningEvents?: LearningEvent[];
+}
+
+/**
+ * Options for exporting knowledge base
+ */
+export interface KnowledgeExportOptions {
+  // Filter by domain patterns (glob-like matching)
+  domainPatterns?: string[];
+  // Include anti-patterns in export
+  includeAntiPatterns?: boolean;
+  // Include learning events (history)
+  includeLearningEvents?: boolean;
+  // Minimum usage count to include a domain
+  minUsageCount?: number;
+  // Minimum success rate to include a domain
+  minSuccessRate?: number;
+  // Pack name for the export
+  packName?: string;
+  // Pack description
+  packDescription?: string;
+}
+
+/**
+ * Conflict resolution strategy for knowledge import
+ */
+export type KnowledgeConflictResolution =
+  | 'skip'       // Skip if domain entry exists
+  | 'overwrite'  // Replace existing with imported
+  | 'merge';     // Merge patterns from both (default)
+
+/**
+ * Options for importing knowledge base
+ */
+export interface KnowledgeImportOptions {
+  // How to handle conflicts with existing entries
+  conflictResolution?: KnowledgeConflictResolution;
+  // Filter which domains to import
+  domainFilter?: string[];
+  // Import anti-patterns
+  importAntiPatterns?: boolean;
+  // Import learning events
+  importLearningEvents?: boolean;
+  // Reset metrics on imported patterns
+  resetMetrics?: boolean;
+  // Adjust confidence levels (multiply by this factor, 0-1)
+  confidenceAdjustment?: number;
+}
+
+/**
+ * Result of a knowledge import operation
+ */
+export interface KnowledgeImportResult {
+  success: boolean;
+  // Number of domain entries imported
+  domainsImported: number;
+  // Number of domains skipped (conflicts)
+  domainsSkipped: number;
+  // Number of domains merged
+  domainsMerged: number;
+  // Pattern counts
+  apiPatternsImported: number;
+  selectorsImported: number;
+  validatorsImported: number;
+  antiPatternsImported: number;
+  // Any errors encountered
+  errors: string[];
+  // Warnings (non-fatal issues)
+  warnings: string[];
+}
+
+/**
+ * Unified pattern pack combining knowledge base and skills
+ */
+export interface UnifiedPatternPack {
+  // Pack metadata
+  metadata: {
+    id: string;
+    name: string;
+    description: string;
+    version: string;
+    createdAt: number;
+    sourceInstance?: string;
+    domains: string[];
+    stats: {
+      domainCount: number;
+      apiPatternCount: number;
+      selectorCount: number;
+      skillCount: number;
+      workflowCount: number;
+      antiPatternCount: number;
+    };
+    compatibility: {
+      minVersion: string;
+      schemaVersion: string;
+    };
+  };
+  // Knowledge base entries
+  knowledge?: KnowledgePack;
+  // Skills pack
+  skills?: SkillPack;
+}
+
+/**
+ * Options for unified export
+ */
+export interface UnifiedExportOptions {
+  // Include knowledge base
+  includeKnowledge?: boolean;
+  // Include skills
+  includeSkills?: boolean;
+  // Knowledge export options
+  knowledgeOptions?: KnowledgeExportOptions;
+  // Skill export options
+  skillOptions?: SkillExportOptions;
+  // Pack name
+  packName?: string;
+  // Pack description
+  packDescription?: string;
+}
+
+/**
+ * Options for unified import
+ */
+export interface UnifiedImportOptions {
+  // Import knowledge base
+  importKnowledge?: boolean;
+  // Import skills
+  importSkills?: boolean;
+  // Knowledge import options
+  knowledgeOptions?: KnowledgeImportOptions;
+  // Skill import options
+  skillOptions?: SkillImportOptions;
+}
+
+/**
+ * Result of unified import
+ */
+export interface UnifiedImportResult {
+  success: boolean;
+  knowledge?: KnowledgeImportResult;
+  skills?: SkillImportResult;
+  errors: string[];
+  warnings: string[];
+}
+
+// ============================================
 // TIERED RENDERING TYPES
 // ============================================
 
