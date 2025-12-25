@@ -616,7 +616,7 @@ Browser: { success: true, ... }  // Learns this for future
 
 | ID | Task | Effort | Category | Notes |
 |----|------|--------|----------|-------|
-| P-001 | Response caching optimization | M | Performance | Smarter TTL |
+| P-001 | Response caching optimization | M | Performance | Smarter TTL (DONE) |
 | P-002 | Pattern lookup optimization | S | Performance | O(1) instead of O(N) (DONE - PR #156) |
 | P-003 | Memory usage optimization | M | Performance | Large skill stores |
 | P-004 | Connection pooling | M | Performance | Reuse HTTP connections |
