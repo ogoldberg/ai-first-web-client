@@ -465,7 +465,7 @@ See [COMPETITIVE_ANALYSIS.md](COMPETITIVE_ANALYSIS.md) for context on why these 
 | ID | Task | Effort | Category | Status | Notes |
 |----|------|--------|----------|--------|-------|
 | D-001 | Update PROJECT_STATUS.md | S | Documentation | Complete | Updated with 2025-12-25 audit results |
-| D-002 | API documentation for MCP tools | M | Documentation | In Progress | Clear parameter docs |
+| D-002 | API documentation for MCP tools | M | Documentation | Complete | Clear parameter docs - see docs/MCP_TOOLS_API.md |
 | D-003 | Architecture diagrams | M | Documentation | Pending | Visual system overview |
 | D-004 | Usage examples and tutorials | L | Documentation | Pending | Getting started guide |
 | **DOC-001** | **Documentation audit** | **L** | **Documentation** | **Complete** | Comprehensive audit completed 2025-12-25. Report: `docs/DOCUMENTATION_AUDIT_2025-12-25.md`. Fixed critical issues (import paths, package names, architecture overview). 22 issues identified and tracked. |
