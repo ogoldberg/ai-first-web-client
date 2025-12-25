@@ -325,7 +325,7 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 | API-013 | Set up CI/CD pipeline | M | Complete | GitHub Actions CI workflow: type checking, tests on PR/push. Deployment to staging/production TBD |
 | API-014 | Load testing and optimization | L | Complete | Autocannon load tests: 17k+ req/s health, 8k+ req/s browse/fetch. Baseline, stress, full suites. PR #149 |
 | API-015 | Security audit | M | Complete | Cryptographic key gen, auth enumeration prevention, SSRF protection, webhook idempotency. PR #148 |
-| API-016 | Create pricing calculator | M | Not Started | Help users estimate costs based on usage patterns. Interactive tool on website |
+| API-016 | Create pricing calculator | M | Complete | Help users estimate costs based on usage patterns. Interactive tool at /pricing with API endpoint. 19 tests |
 | API-017 | Beta program launch | M | Not Started | Private beta with 10-20 users. Gather feedback, fix critical issues |
 
 ### Cloud Operations (New)

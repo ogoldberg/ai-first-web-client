@@ -263,7 +263,13 @@ When you exceed your tier limits:
 
 ### How do I estimate my costs?
 
-Use the usage calculator or monitor your Free tier usage for a week, then extrapolate.
+Use our [interactive pricing calculator](/pricing) to estimate costs based on your expected usage. The calculator allows you to:
+- Adjust request counts for each tier with sliders
+- Apply presets for common usage patterns (Hobby, Startup, Growth, Enterprise)
+- See real-time cost breakdowns for all pricing tiers
+- Get a recommended tier based on your usage
+
+You can also use the programmatic API at `POST /pricing/calculate` with a JSON body containing `intelligenceRequests`, `lightweightRequests`, and `playwrightRequests`.
 
 **Formula:**
 ```text
