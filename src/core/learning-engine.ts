@@ -111,6 +111,13 @@ export class LearningEngine {
    */
   private antiPatterns: Map<string, AntiPattern> = new Map();
 
+  /**
+   * Secondary index for O(1) pattern lookup by domain+pathname (P-002)
+   * Maps `${domain}:${pathname}` to array of patterns (multiple patterns can share pathname)
+   * This avoids O(N) iteration through all patterns for a domain
+   */
+  private pathnameIndex: Map<string, EnhancedApiPattern[]> = new Map();
+
   constructor(
     filePath: string = './enhanced-knowledge-base.json',
     decayConfig: ConfidenceDecayConfig = DEFAULT_DECAY_CONFIG
@@ -131,6 +138,85 @@ export class LearningEngine {
     await this.load();
     // Apply confidence decay on startup
     this.applyConfidenceDecay();
+  }
+
+  // ============================================
+  // PATHNAME INDEX MANAGEMENT (P-002)
+  // ============================================
+
+  /**
+   * Generate index key for pathname lookup
+   */
+  private getPathnameIndexKey(domain: string, pathname: string): string {
+    return `${domain}:${pathname}`;
+  }
+
+  /**
+   * Extract pathname from a pattern endpoint, returns null if invalid
+   */
+  private extractPathnameFromEndpoint(endpoint: string): string | null {
+    try {
+      return new URL(endpoint).pathname;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Add a pattern to the pathname index
+   */
+  private indexPattern(domain: string, pattern: EnhancedApiPattern): void {
+    const pathname = this.extractPathnameFromEndpoint(pattern.endpoint);
+    if (!pathname) return;
+
+    const key = this.getPathnameIndexKey(domain, pathname);
+    const existing = this.pathnameIndex.get(key) || [];
+
+    // Avoid duplicates (same endpoint and method)
+    const isDuplicate = existing.some(
+      p => p.endpoint === pattern.endpoint && p.method === pattern.method
+    );
+    if (!isDuplicate) {
+      existing.push(pattern);
+      this.pathnameIndex.set(key, existing);
+    }
+  }
+
+  /**
+   * Remove a pattern from the pathname index
+   */
+  private unindexPattern(domain: string, pattern: EnhancedApiPattern): void {
+    const pathname = this.extractPathnameFromEndpoint(pattern.endpoint);
+    if (!pathname) return;
+
+    const key = this.getPathnameIndexKey(domain, pathname);
+    const existing = this.pathnameIndex.get(key);
+    if (!existing) return;
+
+    const filtered = existing.filter(
+      p => !(p.endpoint === pattern.endpoint && p.method === pattern.method)
+    );
+    if (filtered.length === 0) {
+      this.pathnameIndex.delete(key);
+    } else {
+      this.pathnameIndex.set(key, filtered);
+    }
+  }
+
+  /**
+   * Rebuild the entire pathname index from entries
+   * Called after load() or when index integrity is questionable
+   */
+  private rebuildPathnameIndex(): void {
+    this.pathnameIndex.clear();
+    for (const [domain, entry] of this.entries) {
+      for (const pattern of entry.apiPatterns) {
+        this.indexPattern(domain, pattern);
+      }
+    }
+    log.debug('Pathname index rebuilt', {
+      indexedPaths: this.pathnameIndex.size,
+    });
   }
 
   // ============================================
@@ -1675,6 +1761,9 @@ export class LearningEngine {
         provenance,
       };
       entry.apiPatterns.push(enhanced);
+
+      // Add to pathname index (P-002)
+      this.indexPattern(domain, enhanced);
     }
 
     entry.usageCount++;
@@ -1916,6 +2005,10 @@ export class LearningEngine {
   /**
    * Find a pattern matching a URL
    * (KnowledgeBase compatibility method)
+   *
+   * Optimized with O(1) pathname index lookup (P-002):
+   * - Exact pathname match: O(1) via index
+   * - Prefix match fallback: O(N) only when exact match fails
    */
   findPattern(url: string): EnhancedApiPattern | null {
     try {
@@ -1928,21 +2021,23 @@ export class LearningEngine {
         return null;
       }
 
+      // O(1) exact match via pathname index (P-002)
+      const indexKey = this.getPathnameIndexKey(domain, pathname);
+      const exactMatches = this.pathnameIndex.get(indexKey);
+      if (exactMatches && exactMatches.length > 0) {
+        // Return first exact match (there may be multiple patterns with same pathname but different methods)
+        return exactMatches[0];
+      }
+
+      // O(N) fallback for prefix matching only when no exact match found
+      // This is still needed for patterns like /api/v1 matching /api/v1/users
       let partialMatch: EnhancedApiPattern | null = null;
 
       for (const p of entry.apiPatterns) {
-        try {
-          const patternUrl = new URL(p.endpoint);
-          if (patternUrl.pathname === pathname) {
-            // Exact match found, this is the best possible match.
-            return p;
-          }
-          // If we haven't found a partial match yet, check for one.
-          if (!partialMatch && pathname.startsWith(patternUrl.pathname)) {
-            partialMatch = p;
-          }
-        } catch {
-          // Ignore patterns with invalid endpoints.
+        const patternPathname = this.extractPathnameFromEndpoint(p.endpoint);
+        if (patternPathname && pathname.startsWith(patternPathname)) {
+          partialMatch = p;
+          break; // Take first prefix match
         }
       }
 
@@ -1984,6 +2079,7 @@ export class LearningEngine {
    */
   clear(): void {
     this.entries.clear();
+    this.pathnameIndex.clear(); // Clear pathname index (P-002)
     this.learningEvents = [];
     this.save();
   }
@@ -2267,6 +2363,9 @@ export class LearningEngine {
       }
 
       logger.learning.info('Loaded knowledge base', { totalDomains: this.entries.size });
+
+      // Rebuild pathname index after loading entries (P-002)
+      this.rebuildPathnameIndex();
     }
 
     // Attempt migration from old KnowledgeBase format
