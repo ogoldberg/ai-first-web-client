@@ -320,7 +320,7 @@ Returns HAR 1.2 JSON with all network requests, responses, and timings.`,
  */
 export const debugTracesSchema: Tool = {
   name: 'debug_traces',
-  description: `Query and manage debug traces for failure analysis and replay.
+  description: `Query, visualize, and manage debug traces for failure analysis and replay.
 
 Actions:
 - list: Query traces with filters
@@ -330,14 +330,22 @@ Actions:
 - export: Export traces for sharing
 - delete: Delete a trace by ID
 - clear: Clear all traces
+- visualize: Render a trace in visual format (ascii, compact, detailed, html, json)
+- compare: Compare two traces side by side
 
-Debug traces capture tier decisions, selectors, network activity, validation, errors, and skills.`,
+Debug traces capture tier decisions, selectors, network activity, validation, errors, and skills.
+Visualization formats (F-009):
+- ascii: Full ASCII timeline with tier cascade, selectors, and summary
+- compact: One-line summary (status, tier, duration, domain)
+- detailed: Multi-section with full details including validation and anomalies
+- html: Rich HTML document with styled tables and timeline
+- json: Raw JSON (same as get action)`,
   inputSchema: {
     type: 'object',
     properties: {
       action: {
         type: 'string',
-        enum: ['list', 'get', 'stats', 'configure', 'export', 'delete', 'clear'],
+        enum: ['list', 'get', 'stats', 'configure', 'export', 'delete', 'clear', 'visualize', 'compare'],
         description: 'Action to perform',
       },
       domain: { type: 'string', description: 'Filter by domain (list action)' },
@@ -351,7 +359,7 @@ Debug traces capture tier decisions, selectors, network activity, validation, er
       tier: { type: 'string', enum: ['intelligence', 'lightweight', 'playwright'], description: 'Filter by tier' },
       limit: { type: 'number', description: 'Max results (default: 20)' },
       offset: { type: 'number', description: 'Pagination offset' },
-      id: { type: 'string', description: 'Trace ID (get/delete actions)' },
+      id: { type: 'string', description: 'Trace ID (get/delete/visualize actions)' },
       ids: { type: 'array', items: { type: 'string' }, description: 'Trace IDs to export' },
       enabled: { type: 'boolean', description: 'Enable/disable recording (configure action)' },
       onlyRecordFailures: { type: 'boolean', description: 'Only record failures (configure action)' },
@@ -359,6 +367,22 @@ Debug traces capture tier decisions, selectors, network activity, validation, er
       neverRecordDomain: { type: 'string', description: 'Domain to never record (configure action)' },
       maxTraces: { type: 'number', description: 'Max traces to retain (configure action)' },
       maxAgeHours: { type: 'number', description: 'Max age in hours (configure action)' },
+      // Visualization options (F-009)
+      format: {
+        type: 'string',
+        enum: ['ascii', 'compact', 'detailed', 'html', 'json'],
+        description: 'Visualization format (visualize action, default: ascii)',
+      },
+      includeNetwork: { type: 'boolean', description: 'Include network activity (visualize, default: true)' },
+      includeSelectors: { type: 'boolean', description: 'Include selector attempts (visualize, default: true)' },
+      includeTitle: { type: 'boolean', description: 'Include title extraction (visualize, default: false)' },
+      includeErrors: { type: 'boolean', description: 'Include errors (visualize, default: true)' },
+      includeSkills: { type: 'boolean', description: 'Include skills info (visualize, default: true)' },
+      maxWidth: { type: 'number', description: 'Max width for ASCII output (visualize, default: 80)' },
+      useColor: { type: 'boolean', description: 'Use ANSI color codes (visualize, default: true for non-html)' },
+      // Compare options (F-009)
+      id1: { type: 'string', description: 'First trace ID (compare action)' },
+      id2: { type: 'string', description: 'Second trace ID (compare action)' },
     },
     required: ['action'],
   },
