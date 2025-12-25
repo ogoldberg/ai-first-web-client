@@ -68,4 +68,8 @@ export {
   // Skill handlers
   handleSkillManagement,
   type SkillAction,
+  // Feedback handlers
+  handleAiFeedback,
+  type FeedbackAction,
+  type AiFeedbackArgs,
 } from './handlers/index.js';

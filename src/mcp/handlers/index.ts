@@ -51,3 +51,6 @@ export {
 
 // Skill handlers
 export { handleSkillManagement, type SkillAction } from './skill-handlers.js';
+
+// Feedback handlers
+export { handleAiFeedback, type FeedbackAction, type AiFeedbackArgs } from './feedback-handlers.js';

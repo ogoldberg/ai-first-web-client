@@ -82,6 +82,7 @@ import {
   recordSkillPromptExecution,
   type SkillPromptExecution,
 } from '../utils/skill-prompt-analytics.js';
+import { FeedbackService, type FeedbackServiceConfig } from './feedback-service.js';
 
 // Procedural memory thresholds
 const SKILL_APPLICATION_THRESHOLD = 0.8;  // Minimum similarity to auto-apply a skill
@@ -321,6 +322,7 @@ export class SmartBrowser {
   private currentTrajectory: BrowsingTrajectory | null = null;
   private semanticInfrastructure: SemanticInfrastructure | null = null;
   private debugRecorder: DebugTraceRecorder;
+  private feedbackService: FeedbackService;
 
   constructor(
     private browserManager: BrowserManager,
@@ -333,6 +335,7 @@ export class SmartBrowser {
     this.proceduralMemory = new ProceduralMemory();
     this.tieredFetcher = new TieredFetcher(browserManager, contentExtractor);
     this.debugRecorder = getDebugTraceRecorder();
+    this.feedbackService = new FeedbackService();
     // verificationEngine is loaded lazily in initialize() to avoid circular dependencies
   }
 
@@ -359,6 +362,10 @@ export class SmartBrowser {
         reason: semanticResult.message,
       });
     }
+
+    // Connect FeedbackService to learning systems for real-time adjustments
+    this.feedbackService.setLearningEngine(this.learningEngine);
+    this.feedbackService.setProceduralMemory(this.proceduralMemory);
   }
 
   /**
@@ -2169,6 +2176,13 @@ export class SmartBrowser {
    */
   getProceduralMemory(): ProceduralMemory {
     return this.proceduralMemory;
+  }
+
+  /**
+   * Get feedback service for AI feedback handling
+   */
+  getFeedbackService(): FeedbackService {
+    return this.feedbackService;
   }
 
   /**
