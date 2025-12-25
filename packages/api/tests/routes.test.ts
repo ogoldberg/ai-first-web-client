@@ -417,6 +417,7 @@ describe('Browse Routes', () => {
       expect(body.success).toBe(true);
       expect(body.data.domain).toBe('example.com');
       expect(body.data.knownPatterns).toBe(2);
+      expect(body.data.tenantId).toBe('tenant_1'); // Response includes tenant context
       expect(mockClient.getDomainIntelligence).toHaveBeenCalledWith('example.com');
     });
   });

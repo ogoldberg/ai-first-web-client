@@ -314,7 +314,82 @@ describe('Authentication', () => {
 
     expect(res.status).toBe(401);
     const body = await res.json();
-    expect(body.error.message).toBe('Invalid API key');
+    // Uses uniform error message to prevent enumeration attacks
+    expect(body.error.message).toBe('Invalid or inactive API key');
+  });
+
+  it('uses uniform error message for revoked keys (enumeration prevention)', async () => {
+    // Create a revoked key
+    const revokedKey = 'ub_test_revokedkey123456789012345';
+    const revokedKeyRecord: ApiKey & { tenant: Tenant } = {
+      id: 'key_revoked_test',
+      keyHash: hashApiKey(revokedKey),
+      keyPrefix: 'ub_test_',
+      name: 'Revoked Test Key',
+      permissions: ['browse'],
+      tenantId: testTenant.id,
+      revokedAt: new Date(), // Revoked
+      expiresAt: null,
+      lastUsedAt: null,
+      usageCount: 0,
+      createdAt: new Date(),
+      tenant: testTenant,
+    };
+    testKeys.set(revokedKeyRecord.keyHash, revokedKeyRecord);
+
+    const res = await app.request('/v1/browse', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${revokedKey}`,
+      },
+      body: JSON.stringify({ url: 'https://example.com' }),
+    });
+
+    expect(res.status).toBe(401);
+    const body = await res.json();
+    // Same error message as non-existent key (prevents enumeration)
+    expect(body.error.message).toBe('Invalid or inactive API key');
+
+    // Cleanup
+    testKeys.delete(revokedKeyRecord.keyHash);
+  });
+
+  it('uses uniform error message for expired keys (enumeration prevention)', async () => {
+    // Create an expired key
+    const expiredKey = 'ub_test_expiredkey123456789012345';
+    const expiredKeyRecord: ApiKey & { tenant: Tenant } = {
+      id: 'key_expired_test',
+      keyHash: hashApiKey(expiredKey),
+      keyPrefix: 'ub_test_',
+      name: 'Expired Test Key',
+      permissions: ['browse'],
+      tenantId: testTenant.id,
+      revokedAt: null,
+      expiresAt: new Date(Date.now() - 1000), // Expired 1 second ago
+      lastUsedAt: null,
+      usageCount: 0,
+      createdAt: new Date(),
+      tenant: testTenant,
+    };
+    testKeys.set(expiredKeyRecord.keyHash, expiredKeyRecord);
+
+    const res = await app.request('/v1/browse', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${expiredKey}`,
+      },
+      body: JSON.stringify({ url: 'https://example.com' }),
+    });
+
+    expect(res.status).toBe(401);
+    const body = await res.json();
+    // Same error message as non-existent key (prevents enumeration)
+    expect(body.error.message).toBe('Invalid or inactive API key');
+
+    // Cleanup
+    testKeys.delete(expiredKeyRecord.keyHash);
   });
 });
 
@@ -366,5 +441,174 @@ describe('Rate Limit Headers', () => {
     expect(res.headers.get('x-ratelimit-limit')).toBeTruthy();
     expect(res.headers.get('x-ratelimit-remaining')).toBeTruthy();
     expect(res.headers.get('x-ratelimit-reset')).toBeTruthy();
+  });
+});
+
+describe('Domain Parameter Validation (SSRF Prevention)', () => {
+  it('rejects localhost domain', async () => {
+    const res = await app.request('/v1/domains/localhost/intelligence', {
+      headers: {
+        Authorization: `Bearer ${testApiKey}`,
+      },
+    });
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error.code).toBe('INVALID_DOMAIN');
+  });
+
+  it('rejects IP address domains', async () => {
+    const res = await app.request('/v1/domains/127.0.0.1/intelligence', {
+      headers: {
+        Authorization: `Bearer ${testApiKey}`,
+      },
+    });
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error.code).toBe('INVALID_DOMAIN');
+  });
+
+  it('rejects private IP ranges (10.x.x.x)', async () => {
+    const res = await app.request('/v1/domains/10.0.0.1/intelligence', {
+      headers: {
+        Authorization: `Bearer ${testApiKey}`,
+      },
+    });
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error.code).toBe('INVALID_DOMAIN');
+  });
+
+  it('rejects private IP ranges (192.168.x.x)', async () => {
+    const res = await app.request('/v1/domains/192.168.1.1/intelligence', {
+      headers: {
+        Authorization: `Bearer ${testApiKey}`,
+      },
+    });
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error.code).toBe('INVALID_DOMAIN');
+  });
+
+  it('rejects .local domains', async () => {
+    const res = await app.request('/v1/domains/myserver.local/intelligence', {
+      headers: {
+        Authorization: `Bearer ${testApiKey}`,
+      },
+    });
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error.code).toBe('INVALID_DOMAIN');
+  });
+
+  it('rejects .internal domains', async () => {
+    const res = await app.request('/v1/domains/internal.internal/intelligence', {
+      headers: {
+        Authorization: `Bearer ${testApiKey}`,
+      },
+    });
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error.code).toBe('INVALID_DOMAIN');
+  });
+
+  it('rejects domain with port number', async () => {
+    const res = await app.request('/v1/domains/example.com:8080/intelligence', {
+      headers: {
+        Authorization: `Bearer ${testApiKey}`,
+      },
+    });
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error.code).toBe('INVALID_DOMAIN');
+  });
+
+  it('rejects domain with path', async () => {
+    // URL encoding of / is %2F
+    const res = await app.request('/v1/domains/example.com%2Fpath/intelligence', {
+      headers: {
+        Authorization: `Bearer ${testApiKey}`,
+      },
+    });
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error.code).toBe('INVALID_DOMAIN');
+  });
+
+  it('rejects overly long domains', async () => {
+    const longDomain = 'a'.repeat(300) + '.com';
+    const res = await app.request(`/v1/domains/${longDomain}/intelligence`, {
+      headers: {
+        Authorization: `Bearer ${testApiKey}`,
+      },
+    });
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error.code).toBe('INVALID_DOMAIN');
+  });
+
+  it('accepts valid public domain', async () => {
+    const res = await app.request('/v1/domains/example.com/intelligence', {
+      headers: {
+        Authorization: `Bearer ${testApiKey}`,
+      },
+    });
+
+    // Should not be a 400 error (might be 500 if browser client not configured, but not 400)
+    expect(res.status).not.toBe(400);
+  });
+
+  it('accepts valid subdomain', async () => {
+    const res = await app.request('/v1/domains/api.example.com/intelligence', {
+      headers: {
+        Authorization: `Bearer ${testApiKey}`,
+      },
+    });
+
+    // Should not be a 400 error
+    expect(res.status).not.toBe(400);
+  });
+});
+
+describe('API Key Generation Security', () => {
+  it('generates keys with sufficient entropy', async () => {
+    const { generateApiKey } = await import('../src/middleware/auth.js');
+
+    // Generate multiple keys and verify uniqueness
+    const keys = new Set<string>();
+    for (let i = 0; i < 100; i++) {
+      const { key } = generateApiKey('test');
+      expect(keys.has(key)).toBe(false);
+      keys.add(key);
+    }
+
+    expect(keys.size).toBe(100);
+  });
+
+  it('generates keys with correct format', async () => {
+    const { generateApiKey } = await import('../src/middleware/auth.js');
+
+    const { key, keyHash, keyPrefix } = generateApiKey('live');
+
+    expect(key).toMatch(/^ub_live_[a-f0-9]{32}$/);
+    expect(keyPrefix).toBe('ub_live_');
+    expect(keyHash).toHaveLength(64); // SHA-256 hex
+  });
+
+  it('key hash is deterministic', async () => {
+    const { generateApiKey, hashApiKey } = await import('../src/middleware/auth.js');
+
+    const { key, keyHash } = generateApiKey('test');
+    const recomputedHash = hashApiKey(key);
+
+    expect(keyHash).toBe(recomputedHash);
   });
 });
