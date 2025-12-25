@@ -20,6 +20,12 @@ import { generateDashboard, getQuickStatus } from '../../utils/analytics-dashboa
 import { getContentChangeTracker } from '../../utils/content-change-tracker.js';
 import { getToolSelectionMetrics } from '../../utils/tool-selection-metrics.js';
 import { missingArgumentsError, unknownActionError } from '../../utils/error-messages.js';
+import {
+  getSkillPromptAnalytics,
+  getSkillPromptStats,
+  getRecentExecutions,
+  clearSkillPromptAnalytics,
+} from '../../utils/skill-prompt-analytics.js';
 
 // ============================================
 // TIER MANAGEMENT
@@ -689,5 +695,87 @@ export async function handleToolSelectionMetrics(
     }
     default:
       throw new Error(unknownActionError(action, 'tool_selection_metrics', ['stats', 'confusion']));
+  }
+}
+
+// ============================================
+// SKILL PROMPT ANALYTICS (SK-011)
+// ============================================
+
+export type SkillPromptAnalyticsAction = 'summary' | 'stats' | 'recent' | 'clear';
+
+/**
+ * Handle skill prompt analytics requests
+ *
+ * Actions:
+ * - summary: Get overview of all skill prompt usage
+ * - stats: Get detailed stats for a specific skill prompt
+ * - recent: Get recent execution records
+ * - clear: Clear all analytics data (for testing)
+ */
+export async function handleSkillPromptAnalytics(
+  action: SkillPromptAnalyticsAction,
+  args: {
+    skillPromptId?: string;
+    domain?: string;
+    since?: number;
+    until?: number;
+    limit?: number;
+  }
+): Promise<McpResponse> {
+  switch (action) {
+    case 'summary': {
+      const analytics = getSkillPromptAnalytics({
+        skillPromptId: args.skillPromptId,
+        domain: args.domain,
+        since: args.since,
+        until: args.until,
+        limit: args.limit,
+      });
+      return jsonResponse(analytics);
+    }
+
+    case 'stats': {
+      if (!args.skillPromptId) {
+        return errorResponse(missingArgumentsError('skill_prompt_analytics:stats', ['skillPromptId']));
+      }
+      const stats = getSkillPromptStats(args.skillPromptId);
+      if (!stats) {
+        return jsonResponse({
+          skillPromptId: args.skillPromptId,
+          message: 'No executions found for this skill prompt',
+          totalExecutions: 0,
+        });
+      }
+      return jsonResponse(stats);
+    }
+
+    case 'recent': {
+      const executions = getRecentExecutions(args.limit ?? 100);
+      return jsonResponse({
+        count: executions.length,
+        executions: executions.map(e => ({
+          skillPromptId: e.skillPromptId,
+          workflowStep: e.workflowStep,
+          success: e.success,
+          domain: e.domain,
+          durationMs: e.durationMs,
+          errorMessage: e.errorMessage,
+          startedAt: new Date(e.startedAt).toISOString(),
+          completedAt: e.completedAt ? new Date(e.completedAt).toISOString() : undefined,
+        })),
+      });
+    }
+
+    case 'clear': {
+      clearSkillPromptAnalytics();
+      return jsonResponse({
+        success: true,
+        message: 'Skill prompt analytics data cleared',
+      });
+    }
+
+    default:
+      throw new Error(unknownActionError(action, 'skill_prompt_analytics', ['summary', 'stats', 'recent', 'clear']));
   }
 }
