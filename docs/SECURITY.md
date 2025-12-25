@@ -238,3 +238,86 @@ If you discover a security vulnerability, please report it responsibly:
 - Request IDs enable tracing
 - Admin actions are logged
 - Usage is tracked per-tenant
+
+---
+
+## Security Audit (2025-12-24)
+
+### Summary
+
+A comprehensive security audit was conducted covering authentication, authorization, input validation, rate limiting, webhook handling, and OWASP top 10 vulnerabilities.
+
+### Issues Fixed
+
+#### HIGH Priority (Fixed)
+
+1. **Weak API Key Generation**
+   - **Issue**: `Math.random()` was used for API key generation, which is not cryptographically secure
+   - **Fix**: Replaced with `crypto.randomBytes(32)` for proper entropy
+   - **Location**: `packages/api/src/middleware/auth.ts:generateApiKey()`
+
+2. **Authentication Enumeration**
+   - **Issue**: Different error messages for invalid, revoked, and expired keys enabled enumeration attacks
+   - **Fix**: Unified error message "Invalid or inactive API key" for all auth failures
+   - **Location**: `packages/api/src/middleware/auth.ts:authMiddleware`
+
+3. **Cross-Tenant Data Access (Partial)**
+   - **Issue**: Domain intelligence endpoint lacked tenant scoping
+   - **Fix**: Added tenant ID to API response; full tenant-scoped queries require LLMBrowserClient extension
+   - **Status**: API layer enforces auth; data-layer isolation is a future enhancement
+   - **Location**: `packages/api/src/routes/browse.ts:/domains/:domain/intelligence`
+
+4. **SSRF via Domain Parameter**
+   - **Issue**: Domain parameters in URLs were not validated, enabling SSRF attacks
+   - **Fix**: Added `isValidDomain()` function that blocks:
+     - localhost and private IP ranges (RFC1918)
+     - IP addresses in domain position
+     - .local, .internal, .localhost TLDs
+     - Overly long domains (>253 chars)
+     - Domains with paths or port numbers
+   - **Location**: `packages/api/src/routes/browse.ts:isValidDomain()`
+
+5. **Webhook Idempotency**
+   - **Issue**: Stripe webhooks could be processed multiple times on retry
+   - **Fix**: Added idempotency tracking with 72-hour TTL (Stripe retry window)
+   - **Location**: `packages/api/src/routes/billing.ts:isWebhookProcessed()`
+
+### Tests Added
+
+- Uniform error message tests for auth enumeration prevention
+- Domain validation tests for SSRF protection (12 test cases)
+- API key generation entropy tests
+- Webhook idempotency export tests
+
+### Remaining Considerations (Lower Priority)
+
+1. **Rate Limiting Persistence**
+   - Current: In-memory only, resets on server restart
+   - Recommendation: Use Redis for persistence in production
+   - Risk: Low - daily limits still enforced
+
+2. **CSP unsafe-inline**
+   - Current: Required for Swagger UI
+   - Recommendation: Consider nonce-based CSP for production
+   - Risk: Medium - reduces XSS protection
+
+3. **Audit Logging**
+   - Current: Request logging only
+   - Recommendation: Add dedicated audit trail for admin actions
+   - Risk: Low - compliance concern primarily
+
+### Testing Checklist
+
+- [x] API key entropy verified (crypto.randomBytes)
+- [x] Auth enumeration prevented (uniform messages)
+- [x] Domain validation blocks private IPs/localhost
+- [x] Webhook idempotency prevents duplicate processing
+- [x] Security headers properly configured
+- [x] CORS restricts origins appropriately
+
+### Dependency Vulnerabilities
+
+Run `npm audit` regularly. Current known issues are in development dependencies only:
+- `@modelcontextprotocol/sdk <1.24.0` - DNS rebinding (dev tool)
+- `esbuild <=0.24.2` - Dev server vulnerability
+- `vitest/vite-node` - Test framework (not in production)

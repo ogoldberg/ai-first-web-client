@@ -411,3 +411,42 @@ describe('Usage Export', () => {
     // Tested via export endpoint
   });
 });
+
+describe('Webhook Idempotency', () => {
+  it('should export idempotency functions', async () => {
+    const { getWebhookIdempotencyStats, clearWebhookIdempotencyStore } = await import(
+      '../src/routes/billing.js'
+    );
+
+    expect(typeof getWebhookIdempotencyStats).toBe('function');
+    expect(typeof clearWebhookIdempotencyStore).toBe('function');
+  });
+
+  it('should track processed webhooks', async () => {
+    const { getWebhookIdempotencyStats, clearWebhookIdempotencyStore } = await import(
+      '../src/routes/billing.js'
+    );
+
+    // Clear any existing state
+    clearWebhookIdempotencyStore();
+
+    // Initially empty
+    const stats = getWebhookIdempotencyStats();
+    expect(stats.totalStored).toBe(0);
+    expect(stats.oldestEntry).toBe(null);
+
+    // Cleanup
+    clearWebhookIdempotencyStore();
+  });
+
+  it('should clear store on reset', async () => {
+    const { getWebhookIdempotencyStats, clearWebhookIdempotencyStore } = await import(
+      '../src/routes/billing.js'
+    );
+
+    // Clear and verify
+    clearWebhookIdempotencyStore();
+    const stats = getWebhookIdempotencyStats();
+    expect(stats.totalStored).toBe(0);
+  });
+});

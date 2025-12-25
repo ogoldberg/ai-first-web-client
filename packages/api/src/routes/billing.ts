@@ -26,6 +26,103 @@ import { authMiddleware, requirePermission } from '../middleware/auth.js';
 
 const billing = new Hono();
 
+/**
+ * SECURITY: Webhook Idempotency Tracker
+ *
+ * Prevents duplicate webhook processing which could cause:
+ * - Double charging
+ * - Duplicate record creation
+ * - Inconsistent state
+ *
+ * Stripe may retry webhooks up to 3 days, so we track event IDs.
+ * In production, this should be Redis-backed for persistence across restarts.
+ */
+interface ProcessedWebhook {
+  eventId: string;
+  processedAt: Date;
+  eventType: string;
+}
+
+const processedWebhooks = new Map<string, ProcessedWebhook>();
+const WEBHOOK_IDEMPOTENCY_TTL_MS = 72 * 60 * 60 * 1000; // 72 hours (Stripe retries for up to 3 days)
+const MAX_STORED_WEBHOOKS = 10000; // Limit memory usage
+
+/**
+ * Check if a webhook event has already been processed
+ */
+function isWebhookProcessed(eventId: string): boolean {
+  const record = processedWebhooks.get(eventId);
+  if (!record) return false;
+
+  // Check if record is still within TTL
+  const age = Date.now() - record.processedAt.getTime();
+  if (age > WEBHOOK_IDEMPOTENCY_TTL_MS) {
+    processedWebhooks.delete(eventId);
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * Mark a webhook event as processed
+ */
+function markWebhookProcessed(eventId: string, eventType: string): void {
+  // Cleanup old entries if we're at capacity
+  if (processedWebhooks.size >= MAX_STORED_WEBHOOKS) {
+    const now = Date.now();
+    for (const [id, record] of processedWebhooks) {
+      if (now - record.processedAt.getTime() > WEBHOOK_IDEMPOTENCY_TTL_MS) {
+        processedWebhooks.delete(id);
+      }
+    }
+
+    // If still at capacity after cleanup, remove oldest entries
+    if (processedWebhooks.size >= MAX_STORED_WEBHOOKS) {
+      const entries = Array.from(processedWebhooks.entries());
+      entries.sort((a, b) => a[1].processedAt.getTime() - b[1].processedAt.getTime());
+      const toRemove = entries.slice(0, entries.length - MAX_STORED_WEBHOOKS + 1000);
+      for (const [id] of toRemove) {
+        processedWebhooks.delete(id);
+      }
+    }
+  }
+
+  processedWebhooks.set(eventId, {
+    eventId,
+    processedAt: new Date(),
+    eventType,
+  });
+}
+
+/**
+ * Get webhook idempotency stats (for monitoring)
+ */
+export function getWebhookIdempotencyStats(): {
+  totalStored: number;
+  oldestEntry: Date | null;
+} {
+  let oldestEntry: Date | null = null;
+
+  for (const record of processedWebhooks.values()) {
+    if (!oldestEntry || record.processedAt < oldestEntry) {
+      oldestEntry = record.processedAt;
+    }
+  }
+
+  return {
+    totalStored: processedWebhooks.size,
+    oldestEntry,
+  };
+}
+
+/**
+ * Clear webhook idempotency store (for testing)
+ */
+export function clearWebhookIdempotencyStore(): void {
+  processedWebhooks.clear();
+}
+
 // Error handler for billing routes (for standalone testing)
 billing.onError((err, c) => {
   if (err instanceof HTTPException) {
@@ -57,6 +154,8 @@ billing.onError((err, c) => {
  * POST /billing/webhook
  * Stripe webhook endpoint
  * No authentication - uses Stripe signature verification
+ *
+ * SECURITY: Implements idempotency to prevent duplicate processing
  */
 billing.post('/webhook', async (c) => {
   if (!isStripeConfigured()) {
@@ -76,7 +175,25 @@ billing.post('/webhook', async (c) => {
     throw new HTTPException(400, { message: 'Invalid webhook signature' });
   }
 
+  // SECURITY: Check if this event has already been processed (idempotency)
+  if (isWebhookProcessed(event.id)) {
+    // Return 200 to prevent Stripe retries, but indicate it was a duplicate
+    return c.json({
+      received: true,
+      handled: false,
+      duplicate: true,
+      event: event.type,
+      message: 'Event already processed',
+    });
+  }
+
   const result = await handleWebhookEvent(event);
+
+  // Mark as processed AFTER successful handling to ensure we don't
+  // mark failed events as processed (they should be retried)
+  if (result.handled && !result.error) {
+    markWebhookProcessed(event.id, event.type);
+  }
 
   return c.json({
     received: true,

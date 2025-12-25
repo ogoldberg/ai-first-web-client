@@ -8,7 +8,7 @@
 
 import { createMiddleware } from 'hono/factory';
 import { HTTPException } from 'hono/http-exception';
-import { createHash } from 'crypto';
+import { createHash, randomBytes, timingSafeEqual } from 'crypto';
 import type { Tenant, ApiKey } from './types.js';
 
 // Context type augmentation
@@ -66,18 +66,19 @@ export function hashApiKey(key: string): string {
 }
 
 /**
- * Generate a new API key
+ * Generate a new API key with cryptographically secure randomness
  * Format: ub_{env}_{random}
+ *
+ * SECURITY: Uses crypto.randomBytes() instead of Math.random()
+ * to ensure cryptographically secure key generation.
  */
 export function generateApiKey(env: 'live' | 'test' = 'live'): {
   key: string;
   keyHash: string;
   keyPrefix: string;
 } {
-  const randomPart = createHash('sha256')
-    .update(Math.random().toString() + Date.now().toString())
-    .digest('hex')
-    .substring(0, 32);
+  // Use cryptographically secure random bytes (32 bytes = 64 hex chars, we use first 32)
+  const randomPart = randomBytes(32).toString('hex').substring(0, 32);
 
   const key = `ub_${env}_${randomPart}`;
   const keyHash = hashApiKey(key);
@@ -133,23 +134,30 @@ export const authMiddleware = createMiddleware(async (c, next) => {
   // Look up the API key
   const record = await apiKeyStore.findByHash(keyHash);
 
+  // SECURITY: Use uniform error message for all auth failures to prevent
+  // user enumeration attacks. Attackers cannot distinguish between:
+  // - Invalid API key
+  // - Revoked API key
+  // - Expired API key
+  const authFailedMessage = 'Invalid or inactive API key';
+
   if (!record) {
     throw new HTTPException(401, {
-      message: 'Invalid API key',
+      message: authFailedMessage,
     });
   }
 
   // Check if key is revoked
   if (record.revokedAt) {
     throw new HTTPException(401, {
-      message: 'API key has been revoked',
+      message: authFailedMessage,
     });
   }
 
   // Check if key is expired
   if (record.expiresAt && record.expiresAt < new Date()) {
     throw new HTTPException(401, {
-      message: 'API key has expired',
+      message: authFailedMessage,
     });
   }
 

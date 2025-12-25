@@ -204,7 +204,8 @@ describe('Auth Middleware', () => {
 
     expect(res.status).toBe(401);
     const body = await res.json();
-    expect(body.error.message).toBe('Invalid API key');
+    // SECURITY: Uses uniform error message to prevent enumeration attacks
+    expect(body.error.message).toBe('Invalid or inactive API key');
   });
 
   it('should reject revoked API keys', async () => {
@@ -224,7 +225,8 @@ describe('Auth Middleware', () => {
 
     expect(res.status).toBe(401);
     const body = await res.json();
-    expect(body.error.message).toBe('API key has been revoked');
+    // SECURITY: Uses uniform error message to prevent enumeration attacks
+    expect(body.error.message).toBe('Invalid or inactive API key');
   });
 
   it('should reject expired API keys', async () => {
@@ -246,7 +248,8 @@ describe('Auth Middleware', () => {
 
     expect(res.status).toBe(401);
     const body = await res.json();
-    expect(body.error.message).toBe('API key has expired');
+    // SECURITY: Uses uniform error message to prevent enumeration attacks
+    expect(body.error.message).toBe('Invalid or inactive API key');
   });
 
   it('should accept valid API keys', async () => {
