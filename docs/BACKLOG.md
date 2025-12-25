@@ -600,7 +600,7 @@ Browser: { success: true, ... }  // Learns this for future
 | D-006 | Dependency injection refactor | L | Debt | Better testability |
 | D-007 | Improve URL pattern matching | M | Debt | Regex/wildcards |
 | D-008 | Session encryption improvement | M | Debt | Use OS keychain (superseded by S-003) |
-| D-009 | Type-safe configuration | S | Debt | Validate config at runtime |
+| D-009 | Type-safe configuration | S | Debt | Validate config at runtime (DONE - PR #157) |
 | D-010 | Split large god files | M | Debt | `src/index.ts` and `content-intelligence.ts` are too large; refactor into smaller modules |
 | D-011 | Clean up untracked src files | S | N/A | Files are already tracked in git (skill-generalizer.ts in src/core/, embedding-provider.ts in src/utils/) |
 
