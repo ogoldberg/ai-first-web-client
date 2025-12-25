@@ -467,7 +467,7 @@ See [COMPETITIVE_ANALYSIS.md](COMPETITIVE_ANALYSIS.md) for context on why these 
 | D-001 | Update PROJECT_STATUS.md | S | Documentation | Complete | Updated with 2025-12-25 audit results |
 | D-002 | API documentation for MCP tools | M | Documentation | Complete | Clear parameter docs - see docs/MCP_TOOLS_API.md |
 | D-003 | Architecture diagrams | M | Documentation | Complete | Visual system overview - see docs/ARCHITECTURE.md |
-| D-004 | Usage examples and tutorials | L | Documentation | In Progress | Getting started guide |
+| D-004 | Usage examples and tutorials | L | Documentation | Complete | Getting started guide - see docs/GETTING_STARTED.md |
 | **DOC-001** | **Documentation audit** | **L** | **Documentation** | **Complete** | Comprehensive audit completed 2025-12-25. Report: `docs/DOCUMENTATION_AUDIT_2025-12-25.md`. Fixed critical issues (import paths, package names, architecture overview). 22 issues identified and tracked. |
 | DOC-002 | Fix package name references | M | Documentation | Complete | Global find-replace `@llm-browser/*` → `@unbrowser/*` in 11 doc files |
 | DOC-003 | Mark outdated examples | S | Documentation | Complete | Added warning to `packages/core/examples/README.md` about wrong imports |
