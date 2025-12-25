@@ -62,11 +62,25 @@ import {
   extractAngularData,
   extractVitePressData,
   extractVuePressData,
-  extractTextFromObject as extractTextFromObjectUtil,
-  extractTitleFromObject as extractTitleFromObjectUtil,
-  htmlToPlainText as htmlToPlainTextUtil,
-  unescapeJavaScriptString as unescapeJavaScriptStringUtil,
 } from './framework-extractors/index.js';
+import {
+  extractApisFromJavaScript,
+  predictAPIEndpoints,
+  looksLikeApiUrl,
+  resolveApiUrl,
+} from './js-api-extractor.js';
+import {
+  getValueAtPath,
+  hasFieldAtPath,
+  getStringAtPath,
+  isHtmlContent,
+  htmlToPlainText as htmlToPlainTextUtil,
+  extractTextFromStructured,
+  extractTextFromObject as extractTextFromObjectUtil,
+  extractContentFromMapping as extractContentFromMappingUtil,
+  PATTERN_CONFIDENCE,
+  getConfidenceLevel,
+} from './content-extraction-utils.js';
 
 // Create a require function for ESM compatibility
 const require = createRequire(import.meta.url);
@@ -670,10 +684,10 @@ export class ContentIntelligence {
   // STRATEGY: Learned API Patterns
   // ============================================
 
-  // Confidence thresholds for pattern application
-  private static readonly MIN_PATTERN_CONFIDENCE = 0.3;
-  private static readonly HIGH_CONFIDENCE_THRESHOLD = 0.8;
-  private static readonly MEDIUM_CONFIDENCE_THRESHOLD = 0.5;
+  // Confidence thresholds for pattern application (use imported constants)
+  private static readonly MIN_PATTERN_CONFIDENCE = PATTERN_CONFIDENCE.MIN;
+  private static readonly HIGH_CONFIDENCE_THRESHOLD = PATTERN_CONFIDENCE.HIGH;
+  private static readonly MEDIUM_CONFIDENCE_THRESHOLD = PATTERN_CONFIDENCE.MEDIUM;
 
   /**
    * Try learned API patterns from previous successful extractions
@@ -1155,124 +1169,54 @@ export class ContentIntelligence {
 
   /**
    * Check if an object has a field at the given path (supports dot notation and array access)
+   * Delegates to imported utility function
    */
   private hasFieldAtPath(obj: unknown, path: string): boolean {
-    const value = this.getValueAtPath(obj, path);
-    return value !== undefined && value !== null;
+    return hasFieldAtPath(obj, path);
   }
 
   /**
    * Get a value from an object using dot notation path
-   * Supports array access like "items[0].title"
+   * Delegates to imported utility function
    */
   private getValueAtPath(obj: unknown, path: string): unknown {
-    if (!path || typeof obj !== 'object' || obj === null) {
-      return undefined;
-    }
-
-    // Handle array notation like "items[0]"
-    const parts = path.split(/\.|\[|\]/).filter(Boolean);
-    let current: unknown = obj;
-
-    for (const part of parts) {
-      if (typeof current !== 'object' || current === null) {
-        return undefined;
-      }
-
-      // Handle numeric indices for arrays
-      if (/^\d+$/.test(part) && Array.isArray(current)) {
-        current = current[parseInt(part, 10)];
-      } else {
-        current = (current as Record<string, unknown>)[part];
-      }
-    }
-
-    return current;
+    return getValueAtPath(obj, path);
   }
 
   /**
    * Extract content from API response using contentMapping
    * Handles HTML content by converting to plain text and markdown
+   * Delegates to imported utility function with turndown callback
    */
   private extractContentFromMapping(
     data: unknown,
     mapping: ContentMapping
   ): { title: string; text: string; markdown: string } {
-    const rawTitle = this.getStringAtPath(data, mapping.title) || 'Untitled';
-    const rawDescription = mapping.description ? this.getStringAtPath(data, mapping.description) : null;
-    const rawBody = mapping.body ? this.getStringAtPath(data, mapping.body) : null;
-
-    // Prefer body content, fall back to description
-    const mainContent = rawBody || rawDescription || this.extractTextFromStructured(data);
-
-    // Strip HTML for title (titles should be plain text)
-    const title = this.isHtmlContent(rawTitle) ? this.htmlToPlainText(rawTitle) : rawTitle;
-
-    // Convert HTML content to plain text and markdown
-    if (mainContent && this.isHtmlContent(mainContent)) {
-      const text = this.htmlToPlainText(mainContent);
-      const markdown = this.turndown.turndown(mainContent);
-      return { title, text, markdown };
-    }
-
-    // Content is already plain text
-    const text = mainContent || '';
-    const markdown = mainContent || '';
-    return { title, text, markdown };
+    return extractContentFromMappingUtil(data, mapping, (html) => this.turndown.turndown(html));
   }
 
   /**
    * Check if a string contains HTML content
+   * Delegates to imported utility function
    */
   private isHtmlContent(str: string): boolean {
-    // Simple check for HTML tags
-    return /<[a-z][\s\S]*>/i.test(str);
+    return isHtmlContent(str);
   }
 
   /**
    * Get a string value from an object at the given path
+   * Delegates to imported utility function
    */
   private getStringAtPath(obj: unknown, path: string): string | null {
-    const value = this.getValueAtPath(obj, path);
-
-    if (typeof value === 'string') {
-      return value;
-    }
-
-    if (typeof value === 'number' || typeof value === 'boolean') {
-      return String(value);
-    }
-
-    return null;
+    return getStringAtPath(obj, path);
   }
 
   /**
    * Extract text content from structured data
+   * Delegates to imported utility function
    */
   private extractTextFromStructured(data: unknown): string {
-    if (typeof data === 'string') {
-      return data;
-    }
-
-    if (typeof data !== 'object' || data === null) {
-      return '';
-    }
-
-    // Look for common content fields
-    const obj = data as Record<string, unknown>;
-    const contentFields = [
-      'text', 'content', 'body', 'description', 'summary', 'selftext',
-      'extract', 'body_markdown', 'readme', 'info.description',
-    ];
-
-    for (const field of contentFields) {
-      const value = this.getValueAtPath(obj, field);
-      if (typeof value === 'string' && value.length > 20) {
-        return value;
-      }
-    }
-
-    return '';
+    return extractTextFromStructured(data);
   }
 
   /**
@@ -1573,257 +1517,42 @@ export class ContentIntelligence {
 
   /**
    * Simple HTML to plain text converter
+   * Delegates to imported content-extraction-utils module
    */
   private htmlToPlainText(html: string): string {
-    // Remove script and style tags
-    let text = html.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '');
-    text = text.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
-
-    // Replace common block elements with newlines
-    text = text.replace(/<\/(p|div|h[1-6]|li|tr|br)>/gi, '\n');
-    text = text.replace(/<(br|hr)\s*\/?>/gi, '\n');
-
-    // Remove all remaining HTML tags
-    text = text.replace(/<[^>]+>/g, '');
-
-    // Decode HTML entities
-    text = text.replace(/&nbsp;/gi, ' ');
-    text = text.replace(/&amp;/gi, '&');
-    text = text.replace(/&lt;/gi, '<');
-    text = text.replace(/&gt;/gi, '>');
-    text = text.replace(/&quot;/gi, '"');
-    text = text.replace(/&#39;/gi, "'");
-
-    // Normalize whitespace
-    text = text.replace(/\n\s*\n\s*\n/g, '\n\n');
-    text = text.trim();
-
-    return text;
+    return htmlToPlainTextUtil(html);
   }
 
   /**
    * Extract API URLs by analyzing JavaScript code in the page
-   *
-   * This performs static analysis of <script> tags to find:
-   * - fetch() calls
-   * - axios requests
-   * - XMLHttpRequest usage
-   * - API base URLs in config objects
-   * - GraphQL endpoints
+   * Delegates to imported js-api-extractor module
    */
   private extractApisFromJavaScript(html: string, pageUrl: URL): string[] {
-    const apis: string[] = [];
-    const origin = pageUrl.origin;
-
-    // Extract all inline scripts and external script src URLs
-    const scriptContents: string[] = [];
-
-    // Get inline script contents
-    const inlineScriptRegex = /<script[^>]*>([^<]*(?:(?!<\/script>)<[^<]*)*)<\/script>/gi;
-    let match;
-    while ((match = inlineScriptRegex.exec(html)) !== null) {
-      if (match[1] && match[1].trim().length > 10) {
-        scriptContents.push(match[1]);
-      }
-    }
-
-    // Also look for API URLs in data attributes and JSON embedded in HTML
-    const dataJsonRegex = /data-(?:api|endpoint|url|config)[^=]*="([^"]+)"/gi;
-    while ((match = dataJsonRegex.exec(html)) !== null) {
-      const value = match[1];
-      if (this.looksLikeApiUrl(value)) {
-        apis.push(this.resolveApiUrl(value, origin));
-      }
-    }
-
-    // Process all script contents
-    for (const script of scriptContents) {
-      // Pattern 1: fetch() calls
-      // Matches: fetch('/api/...'), fetch("https://..."), fetch(`${baseUrl}/api`)
-      const fetchRegex = /fetch\s*\(\s*['"`]([^'"`\s]+)['"`]/g;
-      while ((match = fetchRegex.exec(script)) !== null) {
-        if (this.looksLikeApiUrl(match[1])) {
-          apis.push(this.resolveApiUrl(match[1], origin));
-        }
-      }
-
-      // Pattern 2: axios calls
-      // Matches: axios.get('/api'), axios.post('/api'), axios('/api'), axios({ url: '/api' })
-      const axiosRegex = /axios(?:\.(?:get|post|put|delete|patch))?\s*\(\s*['"`]([^'"`\s]+)['"`]/g;
-      while ((match = axiosRegex.exec(script)) !== null) {
-        if (this.looksLikeApiUrl(match[1])) {
-          apis.push(this.resolveApiUrl(match[1], origin));
-        }
-      }
-
-      // Pattern 3: URL/endpoint configurations
-      // Matches: apiUrl: '/api', endpoint: 'https://...', baseURL: '...'
-      const configRegex = /(?:api[Uu]rl|endpoint|baseURL|apiEndpoint|apiBase|dataUrl|fetchUrl|requestUrl)\s*[=:]\s*['"`]([^'"`\s]+)['"`]/g;
-      while ((match = configRegex.exec(script)) !== null) {
-        if (this.looksLikeApiUrl(match[1])) {
-          apis.push(this.resolveApiUrl(match[1], origin));
-        }
-      }
-
-      // Pattern 4: XMLHttpRequest
-      // Matches: .open('GET', '/api/...')
-      const xhrRegex = /\.open\s*\(\s*['"`](?:GET|POST|PUT|DELETE)['"`]\s*,\s*['"`]([^'"`\s]+)['"`]/gi;
-      while ((match = xhrRegex.exec(script)) !== null) {
-        if (this.looksLikeApiUrl(match[1])) {
-          apis.push(this.resolveApiUrl(match[1], origin));
-        }
-      }
-
-      // Pattern 5: GraphQL endpoints
-      // Matches: '/graphql', '/api/graphql', 'https://.../graphql'
-      const graphqlRegex = /['"`]([^'"`]*\/graphql[^'"`]*)['"`]/gi;
-      while ((match = graphqlRegex.exec(script)) !== null) {
-        apis.push(this.resolveApiUrl(match[1], origin));
-      }
-
-      // Pattern 6: REST-like URL patterns in strings
-      // Matches URLs that look like API endpoints
-      const restRegex = /['"`]((?:https?:\/\/[^'"`\s]+)?\/(?:api|v\d+|rest|data|json|feed)[^'"`\s]*)['"`]/gi;
-      while ((match = restRegex.exec(script)) !== null) {
-        if (this.looksLikeApiUrl(match[1])) {
-          apis.push(this.resolveApiUrl(match[1], origin));
-        }
-      }
-
-      // Pattern 7: Next.js API routes
-      const nextApiRegex = /['"`](\/api\/[^'"`\s]+)['"`]/g;
-      while ((match = nextApiRegex.exec(script)) !== null) {
-        apis.push(this.resolveApiUrl(match[1], origin));
-      }
-
-      // Pattern 8: .json endpoints
-      const jsonEndpointRegex = /['"`]([^'"`\s]+\.json)['"`]/g;
-      while ((match = jsonEndpointRegex.exec(script)) !== null) {
-        // Avoid false positives like 'package.json' or '.json' config files
-        if (!match[1].includes('package.json') &&
-            !match[1].includes('tsconfig') &&
-            !match[1].includes('node_modules') &&
-            this.looksLikeApiUrl(match[1])) {
-          apis.push(this.resolveApiUrl(match[1], origin));
-        }
-      }
-    }
-
-    // Deduplicate and filter
-    const uniqueApis = [...new Set(apis)]
-      .filter(url => {
-        try {
-          const parsed = new URL(url);
-          // Only keep URLs from same origin or absolute URLs
-          return parsed.protocol === 'https:' || parsed.protocol === 'http:';
-        } catch {
-          return false;
-        }
-      })
-      .slice(0, 20); // Limit to 20 endpoints to avoid hammering servers
-
-    if (uniqueApis.length > 0) {
-      logger.intelligence.debug(`Extracted ${uniqueApis.length} API URLs from JavaScript`, {
-        urls: uniqueApis.slice(0, 5), // Log first 5
-      });
-    }
-
-    return uniqueApis;
+    return extractApisFromJavaScript(html, pageUrl);
   }
 
   /**
    * Check if a string looks like an API URL
+   * Delegates to imported js-api-extractor module
    */
   private looksLikeApiUrl(str: string): boolean {
-    if (!str || str.length < 2) return false;
-
-    // Must start with / or http
-    if (!str.startsWith('/') && !str.startsWith('http')) return false;
-
-    // Skip obvious non-API patterns
-    const skipPatterns = [
-      /^\/\//,           // Protocol-relative URLs (usually CDN)
-      /\.(css|js|png|jpg|jpeg|gif|svg|ico|woff|woff2|ttf|eot)$/i,  // Static assets
-      /^\/static\//,     // Static files
-      /^\/assets\//,     // Asset files
-      /^\/images?\//i,   // Image directories
-      /^\/fonts?\//i,    // Font directories
-      /^\/_next\/static/,// Next.js static assets
-      /^\/favicon/,      // Favicons
-      /^javascript:/,    // JavaScript pseudo-protocol
-      /^#/,              // Hash links
-      /^mailto:/,        // Email links
-    ];
-
-    for (const pattern of skipPatterns) {
-      if (pattern.test(str)) return false;
-    }
-
-    // Positive indicators that this is an API
-    const apiIndicators = [
-      /\/api\//i,
-      /\/v\d+\//,        // Versioned APIs like /v1/, /v2/
-      /\/rest\//i,
-      /\/graphql/i,
-      /\/data\//i,
-      /\/json/i,
-      /\.json$/i,
-      /\/feed/i,
-      /\/query/i,
-      /\/search/i,
-      /\/get/i,
-      /\/fetch/i,
-      /\/load/i,
-    ];
-
-    for (const pattern of apiIndicators) {
-      if (pattern.test(str)) return true;
-    }
-
-    // If it looks like a path that could return data, accept it
-    // But be conservative - we'd rather miss some than try too many
-    return str.includes('/api') || str.includes('.json') || str.includes('/data');
+    return looksLikeApiUrl(str);
   }
 
   /**
    * Resolve a potentially relative API URL to absolute
+   * Delegates to imported js-api-extractor module
    */
   private resolveApiUrl(url: string, origin: string): string {
-    if (url.startsWith('http://') || url.startsWith('https://')) {
-      return url;
-    }
-    if (url.startsWith('//')) {
-      return 'https:' + url;
-    }
-    if (url.startsWith('/')) {
-      return origin + url;
-    }
-    return origin + '/' + url;
+    return resolveApiUrl(url, origin);
   }
 
+  /**
+   * Predict common API endpoint patterns based on URL structure
+   * Delegates to imported js-api-extractor module
+   */
   private predictAPIEndpoints(url: URL): string[] {
-    const predictions: string[] = [];
-    const path = url.pathname;
-
-    // Common API patterns
-    predictions.push(`${url.origin}/api${path}`);
-    predictions.push(`${url.origin}/api/v1${path}`);
-    predictions.push(`${url.origin}${path}.json`);
-
-    // Next.js data routes
-    predictions.push(`${url.origin}/_next/data/development${path}.json`);
-
-    // WordPress REST API
-    if (path.match(/\/\d{4}\/\d{2}\/[\w-]+/)) {
-      // Blog post pattern
-      const slug = path.split('/').pop();
-      predictions.push(`${url.origin}/wp-json/wp/v2/posts?slug=${slug}`);
-    }
-
-    // GraphQL (POST, but we can try GET)
-    predictions.push(`${url.origin}/graphql?query={page(path:"${path}"){title,content}}`);
-
-    return predictions;
+    return predictAPIEndpoints(url);
   }
 
   // ============================================
@@ -2071,38 +1800,12 @@ export class ContentIntelligence {
     };
   }
 
+  /**
+   * Extract text recursively from an object, filtering out code/URLs
+   * Delegates to imported content-extraction-utils module
+   */
   private extractTextFromObject(obj: unknown, depth = 0): string {
-    if (depth > 10) return ''; // Prevent infinite recursion
-
-    if (typeof obj === 'string') {
-      // Filter out things that look like code/URLs
-      if (obj.length > 20 && !obj.includes('http') && !obj.includes('{') && !obj.includes('<')) {
-        return obj + ' ';
-      }
-      return '';
-    }
-
-    if (Array.isArray(obj)) {
-      return obj.map(item => this.extractTextFromObject(item, depth + 1)).join('');
-    }
-
-    if (obj && typeof obj === 'object') {
-      let text = '';
-      const textKeys = ['text', 'content', 'body', 'description', 'title', 'name',
-                       'summary', 'excerpt', 'articleBody', 'headline', 'caption'];
-
-      for (const [key, value] of Object.entries(obj)) {
-        // Prioritize text-like keys
-        if (textKeys.includes(key)) {
-          text += this.extractTextFromObject(value, depth + 1);
-        } else if (!['id', 'url', 'href', 'src', 'className', 'style'].includes(key)) {
-          text += this.extractTextFromObject(value, depth + 1);
-        }
-      }
-      return text;
-    }
-
-    return '';
+    return extractTextFromObjectUtil(obj, depth);
   }
 
   private buildResult(

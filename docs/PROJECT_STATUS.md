@@ -245,12 +245,13 @@ These tools are deprecated and hidden by default. Use the consolidated alternati
 
 | Issue | Severity | Notes |
 |-------|----------|-------|
-| Large god files | Low | `src/index.ts` and `content-intelligence.ts` need splitting (D-010) - **IN PROGRESS** |
+| None | - | All known issues resolved |
 
 ### Resolved Issues
 
 | Issue | Resolution |
 |-------|------------|
+| Large god files | D-010: Extracted js-api-extractor.ts and content-extraction-utils.ts from content-intelligence.ts (~300 lines reduction). |
 | Session encryption basic | S-003: AES-256-GCM encryption with PBKDF2 key derivation. Set LLM_BROWSER_SESSION_KEY env var. |
 | Dual knowledge stores | A-001: LearningEngine is now the canonical store. KnowledgeBase deprecated with automatic migration. |
 | Legacy tools not marked deprecated | Added deprecation warnings to browse tool with runtime logging in PR #31 |
