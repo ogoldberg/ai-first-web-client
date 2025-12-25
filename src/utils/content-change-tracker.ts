@@ -18,6 +18,12 @@ import {
   hasContentChanged,
   getChangeSignificance,
 } from './change-detector.js';
+import {
+  generateDiff,
+  type DiffResult,
+  type DiffOptions,
+  type DiffStats,
+} from './diff-generator.js';
 import { PersistentStore, createPersistentStore } from './persistent-store.js';
 import { logger } from './logger.js';
 
@@ -83,6 +89,32 @@ export interface ChangeRecord {
 
   /** Number of sections modified */
   sectionsModified: number;
+
+  /** Diff statistics (added in F-010) */
+  diffStats?: DiffStats;
+}
+
+/**
+ * Result of generating a diff between content versions
+ */
+export interface ContentDiffResult {
+  /** The URL being compared */
+  url: string;
+
+  /** Whether there are any changes */
+  hasChanges: boolean;
+
+  /** Unified diff format string (like git diff) */
+  unifiedDiff: string;
+
+  /** Summary of changes */
+  summary: string;
+
+  /** Detailed statistics */
+  stats: DiffStats;
+
+  /** Full diff result for advanced usage */
+  fullDiff: DiffResult;
 }
 
 /**
@@ -649,6 +681,80 @@ export class ContentChangeTracker {
    */
   async flush(): Promise<void> {
     await this.store.flush();
+  }
+
+  /**
+   * Generate a line-by-line diff between two content versions
+   *
+   * This is the main method for F-010: Diff Generation.
+   * It provides a unified diff format (like git diff) showing exactly what changed.
+   *
+   * @param oldContent - Previous content
+   * @param newContent - Current content
+   * @param url - URL for labeling (optional)
+   * @param options - Diff generation options
+   * @returns ContentDiffResult with unified diff and statistics
+   */
+  generateDiff(
+    oldContent: string,
+    newContent: string,
+    url: string = 'content',
+    options: DiffOptions = {}
+  ): ContentDiffResult {
+    const diffOptions: DiffOptions = {
+      contextLines: 3,
+      oldLabel: `${url} (previous)`,
+      newLabel: `${url} (current)`,
+      ...options,
+    };
+
+    const diff = generateDiff(oldContent, newContent, diffOptions);
+
+    return {
+      url,
+      hasChanges: diff.hasChanges,
+      unifiedDiff: diff.unifiedDiff,
+      summary: diff.summary,
+      stats: diff.stats,
+      fullDiff: diff,
+    };
+  }
+
+  /**
+   * Check for changes and generate a diff if content has changed
+   *
+   * Combines change detection with diff generation for a complete
+   * before/after comparison.
+   *
+   * @param url - The URL to check
+   * @param previousContent - Previous content for comparison
+   * @param currentContent - Current content
+   * @param diffOptions - Options for diff generation
+   * @returns Check result with optional diff
+   */
+  async checkAndDiff(
+    url: string,
+    previousContent: string,
+    currentContent: string,
+    diffOptions: DiffOptions = {}
+  ): Promise<CheckResult & { diff?: ContentDiffResult }> {
+    const result = await this.checkWithDetailedComparison(
+      url,
+      previousContent,
+      currentContent
+    );
+
+    if (result.hasChanged) {
+      const diff = this.generateDiff(
+        previousContent,
+        currentContent,
+        url,
+        diffOptions
+      );
+      return { ...result, diff };
+    }
+
+    return result;
   }
 
   /**
