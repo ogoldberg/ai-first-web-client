@@ -343,17 +343,8 @@ export class FeedbackService {
       const targetLimit = this.rateLimiter.checkTargetNegative(tenantId, targetId);
       if (!targetLimit.allowed) {
         log.warn('Target negative feedback limit exceeded', { tenantId, targetId, count: targetLimit.count });
-
-        // Flag as potential targeted attack
-        const anomaly: AnomalyFlag = {
-          type: 'targeted_attack',
-          severity: 'warning',
-          description: `Excessive negative feedback for target: ${targetId}`,
-          detectedAt: Date.now(),
-        };
-
-        // Still accept but flag it
-        // Fall through to normal processing with anomaly flag
+        // Note: Anomaly flagging is handled by detectAnomalies(), so we just log here
+        // and continue with normal processing - the targeted_attack anomaly will be detected there
       }
     }
 
@@ -374,7 +365,7 @@ export class FeedbackService {
     };
 
     // Step 5: Run anomaly detection
-    const anomalies = this.detectAnomalies(tenantId, validSubmission, record);
+    const anomalies = this.detectAnomalies(tenantId, validSubmission);
     record.anomalyFlags = anomalies;
 
     if (anomalies.some(a => a.severity === 'critical')) {
@@ -461,7 +452,6 @@ export class FeedbackService {
   private detectAnomalies(
     tenantId: string,
     submission: FeedbackSubmission,
-    _currentRecord: FeedbackRecord
   ): AnomalyFlag[] {
     const anomalies: AnomalyFlag[] = [];
     const now = Date.now();
@@ -963,7 +953,7 @@ export class FeedbackService {
 
     // Sign payload with HMAC-SHA256
     const payloadStr = JSON.stringify(payload);
-    const signature = this.signPayload(payloadStr, config.secretHash);
+    const signature = this.signPayload(payloadStr, config.secret);
 
     try {
       const response = await fetch(config.url, {
@@ -1031,10 +1021,8 @@ export class FeedbackService {
   /**
    * Sign a payload with HMAC-SHA256
    */
-  private signPayload(payload: string, secretHash: string): string {
-    // Note: We use the stored hash as the HMAC key
-    // In production, the raw secret would be provided by the tenant
-    return createHmac('sha256', secretHash)
+  private signPayload(payload: string, secret: string): string {
+    return createHmac('sha256', secret)
       .update(payload)
       .digest('hex');
   }
@@ -1045,16 +1033,12 @@ export class FeedbackService {
 
   /**
    * Configure webhook for a tenant
+   * Note: In production, the secret should be encrypted at rest
    */
   configureWebhook(tenantId: string, url: string, secret: string, enabledTypes: NotificationType[]): void {
-    // Hash the secret for storage
-    const secretHash = createHmac('sha256', 'unbrowser-webhook-key')
-      .update(secret)
-      .digest('hex');
-
     const config: WebhookConfig = {
       url,
-      secretHash,
+      secret, // Store raw secret for proper HMAC signing
       enabledTypes,
       enabled: true,
       maxRetries: 3,
@@ -1246,7 +1230,7 @@ export class FeedbackService {
       id: randomUUID(),
       action,
       actor: { type: actorType, id: actorId },
-      feedbackId: (details.feedbackId as string) || '',
+      feedbackId: (details.feedbackId as string) || undefined,
       tenantId,
       details,
       timestamp: Date.now(),

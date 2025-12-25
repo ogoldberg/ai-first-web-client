@@ -256,7 +256,7 @@ export interface FeedbackAuditEntry {
   };
 
   // Context
-  feedbackId: string;
+  feedbackId?: string;
   tenantId: string;
 
   // Details (varies by action)
@@ -336,8 +336,8 @@ export interface WebhookConfig {
   // Webhook URL
   url: string;
 
-  // Secret for HMAC signing (stored hashed)
-  secretHash: string;
+  // Secret for HMAC signing (should be encrypted at rest in production)
+  secret: string;
 
   // Which notification types to receive
   enabledTypes: NotificationType[];
