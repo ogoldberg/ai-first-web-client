@@ -25,6 +25,10 @@ import {
   type BrowserProviderConfig,
 } from './browser-providers.js';
 import {
+  playwrightNotInstalledError,
+  remoteBrowserConnectionError,
+} from '../utils/error-messages.js';
+import {
   launchStealthBrowser,
   generateFingerprint,
   createStealthContext,
@@ -152,11 +156,7 @@ export class BrowserManager {
   private async ensurePlaywright(): Promise<typeof import('playwright')> {
     const pw = await tryLoadPlaywright();
     if (!pw) {
-      throw new Error(
-        'Playwright is not installed. ' +
-        'Install it with: npm install playwright && npx playwright install chromium\n' +
-        'Or use the intelligence/lightweight tiers which work without Playwright.'
-      );
+      throw new Error(playwrightNotInstalledError());
     }
     return pw;
   }
@@ -198,10 +198,11 @@ export class BrowserManager {
             provider: this.provider.name,
             error: message,
           });
-          throw new Error(
-            `Failed to connect to ${this.provider.name}: ${message}\n` +
-            `Provider type: ${this.provider.type}`
-          );
+          throw new Error(remoteBrowserConnectionError(
+            this.provider.name,
+            this.provider.type,
+            message
+          ));
         }
       } else {
         // Local browser launch with stealth mode

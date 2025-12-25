@@ -13,6 +13,11 @@
 
 import { createCipheriv, createDecipheriv, randomBytes, pbkdf2Sync } from 'crypto';
 import { logger } from './logger.js';
+import {
+  encryptionKeyNotSetError,
+  sessionDecryptionError,
+  invalidSessionFormatError,
+} from './error-messages.js';
 
 /** Algorithm for encryption */
 const ALGORITHM = 'aes-256-gcm';
@@ -162,10 +167,7 @@ export class SessionCrypto {
     const password = process.env[ENV_VAR_NAME];
 
     if (!password) {
-      throw new Error(
-        `Session is encrypted but ${ENV_VAR_NAME} not set. ` +
-          'Set the environment variable to decrypt sessions.'
-      );
+      throw new Error(encryptionKeyNotSetError(ENV_VAR_NAME));
     }
 
     try {
@@ -173,7 +175,7 @@ export class SessionCrypto {
 
       // Verify header
       if (payload.header !== ENCRYPTED_HEADER) {
-        throw new Error('Invalid encrypted session format');
+        throw new Error(invalidSessionFormatError());
       }
 
       // Decode components
@@ -196,10 +198,7 @@ export class SessionCrypto {
       return plaintext.toString('utf8');
     } catch (error) {
       if (error instanceof Error && error.message.includes('Unsupported state')) {
-        throw new Error(
-          'Failed to decrypt session: invalid key or corrupted data. ' +
-            'Ensure the correct encryption key is set.'
-        );
+        throw new Error(sessionDecryptionError());
       }
       throw error;
     }

@@ -1387,7 +1387,7 @@ describe('ContentIntelligence', () => {
         intelligence.extract('https://example.com/some-page', {
           forceStrategy: 'api:npm',
         })
-      ).rejects.toThrow(/returned no result/);
+      ).rejects.toThrow(/returned no content/);
     });
 
     it('should return null for NPM URLs without package path', async () => {
@@ -1395,7 +1395,7 @@ describe('ContentIntelligence', () => {
         intelligence.extract('https://www.npmjs.com/', {
           forceStrategy: 'api:npm',
         })
-      ).rejects.toThrow(/returned no result/);
+      ).rejects.toThrow(/returned no content/);
     });
 
     it('should handle API errors gracefully', async () => {
@@ -1410,7 +1410,7 @@ describe('ContentIntelligence', () => {
         intelligence.extract('https://www.npmjs.com/package/nonexistent-package', {
           forceStrategy: 'api:npm',
         })
-      ).rejects.toThrow(/returned no result/);
+      ).rejects.toThrow(/returned no content/);
     });
 
     it('should include dist tags in output', async () => {
@@ -1670,7 +1670,7 @@ describe('ContentIntelligence', () => {
         intelligence.extract('https://example.com/some-page', {
           forceStrategy: 'api:pypi',
         })
-      ).rejects.toThrow(/returned no result/);
+      ).rejects.toThrow(/returned no content/);
     });
 
     it('should return null for PyPI URLs without package path', async () => {
@@ -1678,7 +1678,7 @@ describe('ContentIntelligence', () => {
         intelligence.extract('https://pypi.org/', {
           forceStrategy: 'api:pypi',
         })
-      ).rejects.toThrow(/returned no result/);
+      ).rejects.toThrow(/returned no content/);
     });
 
     it('should handle API errors gracefully', async () => {
@@ -1693,7 +1693,7 @@ describe('ContentIntelligence', () => {
         intelligence.extract('https://pypi.org/project/nonexistent-package', {
           forceStrategy: 'api:pypi',
         })
-      ).rejects.toThrow(/returned no result/);
+      ).rejects.toThrow(/returned no content/);
     });
 
     it('should include release count and date', async () => {
@@ -1828,7 +1828,7 @@ describe('ContentIntelligence', () => {
         intelligence.extract('https://example.com/some-page', {
           forceStrategy: 'api:devto',
         })
-      ).rejects.toThrow(/returned no result/);
+      ).rejects.toThrow(/returned no content/);
     });
 
     it('should return null for Dev.to special routes', async () => {
@@ -1837,7 +1837,7 @@ describe('ContentIntelligence', () => {
         intelligence.extract('https://dev.to/t/javascript', {
           forceStrategy: 'api:devto',
         })
-      ).rejects.toThrow(/returned no result/);
+      ).rejects.toThrow(/returned no content/);
     });
 
     it('should handle API errors gracefully', async () => {
@@ -1852,7 +1852,7 @@ describe('ContentIntelligence', () => {
         intelligence.extract('https://dev.to/nonexistent-user/nonexistent-article', {
           forceStrategy: 'api:devto',
         })
-      ).rejects.toThrow(/returned no result/);
+      ).rejects.toThrow(/returned no content/);
     });
 
     it('should include reactions and comments in output', async () => {
@@ -1888,7 +1888,7 @@ describe('ContentIntelligence', () => {
         intelligence.extract('https://dev.to/user-with-no-articles', {
           forceStrategy: 'api:devto',
         })
-      ).rejects.toThrow(/returned no result/);
+      ).rejects.toThrow(/returned no content/);
     });
   });
 

@@ -7,6 +7,7 @@
  */
 
 import { logger } from './logger.js';
+import { emptyEmbeddingTextError, notInitializedError } from './error-messages.js';
 import type { FeatureExtractionPipeline } from '@xenova/transformers';
 
 // Create a logger for embedding operations
@@ -232,7 +233,7 @@ export class EmbeddingProvider {
     await this.ensureInitialized();
 
     if (!text || text.trim().length === 0) {
-      throw new Error('Cannot generate embedding for empty text');
+      throw new Error(emptyEmbeddingTextError());
     }
 
     const output = await this.pipeline!(text, {
@@ -326,7 +327,7 @@ export class EmbeddingProvider {
       await this.initialize();
     }
     if (!this.initialized) {
-      throw new Error('EmbeddingProvider not initialized');
+      throw new Error(notInitializedError('EmbeddingProvider'));
     }
   }
 }

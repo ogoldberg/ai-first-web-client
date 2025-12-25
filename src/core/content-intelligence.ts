@@ -23,6 +23,11 @@ import TurndownService from 'turndown';
 import { TIMEOUTS } from '../utils/timeouts.js';
 import { logger } from '../utils/logger.js';
 import { createRequire } from 'module';
+import {
+  unknownStrategyError,
+  strategyNoResultError,
+  playwrightNotInstalledError,
+} from '../utils/error-messages.js';
 import type {
   ApiExtractionSuccess,
   ApiExtractionListener,
@@ -437,7 +442,7 @@ export class ContentIntelligence {
 
     const fn = strategyMap[strategy];
     if (!fn) {
-      throw new Error(`Unknown strategy: ${strategy}`);
+      throw new Error(unknownStrategyError(strategy, Object.keys(strategyMap)));
     }
 
     const strategyStartTime = Date.now();
@@ -453,7 +458,7 @@ export class ContentIntelligence {
       return result;
     }
 
-    throw new Error(`Strategy ${strategy} returned no result`);
+    throw new Error(strategyNoResultError(strategy));
   }
 
   // ============================================================================
@@ -1961,7 +1966,7 @@ export class ContentIntelligence {
 
     if (!pw) {
       // Playwright not available - this is fine, just skip this strategy
-      throw new Error('Playwright not installed - skipping browser strategy');
+      throw new Error(playwrightNotInstalledError());
     }
 
     let browser;
