@@ -589,7 +589,7 @@ Browser: { success: true, ... }  // Learns this for future
 
 | ID | Task | Effort | Category | Notes |
 |----|------|--------|----------|-------|
-| F-007 | Pattern import/export | M | Features | In Progress | Share learned patterns |
+| F-007 | Pattern import/export | M | Features | DONE | Share learned patterns (PR #165) |
 | F-008 | Debug mode toggle | S | Features | Verbose output mode (DONE - LLM_BROWSER_DEBUG_MODE=1 enables debug tools) |
 | F-009 | Trace visualization | L | Features | Visual request flow |
 | F-010 | Diff generation for changes | M | Features | Show what changed |
