@@ -375,10 +375,11 @@ All 10 phases complete:
 | P1 | Add per-tenant rate limiting (API-003) | Complete |
 | P1 | Wire SmartBrowser to browse endpoints (CLOUD-001) | Complete |
 | P1 | Add proxy management for IP blocking (CLOUD-003) | Complete |
-| P1 | Implement usage metering and billing (CLOUD-002) | In Progress |
-| P2 | Add Supabase/Postgres persistence (CLOUD-004) | In Progress |
+| P1 | Implement usage metering and billing (CLOUD-002) | Complete |
+| P2 | Add Supabase/Postgres persistence (CLOUD-004) | Complete |
 | P2 | Production infrastructure and monitoring | Not Started |
 | P2 | Beta program launch | Not Started |
+| P3 | Type-safe configuration validation (D-009) | In Progress |
 
 **Benefits:** Platform-agnostic access, primary revenue stream
 
