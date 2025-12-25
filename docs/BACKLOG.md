@@ -371,8 +371,8 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 | DX-006 | Add getInitializationStatus() method | S | DONE | Return what features are active (semantic, playwright, etc.) |
 | DX-007 | Clarify maxAttempts JSDoc in retry.ts | S | DONE | Add note: "maxAttempts is total attempts, not retries" |
 | DX-008 | Add initialization status logging | S | DONE | Log INFO on init: "Initialized with: semantic ON/OFF, playwright ON/OFF" |
-| DX-009 | Add onProgress callback to browse() | M | In Progress | Optional progress indication for long operations |
-| DX-010 | Improve error messages with suggestions | M | Not Started | E.g., "LightweightRenderer requires URL. Use ContentExtractor for HTML." |
+| DX-009 | Add onProgress callback to browse() | M | Complete | Optional progress indication for long operations. PR #151 |
+| DX-010 | Improve error messages with suggestions | M | In Progress | E.g., "LightweightRenderer requires URL. Use ContentExtractor for HTML." |
 
 **Quick Wins (completed):** DX-001, DX-002, DX-003, DX-005, DX-006, DX-007, DX-008
 
