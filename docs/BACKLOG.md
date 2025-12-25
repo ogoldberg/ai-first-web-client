@@ -321,7 +321,7 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 | API-009 | Set up production infrastructure | XL | Not Started | Docker containers, orchestration (K8s or ECS), load balancing, auto-scaling |
 | API-010 | Implement health checks and monitoring | M | Complete | Comprehensive /health with service checks, Prometheus metrics at /health/metrics, K8s probes (/ready, /live). 27 tests |
 | API-011 | Add API documentation | L | Complete | OpenAPI/Swagger UI at /docs, getting started guide, code examples (curl, Python, Node.js). 25 tests. PR #145 |
-| API-012 | Create API client libraries | L | Not Started | Official clients: JavaScript/TypeScript (wraps fetch), Python (requests-based) |
+| API-012 | Create API client libraries | L | Complete | TypeScript SDK in packages/core, Python client in clients/python with full type hints, dataclasses, error handling. 25 Python tests. PR #146 |
 | API-013 | Set up CI/CD pipeline | M | Complete | GitHub Actions CI workflow: type checking, tests on PR/push. Deployment to staging/production TBD |
 | API-014 | Load testing and optimization | L | Not Started | Test at 1000+ req/s, identify bottlenecks, optimize database queries |
 | API-015 | Security audit | M | Not Started | Penetration testing, OWASP top 10 review, dependency scanning |
