@@ -1,17 +1,17 @@
-# @llm-browser/mcp
+# @unbrowser/mcp
 
 MCP (Model Context Protocol) server for LLM Browser.
 
 ## Overview
 
-This package provides the MCP interface for Claude and other LLM clients. It wraps `@llm-browser/core` to provide tool-based access to browsing capabilities.
+This package provides the MCP interface for Claude and other LLM clients. It wraps `@unbrowser/core` to provide tool-based access to browsing capabilities.
 
-For programmatic access without MCP, use `@llm-browser/core` directly.
+For programmatic access without MCP, use `@unbrowser/core` directly.
 
 ## Installation
 
 ```bash
-npm install @llm-browser/mcp
+npm install @unbrowser/mcp
 ```
 
 ## Usage with Claude Desktop
@@ -23,7 +23,7 @@ Add to your Claude Desktop configuration:
   "mcpServers": {
     "llm-browser": {
       "command": "npx",
-      "args": ["@llm-browser/mcp"]
+      "args": ["@unbrowser/mcp"]
     }
   }
 }

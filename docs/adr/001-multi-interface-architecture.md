@@ -48,7 +48,7 @@ From GTM plan, 3 of 4 target customer segments need more than MCP:
 
 ```
 ┌──────────────────────────────────────────────────┐
-│         @llm-browser/core (SDK)                  │
+│         @unbrowser/core (SDK)                  │
 │  All intelligence: SmartBrowser, Learning,      │
 │  API Discovery, Sessions, Content Extraction    │
 │  - Zero interface dependencies                  │
@@ -76,7 +76,7 @@ From GTM plan, 3 of 4 target customer segments need more than MCP:
 
 ### Interface Details
 
-**1. SDK (@llm-browser/core)**
+**1. SDK (@unbrowser/core)**
 - Standalone npm package
 - All core intelligence and learning
 - Zero dependencies on MCP/API layers
@@ -174,7 +174,7 @@ From GTM plan, 3 of 4 target customer segments need more than MCP:
 
 **Phase 2: SDK Extraction (Weeks 3-5)**
 - Tasks: SDK-001 to SDK-012
-- Outcome: `@llm-browser/core` published to npm
+- Outcome: `@unbrowser/core` published to npm
 - Benefit: Enables scraping use case
 
 **Phase 3: Skills Creation (Week 5)**

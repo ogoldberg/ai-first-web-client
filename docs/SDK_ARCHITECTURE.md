@@ -166,7 +166,7 @@ case 'smart_browse': {
 3. **Type exports** - Available in `src/types/`
 4. **Zero MCP coupling** - Core has no MCP imports
 
-### To Create @llm-browser/core Package
+### To Create @unbrowser/core Package
 
 1. **Package structure:**
    ```
@@ -198,7 +198,7 @@ case 'smart_browse': {
 3. **MCP package becomes thin wrapper:**
    ```typescript
    // packages/mcp/src/index.ts
-   import { createLLMBrowser } from '@llm-browser/core';
+   import { createLLMBrowser } from '@unbrowser/core';
    import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 
    // Tool definitions + handlers only
@@ -244,17 +244,17 @@ case 'smart_browse': {
 ### Long-Term Architecture
 
 ```
-@llm-browser/core          # SDK (no MCP dependency)
+@unbrowser/core          # SDK (no MCP dependency)
   └── SmartBrowser, LearningEngine, etc.
 
-@llm-browser/mcp           # MCP server (thin wrapper)
-  └── import { createLLMBrowser } from '@llm-browser/core'
+@unbrowser/mcp           # MCP server (thin wrapper)
+  └── import { createLLMBrowser } from '@unbrowser/core'
 
-@llm-browser/rest          # REST API (future)
-  └── import { createLLMBrowser } from '@llm-browser/core'
+@unbrowser/rest          # REST API (future)
+  └── import { createLLMBrowser } from '@unbrowser/core'
 
-@llm-browser/cli           # CLI tool (future)
-  └── import { createLLMBrowser } from '@llm-browser/core'
+@unbrowser/cli           # CLI tool (future)
+  └── import { createLLMBrowser } from '@unbrowser/core'
 ```
 
 ## Conclusion

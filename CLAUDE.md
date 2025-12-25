@@ -4,16 +4,92 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Unbrowser** is an intelligent web browsing API for AI agents. It learns from browsing patterns, discovers API endpoints automatically, and progressively optimizes to bypass browser rendering entirely.
+**Unbrowser** (npm: `llm-browser`) is an intelligent web browsing API for AI agents. It learns from browsing patterns, discovers API endpoints automatically, and progressively optimizes to bypass browser rendering entirely.
+
+### Two Deployment Architectures
+
+This project supports **two distinct deployment modes** with different use cases:
+
+#### 1. Local MCP Server (PRODUCTION - v0.5.0)
+
+The primary, production-ready architecture for local deployment.
+
+- **Package**: `llm-browser` on npm
+- **Use Cases**: Claude Desktop MCP integration, local Node.js embedding
+- **Factory Function**: `createLLMBrowser()` from `llm-browser/sdk`
+- **Components**: Full SmartBrowser, TieredFetcher, LearningEngine, ProceduralMemory (all in `src/core/`)
+- **Storage**: Local filesystem (`./sessions/`, `./enhanced-knowledge-base.json`, etc.)
+- **Status**: ✅ **Production Ready** (2340+ tests passing)
+
+```typescript
+// Local SDK usage
+import { createLLMBrowser } from 'llm-browser/sdk';
+const browser = await createLLMBrowser();
+const result = await browser.browse('https://example.com');
+```
+
+```json
+// Claude Desktop MCP config
+{
+  "mcpServers": {
+    "unbrowser": {
+      "command": "npx",
+      "args": ["llm-browser"]
+    }
+  }
+}
+```
+
+#### 2. Cloud API (ALPHA - In Development)
+
+A cloud-hosted SaaS deployment for multi-tenant access.
+
+- **Package**: `@unbrowser/core` on npm (HTTP client wrapper)
+- **Use Cases**: REST API access, multi-tenant SaaS, platform-agnostic usage (Python, Ruby, etc.)
+- **Factory Function**: `createUnbrowser()` from `@unbrowser/core`
+- **Components**: HTTP client wrapper (thin) - server runs Architecture #1 in cloud
+- **Storage**: Cloud database (Supabase/Postgres), multi-tenant isolation
+- **Status**: 🚧 **Alpha** (API server functional, see BACKLOG.md tasks API-001 through API-017)
+
+```typescript
+// Cloud SDK usage (HTTP wrapper)
+import { createUnbrowser } from '@unbrowser/core';
+const client = createUnbrowser({
+  apiKey: process.env.UNBROWSER_API_KEY,
+});
+const result = await client.browse('https://example.com');
+```
+
+```bash
+# Direct REST API usage
+curl -X POST https://api.unbrowser.ai/v1/browse \
+  -H "Authorization: Bearer $UNBROWSER_API_KEY" \
+  -d '{"url": "https://example.com"}'
+```
+
+#### Which Should You Use?
+
+**Most users**: Use the **Local MCP Server** (`llm-browser`)
+- Works with Claude Desktop out of the box
+- All data stays local (privacy)
+- No API keys or billing required
+- Full feature set available
+
+**Cloud API** users need:
+- Multi-tenant isolation
+- Usage-based billing and quotas
+- Platform-agnostic access (non-Node.js languages)
+- No local setup/dependencies
+- Centralized learning (shared pattern pool across tenants)
 
 ### Current Focus: Cloud API Launch
 
-We're building a cloud-hosted API at `api.unbrowser.ai`. The SDK and MCP packages become thin HTTP clients while all intelligence runs in the cloud.
+We're building a cloud-hosted API at `api.unbrowser.ai` where all intelligence runs server-side. The cloud deployment uses the Local MCP Server architecture internally but exposes it via REST API for multi-tenant access.
 
-**Three access methods:**
+**Three access methods to cloud API:**
 1. **REST API** - Direct HTTP calls at `api.unbrowser.ai`
-2. **SDK** - `@unbrowser/core` npm package
-3. **MCP** - `@unbrowser/mcp` for Claude Desktop
+2. **SDK** - `@unbrowser/core` npm package (thin HTTP client)
+3. **MCP** - `@unbrowser/mcp` for Claude Desktop (planned - SDK-009)
 
 ### Core Philosophy: "Browser Minimizer"
 
@@ -108,9 +184,12 @@ packages/
 
 ### API Endpoints
 
+**Core Endpoints:**
+
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | `POST` | `/v1/browse` | Browse URL, extract content |
+| `POST` | `/v1/browse/preview` | Preview execution plan without running (COMP-002) |
 | `POST` | `/v1/batch` | Browse multiple URLs |
 | `POST` | `/v1/fetch` | Fast tiered fetch |
 | `GET` | `/v1/domains/:domain/intelligence` | Domain learning summary |
@@ -118,6 +197,33 @@ packages/
 | `GET` | `/v1/proxy/stats` | Proxy pool statistics |
 | `GET` | `/v1/proxy/risk/:domain` | Domain risk assessment |
 | `GET` | `/health` | Health check |
+
+**Workflow Management (COMP-009):**
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/v1/workflows/record/start` | Start workflow recording session |
+| `POST` | `/v1/workflows/record/:id/stop` | Stop recording and save workflow |
+| `POST` | `/v1/workflows/record/:id/annotate` | Annotate workflow step |
+| `POST` | `/v1/workflows/:id/replay` | Replay saved workflow |
+| `GET` | `/v1/workflows` | List saved workflows |
+| `GET` | `/v1/workflows/:id` | Get workflow details |
+| `DELETE` | `/v1/workflows/:id` | Delete workflow |
+
+**Admin & Management:**
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `POST` | `/v1/tenants` | Create new tenant (API-005) |
+| `GET` | `/v1/tenants/:id` | Get tenant details |
+| `PATCH` | `/v1/tenants/:id` | Update tenant settings |
+| `POST` | `/v1/billing/webhook` | Stripe webhook handler (API-007) |
+| `GET` | `/v1/admin/dashboard` | Admin dashboard data (API-008) |
+| `GET` | `/admin` | Admin UI (HTML) |
+| `GET` | `/docs` | API documentation (Swagger UI) (API-011) |
+| `GET` | `/pricing` | Pricing calculator (API-016) |
+
+**Complete API specification:** See [`docs/api/openapi.yaml`](docs/api/openapi.yaml) for full OpenAPI 3.1 spec with request/response schemas.
 
 ## Development Commands
 

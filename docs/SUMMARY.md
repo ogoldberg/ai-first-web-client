@@ -133,7 +133,7 @@ node dogfood.js patterns example.com
 ```json
 {
   "mcpServers": {
-    "llm-browser": {
+    "unbrowser": {
       "command": "node",
       "args": ["/Users/og/src/ai-first-web-client/dist/index.js"]
     }

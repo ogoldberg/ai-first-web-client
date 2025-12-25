@@ -23,7 +23,7 @@ Moving from **MCP-only (25 tools)** to **multi-interface architecture** with SDK
 ### Hybrid Architecture
 
 ```
-          @llm-browser/core (SDK)
+          @unbrowser/core (SDK)
                   ↓
     ┌─────────────┼─────────────┬──────────┐
     ↓             ↓             ↓          ↓
@@ -48,13 +48,13 @@ Moving from **MCP-only (25 tools)** to **multi-interface architecture** with SDK
 - `batch_browse` (optional)
 
 #### 2. SDK Extraction (SDK-001 to SDK-012)
-**What:** Extract core into `@llm-browser/core` npm package
+**What:** Extract core into `@unbrowser/core` npm package
 **Why:** Enable scraping without LLM overhead
 **When:** Weeks 3-5
 
 **Result:**
 ```typescript
-import { SmartBrowser } from '@llm-browser/core';
+import { SmartBrowser } from '@unbrowser/core';
 const browser = new SmartBrowser();
 await browser.browse(url); // Learns once
 await browser.executeApi(api); // 1000x fast

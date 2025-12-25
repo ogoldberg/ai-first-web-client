@@ -44,7 +44,7 @@ Thank you for your interest in contributing to LLM Browser! This document provid
 ```
 llm-browser/
   packages/
-    core/           # Core SDK (@llm-browser/core)
+    core/           # Core SDK (@unbrowser/core)
     mcp/            # MCP server package
   src/              # Main MCP server source
   tests/            # Test suites
