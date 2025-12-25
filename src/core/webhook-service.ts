@@ -9,13 +9,23 @@
  * - HMAC-SHA256 signature verification
  * - Retry with exponential backoff
  * - Delivery tracking and health monitoring
- * - Circuit breaker pattern for unhealthy endpoints
+ * - Circuit breaker pattern for unhealthy endpoints (timestamp-based, restart-resilient)
  *
  * Security:
  * - All payloads signed with HMAC-SHA256
  * - Secrets stored securely (not logged)
  * - Rate limiting for outbound requests
  * - Idempotency keys prevent duplicate processing
+ *
+ * Current Limitations:
+ * - Retry state is in-memory (pending retries lost on restart)
+ * - For production reliability, consider:
+ *   - Persisting retry queue to database
+ *   - Using a job queue (e.g., BullMQ, Bee-Queue)
+ *   - Loading outstanding jobs on startup
+ *
+ * Note: Circuit breaker uses timestamp-based reset (circuitOpenedAt) rather than
+ * setTimeout, making it resilient to server restarts.
  */
 
 import { createHmac, randomUUID } from 'crypto';
@@ -342,9 +352,20 @@ export class WebhookService {
       return false;
     }
 
-    // Check circuit breaker
+    // Check circuit breaker with timestamp-based reset
+    // This approach is restart-resilient - we check elapsed time rather than relying on setTimeout
     if (endpoint.health.status === 'unhealthy') {
-      return false;
+      const circuitOpenedAt = endpoint.health.circuitOpenedAt;
+      if (circuitOpenedAt && Date.now() - circuitOpenedAt >= this.config.circuitBreakerResetMs) {
+        // Reset to degraded - allow traffic with monitoring
+        endpoint.health.status = 'degraded';
+        endpoint.health.circuitOpenedAt = undefined;
+        log.info('Webhook endpoint circuit breaker reset to degraded', {
+          endpointId: endpoint.id,
+        });
+      } else {
+        return false;
+      }
     }
 
     // Check event type filter
@@ -605,20 +626,11 @@ export class WebhookService {
     // Update health status based on consecutive failures
     if (endpoint.health.consecutiveFailures >= this.config.circuitBreakerThreshold) {
       endpoint.health.status = 'unhealthy';
+      endpoint.health.circuitOpenedAt = Date.now(); // Store timestamp for restart-resilient reset
       log.warn('Webhook endpoint marked unhealthy', {
         endpointId: endpoint.id,
         consecutiveFailures: endpoint.health.consecutiveFailures,
       });
-
-      // Schedule circuit breaker reset
-      setTimeout(() => {
-        if (endpoint.health.status === 'unhealthy') {
-          endpoint.health.status = 'degraded';
-          log.info('Webhook endpoint circuit breaker reset to degraded', {
-            endpointId: endpoint.id,
-          });
-        }
-      }, this.config.circuitBreakerResetMs);
     } else if (endpoint.health.consecutiveFailures >= 2) {
       endpoint.health.status = 'degraded';
     }

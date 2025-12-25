@@ -271,6 +271,10 @@ export interface WebhookHealth {
 
   // Response time tracking
   avgResponseTimeMs?: number;
+
+  // Circuit breaker timestamp (when circuit was opened)
+  // Used for timestamp-based reset instead of setTimeout for restart resilience
+  circuitOpenedAt?: number;
 }
 
 // ============================================
@@ -438,14 +442,26 @@ export function createDefaultHealth(): WebhookHealth {
 }
 
 /**
+ * Severity levels for filtering
+ */
+export type SeverityLevel = 'low' | 'medium' | 'high' | 'critical';
+
+/**
  * Severity priority order (for filtering)
  */
-export const SEVERITY_PRIORITY: Record<string, number> = {
+export const SEVERITY_PRIORITY: Record<SeverityLevel, number> = {
   low: 1,
   medium: 2,
   high: 3,
   critical: 4,
 };
+
+/**
+ * Check if a string is a valid severity level
+ */
+function isSeverityLevel(value: string): value is SeverityLevel {
+  return value in SEVERITY_PRIORITY;
+}
 
 /**
  * Check if an event meets severity threshold
@@ -456,5 +472,8 @@ export function meetsSeverityThreshold(
 ): boolean {
   if (!minSeverity) return true;
   if (!eventSeverity) return true; // No severity = include by default
+  if (!isSeverityLevel(eventSeverity) || !isSeverityLevel(minSeverity)) {
+    return true; // Unknown severity = include by default
+  }
   return SEVERITY_PRIORITY[eventSeverity] >= SEVERITY_PRIORITY[minSeverity];
 }
