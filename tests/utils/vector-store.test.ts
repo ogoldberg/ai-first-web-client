@@ -474,7 +474,7 @@ describe('VectorStore (V-001)', () => {
           createdAt: Date.now(),
           entityType: 'pattern',
         })
-      ).rejects.toThrow('VectorStore not initialized');
+      ).rejects.toThrow('VectorStore is not initialized');
     });
 
     it('should require at least one filter for deleteByFilter', async () => {

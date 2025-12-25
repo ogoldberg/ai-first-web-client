@@ -78,6 +78,7 @@ import {
 
 import { logger } from './utils/logger.js';
 import { getToolSelectionMetrics } from './utils/tool-selection-metrics.js';
+import { unknownToolError } from './utils/error-messages.js';
 
 /**
  * Helper to read boolean mode flags from environment variables
@@ -613,8 +614,15 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
         });
       }
 
-      default:
-        throw new Error(`Unknown tool: ${name}`);
+      default: {
+        // Get list of available tools for helpful error message
+        const availableTools = [
+          'smart_browse', 'batch_browse', 'execute_api_call', 'session_management', 'api_auth',
+          'capture_screenshot', 'export_har', 'debug_traces', 'get_domain_intelligence',
+          'get_domain_capabilities', 'get_learning_stats', 'skill_management', 'tier_management',
+        ];
+        throw new Error(unknownToolError(name, availableTools));
+      }
     }
   } catch (error) {
     // TC-010: Record failed tool invocation

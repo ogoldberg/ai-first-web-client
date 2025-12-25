@@ -19,6 +19,7 @@ import { getUsageMeter, type UsageQueryOptions } from '../../utils/usage-meter.j
 import { generateDashboard, getQuickStatus } from '../../utils/analytics-dashboard.js';
 import { getContentChangeTracker } from '../../utils/content-change-tracker.js';
 import { getToolSelectionMetrics } from '../../utils/tool-selection-metrics.js';
+import { missingArgumentsError, unknownActionError } from '../../utils/error-messages.js';
 
 // ============================================
 // TIER MANAGEMENT
@@ -282,7 +283,7 @@ export async function handleContentTracking(
 
   switch (action) {
     case 'track': {
-      if (!url) throw new Error('url is required for track action');
+      if (!url) throw new Error(missingArgumentsError('content_tracking:track', ['url']));
       const result = await smartBrowser.browse(url, {
         validateContent: true,
         enableLearning: true,
@@ -309,7 +310,7 @@ export async function handleContentTracking(
     }
 
     case 'check': {
-      if (!url) throw new Error('url is required for check action');
+      if (!url) throw new Error(missingArgumentsError('content_tracking:check', ['url']));
       const result = await smartBrowser.browse(url, {
         validateContent: true,
         enableLearning: true,
@@ -419,7 +420,7 @@ export async function handleContentTracking(
     }
 
     case 'untrack': {
-      if (!url) throw new Error('url is required for untrack action');
+      if (!url) throw new Error(missingArgumentsError('content_tracking:untrack', ['url']));
       const wasTracked = await tracker.untrackUrl(url);
       return jsonResponse({
         action: 'untrack',
@@ -446,7 +447,7 @@ export async function handleContentTracking(
     }
 
     default:
-      throw new Error(`Unknown content_tracking action: ${action}`);
+      throw new Error(unknownActionError(action, 'content_tracking', ['track', 'check', 'list', 'history', 'untrack', 'stats']));
   }
 }
 
@@ -687,6 +688,6 @@ export async function handleToolSelectionMetrics(
       return jsonResponse(indicators);
     }
     default:
-      throw new Error(`Unknown action for tool_selection_metrics: ${action}`);
+      throw new Error(unknownActionError(action, 'tool_selection_metrics', ['stats', 'confusion']));
   }
 }

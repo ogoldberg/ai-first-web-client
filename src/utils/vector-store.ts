@@ -10,6 +10,7 @@ import type {
   Table as LanceDBTable,
 } from '@lancedb/lancedb';
 import { logger } from './logger.js';
+import { notInitializedError } from './error-messages.js';
 
 // Create a logger for vector store operations
 const log = logger.create('VectorStore');
@@ -199,7 +200,7 @@ export class VectorStore {
    */
   private async ensureTable(): Promise<LanceDBTable> {
     if (!this.initialized || !this.db) {
-      throw new Error('VectorStore not initialized');
+      throw new Error(notInitializedError('VectorStore'));
     }
 
     if (this.table) {

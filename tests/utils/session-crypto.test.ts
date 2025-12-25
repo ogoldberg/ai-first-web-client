@@ -163,7 +163,7 @@ describe('SessionCrypto', () => {
       delete process.env.LLM_BROWSER_SESSION_KEY;
       const crypto2 = new SessionCrypto();
 
-      expect(() => crypto2.decrypt(encrypted)).toThrow(/LLM_BROWSER_SESSION_KEY not set/);
+      expect(() => crypto2.decrypt(encrypted)).toThrow(/LLM_BROWSER_SESSION_KEY is not set/);
     });
 
     it('should throw for invalid encrypted format', () => {
