@@ -18,6 +18,7 @@ import { adminUI } from './routes/admin-ui.js';
 import workflows from './routes/workflows.js';
 import { billing } from './routes/billing.js';
 import { docs } from './routes/docs.js';
+import { pricingCalculator } from './routes/pricing-calculator.js';
 import { requestLoggerMiddleware } from './middleware/request-logger.js';
 
 // Create the main Hono app
@@ -101,6 +102,7 @@ app.route('/v1/admin/dashboard', dashboard); // API-008: Admin dashboard API
 app.route('/admin', adminUI); // API-008: Admin dashboard UI
 app.route('/v1/workflows', workflows); // COMP-009: Workflow recording
 app.route('/v1/billing', billing); // API-007: Stripe billing integration
+app.route('/pricing', pricingCalculator); // API-016: Pricing calculator
 
 // Root endpoint
 app.get('/', (c) => {
@@ -126,6 +128,7 @@ app.get('/', (c) => {
       replayWorkflow: '/v1/workflows/:id/replay',
       billing: '/v1/billing',
       billingWebhook: '/v1/billing/webhook',
+      pricingCalculator: '/pricing',
     },
   });
 });
