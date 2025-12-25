@@ -136,6 +136,50 @@ export class ResponseCache<T = unknown> {
   }
 
   /**
+   * Clear cache entries for a specific domain
+   * @param domain - Domain to clear entries for (e.g., 'example.com')
+   * @returns Number of entries removed
+   */
+  clearDomain(domain: string): number {
+    let removed = 0;
+    const normalizedDomain = domain.toLowerCase();
+
+    for (const key of this.cache.keys()) {
+      try {
+        // Keys may be URLs or URL-like strings
+        const url = new URL(key.startsWith('http') ? key : `https://${key}`);
+        if (url.hostname.toLowerCase() === normalizedDomain ||
+            url.hostname.toLowerCase().endsWith(`.${normalizedDomain}`)) {
+          this.cache.delete(key);
+          removed++;
+        }
+      } catch {
+        // Key is not a valid URL, skip
+      }
+    }
+
+    return removed;
+  }
+
+  /**
+   * Get all unique domains in the cache
+   */
+  getDomains(): string[] {
+    const domains = new Set<string>();
+
+    for (const key of this.cache.keys()) {
+      try {
+        const url = new URL(key.startsWith('http') ? key : `https://${key}`);
+        domains.add(url.hostname.toLowerCase());
+      } catch {
+        // Key is not a valid URL, skip
+      }
+    }
+
+    return Array.from(domains).sort();
+  }
+
+  /**
    * Get cache statistics
    */
   getStats(): {

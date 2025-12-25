@@ -366,7 +366,7 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 | DX-001 | Add LLMBrowserConfig options table to README | S | DONE | Document all config options with types, defaults, descriptions |
 | DX-002 | Add TypeScript import examples to README | S | DONE | Show proper type imports for SmartBrowseResult, options, errors |
 | DX-003 | Add SmartBrowseOptions grouped reference | M | DONE | Group 30+ options by concern: Essential, Learning, Validation, Advanced (added to README) |
-| DX-004 | Add cache management API to LLMBrowserClient | S | In Progress | clearCache(domain?), getCacheStats() methods |
+| DX-004 | Add cache management API to LLMBrowserClient | S | Complete | clearCache(domain?), getCacheStats() methods. 45 tests. PR #150 |
 | DX-005 | Expose getSessionHealth() on LLMBrowserClient | S | DONE | Convenience method wrapping SessionManager |
 | DX-006 | Add getInitializationStatus() method | S | DONE | Return what features are active (semantic, playwright, etc.) |
 | DX-007 | Clarify maxAttempts JSDoc in retry.ts | S | DONE | Add note: "maxAttempts is total attempts, not retries" |

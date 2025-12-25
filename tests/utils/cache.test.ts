@@ -160,6 +160,91 @@ describe('ResponseCache', () => {
     });
   });
 
+  describe('clearDomain', () => {
+    it('should clear entries for a specific domain', () => {
+      cache.set('https://example.com/page1', 'value1');
+      cache.set('https://example.com/page2', 'value2');
+      cache.set('https://other.com/page', 'value3');
+
+      const removed = cache.clearDomain('example.com');
+
+      expect(removed).toBe(2);
+      expect(cache.get('https://example.com/page1')).toBeUndefined();
+      expect(cache.get('https://example.com/page2')).toBeUndefined();
+      expect(cache.get('https://other.com/page')).toBe('value3');
+    });
+
+    it('should clear entries for subdomains', () => {
+      cache.set('https://api.example.com/endpoint', 'api-value');
+      cache.set('https://www.example.com/page', 'www-value');
+      cache.set('https://other.com/page', 'other-value');
+
+      const removed = cache.clearDomain('example.com');
+
+      expect(removed).toBe(2);
+      expect(cache.get('https://api.example.com/endpoint')).toBeUndefined();
+      expect(cache.get('https://www.example.com/page')).toBeUndefined();
+      expect(cache.get('https://other.com/page')).toBe('other-value');
+    });
+
+    it('should be case-insensitive', () => {
+      cache.set('https://Example.COM/page', 'value');
+
+      const removed = cache.clearDomain('example.com');
+
+      expect(removed).toBe(1);
+      expect(cache.get('https://Example.COM/page')).toBeUndefined();
+    });
+
+    it('should return 0 for non-matching domain', () => {
+      cache.set('https://example.com/page', 'value');
+
+      const removed = cache.clearDomain('nonexistent.com');
+
+      expect(removed).toBe(0);
+      expect(cache.get('https://example.com/page')).toBe('value');
+    });
+  });
+
+  describe('getDomains', () => {
+    it('should return list of unique domains', () => {
+      cache.set('https://example.com/page1', 'value1');
+      cache.set('https://example.com/page2', 'value2');
+      cache.set('https://other.com/page', 'value3');
+      cache.set('https://api.example.com/endpoint', 'value4');
+
+      const domains = cache.getDomains();
+
+      expect(domains).toHaveLength(3);
+      expect(domains).toContain('example.com');
+      expect(domains).toContain('other.com');
+      expect(domains).toContain('api.example.com');
+    });
+
+    it('should return sorted domains', () => {
+      cache.set('https://zebra.com', 'z');
+      cache.set('https://apple.com', 'a');
+      cache.set('https://mango.com', 'm');
+
+      const domains = cache.getDomains();
+
+      expect(domains).toEqual(['apple.com', 'mango.com', 'zebra.com']);
+    });
+
+    it('should return empty array for empty cache', () => {
+      const domains = cache.getDomains();
+      expect(domains).toEqual([]);
+    });
+
+    it('should normalize domains to lowercase', () => {
+      cache.set('https://EXAMPLE.COM/page', 'value');
+
+      const domains = cache.getDomains();
+
+      expect(domains).toEqual(['example.com']);
+    });
+  });
+
   describe('withCache', () => {
     it('should return cached value without calling function', async () => {
       const fn = vi.fn().mockResolvedValue('computed');

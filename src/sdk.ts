@@ -30,6 +30,7 @@ import { SmartBrowser, type SmartBrowseOptions, type SmartBrowseResult } from '.
 import { TieredFetcher, type TieredFetchOptions, type TieredFetchResult } from './core/tiered-fetcher.js';
 import { ProceduralMemory } from './core/procedural-memory.js';
 import { LearningEngine } from './core/learning-engine.js';
+import { pageCache, apiCache } from './utils/cache.js';
 import type { SkillMatch } from './types/index.js';
 
 // Re-export core types from their actual modules
@@ -268,6 +269,99 @@ export class LLMBrowserClient {
    */
   getContentExtractor(): ContentExtractor {
     return this.contentExtractor;
+  }
+
+  // =============================================================================
+  // CACHE MANAGEMENT (DX-004)
+  // =============================================================================
+
+  /**
+   * Clear cached content
+   *
+   * @param domain - Optional domain to clear cache for (e.g., 'example.com').
+   *                 If not provided, clears all cached content.
+   * @returns Number of cache entries cleared
+   *
+   * @example
+   * ```typescript
+   * // Clear all cache
+   * const cleared = browser.clearCache();
+   * console.log(`Cleared ${cleared} entries`);
+   *
+   * // Clear cache for a specific domain
+   * const domainCleared = browser.clearCache('example.com');
+   * console.log(`Cleared ${domainCleared} entries for example.com`);
+   * ```
+   */
+  clearCache(domain?: string): number {
+    let pageCacheCleared = 0;
+    let apiCacheCleared = 0;
+
+    if (domain) {
+      // Clear for specific domain
+      pageCacheCleared = pageCache.clearDomain(domain);
+      apiCacheCleared = apiCache.clearDomain(domain);
+    } else {
+      // Get current sizes before clearing
+      pageCacheCleared = pageCache.getStats().size;
+      apiCacheCleared = apiCache.getStats().size;
+      pageCache.clear();
+      apiCache.clear();
+    }
+
+    return pageCacheCleared + apiCacheCleared;
+  }
+
+  /**
+   * Get cache statistics
+   *
+   * @returns Combined cache statistics including:
+   *   - totalEntries: Total number of cached items
+   *   - pageCache: Page/HTML content cache stats
+   *   - apiCache: API response cache stats
+   *   - domains: List of domains with cached content
+   *
+   * @example
+   * ```typescript
+   * const stats = browser.getCacheStats();
+   * console.log(`Cache has ${stats.totalEntries} entries across ${stats.domains.length} domains`);
+   * console.log(`Page cache: ${stats.pageCache.size} entries`);
+   * console.log(`API cache: ${stats.apiCache.size} entries`);
+   * ```
+   */
+  getCacheStats(): {
+    totalEntries: number;
+    pageCache: {
+      size: number;
+      maxEntries: number;
+      ttlMs: number;
+      oldestEntry: number | null;
+      newestEntry: number | null;
+    };
+    apiCache: {
+      size: number;
+      maxEntries: number;
+      ttlMs: number;
+      oldestEntry: number | null;
+      newestEntry: number | null;
+    };
+    domains: string[];
+  } {
+    const pageCacheStats = pageCache.getStats();
+    const apiCacheStats = apiCache.getStats();
+
+    // Combine domains from both caches
+    const allDomains = new Set([
+      ...pageCache.getDomains(),
+      ...apiCache.getDomains(),
+    ]);
+
+    return {
+      totalEntries: pageCacheStats.size + apiCacheStats.size,
+      pageCache: pageCacheStats,
+      apiCache: apiCacheStats,
+      domains: Array.from(allDomains).sort(),
+    };
   }
 
   /**
