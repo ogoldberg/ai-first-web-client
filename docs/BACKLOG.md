@@ -550,7 +550,7 @@ See [COMPETITIVE_ANALYSIS.md](COMPETITIVE_ANALYSIS.md) for context on why these 
 | LR-003 | Add retryWith parameter to browse tool | M | DONE | RetryConfig support in SmartBrowseOptions with userAgent, headers, delays, etc. |
 | LR-004 | Curate trusted source list | S | DONE | TRUSTED_SOURCES: github.com, stackoverflow.com, MDN, web.dev, playwright.dev |
 | LR-005 | Add recursion depth limit | S | Complete | Max 2 research attempts per blocked site. PR #153 |
-| LR-006 | Integrate successful retries with stealth learning | M | In Progress | Persist what worked via recordStealthSuccess() |
+| LR-006 | Integrate successful retries with stealth learning | M | Complete | Persist what worked via recordStealthSuccess(). PR #154 |
 
 **Example Flow:**
 ```
