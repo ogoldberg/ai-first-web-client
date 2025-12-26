@@ -440,10 +440,12 @@ export class VerificationEngine {
       return new RegExp(`id=['"]${this.escapeRegex(id)}['"]`, 'i');
     }
 
-    // Handle class selector: .foo -> class="...foo..."
+    // Handle class selector: .foo -> class="...foo..." with word boundaries
+    // Use (?:^|\\s) and (?:\\s|$|['\"]) to match complete class names
+    // This prevents .button from matching "submit-button"
     if (selector.startsWith('.')) {
       const className = selector.slice(1);
-      return new RegExp(`class=['"][^'"]*${this.escapeRegex(className)}[^'"]*['"]`, 'i');
+      return new RegExp(`class=['"][^'"]*(?:^|\\s)${this.escapeRegex(className)}(?:\\s|['"])[^'"]*['"]`, 'i');
     }
 
     // Handle data attribute: [data-foo] or [data-foo="bar"]

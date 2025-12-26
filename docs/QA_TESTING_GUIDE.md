@@ -341,7 +341,7 @@ Unbrowser includes a built-in verification engine (`src/core/verification-engine
 
     // Pattern matching
     fieldMatches: {
-      price: /\$\d+/,
+      price: /\$[\d,]+(\.\d{2})?/,  // Matches $10, $1,000, $19.99
       sku: /^SKU-\d{6}$/,
       email: /^[\w.]+@[\w.]+$/,
     },
@@ -371,24 +371,30 @@ Unbrowser includes a built-in verification engine (`src/core/verification-engine
 
 #### Cross-URL Verification
 
+State verification performs secondary requests to confirm state. Both `checkUrl` and `checkApi` take URL strings (not objects):
+
 ```typescript
 {
   type: 'state',
   assertion: {
-    // Browse another URL to verify state
-    checkUrl: {
-      url: 'https://api.example.com/product/123',
-      fieldExists: ['id', 'title'],
-    },
-    // Or call an API directly
-    checkApi: {
-      url: 'https://api.example.com/stock/123',
-      method: 'GET',
-      fieldMatches: {
-        quantity: /^\d+$/,
-      },
-    },
+    // Browse another URL to verify state (checks content loaded successfully)
+    checkUrl: 'https://example.com/product/123',
+    // Optional: Check if a CSS selector exists in the checkUrl result
+    checkSelector: '#product-details',
   },
+  severity: 'error',
+  retryable: true,
+}
+
+// Or use checkApi to call an API endpoint directly
+{
+  type: 'state',
+  assertion: {
+    // Call an API to verify state (checks for 2xx status and non-empty data)
+    checkApi: 'https://api.example.com/stock/123',
+  },
+  severity: 'error',
+  retryable: true,
 }
 ```
 
@@ -535,7 +541,7 @@ const results = await browser.batchBrowse(ecommerceSites, {
       type: 'content',
       assertion: {
         fieldExists: ['title', 'price'],
-        fieldMatches: { price: /[\$\u20AC\u00A3][\d,]+/ },
+        fieldMatches: { price: /[\$\u20AC\u00A3][\d,]+(\.\d{2})?/ },
       },
     }],
   },
@@ -673,7 +679,7 @@ describe('Product Page Tests', () => {
           type: 'content',
           assertion: {
             fieldExists: ['title', 'price', 'description'],
-            fieldMatches: { price: /\$\d+/ },
+            fieldMatches: { price: /\$[\d,]+(\.\d{2})?/ },
           },
         }],
       },
