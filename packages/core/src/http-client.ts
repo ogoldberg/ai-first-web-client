@@ -193,6 +193,127 @@ export interface ProgressEvent {
 
 export type ProgressCallback = (event: ProgressEvent) => void;
 
+// ============================================
+// Skill Pack Types (PACK-001)
+// ============================================
+
+export type SkillVertical =
+  | 'developer'
+  | 'ecommerce'
+  | 'social'
+  | 'news'
+  | 'finance'
+  | 'research'
+  | 'travel'
+  | 'general';
+
+export type SkillTier = 'essential' | 'domain-specific' | 'advanced';
+
+export interface BrowsingSkill {
+  id: string;
+  name: string;
+  description: string;
+  preconditions: {
+    urlPatterns?: string[];
+    domainPatterns?: string[];
+    requiredSelectors?: string[];
+    pageType?: string;
+  };
+  actionSequence: Array<{ type: string; [key: string]: any }>;
+  metrics: {
+    successCount: number;
+    failureCount: number;
+    timesUsed: number;
+  };
+  sourceDomain?: string;
+  tier?: SkillTier;
+  loadPriority?: number;
+  sizeEstimate?: number;
+}
+
+export interface AntiPattern {
+  id: string;
+  pattern: string;
+  reason: string;
+  learnedFrom: string;
+  occurrences: number;
+}
+
+export interface SkillWorkflow {
+  id: string;
+  name: string;
+  description: string;
+  domain: string;
+  steps: Array<{
+    skillId?: string;
+    action: string;
+    description: string;
+  }>;
+}
+
+export interface SkillPackMetadata {
+  id: string;
+  name: string;
+  description: string;
+  version: string;
+  createdAt: number;
+  sourceInstance?: string;
+  verticals: SkillVertical[];
+  domains: string[];
+  stats: {
+    skillCount: number;
+    antiPatternCount: number;
+    workflowCount: number;
+    totalSuccessCount: number;
+    avgSuccessRate: number;
+  };
+  compatibility: {
+    minVersion: string;
+    schemaVersion: string;
+  };
+}
+
+export interface SkillPack {
+  metadata: SkillPackMetadata;
+  skills: BrowsingSkill[];
+  antiPatterns: AntiPattern[];
+  workflows: SkillWorkflow[];
+}
+
+export interface SkillExportOptions {
+  domainPatterns?: string[];
+  verticals?: SkillVertical[];
+  includeAntiPatterns?: boolean;
+  includeWorkflows?: boolean;
+  minSuccessRate?: number;
+  minUsageCount?: number;
+  packName?: string;
+  packDescription?: string;
+}
+
+export type SkillConflictResolution = 'skip' | 'overwrite' | 'merge' | 'rename';
+
+export interface SkillImportOptions {
+  conflictResolution?: SkillConflictResolution;
+  domainFilter?: string[];
+  verticalFilter?: SkillVertical[];
+  importAntiPatterns?: boolean;
+  importWorkflows?: boolean;
+  resetMetrics?: boolean;
+  namePrefix?: string;
+}
+
+export interface SkillImportResult {
+  success: boolean;
+  skillsImported: number;
+  skillsSkipped: number;
+  skillsMerged: number;
+  antiPatternsImported: number;
+  workflowsImported: number;
+  errors: string[];
+  warnings: string[];
+}
+
 export class UnbrowserError extends Error {
   code: string;
 
@@ -619,6 +740,177 @@ export class UnbrowserClient {
    */
   async deleteWorkflow(workflowId: string): Promise<{ workflowId: string; deleted: boolean }> {
     return this.request('DELETE', `/v1/workflows/${workflowId}`);
+  }
+
+  // ============================================
+  // Skill Pack Management (PACK-001)
+  // ============================================
+
+  /**
+   * Export skills as a portable skill pack
+   *
+   * Create a JSON skill pack that can be shared via npm, GitHub, or imported
+   * into other Unbrowser instances. Filter by domain, vertical, or quality metrics.
+   *
+   * @example
+   * ```typescript
+   * // Export all GitHub skills
+   * const pack = await client.exportSkillPack({
+   *   domainPatterns: ['github.com'],
+   *   minSuccessRate: 0.8,
+   *   packName: 'My GitHub Skills'
+   * });
+   *
+   * // Save to file
+   * await fs.writeFile('github-skills.json', JSON.stringify(pack, null, 2));
+   * ```
+   */
+  async exportSkillPack(options?: SkillExportOptions): Promise<{
+    success: boolean;
+    pack: SkillPack;
+    metadata: {
+      skillCount: number;
+      antiPatternCount: number;
+      workflowCount: number;
+      version: string;
+      createdAt: number;
+    };
+  }> {
+    return this.request('POST', '/v1/skill-packs/export', options || {});
+  }
+
+  /**
+   * Import a skill pack into ProceduralMemory
+   *
+   * Install skills from a downloaded pack, npm package, or custom source.
+   * Configure conflict resolution and filtering options.
+   *
+   * @example
+   * ```typescript
+   * // Import skills from a pack
+   * const packJson = await fs.readFile('github-skills.json', 'utf-8');
+   * const pack = JSON.parse(packJson);
+   *
+   * const result = await client.importSkillPack(pack, {
+   *   conflictResolution: 'skip',
+   *   resetMetrics: false
+   * });
+   *
+   * console.log(`Imported ${result.result.skillsImported} skills`);
+   * console.log(`Skipped ${result.result.skillsSkipped} duplicates`);
+   * ```
+   */
+  async importSkillPack(
+    pack: SkillPack,
+    options?: SkillImportOptions
+  ): Promise<{
+    success: boolean;
+    result: SkillImportResult;
+  }> {
+    return this.request('POST', '/v1/skill-packs/import', { pack, options });
+  }
+
+  /**
+   * Browse official skill pack library
+   *
+   * List verified skill packs published by Unbrowser and the community.
+   * Filter by vertical or search by keywords.
+   *
+   * @example
+   * ```typescript
+   * // List all developer-focused packs
+   * const { packs } = await client.listSkillPackLibrary({ vertical: 'developer' });
+   *
+   * packs.forEach(pack => {
+   *   console.log(`${pack.name}: ${pack.skillCount} skills`);
+   * });
+   * ```
+   */
+  async listSkillPackLibrary(options?: {
+    vertical?: SkillVertical;
+    search?: string;
+  }): Promise<{
+    success: boolean;
+    packs: Array<{
+      id: string;
+      name: string;
+      description: string;
+      version: string;
+      verticals: SkillVertical[];
+      domains: string[];
+      skillCount: number;
+      downloadCount: number;
+      verified: boolean;
+      npmUrl: string;
+    }>;
+    total: number;
+  }> {
+    const params = new URLSearchParams();
+    if (options?.vertical) params.set('vertical', options.vertical);
+    if (options?.search) params.set('search', options.search);
+
+    const query = params.toString();
+    return this.request('GET', `/v1/skill-packs/library${query ? `?${query}` : ''}`);
+  }
+
+  /**
+   * Install a skill pack from the official library
+   *
+   * Download and install a published skill pack by ID. Currently returns
+   * 501 Not Implemented - use exportSkillPack() and importSkillPack() instead.
+   *
+   * @example
+   * ```typescript
+   * // Install GitHub skills (when implemented)
+   * const result = await client.installSkillPack('@unbrowser/skills-github', {
+   *   conflictResolution: 'skip'
+   * });
+   * ```
+   */
+  async installSkillPack(
+    packId: string,
+    options?: SkillImportOptions
+  ): Promise<{
+    success: boolean;
+    result: SkillImportResult;
+  }> {
+    return this.request('POST', '/v1/skill-packs/install', { packId, options });
+  }
+
+  /**
+   * Get statistics about loaded skills
+   *
+   * Returns skill counts by vertical and tier, plus progressive loading stats.
+   * Useful for monitoring memory usage and lazy loading behavior.
+   *
+   * @example
+   * ```typescript
+   * const stats = await client.getSkillPackStats();
+   *
+   * console.log(`Total skills: ${stats.totalSkills}`);
+   * console.log(`Essential (loaded): ${stats.loadingStats.totalLoaded}`);
+   * console.log(`Domain-specific (lazy): ${stats.byTier['domain-specific']}`);
+   * console.log(`Memory savings: ${stats.loadingStats.totalUnloaded} skills unloaded`);
+   * ```
+   */
+  async getSkillPackStats(): Promise<{
+    success: boolean;
+    totalSkills: number;
+    totalWorkflows: number;
+    totalAntiPatterns: number;
+    byVertical: Record<SkillVertical, number>;
+    byTier: {
+      essential: number;
+      'domain-specific': number;
+      advanced: number;
+    };
+    loadingStats: {
+      totalLoaded: number;
+      totalUnloaded: number;
+      loadedDomains: string[];
+    };
+  }> {
+    return this.request('GET', '/v1/skill-packs/stats');
   }
 }
 
