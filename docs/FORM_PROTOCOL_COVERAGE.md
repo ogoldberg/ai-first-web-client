@@ -76,6 +76,17 @@ See [WEBSOCKET_FORM_SUPPORT.md](WEBSOCKET_FORM_SUPPORT.md)
 
 See [SERVER_ACTION_SUPPORT.md](SERVER_ACTION_SUPPORT.md)
 
+### 8. **JSON-RPC** (JSON-RPC 1.0 & 2.0) (GAP-017 - Implemented 2025-12-26)
+- ✅ JSON-RPC 2.0 detection via `jsonrpc: "2.0"` field
+- ✅ JSON-RPC 1.0 (legacy) detection via method/params/id structure
+- ✅ Method name capture and learning
+- ✅ Parameter mapping (form fields → RPC params)
+- ✅ Timestamp-based request ID generation
+- ✅ Named and positional parameter support
+- ✅ 15-20x speedup for RPC-based forms
+
+See [JSON_RPC_SUPPORT.md](JSON_RPC_SUPPORT.md)
+
 ---
 
 ## ⚠️ Partially Supported (Exists Elsewhere, Not Integrated)
@@ -84,28 +95,7 @@ See [SERVER_ACTION_SUPPORT.md](SERVER_ACTION_SUPPORT.md)
 
 ## ❌ Not Supported (Major Gaps)
 
-### 1. **JSON-RPC**
-**Status:** ❌ **NOT SUPPORTED**
-
-**What's Missing:**
-No detection of JSON-RPC method calls
-
-**Example:**
-```javascript
-POST /api/rpc
-Content-Type: application/json
-
-{
-  "jsonrpc": "2.0",
-  "method": "user.create",
-  "params": { "name": "John", "email": "john@example.com" },
-  "id": 1
-}
-```
-
-**Gap:** Detect `jsonrpc` field and learn RPC patterns
-
-### 3. **gRPC-Web**
+### 1. **gRPC-Web**
 **Status:** ❌ **NOT SUPPORTED**
 
 **What's Missing:**
@@ -228,11 +218,11 @@ setUsers(users.map(u => u.id === 'temp-123' ? result : u));
 
 ### P2: Medium Priority (Nice to Have)
 
-| Gap | Impact | Frequency | Difficulty |
-|-----|--------|-----------|------------|
-| **JSON-RPC** | LOW | Uncommon | Low |
-| **Validation Handling** | MEDIUM | Common | Medium |
-| **Optimistic Updates** | LOW | Modern SPAs | Medium |
+| Gap | Impact | Frequency | Difficulty | Status |
+|-----|--------|-----------|------------|--------|
+| ~~**JSON-RPC**~~ | LOW | Uncommon | Low | ✅ Implemented (GAP-017) |
+| **Validation Handling** | MEDIUM | Common | Medium | ❌ Not Started |
+| **Optimistic Updates** | LOW | Modern SPAs | Medium | ❌ Not Started |
 
 ### P3: Low Priority (Edge Cases)
 
@@ -379,10 +369,10 @@ setUsers(users.map(u => u.id === 'temp-123' ? result : u));
 - ✅ **2FA/OTP (SMS, email, TOTP, authenticator)** - GAP-014 implemented 2025-12-26
 - ✅ **WebSocket submissions (Socket.IO, raw WebSocket, SockJS)** - GAP-015 implemented 2025-12-26
 - ✅ **Server Actions (Next.js 13+, Remix)** - GAP-016 implemented 2025-12-26
+- ✅ **JSON-RPC (1.0 & 2.0)** - GAP-017 implemented 2025-12-26
 
 **Major Gaps:**
 - ❌ OAuth flows
-- ❌ JSON-RPC
 - ❌ gRPC-Web
 
 **Estimated Impact:**
@@ -402,6 +392,6 @@ setUsers(users.map(u => u.id === 'temp-123' ? result : u));
 3. ~~Implement GAP-014 (2FA Support)~~ ✅ **Complete**
 4. ~~Implement GAP-015 (WebSocket Forms)~~ ✅ **Complete**
 5. ~~Implement GAP-016 (Server Actions)~~ ✅ **Complete**
-6. Implement GAP-018 (OAuth Flows) - P1
-7. Implement GAP-010 (Rate Limiting) - P1
-8. Implement GAP-017 (JSON-RPC) - P2
+6. ~~Implement GAP-017 (JSON-RPC)~~ ✅ **Complete**
+7. Implement GAP-018 (OAuth Flows) - P1
+8. Implement GAP-010 (Rate Limiting) - P1

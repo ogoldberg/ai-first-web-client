@@ -231,6 +231,13 @@ export interface LearnedFormPattern {
     variableMapping: Record<string, string>; // formField → GraphQL variable
   };
 
+  // JSON-RPC-specific (if patternType === 'json-rpc')
+  jsonRpcMethod?: {
+    methodName: string; // e.g., "user.create", "api.submit"
+    paramsMapping: Record<string, string>; // formField → RPC param
+    version: '1.0' | '2.0'; // JSON-RPC version
+  };
+
   // WebSocket-specific (if patternType === 'websocket')
   websocketPattern?: WebSocketPattern;
 
@@ -486,6 +493,38 @@ export class FormSubmissionLearner {
           'Accept': 'application/json',
         },
         body: JSON.stringify(graphqlPayload),
+      });
+    } else if (pattern.patternType === 'json-rpc' && pattern.jsonRpcMethod) {
+      // JSON-RPC method call
+      const rpcMethod = pattern.jsonRpcMethod;
+
+      // Build RPC params from form fields
+      const rpcParams: Record<string, any> = {};
+      for (const [formField, rpcParam] of Object.entries(rpcMethod.paramsMapping)) {
+        if (payload[formField] !== undefined) {
+          rpcParams[rpcParam] = payload[formField];
+        }
+      }
+
+      // Build JSON-RPC request
+      const rpcRequest: any = {
+        method: rpcMethod.methodName,
+        params: rpcParams,
+        id: Date.now(), // Use timestamp as ID (simple incrementing strategy)
+      };
+
+      // Add version field for JSON-RPC 2.0
+      if (rpcMethod.version === '2.0') {
+        rpcRequest.jsonrpc = '2.0';
+      }
+
+      response = await fetch(pattern.apiEndpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify(rpcRequest),
       });
     } else {
       // Standard REST request
@@ -1459,6 +1498,17 @@ export class FormSubmissionLearner {
       return this.createGraphQLPattern(formUrl, form, submitRequest, graphqlMutation, domain);
     }
 
+    // Check if this is a JSON-RPC method call
+    const jsonRpc = this.detectJsonRpc(submitRequest);
+    if (jsonRpc) {
+      logger.formLearner.info('Detected JSON-RPC submission', {
+        endpoint: submitRequest.url,
+        method: jsonRpc.methodName,
+        version: jsonRpc.version,
+      });
+      return this.createJsonRpcPattern(formUrl, form, submitRequest, jsonRpc, domain);
+    }
+
     // Try to extract field mapping from request body
     const fieldMapping = this.extractFieldMapping(form, submitRequest);
 
@@ -2282,6 +2332,160 @@ export class FormSubmissionLearner {
       actionId: serverAction.actionId,
       actionName: serverAction.actionName,
       fieldsCount: Object.keys(fieldMapping).length,
+    });
+
+    return pattern;
+  }
+
+  /**
+   * Detect JSON-RPC method call pattern
+   */
+  private detectJsonRpc(request: NetworkRequest): {
+    methodName: string;
+    params: Record<string, any>;
+    version: '1.0' | '2.0';
+    id: any;
+  } | null {
+    // JSON-RPC requires POST method
+    if (request.method !== 'POST') {
+      return null;
+    }
+
+    // Must be JSON content type
+    const contentType = request.requestHeaders?.['content-type'] || '';
+    if (!contentType.includes('application/json')) {
+      return null;
+    }
+
+    // Get request body
+    const requestBody = (request as any).requestBody;
+    if (!requestBody || typeof requestBody !== 'object') {
+      return null;
+    }
+
+    // JSON-RPC 2.0 detection
+    if (requestBody.jsonrpc === '2.0' && typeof requestBody.method === 'string') {
+      const params = requestBody.params || {};
+
+      logger.formLearner.info('Detected JSON-RPC 2.0 request', {
+        method: requestBody.method,
+        hasParams: !!requestBody.params,
+        id: requestBody.id,
+      });
+
+      return {
+        methodName: requestBody.method,
+        params: typeof params === 'object' ? params : {},
+        version: '2.0',
+        id: requestBody.id,
+      };
+    }
+
+    // JSON-RPC 1.0 detection (legacy)
+    if (typeof requestBody.method === 'string' && 'params' in requestBody && 'id' in requestBody) {
+      const params = requestBody.params || {};
+
+      logger.formLearner.info('Detected JSON-RPC 1.0 request', {
+        method: requestBody.method,
+        hasParams: !!requestBody.params,
+        id: requestBody.id,
+      });
+
+      return {
+        methodName: requestBody.method,
+        params: Array.isArray(params) ? {} : params, // 1.0 can use arrays, convert to object
+        version: '1.0',
+        id: requestBody.id,
+      };
+    }
+
+    return null;
+  }
+
+  /**
+   * Create a JSON-RPC pattern
+   */
+  private createJsonRpcPattern(
+    formUrl: string,
+    form: DetectedForm,
+    request: NetworkRequest,
+    jsonRpc: {
+      methodName: string;
+      params: Record<string, any>;
+      version: '1.0' | '2.0';
+      id: any;
+    },
+    domain: string
+  ): LearnedFormPattern {
+    // Extract field mapping from params
+    const paramsMapping: Record<string, string> = {};
+    const fieldMapping: Record<string, string> = {};
+
+    // Try to match form fields to RPC params
+    for (const field of form.fields) {
+      if (field.type === 'submit' || !field.name) continue;
+
+      const fieldName = field.name;
+
+      // Try exact match first
+      if (fieldName in jsonRpc.params) {
+        paramsMapping[fieldName] = fieldName;
+        fieldMapping[fieldName] = fieldName;
+      } else {
+        // Try camelCase/snake_case variations
+        const camelCase = this.toCamelCase(fieldName);
+        const snakeCase = this.toSnakeCase(fieldName);
+
+        if (camelCase in jsonRpc.params) {
+          paramsMapping[fieldName] = camelCase;
+          fieldMapping[fieldName] = camelCase;
+        } else if (snakeCase in jsonRpc.params) {
+          paramsMapping[fieldName] = snakeCase;
+          fieldMapping[fieldName] = snakeCase;
+        } else {
+          // Default to 1:1 mapping
+          paramsMapping[fieldName] = fieldName;
+          fieldMapping[fieldName] = fieldName;
+        }
+      }
+    }
+
+    // Detect CSRF handling
+    const csrfHandling = this.detectCsrfHandling(form);
+
+    const pattern: LearnedFormPattern = {
+      id: `json-rpc:${domain}:${Date.now()}`,
+      domain,
+      formUrl,
+      apiEndpoint: request.url,
+      method: 'POST',
+      patternType: 'json-rpc',
+      encoding: 'application/json',
+      jsonRpcMethod: {
+        methodName: jsonRpc.methodName,
+        paramsMapping,
+        version: jsonRpc.version,
+      },
+      fieldMapping,
+      fileFields: form.fileFields && form.fileFields.length > 0 ? form.fileFields : undefined,
+      csrfTokenField: csrfHandling?.fieldName,
+      csrfTokenSource: csrfHandling?.source,
+      csrfTokenSelector: csrfHandling?.selector,
+      requiredFields: form.fields.filter(f => f.required).map(f => f.name),
+      successIndicators: {
+        statusCodes: [request.status],
+      },
+      dynamicFields: [], // Will be populated by multi-submission learning
+      learnedAt: Date.now(),
+      timesUsed: 0,
+      successRate: 1.0,
+    };
+
+    logger.formLearner.info('Created JSON-RPC pattern', {
+      patternId: pattern.id,
+      method: jsonRpc.methodName,
+      version: jsonRpc.version,
+      paramsCount: Object.keys(paramsMapping).length,
     });
 
     return pattern;
