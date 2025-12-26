@@ -590,13 +590,56 @@ export interface EnhancedKnowledgeBaseEntry {
   loadPriority?: number;
   // Estimated size in KB (for load planning)
   sizeEstimate?: number;
+
+  // Content loading patterns (GAP-008)
+  contentLoadingPatterns?: ContentLoadingPatternEntry[];
+}
+
+/**
+ * Content loading pattern entry for persistence (GAP-008)
+ */
+export interface ContentLoadingPatternEntry {
+  /** Unique identifier */
+  id: string;
+  /** API endpoint that loads content */
+  endpoint: string;
+  /** URL pattern for matching */
+  urlPattern: string;
+  /** HTTP method */
+  method: 'GET' | 'POST';
+  /** When content is triggered to load */
+  triggerType: 'immediate' | 'delayed' | 'on_scroll' | 'on_interaction' | 'on_visibility';
+  /** Delay in ms for 'delayed' trigger */
+  triggerDelay?: number;
+  /** Parameters that vary between requests */
+  variableParams: string[];
+  /** Path to data in response */
+  dataPath: string;
+  /** Type of data at the path */
+  dataType: 'array' | 'object' | 'string';
+  /** Estimated item count (for arrays) */
+  itemCount?: number;
+  /** Size of response in bytes */
+  responseSize: number;
+  /** Fields that look like content */
+  contentFields: string[];
+  /** Whether this endpoint is essential for page content */
+  isEssential: boolean;
+  /** Confidence in this pattern (0-1) */
+  confidence: number;
+  /** Average response time (ms) */
+  avgResponseTime: number;
+  /** When pattern was discovered */
+  discoveredAt: number;
+  /** When pattern was last used */
+  lastUsedAt: number;
 }
 
 /**
  * Learning event for tracking what was learned
  */
 export interface LearningEvent {
-  type: 'api_discovered' | 'selector_learned' | 'validator_created' | 'pagination_detected' | 'failure_recorded' | 'pattern_verified' | 'confidence_decayed';
+  type: 'api_discovered' | 'selector_learned' | 'validator_created' | 'pagination_detected' | 'failure_recorded' | 'pattern_verified' | 'confidence_decayed' | 'content_loading_detected';
   domain: string;
   details: Record<string, unknown>;
   timestamp: number;

@@ -27,6 +27,7 @@ import type {
   RefreshPattern,
   ContentValidator,
   PaginationPattern,
+  ContentLoadingPatternEntry,
   DomainGroup,
   FailureContext,
   LearningEvent,
@@ -1715,6 +1716,181 @@ export class LearningEngine {
     const urlBase = this.extractUrlBase(url);
     const paginationPatterns = entry.paginationPatterns as Record<string, PaginationPattern>;
     return paginationPatterns[urlBase] || null;
+  }
+
+  // ============================================
+  // CONTENT LOADING PATTERN LEARNING (GAP-008)
+  // ============================================
+
+  /**
+   * Learn content loading patterns for a domain
+   */
+  learnContentLoadingPatterns(
+    domain: string,
+    patterns: ContentLoadingPatternEntry[]
+  ): void {
+    if (patterns.length === 0) return;
+
+    const entry = this.getOrCreateEntry(domain);
+    const now = Date.now();
+
+    // Initialize if not exists
+    if (!entry.contentLoadingPatterns) {
+      entry.contentLoadingPatterns = [];
+    }
+
+    // Add or update patterns
+    for (const pattern of patterns) {
+      const existingIndex = entry.contentLoadingPatterns.findIndex(
+        p => p.urlPattern === pattern.urlPattern
+      );
+
+      if (existingIndex >= 0) {
+        // Update existing pattern, merging metrics
+        const existing = entry.contentLoadingPatterns[existingIndex];
+        entry.contentLoadingPatterns[existingIndex] = {
+          ...pattern,
+          id: existing.id, // Preserve the original stable ID
+          // Keep higher confidence between existing and new
+          confidence: Math.max(existing.confidence, pattern.confidence),
+          // Use exponential moving average for response time
+          avgResponseTime: (existing.avgResponseTime * 0.8) + (pattern.avgResponseTime * 0.2),
+          // Keep earliest discovery time
+          discoveredAt: Math.min(existing.discoveredAt, pattern.discoveredAt),
+          lastUsedAt: now,
+        };
+      } else {
+        // Add new pattern
+        entry.contentLoadingPatterns.push({
+          ...pattern,
+          lastUsedAt: now,
+        });
+      }
+    }
+
+    // Sort by confidence and essentialness
+    entry.contentLoadingPatterns.sort((a, b) => {
+      if (a.isEssential !== b.isEssential) {
+        return a.isEssential ? -1 : 1;
+      }
+      return b.confidence - a.confidence;
+    });
+
+    // Limit to top 10 patterns per domain
+    if (entry.contentLoadingPatterns.length > 10) {
+      entry.contentLoadingPatterns = entry.contentLoadingPatterns.slice(0, 10);
+    }
+
+    entry.lastUpdated = now;
+    this.save();
+
+    // Record learning event
+    this.recordLearningEvent({
+      type: 'content_loading_detected',
+      domain,
+      details: {
+        patternCount: patterns.length,
+        endpoints: patterns.map(p => p.endpoint),
+      },
+      timestamp: now,
+    });
+
+    log.info('Learned content loading patterns', {
+      domain,
+      patternCount: patterns.length,
+      totalPatterns: entry.contentLoadingPatterns.length,
+    });
+  }
+
+  /**
+   * Get content loading patterns for a domain
+   */
+  getContentLoadingPatterns(domain: string): ContentLoadingPatternEntry[] {
+    const entry = this.entries.get(domain);
+    if (!entry || !entry.contentLoadingPatterns) {
+      return [];
+    }
+    return entry.contentLoadingPatterns;
+  }
+
+  /**
+   * Get the best content loading pattern for waiting
+   */
+  getBestContentLoadingPattern(domain: string): ContentLoadingPatternEntry | null {
+    const patterns = this.getContentLoadingPatterns(domain);
+    if (patterns.length === 0) return null;
+
+    // Return first pattern (already sorted by essential + confidence)
+    const best = patterns[0];
+
+    // Only return if confidence is high enough
+    if (best.confidence < 0.6 || !best.isEssential) {
+      return null;
+    }
+
+    return best;
+  }
+
+  /**
+   * Record success for a content loading pattern
+   */
+  recordContentLoadingSuccess(
+    domain: string,
+    patternId: string,
+    responseTime: number
+  ): void {
+    const entry = this.entries.get(domain);
+    if (!entry || !entry.contentLoadingPatterns) return;
+
+    const pattern = entry.contentLoadingPatterns.find(p => p.id === patternId);
+    if (!pattern) return;
+
+    // Update metrics
+    pattern.avgResponseTime =
+      (pattern.avgResponseTime * 0.8) + (responseTime * 0.2); // Exponential moving average
+    pattern.confidence = Math.min(1.0, pattern.confidence * 1.05); // Slight boost
+    pattern.lastUsedAt = Date.now();
+
+    this.save();
+  }
+
+  /**
+   * Record failure for a content loading pattern
+   */
+  recordContentLoadingFailure(
+    domain: string,
+    patternId: string,
+    reason: string
+  ): void {
+    const entry = this.entries.get(domain);
+    if (!entry || !entry.contentLoadingPatterns) return;
+
+    const pattern = entry.contentLoadingPatterns.find(p => p.id === patternId);
+    if (!pattern) return;
+
+    // Decay confidence on failure
+    pattern.confidence *= 0.85;
+    pattern.lastUsedAt = Date.now();
+
+    log.debug('Recorded content loading failure', {
+      domain,
+      patternId,
+      reason,
+      newConfidence: pattern.confidence,
+    });
+
+    // Remove pattern if confidence drops too low
+    if (pattern.confidence < 0.3) {
+      entry.contentLoadingPatterns = entry.contentLoadingPatterns.filter(
+        p => p.id !== patternId
+      );
+      log.info('Removed low-confidence content loading pattern', {
+        domain,
+        patternId,
+      });
+    }
+
+    this.save();
   }
 
   // ============================================
