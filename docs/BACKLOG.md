@@ -411,7 +411,7 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 
 | ID | Task | Effort | Status | Notes |
 |----|------|--------|--------|-------|
-| GAP-004 | Multi-Step Workflow Optimization | L | In Progress | Analyze workflows to find shortcut paths. Example: 4-step wizard → direct API call to final endpoint if it contains all data |
+| GAP-004 | Multi-Step Workflow Optimization | L | Complete | WorkflowOptimizer: detects API shortcuts and data sufficiency, tracks metrics, auto-promotes after 90%+ success. PR #184 |
 | GAP-005 | Pagination API Discovery | M | Not Started | Learn that "Next page" uses API calls (/api/results?page=2), eliminate browser renders for multi-page scraping |
 | GAP-006 | Search Query Optimization | M | Not Started | Learn search API endpoints (/api/search?q=...), eliminate form rendering for searches |
 
