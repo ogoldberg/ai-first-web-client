@@ -102,7 +102,28 @@ export interface FormSubmissionResult {
   duration: number;
   learned: boolean; // Whether a new pattern was learned
   error?: string;
+  otpRequired?: boolean; // Whether OTP challenge was encountered
+  otpChallenge?: OTPChallenge; // OTP challenge details (if applicable)
 }
+
+/**
+ * OTP/2FA challenge detected during submission
+ */
+export interface OTPChallenge {
+  type: 'sms' | 'email' | 'totp' | 'authenticator' | 'backup_code' | 'unknown';
+  message?: string; // Message shown to user (e.g., "Code sent to ***@example.com")
+  destination?: string; // Masked destination (e.g., "***@example.com", "***1234")
+  expiresIn?: number; // Seconds until code expires
+  retryAfter?: number; // Seconds until can request new code
+  endpoint: string; // OTP verification endpoint
+  codeLength?: number; // Expected code length (e.g., 6)
+}
+
+/**
+ * Callback for prompting user for OTP code
+ * Returns the OTP code entered by the user, or null if cancelled
+ */
+export type OTPPromptCallback = (challenge: OTPChallenge) => Promise<string | null>;
 
 /**
  * Dynamic field that needs to be fetched before each submission
@@ -171,6 +192,20 @@ export interface LearnedFormPattern {
     responseFields?: string[]; // Fields that indicate success
   };
 
+  // OTP/2FA handling (if this form requires 2FA)
+  requiresOTP?: boolean;
+  otpPattern?: {
+    detectionIndicators: {
+      statusCodes?: number[]; // e.g., [202, 401, 403]
+      responseFields?: string[]; // e.g., ['requires2FA', 'otpRequired']
+      responseValues?: Record<string, any>; // e.g., { requires2FA: true }
+    };
+    otpEndpoint: string; // Endpoint to submit OTP code
+    otpFieldName: string; // Field name for OTP code (e.g., 'code', 'otp', 'token')
+    otpMethod: 'POST' | 'PUT'; // HTTP method for OTP submission
+    otpType: 'sms' | 'email' | 'totp' | 'authenticator' | 'backup_code' | 'unknown';
+  };
+
   // Metadata
   learnedAt: number;
   timesUsed: number;
@@ -185,6 +220,8 @@ export interface SubmitFormOptions {
   timeout?: number;
   waitForNavigation?: boolean;
   csrfToken?: string; // Optional pre-fetched CSRF token
+  onOTPRequired?: OTPPromptCallback; // Callback when OTP is required
+  autoRetryOnOTP?: boolean; // Automatically retry submission with OTP (default: true)
 }
 
 export class FormSubmissionLearner {
@@ -357,11 +394,60 @@ export class FormSubmissionLearner {
       });
     }
 
+    // Try to parse response data (might fail if not JSON)
+    let responseData: any;
+    try {
+      responseData = await response.json();
+    } catch {
+      responseData = null;
+    }
+
+    // Check for OTP challenge BEFORE throwing error on non-OK response
+    const otpChallenge = this.detectOTPChallenge(response, responseData);
+
+    if (otpChallenge) {
+      logger.formLearner.info('OTP challenge detected during API submission', {
+        otpType: otpChallenge.type,
+        endpoint: otpChallenge.endpoint,
+      });
+
+      // Learn OTP pattern for future submissions
+      if (!pattern.requiresOTP) {
+        this.learnOTPPattern(pattern, otpChallenge, response, responseData);
+      }
+
+      // If no OTP callback provided, we can't proceed
+      if (!options.onOTPRequired) {
+        throw new Error('OTP required but no onOTPRequired callback provided. Cannot complete submission.');
+      }
+
+      // Prompt user for OTP code
+      const otpCode = await options.onOTPRequired(otpChallenge);
+
+      if (!otpCode) {
+        throw new Error('OTP code not provided by user. Submission cancelled.');
+      }
+
+      // Submit OTP code
+      const otpResponse = await this.submitOTP(otpChallenge, otpCode, pattern);
+
+      if (!otpResponse.ok) {
+        throw new Error(`OTP verification failed: ${otpResponse.status} ${otpResponse.statusText}`);
+      }
+
+      // Parse OTP response
+      const otpResponseData = await otpResponse.json();
+
+      return {
+        responseUrl: otpResponse.url,
+        data: otpResponseData,
+      };
+    }
+
+    // No OTP challenge - proceed with normal validation
     if (!response.ok) {
       throw new Error(`API request failed: ${response.status} ${response.statusText}`);
     }
-
-    const responseData = await response.json();
 
     // Validate success
     if (!this.isSuccessResponse(response.status, responseData, pattern)) {
@@ -438,6 +524,203 @@ export class FormSubmissionLearner {
     });
 
     return response;
+  }
+
+  /**
+   * Detect OTP challenge from API response
+   */
+  private detectOTPChallenge(
+    response: Response,
+    responseData: any
+  ): OTPChallenge | null {
+    // Common OTP detection patterns
+    const status = response.status;
+
+    // Pattern 1: Status code based (202 Accepted, 401 Unauthorized with 2FA required)
+    const otpStatusCodes = [202, 401, 403, 428]; // 428 = Precondition Required
+    const isOTPStatus = otpStatusCodes.includes(status);
+
+    // Pattern 2: Response field based
+    const otpFieldPatterns = [
+      'requires2FA',
+      'requiresOTP',
+      'twoFactorRequired',
+      'otpRequired',
+      'mfaRequired',
+      'verification_required',
+      'challenge_type',
+    ];
+
+    const hasOTPField = otpFieldPatterns.some(
+      field => responseData && field in responseData && responseData[field]
+    );
+
+    // Pattern 3: Response message based
+    const otpMessagePatterns = [
+      /verification code/i,
+      /2FA/i,
+      /two.factor/i,
+      /authentication code/i,
+      /OTP/i,
+      /one.time password/i,
+      /sent.*(code|token)/i,
+    ];
+
+    const message = responseData?.message || responseData?.error || '';
+    const hasOTPMessage = otpMessagePatterns.some(pattern => pattern.test(message));
+
+    if (!isOTPStatus && !hasOTPField && !hasOTPMessage) {
+      return null; // Not an OTP challenge
+    }
+
+    logger.formLearner.info('Detected OTP challenge', {
+      status,
+      hasOTPField,
+      hasOTPMessage,
+      responseData,
+    });
+
+    // Extract OTP details from response
+    const otpType = this.extractOTPType(responseData);
+    const otpEndpoint = responseData?.otpEndpoint ||
+                       responseData?.verification_url ||
+                       responseData?.verify_url ||
+                       response.url; // Default to same endpoint
+
+    const codeLength = responseData?.codeLength ||
+                      responseData?.code_length ||
+                      (otpType === 'totp' ? 6 : undefined);
+
+    const challenge: OTPChallenge = {
+      type: otpType,
+      message: responseData?.message || responseData?.error || `Verification code required (${otpType})`,
+      destination: responseData?.destination || responseData?.masked_destination,
+      expiresIn: responseData?.expiresIn || responseData?.expires_in,
+      retryAfter: responseData?.retryAfter || responseData?.retry_after,
+      endpoint: otpEndpoint,
+      codeLength,
+    };
+
+    return challenge;
+  }
+
+  /**
+   * Extract OTP type from response data
+   */
+  private extractOTPType(responseData: any): OTPChallenge['type'] {
+    const type = responseData?.otpType ||
+                responseData?.method ||
+                responseData?.challenge_type ||
+                responseData?.verificationType;
+
+    if (!type) {
+      // Try to infer from message
+      const message = (responseData?.message || '').toLowerCase();
+      if (message.includes('sms')) return 'sms';
+      if (message.includes('email')) return 'email';
+      if (message.includes('authenticator')) return 'authenticator';
+      if (message.includes('totp')) return 'totp';
+      if (message.includes('backup')) return 'backup_code';
+      return 'unknown';
+    }
+
+    const typeStr = String(type).toLowerCase();
+    if (typeStr.includes('sms')) return 'sms';
+    if (typeStr.includes('email')) return 'email';
+    if (typeStr.includes('totp')) return 'totp';
+    if (typeStr.includes('authenticator') || typeStr.includes('app')) return 'authenticator';
+    if (typeStr.includes('backup')) return 'backup_code';
+
+    return 'unknown';
+  }
+
+  /**
+   * Submit OTP code to verification endpoint
+   */
+  private async submitOTP(
+    challenge: OTPChallenge,
+    otpCode: string,
+    pattern?: LearnedFormPattern
+  ): Promise<Response> {
+    // Determine OTP field name (use learned pattern if available)
+    const otpFieldName = pattern?.otpPattern?.otpFieldName || 'code';
+    const otpMethod = pattern?.otpPattern?.otpMethod || 'POST';
+
+    logger.formLearner.info('Submitting OTP code', {
+      endpoint: challenge.endpoint,
+      otpType: challenge.type,
+      codeLength: otpCode.length,
+    });
+
+    const response = await fetch(challenge.endpoint, {
+      method: otpMethod,
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify({
+        [otpFieldName]: otpCode,
+      }),
+    });
+
+    return response;
+  }
+
+  /**
+   * Learn OTP pattern from challenge and add it to form pattern
+   */
+  private learnOTPPattern(
+    pattern: LearnedFormPattern,
+    challenge: OTPChallenge,
+    initialResponse: Response,
+    initialResponseData: any
+  ): void {
+    logger.formLearner.info('Learning OTP pattern', {
+      patternId: pattern.id,
+      otpType: challenge.type,
+      endpoint: challenge.endpoint,
+    });
+
+    // Detect OTP field name by trying common patterns
+    const otpFieldName = initialResponseData?.otpFieldName ||
+                        initialResponseData?.code_field ||
+                        'code'; // Default
+
+    pattern.requiresOTP = true;
+    pattern.otpPattern = {
+      detectionIndicators: {
+        statusCodes: [initialResponse.status],
+        responseFields: Object.keys(initialResponseData || {}).filter(key =>
+          key.toLowerCase().includes('otp') ||
+          key.toLowerCase().includes('2fa') ||
+          key.toLowerCase().includes('mfa') ||
+          key.toLowerCase().includes('verification')
+        ),
+        responseValues: {},
+      },
+      otpEndpoint: challenge.endpoint,
+      otpFieldName,
+      otpMethod: 'POST', // Default, could be learned
+      otpType: challenge.type,
+    };
+
+    // Extract specific response values that indicate OTP requirement
+    if (initialResponseData) {
+      for (const [key, value] of Object.entries(initialResponseData)) {
+        if (
+          typeof value === 'boolean' && value === true &&
+          (key.includes('requires') || key.includes('needed') || key.includes('required'))
+        ) {
+          pattern.otpPattern.detectionIndicators.responseValues![key] = value;
+        }
+      }
+    }
+
+    logger.formLearner.info('OTP pattern learned', {
+      patternId: pattern.id,
+      otpFieldName,
+      detectionFields: pattern.otpPattern.detectionIndicators.responseFields,
+    });
   }
 
   /**

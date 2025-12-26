@@ -427,7 +427,7 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 |----|------|--------|--------|-------|
 | GAP-012 | File Upload Support | L | ✅ Implemented | Handles multipart/form-data, detects file fields, learns upload patterns. Supports Buffer/base64/filePath. See [FILE_UPLOAD_SUPPORT.md](FILE_UPLOAD_SUPPORT.md) |
 | GAP-013 | GraphQL Mutation Learning | M | ✅ Implemented | Integrated with GraphQL introspection, detects mutations in forms, maps form fields to GraphQL variables. See [GRAPHQL_FORM_SUPPORT.md](GRAPHQL_FORM_SUPPORT.md) |
-| GAP-014 | Two-Factor Auth Support | L | Not Started | Detect OTP challenges, pause workflow, prompt user for code, resume submission. Critical for auth workflows |
+| GAP-014 | Two-Factor Auth Support | L | ✅ Implemented | Detects OTP challenges (SMS/email/TOTP), pauses workflow, prompts user via callback, learns OTP patterns. Unblocks ~50% of auth flows. See [TWO_FACTOR_AUTH_SUPPORT.md](TWO_FACTOR_AUTH_SUPPORT.md) |
 | GAP-015 | WebSocket Form Submissions | M | Not Started | Detect WebSocket emit patterns, learn event payloads, integrate with AsyncAPI discovery |
 | GAP-016 | Server Action Support | M | Not Started | Handle Next.js/Remix server actions, detect Next-Action header, learn action patterns |
 | GAP-017 | JSON-RPC Form Patterns | S | Not Started | Detect JSON-RPC method calls, learn RPC patterns |
