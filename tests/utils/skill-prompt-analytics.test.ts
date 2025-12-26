@@ -103,7 +103,9 @@ describe('Skill Prompt Analytics (SK-011)', () => {
       completeSkillPromptExecution(execution, true);
 
       expect(execution.success).toBe(true);
-      expect(execution.durationMs).toBeGreaterThanOrEqual(50);
+      // Use 45ms threshold to account for timer precision variance
+      // setTimeout(50) can fire slightly early on some platforms
+      expect(execution.durationMs).toBeGreaterThanOrEqual(45);
       expect(execution.completedAt).toBeDefined();
     });
 
