@@ -40,65 +40,97 @@ Ready-to-submit skill definition following Anthropic's skill format:
 
 ## Recommended Implementation Order
 
-Based on impact vs. effort analysis:
+Based on impact vs. effort analysis (build → validate → promote):
 
-### Phase 1: Quick Wins (1-2 weeks)
+### Phase 1: Core Enhancements (2-3 weeks)
 
-| Priority | Task | Effort | Impact | File |
-|----------|------|--------|--------|------|
-| **P1** | Submit Unbrowser skill to Composio | S (1-2 hours) | High | `skills/unbrowser/SKILL.md` |
-| **P2** | Enhanced Article Detection (ART-001) | S (1 day) | Medium | `src/core/content-intelligence.ts` |
-| **P3** | Playwright Debug Mode (PLAY-001) | S (1 day) | Low | `src/core/tiered-fetcher.ts` |
-
-### Phase 2: Core Enhancements (2-3 weeks)
+Build the foundational improvements first:
 
 | Priority | Task | Effort | Impact | Files |
 |----------|------|--------|--------|-------|
 | **P1** | Progressive Knowledge Loading (PROG-001) | M (2-3 days) | High | `src/core/procedural-memory.ts`, `src/core/learning-engine.ts` |
 | **P1** | Skill Pack Infrastructure (PACK-001) | L (4-5 days) | High | `packages/api/routes/skill-packs.ts`, `packages/core/skill-packs.ts` |
+| **P2** | Enhanced Article Detection (ART-001) | S (1 day) | Medium | `src/core/content-intelligence.ts` |
 
-### Phase 3: Advanced Features (3-4 weeks)
+### Phase 2: Polish & Validation (1-2 weeks)
+
+Validate everything works well and add nice-to-have features:
 
 | Priority | Task | Effort | Impact | Notes |
 |----------|------|--------|--------|-------|
 | **P2** | Multi-Page Workflow Orchestration (WORK-001) | M (already in progress) | Medium | Already planned as COMP-009 in BACKLOG.md |
+| **P3** | Playwright Debug Mode (PLAY-001) | S (1 day) | Low | `src/core/tiered-fetcher.ts` |
 | **P3** | API Fuzzing Discovery (FUZZ-001) | S (1 day) | Low | `src/core/api-discovery-orchestrator.ts` |
+| **P3** | Create example workflows | S (1 day) | High | Demonstrate skill packs, article extraction, etc. |
+
+### Phase 3: Public Release (After validation)
+
+Only promote after we're confident everything works:
+
+| Priority | Task | Effort | Impact | File |
+|----------|------|--------|--------|------|
+| **P1** | Submit Unbrowser skill to Composio | S (1-2 hours) | High | `skills/unbrowser/SKILL.md` |
+| **P2** | Create demo video | S (2-3 hours) | Medium | Show off capabilities for marketplace |
+| **P3** | Write blog post | M (1 day) | Medium | Announce integration with Composio skills |
 
 ---
 
-## Phase 1 Details: Quick Wins
+## Phase 1 Details: Core Enhancements
 
-### 1. Submit Unbrowser Skill to Composio ✅ Ready
+### 1. Progressive Knowledge Loading (PROG-001)
 
-**Task:** Create PR to add Unbrowser to awesome-claude-skills marketplace
+**Task:** Add tiered loading to ProceduralMemory and LearningEngine
 
-**Steps:**
-1. Fork https://github.com/ComposioHQ/awesome-claude-skills
-2. Add entry to README.md under "Development & Code Tools":
-   ```markdown
-   - **Unbrowser** - https://github.com/ogoldberg/ai-first-web-client/tree/main/skills/unbrowser
-   ```
-3. Copy `skills/unbrowser/SKILL.md` to fork
-4. Submit PR with title: "Add Unbrowser - Intelligent Web Browsing Skill"
-5. PR description:
-   ```markdown
-   Adds Unbrowser, an intelligent web browsing API that:
-   - Learns from browsing patterns to eliminate rendering overhead
-   - Discovers APIs automatically for 10x faster extraction
-   - Supports authenticated sessions and multi-step workflows
-   - Provides both local MCP server and cloud API access
+See detailed implementation in `COMPOSIO_INTEGRATION_ANALYSIS.md` section 1.
 
-   The skill is ready to use via npm (`llm-browser`) or Claude Desktop MCP configuration.
-   ```
+**Key changes:**
+- Add `tier` field to `BrowsingSkill` type
+- Modify `ProceduralMemory` to support lazy loading
+- Create migration script to classify existing skills
+- Update `SmartBrowser` to trigger tier loading
 
-**Effort:** 1-2 hours
-**Impact:** High - Marketing & discovery channel
+**Files:**
+- `src/types/index.ts` (add tier field)
+- `src/core/procedural-memory.ts` (lazy loading)
+- `src/core/learning-engine.ts` (lazy loading)
+- `src/core/smart-browser.ts` (trigger loading)
+- `scripts/migrate-skill-tiers.ts` (migration)
+
+**Effort:** 2-3 days
+**Impact:** High - Scalability & performance (80% memory reduction)
 **Owner:** TBD
-**Deadline:** Within 1 week
+**Deadline:** Within 3 weeks
 
 ---
 
-### 2. Enhanced Article Detection (ART-001)
+### 2. Skill Pack Infrastructure (PACK-001)
+
+**Task:** Enable distribution and installation of pre-learned skill packs
+
+See detailed implementation in `COMPOSIO_INTEGRATION_ANALYSIS.md` section 2.
+
+**Components:**
+
+1. **SkillPack Type** (`src/types/index.ts`)
+2. **Export/Import** (`src/core/procedural-memory.ts`)
+3. **API Endpoints** (`packages/api/routes/skill-packs.ts`)
+4. **SDK Methods** (`packages/core/skill-packs.ts`)
+5. **MCP Support** (`packages/mcp/skill-packs.ts`)
+
+**Official Packs to Create:**
+- `@unbrowser/skills-linkedin` - LinkedIn profile extraction
+- `@unbrowser/skills-ecommerce` - Product pages, pricing
+- `@unbrowser/skills-news` - Article extraction
+- `@unbrowser/skills-github` - Repository data, API discovery
+
+**Effort:** 4-5 days
+**Impact:** High - New distribution channel
+**Owner:** TBD
+**Deadline:** Within 3 weeks
+
+---
+
+### 3. Enhanced Article Detection (ART-001)
 
 **Task:** Improve article content extraction in ContentIntelligence
 
@@ -338,62 +370,179 @@ POST /v1/browse
 **Effort:** 1 day
 **Impact:** Low - Nice for debugging, not critical
 **Owner:** TBD
-**Deadline:** Within 2 weeks
+**Deadline:** Within 3 weeks
 
 ---
 
-## Phase 2 Details: Core Enhancements
+## Phase 2 Details: Polish & Validation
 
-### 4. Progressive Knowledge Loading (PROG-001)
+### 4. Multi-Page Workflow Orchestration (WORK-001)
 
-**Task:** Add tiered loading to ProceduralMemory and LearningEngine
+**Task:** Complete implementation of workflow recording and replay
 
-See detailed implementation in `COMPOSIO_INTEGRATION_ANALYSIS.md` section 1.
+This is already in progress as **COMP-009** in BACKLOG.md. The API endpoints exist, need SDK wrappers.
 
-**Key changes:**
-- Add `tier` field to `BrowsingSkill` type
-- Modify `ProceduralMemory` to support lazy loading
-- Create migration script to classify existing skills
-- Update `SmartBrowser` to trigger tier loading
+**Example Usage:**
+```typescript
+// Record workflow
+const workflow = await client.recordWorkflow(async (recorder) => {
+  const homepage = await recorder.browse('https://example.com');
+  const about = await recorder.browse('https://example.com/about');
+  const contact = await recorder.browse('https://example.com/contact');
 
-**Files:**
-- `src/types/index.ts` (add tier field)
-- `src/core/procedural-memory.ts` (lazy loading)
-- `src/core/learning-engine.ts` (lazy loading)
-- `src/core/smart-browser.ts` (trigger loading)
-- `scripts/migrate-skill-tiers.ts` (migration)
+  return {
+    name: homepage.content.structured?.companyName,
+    description: about.content.text,
+    email: contact.content.structured?.email,
+  };
+});
 
-**Effort:** 2-3 days
-**Impact:** High - Scalability & performance
+// Replay on different company
+const result = await workflow.replay('https://another-company.com');
+```
+
+**Effort:** M (2-3 days, SDK wrappers needed)
+**Impact:** Medium - Enable multi-page data gathering
 **Owner:** TBD
-**Deadline:** Within 1 month
+**Deadline:** Within 4 weeks
 
 ---
 
-### 5. Skill Pack Infrastructure (PACK-001)
+### 5. Playwright Debug Mode (PLAY-001)
 
-**Task:** Enable distribution and installation of pre-learned skill packs
+See section 3 above for implementation details.
 
-See detailed implementation in `COMPOSIO_INTEGRATION_ANALYSIS.md` section 2.
-
-**Components:**
-
-1. **SkillPack Type** (`src/types/index.ts`)
-2. **Export/Import** (`src/core/procedural-memory.ts`)
-3. **API Endpoints** (`packages/api/routes/skill-packs.ts`)
-4. **SDK Methods** (`packages/core/skill-packs.ts`)
-5. **MCP Support** (`packages/mcp/skill-packs.ts`)
-
-**Official Packs to Create:**
-- `@unbrowser/skills-linkedin` - LinkedIn profile extraction
-- `@unbrowser/skills-ecommerce` - Product pages, pricing
-- `@unbrowser/skills-news` - Article extraction
-- `@unbrowser/skills-github` - Repository data, API discovery
-
-**Effort:** 4-5 days
-**Impact:** High - New distribution channel
+**Effort:** 1 day
+**Impact:** Low - Debugging aid
 **Owner:** TBD
-**Deadline:** Within 1 month
+**Deadline:** Within 4 weeks
+
+---
+
+### 6. API Fuzzing Discovery (FUZZ-001)
+
+**Task:** Add fuzzing-based discovery to complement existing pattern learning
+
+```typescript
+class ApiDiscoveryOrchestrator {
+  async discoverViaFuzzing(baseUrl: string): Promise<ApiEndpoint[]> {
+    const commonPaths = [
+      '/api', '/api/v1', '/api/v2',
+      '/graphql', '/rest', '/v1',
+      '/.well-known/openapi.json',
+      '/swagger.json', '/docs'
+    ];
+
+    // Try each path, collect 200/301 responses
+    // Learn successful patterns for future
+    return endpoints;
+  }
+}
+```
+
+**Effort:** 1 day
+**Impact:** Low - Nice-to-have, existing discovery is good
+**Owner:** TBD
+**Deadline:** Within 4 weeks
+
+---
+
+### 7. Create Example Workflows
+
+**Task:** Build comprehensive examples demonstrating Unbrowser capabilities
+
+**Examples to create:**
+- LinkedIn profile extraction (skill pack demo)
+- E-commerce product monitoring
+- News article aggregation
+- GitHub repository intelligence
+- Multi-page company research workflow
+
+**Location:** `examples/` directory in repository
+
+**Effort:** 1 day
+**Impact:** High - Needed for marketplace submission
+**Owner:** TBD
+**Deadline:** Within 4 weeks (before Phase 3)
+
+---
+
+## Phase 3 Details: Public Release
+
+### 8. Submit Unbrowser Skill to Composio
+
+**Task:** Create PR to add Unbrowser to awesome-claude-skills marketplace
+
+**Prerequisites:**
+- ✅ Skill definition exists (`skills/unbrowser/SKILL.md`)
+- ⏳ Core features implemented (PROG-001, PACK-001, ART-001)
+- ⏳ Examples created and tested
+- ⏳ At least one skill pack published (`@unbrowser/skills-linkedin`)
+
+**Steps:**
+1. Fork https://github.com/ComposioHQ/awesome-claude-skills
+2. Add entry to README.md under "Development & Code Tools":
+   ```markdown
+   - **Unbrowser** - https://github.com/ogoldberg/ai-first-web-client/tree/main/skills/unbrowser
+   ```
+3. Copy `skills/unbrowser/SKILL.md` to fork
+4. Submit PR with title: "Add Unbrowser - Intelligent Web Browsing Skill"
+5. PR description:
+   ```markdown
+   Adds Unbrowser, an intelligent web browsing API that:
+   - Learns from browsing patterns to eliminate rendering overhead (10x speedup)
+   - Discovers APIs automatically for faster extraction
+   - Supports authenticated sessions and multi-step workflows
+   - Distributes pre-learned skill packs via npm
+   - Provides both local MCP server and cloud API access
+
+   The skill is ready to use via npm (`llm-browser`) or Claude Desktop MCP configuration.
+
+   Examples: https://github.com/ogoldberg/ai-first-web-client/tree/main/examples
+   ```
+
+**Effort:** 1-2 hours
+**Impact:** High - Marketing & discovery channel
+**Owner:** TBD
+**Deadline:** After Phase 1 & 2 completion
+
+---
+
+### 9. Create Demo Video
+
+**Task:** Record 2-3 minute demo showing Unbrowser capabilities
+
+**Content:**
+- Show Claude Desktop with Unbrowser MCP
+- Demonstrate article extraction (before/after learning)
+- Show API discovery in action
+- Install and use a skill pack
+- Highlight 10x speedup after learning
+
+**Platform:** YouTube or Loom
+**Effort:** 2-3 hours
+**Impact:** Medium - Visual demo for marketplace
+**Owner:** TBD
+**Deadline:** After Phase 1 & 2 completion
+
+---
+
+### 10. Write Blog Post
+
+**Task:** Announce Unbrowser + Composio skills integration
+
+**Topics:**
+- How Unbrowser learns from Composio skills patterns
+- Progressive disclosure architecture
+- Skill pack distribution model
+- Performance benchmarks (10x speedup)
+- Future roadmap
+
+**Platform:** Medium, Dev.to, or company blog
+**Effort:** 1 day
+**Impact:** Medium - Marketing & SEO
+**Owner:** TBD
+**Deadline:** After marketplace submission
 
 ---
 
@@ -415,17 +564,25 @@ Track these metrics to measure success:
 ### Immediate (This Week)
 - [ ] **Review** this plan with team
 - [ ] **Assign** owners for Phase 1 tasks
-- [ ] **Submit** Unbrowser skill PR to Composio
+- [ ] **Start** PROG-001 design and implementation
+- [ ] **Start** PACK-001 design document
 
-### Short Term (2 Weeks)
-- [ ] **Implement** ART-001 (Enhanced Article Detection)
-- [ ] **Implement** PLAY-001 (Playwright Debug Mode)
-- [ ] **Start** PROG-001 design document
-
-### Medium Term (1 Month)
-- [ ] **Complete** PROG-001 (Progressive Loading)
+### Short Term (3 Weeks)
+- [ ] **Complete** PROG-001 (Progressive Knowledge Loading)
 - [ ] **Complete** PACK-001 (Skill Pack Infrastructure)
-- [ ] **Release** first official skill pack (`@unbrowser/skills-linkedin`)
+- [ ] **Implement** ART-001 (Enhanced Article Detection)
+- [ ] **Create** first official skill pack (`@unbrowser/skills-linkedin`)
+
+### Medium Term (4-6 Weeks)
+- [ ] **Complete** Phase 2 validation tasks (WORK-001, PLAY-001, FUZZ-001)
+- [ ] **Create** example workflows demonstrating all capabilities
+- [ ] **Test** skill packs with real-world use cases
+- [ ] **Document** all new features
+
+### Long Term (After Validation)
+- [ ] **Submit** Unbrowser skill PR to Composio
+- [ ] **Create** demo video showcasing capabilities
+- [ ] **Publish** blog post announcing integration
 
 ---
 
