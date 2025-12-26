@@ -49,6 +49,18 @@ export interface WorkflowStep {
 }
 
 /**
+ * Workflow type classification (GAP-003)
+ * Used to identify special workflow types like login flows
+ */
+export type WorkflowType =
+  | 'general'       // Default workflow type
+  | 'login'         // Authentication/login workflow
+  | 'checkout'      // E-commerce checkout workflow
+  | 'form'          // Form submission workflow
+  | 'search'        // Search/query workflow
+  | 'navigation';   // Navigation/browsing workflow
+
+/**
  * Saved workflow (can be replayed)
  */
 export interface Workflow {
@@ -57,6 +69,7 @@ export interface Workflow {
   description: string;
   domain: string;
   tags: string[];
+  type?: WorkflowType; // GAP-003: Workflow type for special handling (default: 'general')
   steps: WorkflowStep[];
 
   // Metadata
