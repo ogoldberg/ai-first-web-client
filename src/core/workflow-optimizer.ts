@@ -299,7 +299,7 @@ export class WorkflowOptimizer {
             estimatedSpeedupFactor: this.calculateSpeedup(bypassedDuration, apiRequest.duration || 200),
             confidence: coverage,
             dataFieldsCovered: covered,
-            requiredParameters: [], // Extract from URL if needed
+            requiredParameters: this.extractUrlParameters(apiRequest.url),
             metrics: this.createEmptyMetrics(),
             discoveredAt: Date.now(),
             isPromoted: false,
@@ -360,7 +360,8 @@ export class WorkflowOptimizer {
       responseData = typeof apiRequest.responseBody === 'string'
         ? JSON.parse(apiRequest.responseBody)
         : apiRequest.responseBody;
-    } catch {
+    } catch (error) {
+      optimizerLogger.debug('Failed to parse API response body as JSON', { url: apiRequest.url, error });
       return null; // Not valid JSON
     }
 
@@ -447,12 +448,13 @@ export class WorkflowOptimizer {
     try {
       const parsed = new URL(url);
 
-      // Extract path parameters (e.g., /users/123 -> userId)
+      // Extract path parameters (e.g., /users/123/orders/456 -> resourceId0, resourceId1)
       const pathParts = parsed.pathname.split('/').filter(Boolean);
       for (const part of pathParts) {
         // Detect numeric IDs or UUIDs
         if (/^\d+$/.test(part) || /^[a-f0-9-]{36}$/i.test(part)) {
-          params.push('resourceId');
+          // Use unique names for each resource ID found
+          params.push(`resourceId${params.filter(p => p.startsWith('resourceId')).length}`);
         }
       }
 
@@ -460,8 +462,8 @@ export class WorkflowOptimizer {
       parsed.searchParams.forEach((_, key) => {
         params.push(key);
       });
-    } catch {
-      // Invalid URL
+    } catch (error) {
+      optimizerLogger.warn('Failed to parse URL', { url, error });
     }
 
     return [...new Set(params)]; // Deduplicate
@@ -520,7 +522,8 @@ export class WorkflowOptimizer {
     let data: any;
     try {
       data = typeof responseBody === 'string' ? JSON.parse(responseBody) : responseBody;
-    } catch {
+    } catch (error) {
+      optimizerLogger.debug('Failed to parse response body for structure analysis', { error });
       return undefined;
     }
 

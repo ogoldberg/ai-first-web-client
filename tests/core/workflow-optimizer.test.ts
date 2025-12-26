@@ -187,9 +187,9 @@ describe('WorkflowOptimizer', () => {
 
       const result = await optimizer.analyzeWorkflow(workflow, networkData);
 
-      // Should find at least one optimization
-      const apiShortcuts = result.optimizations.filter(o => o.type === 'api_shortcut');
-      expect(apiShortcuts.length).toBeGreaterThanOrEqual(0); // May not trigger if confidence is low
+      // Should find optimizations - the API contains all fields from earlier steps
+      // and the confidence should be high enough given the complete field coverage
+      expect(result.optimizations.length).toBeGreaterThan(0);
     });
 
     it('should not detect shortcut for non-JSON responses', async () => {
@@ -273,7 +273,8 @@ describe('WorkflowOptimizer', () => {
       ];
 
       const result = await optimizer.analyzeWorkflow(workflow, networkData);
-      expect(result.optimizations.length).toBeGreaterThanOrEqual(0);
+      // With API path and full coverage, should find optimizations
+      expect(result.optimizations.length).toBeGreaterThan(0);
     });
   });
 
@@ -313,7 +314,7 @@ describe('WorkflowOptimizer', () => {
       const dataSufficiencyOpts = result.optimizations.filter(o => o.type === 'data_sufficiency');
 
       // Should detect data sufficiency since step 3 has all fields from steps 1 and 2
-      expect(dataSufficiencyOpts.length).toBeGreaterThanOrEqual(0);
+      expect(dataSufficiencyOpts.length).toBeGreaterThan(0);
     });
 
     it('should not detect sufficiency when fields are missing', async () => {
