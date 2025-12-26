@@ -889,5 +889,53 @@ describe('SearchQueryOptimizer', () => {
       const pattern = optimizer.getPattern(result.pattern!.id);
       expect(pattern!.lastUsedAt).toBeGreaterThanOrEqual(initialLastUsed);
     });
+
+    it('should filter out volatile URL parameters', async () => {
+      const context = createSearchContext({
+        networkRequests: [
+          createNetworkRequest({
+            url: 'https://api.example.com/search?q=test&category=books&_t=1234567890&session=abc&cache=nocache',
+            contentType: 'application/json',
+            status: 200,
+            responseBody: JSON.stringify({ results: [{ id: 1 }] }),
+          }),
+        ],
+        searchTerm: 'test',
+      });
+
+      const result = await optimizer.analyze(context);
+      expect(result.detected).toBe(true);
+
+      const searchUrl = optimizer.generateSearchUrl(result.pattern!, 'new query');
+      // Should preserve stable params
+      expect(searchUrl).toContain('category=books');
+      expect(searchUrl).toContain('q=new+query');
+      // Should filter out volatile params
+      expect(searchUrl).not.toContain('_t=');
+      expect(searchUrl).not.toContain('session=');
+      expect(searchUrl).not.toContain('cache=');
+    });
+
+    it('should handle JSON keys containing dots', async () => {
+      const context = createSearchContext({
+        networkRequests: [
+          createNetworkRequest({
+            url: 'https://api.example.com/search?q=test',
+            contentType: 'application/json',
+            status: 200,
+            responseBody: JSON.stringify({
+              'data.results': [{ id: 1 }, { id: 2 }],
+            }),
+          }),
+        ],
+        searchTerm: 'test',
+      });
+
+      const result = await optimizer.analyze(context);
+      // Should detect using the key with dots as a single key
+      expect(result.detected).toBe(true);
+      // The results path should be 'data.results' as a single key
+      expect(result.pattern!.responseStructure.resultsPath).toBe('data.results');
+    });
   });
 });

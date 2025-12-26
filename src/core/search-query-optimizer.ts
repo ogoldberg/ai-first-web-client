@@ -569,11 +569,10 @@ export class SearchQueryOptimizer {
 
     for (const param of paginationParams) {
       if (url.searchParams.has(param)) {
-        const value = url.searchParams.get(param) || '';
         return {
           paramName: param,
           type: this.inferPaginationType(param),
-          startValue: this.inferStartValue(param, value),
+          startValue: this.inferStartValue(param),
           increment: ['page', 'p'].includes(param) ? 1 : undefined,
         };
       }
@@ -600,9 +599,9 @@ export class SearchQueryOptimizer {
   }
 
   /**
-   * Infer pagination start value
+   * Infer pagination start value based on parameter name
    */
-  private inferStartValue(param: string, _value: string): number | string {
+  private inferStartValue(param: string): number | string {
     const lowerParam = param.toLowerCase();
 
     if (['page', 'p'].includes(lowerParam)) {
@@ -617,12 +616,20 @@ export class SearchQueryOptimizer {
   }
 
   /**
-   * Build endpoint URL without query parameter
+   * Build endpoint URL without query parameter and volatile parameters
+   * Filters out session IDs, timestamps, nonces, and other non-stable params
    */
   private buildEndpointUrl(url: URL, queryParamName: string): string {
-    const base = new URL(url.toString());
-    base.searchParams.delete(queryParamName);
-    return base.toString();
+    const newUrl = new URL(url.origin + url.pathname);
+    const volatileKeys = /^(?:_|token|session|nonce|cache|timestamp|t|ts|_t|rand|random|nocache)/i;
+
+    for (const [key, value] of url.searchParams.entries()) {
+      if (key !== queryParamName && !volatileKeys.test(key)) {
+        newUrl.searchParams.set(key, value);
+      }
+    }
+
+    return newUrl.toString();
   }
 
   /**
@@ -660,9 +667,15 @@ export class SearchQueryOptimizer {
 
   /**
    * Get value by dot-notation path
+   * Handles keys containing dots by first checking if the path exists as a single key
    */
   private getValueByPath(obj: any, path: string): any {
     if (!path) return obj;
+
+    // First, check if the path exists as a single key (handles keys with dots)
+    if (obj && typeof obj === 'object' && path in obj) {
+      return obj[path];
+    }
 
     return path.split('.').reduce((current, key) => {
       return current && typeof current === 'object' ? current[key] : undefined;
