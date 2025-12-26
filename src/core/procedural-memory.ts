@@ -19,6 +19,7 @@
 import * as crypto from 'crypto';
 import { PersistentStore } from '../utils/persistent-store.js';
 import { logger } from '../utils/logger.js';
+import { matchDomain } from '../utils/url-pattern-matcher.js';
 import type { VectorStore, SearchResult } from '../utils/vector-store.js';
 import type { EmbeddingProvider, EmbeddingResult } from '../utils/embedding-provider.js';
 import type {
@@ -1391,15 +1392,10 @@ export class ProceduralMemory {
 
   /**
    * Check if domain matches a pattern (glob-like)
+   * Uses centralized url-pattern-matcher utility (D-007)
    */
   private matchesDomainPattern(domain: string, pattern: string): boolean {
-    // Convert glob pattern to regex
-    const regexPattern = pattern
-      .replace(/\./g, '\\.')
-      .replace(/\*/g, '.*')
-      .replace(/\?/g, '.');
-    const regex = new RegExp(`^${regexPattern}$`, 'i');
-    return regex.test(domain);
+    return matchDomain(domain, pattern);
   }
 
   /**
