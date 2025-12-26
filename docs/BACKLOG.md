@@ -405,7 +405,7 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 |----|------|--------|--------|-------|
 | GAP-001 | Form Submission Learning | L | Complete | FormSubmissionLearner: learns POST patterns from browser submissions, replays via direct API. Handles dynamic fields (CSRF, user IDs, nonces). See [FORM_AUTOMATION_IMPLEMENTATION.md](FORM_AUTOMATION_IMPLEMENTATION.md) |
 | GAP-002 | POST/PUT/DELETE API Learning | S | Complete | Enhanced ApiAnalyzer to score mutations equally with GET. Adds REST-compliant status code detection (201, 204) |
-| GAP-003 | Auth Flow Automation | M | In Progress | Auto-detect auth challenges (401, redirects), replay learned login workflows, fallback to user prompt |
+| GAP-003 | Auth Flow Automation | M | Complete | AuthFlowDetector: detects 401/403, login redirects, session expiration, auth messages. Resolution via workflow replay, stored credentials, or user callback. PR #183 |
 
 ### Phase 2: Workflows (Next Sprint)
 
