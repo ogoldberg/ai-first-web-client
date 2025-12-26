@@ -431,7 +431,7 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 | GAP-015 | WebSocket Form Submissions | M | ✅ Implemented | Detects WebSocket/Socket.IO/SockJS patterns via CDP, learns event payloads with intelligent scoring, direct WebSocket replay. 20-30x speedup for real-time forms. See [WEBSOCKET_FORM_SUPPORT.md](WEBSOCKET_FORM_SUPPORT.md) |
 | GAP-016 | Server Action Support | M | ✅ Implemented | Detects Next.js Server Actions (Next-Action header) and Remix Actions (_action field), learns framework-specific patterns, direct replay with 10-15x speedup. Handles redirects, JSON responses, and React Flight Streams. See [SERVER_ACTION_SUPPORT.md](SERVER_ACTION_SUPPORT.md) |
 | GAP-017 | JSON-RPC Form Patterns | S | ✅ Implemented | Detects JSON-RPC 1.0 and 2.0 method calls, learns RPC method and params mapping, direct replay with timestamp IDs. Supports both named and positional parameters. 15-20x speedup. See [JSON_RPC_SUPPORT.md](JSON_RPC_SUPPORT.md) |
-| GAP-018 | OAuth Flow Automation | L | Not Started | Track multi-redirect OAuth flows as single workflow, handle authorization codes |
+| GAP-018 | OAuth Flow Automation | L | 🚧 Foundation Implemented | OAuth detection via URL parameters, flow type identification (Authorization Code/PKCE/Implicit), data structures for flow tracking. Foundation complete - full automation (redirect tracking, token exchange, PKCE generation, replay) requires Phases 2-5. See [OAUTH_FLOW_SUPPORT.md](OAUTH_FLOW_SUPPORT.md) |
 
 **Expected Impact:**
 - 10-25x speedup for form submissions

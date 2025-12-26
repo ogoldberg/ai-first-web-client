@@ -213,7 +213,7 @@ setUsers(users.map(u => u.id === 'temp-123' ? result : u));
 |-----|--------|-----------|------------|--------|
 | ~~**Server Actions** (Next.js/Remix)~~ | MEDIUM | Growing | Medium | ✅ Implemented (GAP-016) |
 | ~~**WebSocket Forms**~~ | MEDIUM | Common (chat, real-time) | Medium | ✅ Implemented (GAP-015) |
-| **OAuth Flows** | MEDIUM | Common | High | ❌ Not Started |
+| **OAuth Flows** | MEDIUM | Common | High | 🚧 Foundation (GAP-018) |
 | ~~**Rate Limiting**~~ | MEDIUM | Very Common | Low | ✅ Implemented (GAP-010) |
 
 ### P2: Medium Priority (Nice to Have)

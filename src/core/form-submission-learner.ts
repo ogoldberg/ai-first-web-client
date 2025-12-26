@@ -146,6 +146,54 @@ export interface RateLimitInfo {
 }
 
 /**
+ * OAuth flow information
+ */
+export interface OAuthFlowInfo {
+  /** OAuth flow type */
+  flowType: 'authorization_code' | 'implicit' | 'pkce';
+  /** Authorization endpoint URL */
+  authEndpoint: string;
+  /** Token endpoint URL (for authorization code flow) */
+  tokenEndpoint?: string;
+  /** Client ID */
+  clientId: string;
+  /** Redirect URI */
+  redirectUri: string;
+  /** Requested scopes */
+  scopes: string[];
+  /** State parameter (CSRF protection) */
+  state?: string;
+  /** PKCE code challenge (if using PKCE) */
+  codeChallenge?: string;
+  /** PKCE code challenge method */
+  codeChallengeMethod?: 'S256' | 'plain';
+  /** Response type (code, token, id_token) */
+  responseType: string;
+}
+
+/**
+ * Learned OAuth flow pattern
+ */
+export interface LearnedOAuthFlow {
+  id: string;
+  domain: string;
+  /** URL that triggers OAuth flow (e.g., /login, /connect) */
+  triggerUrl: string;
+  /** OAuth provider (e.g., 'github', 'google', 'auth0') */
+  provider?: string;
+  /** Flow information */
+  flow: OAuthFlowInfo;
+  /** Whether this flow uses PKCE */
+  usesPKCE: boolean;
+  /** Learned at timestamp */
+  learnedAt: number;
+  /** Times this flow was used */
+  timesUsed: number;
+  /** Success rate */
+  successRate: number;
+}
+
+/**
  * WebSocket message captured during form submission
  */
 export interface WebSocketMessage {
@@ -317,6 +365,7 @@ export class FormSubmissionLearner {
   private patternRegistry: ApiPatternRegistry;
   private formPatterns: Map<string, LearnedFormPattern> = new Map();
   private rateLimits: Map<string, RateLimitInfo> = new Map(); // domain → rate limit info
+  private oauthFlows: Map<string, LearnedOAuthFlow> = new Map(); // triggerUrl → OAuth flow
 
   constructor(patternRegistry: ApiPatternRegistry) {
     this.patternRegistry = patternRegistry;
@@ -2728,5 +2777,57 @@ export class FormSubmissionLearner {
         }
       }
     }
+  }
+
+  /**
+   * Detect OAuth authorization redirect from URL
+   */
+  private detectOAuthRedirect(url: string): OAuthFlowInfo | null {
+    const urlObj = new URL(url);
+    const params = urlObj.searchParams;
+
+    // Check for OAuth 2.0 authorization parameters
+    const hasClientId = params.has('client_id');
+    const hasRedirectUri = params.has('redirect_uri');
+    const hasResponseType = params.has('response_type');
+
+    if (!hasClientId || !hasResponseType) {
+      return null; // Not an OAuth redirect
+    }
+
+    const responseType = params.get('response_type') || '';
+    const clientId = params.get('client_id') || '';
+    const redirectUri = params.get('redirect_uri') || '';
+    const scope = params.get('scope') || '';
+    const state = params.get('state') || undefined;
+    const codeChallenge = params.get('code_challenge') || undefined;
+    const codeChallengeMethod = params.get('code_challenge_method') as 'S256' | 'plain' | undefined;
+
+    // Determine flow type
+    let flowType: 'authorization_code' | 'implicit' | 'pkce' = 'authorization_code';
+    if (codeChallenge) {
+      flowType = 'pkce';
+    } else if (responseType.includes('token')) {
+      flowType = 'implicit';
+    }
+
+    logger.formLearner.info('Detected OAuth authorization redirect', {
+      authEndpoint: urlObj.origin + urlObj.pathname,
+      clientId,
+      flowType,
+      scopes: scope.split(' '),
+    });
+
+    return {
+      flowType,
+      authEndpoint: urlObj.origin + urlObj.pathname,
+      clientId,
+      redirectUri,
+      scopes: scope ? scope.split(' ') : [],
+      state,
+      codeChallenge,
+      codeChallengeMethod,
+      responseType,
+    };
   }
 }
