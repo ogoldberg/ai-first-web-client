@@ -402,6 +402,55 @@ await browser.configureAuth('api.github.com', 'oauth2', {
 const result = await browser.browse('https://api.github.com/user/repos');
 ```
 
+### 6. E2E API Testing
+
+Unbrowser excels at API testing - it automatically discovers APIs and can validate them:
+
+```typescript
+// Discover APIs from a site
+const discovery = await browser.browse('https://api.example.com', {
+  includeNetwork: true,
+});
+
+console.log('Found APIs:', discovery.discoveredApis.length);
+
+// Test each discovered endpoint
+for (const api of discovery.discoveredApis) {
+  const result = await browser.executeApiCall({
+    url: api.url,
+    method: api.method,
+  });
+
+  console.log(`${api.method} ${api.url}: ${result.status}`);
+}
+```
+
+### 7. Content Validation Testing
+
+Use the built-in verification engine for content assertions:
+
+```typescript
+const result = await browser.browse('https://shop.example.com/product/123', {
+  verify: {
+    mode: 'standard',
+    checks: [{
+      type: 'content',
+      assertion: {
+        fieldExists: ['title', 'price', 'description'],
+        fieldMatches: { price: /\$[\d,]+/ },
+        minLength: 500,
+      },
+      severity: 'critical',
+    }],
+  },
+});
+
+console.log('Verification passed:', result.verification.passed);
+console.log('Confidence:', result.verification.confidence);
+```
+
+> **See also**: [QA Testing Guide](QA_TESTING_GUIDE.md) for comprehensive testing documentation.
+
 ---
 
 ## Configuration

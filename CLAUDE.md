@@ -109,6 +109,57 @@ The goal is to **progressively eliminate the need for rendering**:
 5. **Session Management**: Persistent authenticated sessions
 6. **Stealth Mode**: Fingerprint evasion, behavioral delays, bot detection avoidance
 7. **Collective Learning**: Shared pattern pool across tenants
+8. **Verification Engine**: Built-in assertions, confidence scoring, content validation
+
+### QA & Testing Use Cases
+
+**Unbrowser is excellent for testing scenarios focused on content validation and API testing.** Use it when:
+
+| Use Case | Why Unbrowser |
+|----------|---------------|
+| **E2E API testing** | Auto-discovers APIs from sites, validates responses, detects API changes |
+| **Content validation** | Built-in verification with `fieldExists`, `fieldMatches`, `minLength`, etc. |
+| **Multi-site regression** | Learned patterns transfer across similar sites automatically |
+| **Workflow automation** | Record and replay workflows with validation |
+
+**Key QA Features:**
+
+```typescript
+// Content validation with assertions
+const result = await browser.browse(url, {
+  verify: {
+    mode: 'thorough',  // 'basic', 'standard', 'thorough'
+    checks: [{
+      type: 'content',
+      assertion: {
+        fieldExists: ['title', 'price'],
+        fieldMatches: { price: /\$[\d,]+/ },
+        minLength: 500,
+      },
+      severity: 'critical',  // 'warning', 'error', 'critical'
+    }],
+  },
+});
+// result.verification.passed, result.verification.confidence
+```
+
+```typescript
+// Automatic API discovery and testing
+const discovery = await browser.browse('https://api.example.com', {
+  includeNetwork: true,
+});
+for (const api of discovery.discoveredApis) {
+  const result = await browser.executeApiCall({ url: api.url, method: api.method });
+  console.log(`${api.method} ${api.url}: ${result.status}`);
+}
+```
+
+**When NOT to use Unbrowser for QA:**
+- Visual regression testing (use Playwright snapshots)
+- Interactive UI testing (use Playwright locators)
+- Mobile/cross-browser testing (use Playwright device emulation)
+
+See **[docs/QA_TESTING_GUIDE.md](docs/QA_TESTING_GUIDE.md)** for comprehensive QA documentation.
 
 ## Package Manager and Workspaces
 
@@ -377,6 +428,7 @@ See [docs/PROXY_MANAGEMENT_PLAN.md](docs/PROXY_MANAGEMENT_PLAN.md) for full arch
 - **[docs/PRICING.md](docs/PRICING.md)** - Pricing tiers
 - **[docs/api/API_DESIGN.md](docs/api/API_DESIGN.md)** - REST API design
 - **[docs/api/openapi.yaml](docs/api/openapi.yaml)** - OpenAPI 3.1 specification
+- **[docs/QA_TESTING_GUIDE.md](docs/QA_TESTING_GUIDE.md)** - E2E API testing and QA automation guide
 
 ## Current Sprint: Cloud API Launch
 
