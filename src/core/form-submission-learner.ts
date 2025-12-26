@@ -126,6 +126,26 @@ export interface OTPChallenge {
 export type OTPPromptCallback = (challenge: OTPChallenge) => Promise<string | null>;
 
 /**
+ * Rate limit information for a domain
+ */
+export interface RateLimitInfo {
+  /** Domain being rate limited */
+  domain: string;
+  /** Rate limit quota (requests per period) */
+  limit?: number;
+  /** Remaining requests in current period */
+  remaining?: number;
+  /** Timestamp when rate limit resets (Unix timestamp in ms) */
+  resetAt?: number;
+  /** Retry after N seconds (from Retry-After header) */
+  retryAfterSeconds?: number;
+  /** Last time we hit a rate limit (for tracking) */
+  lastRateLimitTime?: number;
+  /** Number of times we've been rate limited */
+  rateLimitCount: number;
+}
+
+/**
  * WebSocket message captured during form submission
  */
 export interface WebSocketMessage {
@@ -296,6 +316,7 @@ export interface SubmitFormOptions {
 export class FormSubmissionLearner {
   private patternRegistry: ApiPatternRegistry;
   private formPatterns: Map<string, LearnedFormPattern> = new Map();
+  private rateLimits: Map<string, RateLimitInfo> = new Map(); // domain → rate limit info
 
   constructor(patternRegistry: ApiPatternRegistry) {
     this.patternRegistry = patternRegistry;
@@ -544,6 +565,20 @@ export class FormSubmissionLearner {
         },
         body,
       });
+    }
+
+    // Update rate limit info from response headers
+    const domain = new URL(pattern.apiEndpoint).hostname;
+    this.updateRateLimitInfo(response, domain);
+
+    // Check for rate limit (429) and handle specially
+    if (response.status === 429) {
+      const rateLimitInfo = this.detectRateLimit(response, domain);
+      if (rateLimitInfo) {
+        this.rateLimits.set(domain, rateLimitInfo);
+        const waitSeconds = rateLimitInfo.retryAfterSeconds || 60;
+        throw new Error(`Rate limit exceeded. Retry after ${waitSeconds} seconds.`);
+      }
     }
 
     // Try to parse response data (might fail if not JSON)
@@ -2489,5 +2524,209 @@ export class FormSubmissionLearner {
     });
 
     return pattern;
+  }
+
+  /**
+   * Detect and parse rate limit information from response
+   */
+  private detectRateLimit(response: Response, domain: string): RateLimitInfo | null {
+    // Check for 429 status code
+    if (response.status !== 429) {
+      // Also check for rate limit headers even on success (to track remaining quota)
+      const headers = response.headers;
+      const limit = headers.get('x-ratelimit-limit') || headers.get('ratelimit-limit');
+      const remaining = headers.get('x-ratelimit-remaining') || headers.get('ratelimit-remaining');
+      const reset = headers.get('x-ratelimit-reset') || headers.get('ratelimit-reset');
+
+      if (limit || remaining || reset) {
+        const existingInfo = this.rateLimits.get(domain) || {
+          domain,
+          rateLimitCount: 0,
+        };
+
+        return {
+          ...existingInfo,
+          limit: limit ? parseInt(limit, 10) : existingInfo.limit,
+          remaining: remaining ? parseInt(remaining, 10) : existingInfo.remaining,
+          resetAt: reset ? parseInt(reset, 10) * 1000 : existingInfo.resetAt, // Convert to ms
+        };
+      }
+
+      return null;
+    }
+
+    // We hit a rate limit (429)
+    const headers = response.headers;
+    const retryAfter = headers.get('retry-after');
+    const limit = headers.get('x-ratelimit-limit') || headers.get('ratelimit-limit');
+    const reset = headers.get('x-ratelimit-reset') || headers.get('ratelimit-reset');
+
+    let retryAfterSeconds: number | undefined;
+    let resetAt: number | undefined;
+
+    // Parse Retry-After header (can be seconds or HTTP date)
+    if (retryAfter) {
+      if (/^\d+$/.test(retryAfter)) {
+        // Retry-After is in seconds
+        retryAfterSeconds = parseInt(retryAfter, 10);
+        resetAt = Date.now() + (retryAfterSeconds * 1000);
+      } else {
+        // Retry-After is an HTTP date
+        const retryDate = new Date(retryAfter);
+        if (!isNaN(retryDate.getTime())) {
+          resetAt = retryDate.getTime();
+          retryAfterSeconds = Math.ceil((resetAt - Date.now()) / 1000);
+        }
+      }
+    }
+
+    // Parse X-RateLimit-Reset header (Unix timestamp)
+    if (reset && !resetAt) {
+      resetAt = parseInt(reset, 10) * 1000; // Convert to ms
+      retryAfterSeconds = Math.ceil((resetAt - Date.now()) / 1000);
+    }
+
+    const existingInfo = this.rateLimits.get(domain);
+
+    const rateLimitInfo: RateLimitInfo = {
+      domain,
+      limit: limit ? parseInt(limit, 10) : existingInfo?.limit,
+      remaining: 0, // We're rate limited, so remaining is 0
+      resetAt,
+      retryAfterSeconds,
+      lastRateLimitTime: Date.now(),
+      rateLimitCount: (existingInfo?.rateLimitCount || 0) + 1,
+    };
+
+    logger.formLearner.warn('Rate limit detected', {
+      domain,
+      retryAfterSeconds,
+      resetAt: resetAt ? new Date(resetAt).toISOString() : undefined,
+      rateLimitCount: rateLimitInfo.rateLimitCount,
+    });
+
+    return rateLimitInfo;
+  }
+
+  /**
+   * Check if we should wait before making a request due to rate limiting
+   * Returns wait time in milliseconds, or 0 if safe to proceed
+   */
+  private checkRateLimitWait(domain: string): number {
+    const rateLimitInfo = this.rateLimits.get(domain);
+    if (!rateLimitInfo) {
+      return 0; // No rate limit info, proceed
+    }
+
+    // Check if rate limit has expired
+    if (rateLimitInfo.resetAt && rateLimitInfo.resetAt > Date.now()) {
+      const waitMs = rateLimitInfo.resetAt - Date.now();
+      logger.formLearner.info('Rate limit still active, need to wait', {
+        domain,
+        waitSeconds: Math.ceil(waitMs / 1000),
+      });
+      return waitMs;
+    }
+
+    // Check if we have remaining quota
+    if (rateLimitInfo.remaining !== undefined && rateLimitInfo.remaining <= 0) {
+      if (rateLimitInfo.resetAt && rateLimitInfo.resetAt > Date.now()) {
+        const waitMs = rateLimitInfo.resetAt - Date.now();
+        logger.formLearner.info('No remaining quota, need to wait', {
+          domain,
+          waitSeconds: Math.ceil(waitMs / 1000),
+        });
+        return waitMs;
+      }
+    }
+
+    return 0; // Safe to proceed
+  }
+
+  /**
+   * Retry a request with exponential backoff after rate limit
+   */
+  private async retryWithBackoff<T>(
+    fn: () => Promise<T>,
+    domain: string,
+    maxRetries: number = 3
+  ): Promise<T> {
+    let lastError: Error | null = null;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        // Check if we need to wait due to rate limiting
+        const waitMs = this.checkRateLimitWait(domain);
+        if (waitMs > 0) {
+          const waitSeconds = Math.ceil(waitMs / 1000);
+          logger.formLearner.info('Waiting for rate limit to reset', {
+            domain,
+            waitSeconds,
+            attempt: attempt + 1,
+          });
+
+          // Cap wait time at 60 seconds for safety
+          const cappedWait = Math.min(waitMs, 60000);
+          await new Promise(resolve => setTimeout(resolve, cappedWait));
+        }
+
+        // Attempt the request
+        return await fn();
+      } catch (error: any) {
+        lastError = error;
+
+        // Check if this is a rate limit error
+        if (error.response && error.response.status === 429) {
+          const rateLimitInfo = this.detectRateLimit(error.response, domain);
+          if (rateLimitInfo) {
+            this.rateLimits.set(domain, rateLimitInfo);
+          }
+
+          // Calculate backoff time (exponential: 2^attempt seconds, max 60s)
+          const backoffSeconds = Math.min(Math.pow(2, attempt), 60);
+
+          if (attempt < maxRetries) {
+            logger.formLearner.info('Rate limit hit, retrying with backoff', {
+              domain,
+              attempt: attempt + 1,
+              maxRetries,
+              backoffSeconds,
+            });
+
+            await new Promise(resolve => setTimeout(resolve, backoffSeconds * 1000));
+            continue;
+          }
+        }
+
+        // Not a rate limit error, or max retries exceeded
+        throw error;
+      }
+    }
+
+    // Max retries exceeded
+    throw lastError || new Error('Max retries exceeded');
+  }
+
+  /**
+   * Update rate limit info after a successful or failed request
+   */
+  private updateRateLimitInfo(response: Response, domain: string): void {
+    const rateLimitInfo = this.detectRateLimit(response, domain);
+    if (rateLimitInfo) {
+      this.rateLimits.set(domain, rateLimitInfo);
+
+      // Log if we're getting close to the limit
+      if (rateLimitInfo.remaining !== undefined && rateLimitInfo.limit !== undefined) {
+        const percentRemaining = (rateLimitInfo.remaining / rateLimitInfo.limit) * 100;
+        if (percentRemaining < 20) {
+          logger.formLearner.warn('Approaching rate limit', {
+            domain,
+            remaining: rateLimitInfo.remaining,
+            limit: rateLimitInfo.limit,
+            percentRemaining: percentRemaining.toFixed(1),
+          });
+        }
+      }
+    }
   }
 }

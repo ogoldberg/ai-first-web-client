@@ -412,7 +412,7 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 |----|------|--------|--------|-------|
 | GAP-007 | CAPTCHA Challenge Detection | M | Not Started | Detect CAPTCHA challenges, prompt user, resume workflow after solved |
 | GAP-008 | Dynamic Content Loading | M | Not Started | Learn which XHR calls load content, monitor specific endpoints instead of networkidle |
-| GAP-010 | Rate Limit Learning | S | Not Started | Learn per-domain rate limits from 429 responses, adapt automatically |
+| GAP-010 | Rate Limit Learning | S | ✅ Implemented | Detects 429 responses and rate limit headers (X-RateLimit-*, Retry-After), tracks quota per domain, automatic retry with exponential backoff (max 3 retries), pre-emptive wait checks, warns at 20% remaining quota. See [RATE_LIMITING_SUPPORT.md](RATE_LIMITING_SUPPORT.md) |
 
 ### Future Opportunities
 
