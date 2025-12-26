@@ -307,8 +307,8 @@ export class FormSubmissionLearner {
           timestamp: Date.now(),
         };
 
-        // Capture response body for POST requests
-        if (request.method() === 'POST' || request.method() === 'PUT') {
+        // Capture response body for mutation requests
+        if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method())) {
           response.json().then((body: any) => {
             req.responseBody = body;
           }).catch(() => {
@@ -459,18 +459,18 @@ export class FormSubmissionLearner {
     networkRequests: NetworkRequest[],
     domain: string
   ): LearnedFormPattern | null {
-    // Find POST/PUT requests that are likely the form submission
+    // Find mutation requests (POST/PUT/PATCH/DELETE) that are likely the form submission
     const submitRequests = networkRequests.filter(req =>
-      (req.method === 'POST' || req.method === 'PUT') &&
+      ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method) &&
       req.status >= 200 && req.status < 400
     );
 
     if (submitRequests.length === 0) {
-      logger.formLearner.warn('No successful POST requests found in form submission');
+      logger.formLearner.warn('No successful mutation requests (POST/PUT/PATCH/DELETE) found in form submission');
       return null;
     }
 
-    // Use the first successful POST (most likely the form submission)
+    // Use the first successful mutation (most likely the form submission)
     const submitRequest = submitRequests[0];
 
     // Try to extract field mapping from request body
