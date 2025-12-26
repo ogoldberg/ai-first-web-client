@@ -261,10 +261,15 @@ Be honest about what this can and can't do:
 
 **Works well for:**
 
+- **E2E API testing** - Auto-discovers APIs, validates responses, detects changes
+- **Content validation** - Built-in verification engine with assertions and confidence scores
+- **QA automation** - Record workflows, replay with validation, regression testing
 - Government websites, documentation sites
 - E-commerce product listings
 - News and content sites
 - Sites with discoverable APIs
+
+> **Testing & QA**: See [docs/QA_TESTING_GUIDE.md](docs/QA_TESTING_GUIDE.md) for using Unbrowser as a testing tool.
 
 **May struggle with:**
 

@@ -554,6 +554,37 @@ See [COMPETITIVE_ANALYSIS.md](COMPETITIVE_ANALYSIS.md) for context on why these 
 
 ---
 
+## P2: QA & Testing Use Cases (New Initiative)
+
+**Goal:** Position Unbrowser as a QA/testing tool for E2E API testing, content validation, and regression testing.
+
+**Context:** Unbrowser has strong QA capabilities (VerificationEngine, confidence scoring, workflow recording) that aren't well-documented. Better documentation and examples will help AI agents and developers recognize when to use Unbrowser for testing.
+
+**Documentation Status:**
+- ✅ Created `docs/QA_TESTING_GUIDE.md` - Comprehensive QA documentation
+- ✅ Updated `CLAUDE.md` - QA use cases section for AI agents
+- ✅ Updated `README.md` - Added QA to "Works well for" section
+- ✅ Updated `GETTING_STARTED.md` - E2E API testing and content validation examples
+
+| ID | Task | Effort | Status | Notes |
+|----|------|--------|--------|-------|
+| QA-001 | Create E2E API testing example | M | Not Started | Full example: discover APIs, test each endpoint, report results |
+| QA-002 | Create content validation test suite example | M | Not Started | Example using verify options with Vitest/Jest integration |
+| QA-003 | Create multi-site regression example | M | Not Started | Test same patterns across multiple similar sites |
+| QA-004 | Create workflow recording/replay example | M | Not Started | Record workflow, replay with different params, validate results |
+| QA-005 | Create API change detection example | S | Not Started | Detect when API responses change from baseline |
+| QA-006 | Add verification engine JSDoc | S | Not Started | Document VerificationEngine API with TypeDoc |
+| QA-007 | Create QA-focused MCP skill prompts | M | Not Started | Skills for common QA workflows (validate site, test APIs, etc.) |
+| QA-008 | Add QA video walkthrough | L | Not Started | Screen recording showing E2E API testing workflow |
+
+**Success Criteria:**
+- AI agents can easily identify Unbrowser as a QA tool from docs
+- 4+ working QA examples in packages/core/examples/
+- QA use cases mentioned in tool descriptions
+- Skill prompts for common QA workflows
+
+---
+
 ## P2: Anti-Bot Evasion (New Initiative)
 
 **Goal:** Improve bot detection evasion using open-source techniques only - no third-party services required.
