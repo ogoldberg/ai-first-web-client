@@ -148,7 +148,24 @@ interface ProceduralMemoryData {
 }
 
 export class ProceduralMemory {
-  private skills: Map<string, BrowsingSkill> = new Map();
+  // Progressive loading: Skills split by tier (PROG-001)
+  private essentialSkills: Map<string, BrowsingSkill> = new Map();      // Tier 1: Always loaded
+  private domainSpecificSkills: Map<string, BrowsingSkill> = new Map(); // Tier 2: Lazy loaded by domain
+  private advancedSkills: Map<string, BrowsingSkill> = new Map();       // Tier 3: Lazy loaded on demand
+
+  // Track which domains have been loaded (to avoid redundant loading)
+  private loadedDomains: Set<string> = new Set();
+
+  // Legacy: unified view for backward compatibility
+  private get skills(): Map<string, BrowsingSkill> {
+    // Return merged view of all loaded skills
+    const merged = new Map<string, BrowsingSkill>();
+    for (const [id, skill] of this.essentialSkills) merged.set(id, skill);
+    for (const [id, skill] of this.domainSpecificSkills) merged.set(id, skill);
+    for (const [id, skill] of this.advancedSkills) merged.set(id, skill);
+    return merged;
+  }
+
   private workflows: Map<string, SkillWorkflow> = new Map();
   private trajectoryBuffer: BrowsingTrajectory[] = [];
   private config: ProceduralMemoryConfig;
@@ -1208,10 +1225,29 @@ export class ProceduralMemory {
   private async load(): Promise<void> {
     const data = await this.store.load();
     if (data) {
-      this.skills = new Map();
+      // Progressive loading (PROG-001): Only load essential skills initially
+      this.essentialSkills = new Map();
+      this.domainSpecificSkills = new Map();
+      this.advancedSkills = new Map();
+
       if (data.skills) {
         for (const skill of data.skills) {
-          this.skills.set(skill.id, skill);
+          // Classify skill by tier (default to domain-specific for backward compatibility)
+          const tier = skill.tier || 'domain-specific';
+
+          switch (tier) {
+            case 'essential':
+              this.essentialSkills.set(skill.id, skill);
+              break;
+            case 'domain-specific':
+              // Store but don't load yet (lazy loading)
+              this.domainSpecificSkills.set(skill.id, skill);
+              break;
+            case 'advanced':
+              // Store but don't load yet (lazy loading)
+              this.advancedSkills.set(skill.id, skill);
+              break;
+          }
         }
       }
 
@@ -1263,8 +1299,127 @@ export class ProceduralMemory {
         this.feedbackLog = data.feedbackLog;
       }
 
-      logger.proceduralMemory.info(`Loaded ${this.skills.size} skills, ${this.workflows.size} workflows, ${this.antiPatterns.size} anti-patterns`);
+      logger.proceduralMemory.info(
+        `Progressive loading: ${this.essentialSkills.size} essential, ` +
+        `${this.domainSpecificSkills.size} domain-specific (not loaded), ` +
+        `${this.advancedSkills.size} advanced (not loaded), ` +
+        `${this.workflows.size} workflows, ${this.antiPatterns.size} anti-patterns`
+      );
     }
+  }
+
+  /**
+   * Load domain-specific skills for a given domain (PROG-001)
+   * This is called lazily when SmartBrowser browses a new domain
+   */
+  async loadSkillsForDomain(domain: string): Promise<number> {
+    // Skip if already loaded
+    if (this.loadedDomains.has(domain)) {
+      return 0;
+    }
+
+    let loadedCount = 0;
+
+    // Find all domain-specific skills matching this domain
+    for (const [id, skill] of this.domainSpecificSkills.entries()) {
+      if (this.skillMatchesDomain(skill, domain)) {
+        // Move from domainSpecificSkills to essentialSkills (now loaded)
+        this.essentialSkills.set(id, skill);
+        this.domainSpecificSkills.delete(id);
+        loadedCount++;
+      }
+    }
+
+    this.loadedDomains.add(domain);
+    logger.proceduralMemory.info(`Lazy loaded ${loadedCount} skills for domain: ${domain}`);
+
+    return loadedCount;
+  }
+
+  /**
+   * Load a specific advanced skill by ID (PROG-001)
+   * This is called when an advanced skill is explicitly requested
+   */
+  async loadAdvancedSkill(skillId: string): Promise<boolean> {
+    const skill = this.advancedSkills.get(skillId);
+    if (!skill) {
+      return false;
+    }
+
+    // Move from advancedSkills to essentialSkills (now loaded)
+    this.essentialSkills.set(skillId, skill);
+    this.advancedSkills.delete(skillId);
+    logger.proceduralMemory.info(`Loaded advanced skill: ${skill.name} (${skillId})`);
+
+    return true;
+  }
+
+  /**
+   * Check if a skill matches a domain
+   */
+  private skillMatchesDomain(skill: BrowsingSkill, domain: string): boolean {
+    // Check if skill's source domain matches
+    if (skill.sourceDomain && matchDomain(domain, skill.sourceDomain)) {
+      return true;
+    }
+
+    // Check if skill's preconditions match the domain
+    if (skill.preconditions.domainPatterns) {
+      for (const pattern of skill.preconditions.domainPatterns) {
+        if (matchDomain(domain, pattern)) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Get statistics about loaded vs. unloaded skills (PROG-001)
+   */
+  getLoadingStats(): {
+    essential: number;
+    domainSpecific: { loaded: number; unloaded: number };
+    advanced: { loaded: number; unloaded: number };
+    totalLoaded: number;
+    totalUnloaded: number;
+    loadedDomains: string[];
+  } {
+    const essentialCount = this.essentialSkills.size;
+    const domainSpecificUnloaded = this.domainSpecificSkills.size;
+    const advancedUnloaded = this.advancedSkills.size;
+
+    // Count domain-specific skills that were moved to essential (loaded)
+    let domainSpecificLoaded = 0;
+    for (const skill of this.essentialSkills.values()) {
+      if (skill.tier === 'domain-specific') {
+        domainSpecificLoaded++;
+      }
+    }
+
+    // Count advanced skills that were moved to essential (loaded)
+    let advancedLoaded = 0;
+    for (const skill of this.essentialSkills.values()) {
+      if (skill.tier === 'advanced') {
+        advancedLoaded++;
+      }
+    }
+
+    return {
+      essential: essentialCount - domainSpecificLoaded - advancedLoaded,
+      domainSpecific: {
+        loaded: domainSpecificLoaded,
+        unloaded: domainSpecificUnloaded,
+      },
+      advanced: {
+        loaded: advancedLoaded,
+        unloaded: advancedUnloaded,
+      },
+      totalLoaded: essentialCount,
+      totalUnloaded: domainSpecificUnloaded + advancedUnloaded,
+      loadedDomains: Array.from(this.loadedDomains),
+    };
   }
 
   private save(): void {

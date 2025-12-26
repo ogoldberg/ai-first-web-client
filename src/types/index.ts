@@ -541,6 +541,14 @@ export interface SuccessProfile {
 /**
  * Enhanced knowledge base entry with all learning features
  */
+/**
+ * Pattern tier for progressive disclosure (PROG-001)
+ * - essential: Core patterns always loaded (common APIs, basic selectors)
+ * - domain-specific: Loaded when domain matches
+ * - advanced: Loaded on explicit need (edge cases, rare patterns)
+ */
+export type PatternTier = 'essential' | 'domain-specific' | 'advanced';
+
 export interface EnhancedKnowledgeBaseEntry {
   domain: string;
 
@@ -575,6 +583,13 @@ export interface EnhancedKnowledgeBaseEntry {
   overallSuccessRate: number;
   createdAt: number;
   lastUpdated: number;
+
+  // Progressive loading tier (PROG-001)
+  tier?: PatternTier;
+  // Load priority within tier (higher = load first)
+  loadPriority?: number;
+  // Estimated size in KB (for load planning)
+  sizeEstimate?: number;
 }
 
 /**
@@ -640,6 +655,14 @@ export interface SkillPreconditions {
 }
 
 /**
+ * Skill tier for progressive disclosure (PROG-001)
+ * - essential: Always loaded (cookie banners, common patterns)
+ * - domain-specific: Loaded when domain matches
+ * - advanced: Loaded on explicit need (rare/specialized patterns)
+ */
+export type SkillTier = 'essential' | 'domain-specific' | 'advanced';
+
+/**
  * A learned browsing skill (procedural memory unit)
  */
 export interface BrowsingSkill {
@@ -674,6 +697,12 @@ export interface BrowsingSkill {
     confidence: number;
     learnedFrom: 'success' | 'failure';
   }>;
+  // Progressive loading tier (PROG-001)
+  tier?: SkillTier;
+  // Load priority within tier (higher = load first)
+  loadPriority?: number;
+  // Estimated size in KB (for load planning)
+  sizeEstimate?: number;
 }
 
 /**
