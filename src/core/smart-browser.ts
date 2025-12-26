@@ -421,6 +421,14 @@ export class SmartBrowser {
     const useSkills = options.useSkills !== false;
     const recordTrajectory = options.recordTrajectory !== false;
 
+    // Progressive loading (PROG-001): Lazy load domain-specific skills
+    if (useSkills) {
+      const loadedCount = await this.proceduralMemory.loadSkillsForDomain(domain);
+      if (loadedCount > 0) {
+        logger.smartBrowser.debug(`Lazy loaded ${loadedCount} skills for domain: ${domain}`);
+      }
+    }
+
     // Emit initializing progress
     this.emitProgress(onProgress, 'initializing', `Starting browse for ${domain}`, url, startTime);
 
