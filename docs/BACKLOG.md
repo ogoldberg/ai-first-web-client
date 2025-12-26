@@ -421,6 +421,18 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 | GAP-009 | Multi-Domain Login Reuse | M | Not Started | Detect SSO flows, reuse credentials across domains |
 | GAP-011 | Content Change Prediction | M | Not Started | Learn update patterns (e.g., "updates every 6 hours"), optimize polling |
 
+### Phase 4: Protocol & Format Support
+
+| ID | Task | Effort | Status | Notes |
+|----|------|--------|--------|-------|
+| GAP-012 | File Upload Support | L | Not Started | Handle multipart/form-data, detect file fields, learn upload patterns. Blocks ~30% of real-world forms. See [FORM_PROTOCOL_COVERAGE.md](FORM_PROTOCOL_COVERAGE.md) |
+| GAP-013 | GraphQL Mutation Learning | M | Not Started | Integrate with existing GraphQL introspection, detect mutations in forms, map form fields to GraphQL variables |
+| GAP-014 | Two-Factor Auth Support | L | Not Started | Detect OTP challenges, pause workflow, prompt user for code, resume submission. Critical for auth workflows |
+| GAP-015 | WebSocket Form Submissions | M | Not Started | Detect WebSocket emit patterns, learn event payloads, integrate with AsyncAPI discovery |
+| GAP-016 | Server Action Support | M | Not Started | Handle Next.js/Remix server actions, detect Next-Action header, learn action patterns |
+| GAP-017 | JSON-RPC Form Patterns | S | Not Started | Detect JSON-RPC method calls, learn RPC patterns |
+| GAP-018 | OAuth Flow Automation | L | Not Started | Track multi-redirect OAuth flows as single workflow, handle authorization codes |
+
 **Expected Impact:**
 - 10-25x speedup for form submissions
 - 50-100x speedup for paginated scraping
