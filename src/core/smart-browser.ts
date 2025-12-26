@@ -158,6 +158,17 @@ export interface SmartBrowseOptions extends BrowseOptions {
   // 'any': Use cache if available and not stale, otherwise fetch (default)
   freshnessRequirement?: FreshnessRequirement;
 
+  // === Playwright Debug Mode (PLAY-001) ===
+
+  // Enable visual debugging for Playwright tier
+  // Useful for teaching, debugging, and understanding automation
+  debug?: {
+    visible?: boolean;        // Show browser window (headless: false)
+    slowMotion?: number;      // ms delay between actions (default: 100)
+    screenshots?: boolean;    // Capture screenshots after actions
+    consoleLogs?: boolean;    // Collect browser console output
+  };
+
   // === Debug Recording (O-005) ===
 
   // Record debug trace for this operation
@@ -1146,6 +1157,8 @@ export class SmartBrowser {
         maxLatencyMs: options.maxLatencyMs,
         maxCostTier: options.maxCostTier,
         freshnessRequirement: options.freshnessRequirement,
+        // Debug mode (PLAY-001)
+        debug: options.debug,
       });
 
       // If it fell back to playwright and returned a page, we should use the full Playwright path
