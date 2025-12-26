@@ -12,10 +12,8 @@
 
 Creating practical QA examples and documentation to help users understand how to use Unbrowser for testing.
 
-**In Progress:**
-- QA-006 - Add verification engine JSDoc
-
 **Completed:**
+- QA-006 - Add verification engine JSDoc (`src/core/verification-engine.ts`, `src/types/verification.ts`)
 - QA-005 - API change detection example (`examples/api-change-detection.ts`)
 - QA-004 - Workflow recording/replay example (`examples/workflow-recording-replay.ts`)
 - QA-003 - Multi-site regression example (`examples/multi-site-regression.ts`)

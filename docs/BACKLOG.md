@@ -573,7 +573,7 @@ See [COMPETITIVE_ANALYSIS.md](COMPETITIVE_ANALYSIS.md) for context on why these 
 | QA-003 | Create multi-site regression example | M | Complete | Test same patterns across multiple similar sites. See `examples/multi-site-regression.ts` |
 | QA-004 | Create workflow recording/replay example | M | Complete | Record workflow, replay with different params, validate results. See `examples/workflow-recording-replay.ts` |
 | QA-005 | Create API change detection example | S | Complete | Detect when API responses change from baseline. See `examples/api-change-detection.ts` |
-| QA-006 | Add verification engine JSDoc | S | Not Started | Document VerificationEngine API with TypeDoc |
+| QA-006 | Add verification engine JSDoc | S | Complete | Document VerificationEngine API with TypeDoc |
 | QA-007 | Create QA-focused MCP skill prompts | M | Not Started | Skills for common QA workflows (validate site, test APIs, etc.) |
 | QA-008 | Add QA video walkthrough | L | Not Started | Screen recording showing E2E API testing workflow |
 
