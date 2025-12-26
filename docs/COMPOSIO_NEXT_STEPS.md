@@ -184,6 +184,88 @@ const result = await client.importSkillPack(pack, {
 
 ---
 
+### ART-001: Enhanced Article Detection (Completed 2025-12-26)
+
+**Status:** ✅ **Complete** - Article detection and metadata extraction implemented
+
+**Implementation Summary:**
+- ✅ Added ArticleMetadata interface to ContentResult
+- ✅ Implemented multi-indicator article detection (6 indicators)
+- ✅ Created comprehensive metadata extraction methods
+- ✅ Enhanced content quality for articles vs general pages
+- ✅ All TypeScript types and methods properly implemented
+
+**Benefits Achieved:**
+- **Accurate detection** - 6 indicators with 3+ required for classification
+- **Rich metadata** - Author, dates, tags, category, word count, reading time
+- **Better extraction** - Cleaner content isolation for articles
+- **Backward compatible** - Article field is optional
+
+**Components Implemented:**
+
+1. **Types** (`src/core/content-intelligence.ts`):
+   - `ArticleMetadata` interface with 9 fields
+   - Added `article?` field to `ContentResult`
+
+2. **Detection Logic**:
+   - `detectArticle()` - Multi-indicator scoring system
+   - `hasSchemaType()` - Check for Article/NewsArticle/BlogPosting schemas
+   - `detectArticleStructure()` - Heuristics (word count, paragraphs, link density)
+
+3. **Metadata Extraction**:
+   - `extractAuthor()` - Meta tags + common selectors
+   - `findPublishDate()` - Meta tags + time elements
+   - `findModifiedDate()` - Article modified time
+   - `extractTags()` - Keywords + article:tag + tag selectors
+   - `extractCategory()` - Article section classification
+   - `extractMainArticleContent()` - Cleaned article body
+   - `countWords()` - Full page word count
+   - Reading time calculation (200 words/minute)
+
+4. **Content Quality**:
+   - Removes ads, navigation, related posts, comments for articles
+   - Priority selector system for article content
+   - Fallback to largest content block for non-articles
+
+**Files Changed:**
+- `src/core/content-intelligence.ts` (+317 lines, -4 lines)
+  - Added ArticleMetadata type
+  - Added 10 new private methods for detection and extraction
+  - Updated parseStaticHTML to detect articles
+  - Updated buildResult to pass through article metadata
+
+**Commit:**
+- `fba09d3` - feat(ART-001): Add enhanced article detection and metadata extraction
+
+**Detection Indicators:**
+1. Has `<article>` tag
+2. Has Article/NewsArticle/BlogPosting schema
+3. OpenGraph type is "article"
+4. Has author metadata
+5. Has publish date
+6. Has article structure (500+ words, 5+ paragraphs, 2+ headings, low link density)
+
+**Example Output:**
+```typescript
+{
+  content: { title, text, markdown, structured },
+  article: {
+    isArticle: true,
+    author: "Jane Doe",
+    publishDate: "2025-12-26T10:00:00Z",
+    modifiedDate: "2025-12-26T15:30:00Z",
+    tags: ["typescript", "web-scraping", "ai"],
+    category: "Technology",
+    mainContent: "... cleaned markdown content ...",
+    wordCount: 1250,
+    readingTimeMinutes: 7
+  },
+  meta: { ... }
+}
+```
+
+---
+
 ## Recommended Implementation Order
 
 Based on impact vs. effort analysis (build → validate → promote):
@@ -716,7 +798,7 @@ Track these metrics to measure success:
 ### Short Term (3 Weeks)
 - [x] **Complete** PROG-001 (Progressive Knowledge Loading) ✅
 - [x] **Complete** PACK-001 (Skill Pack Infrastructure) ✅
-- [ ] **Implement** ART-001 (Enhanced Article Detection)
+- [x] **Implement** ART-001 (Enhanced Article Detection) ✅
 - [ ] **Create** first official skill pack (`@unbrowser/skills-linkedin`)
 
 ### Medium Term (4-6 Weeks)
