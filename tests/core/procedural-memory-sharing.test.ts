@@ -131,7 +131,8 @@ describe('ProceduralMemory Skill Sharing', () => {
   describe('Vertical Inference', () => {
     it('should infer government vertical from .gov domain', () => {
       const skill = createTestSkill('gov_skill', 'example.gov');
-      memory['skills'].set(skill.id, skill);
+      // Use the underlying map since skills getter returns a computed view
+      memory['domainSpecificSkills'].set(skill.id, skill);
 
       const pack = memory.exportSkillPack();
       expect(pack.metadata.verticals).toContain('government');
@@ -139,7 +140,7 @@ describe('ProceduralMemory Skill Sharing', () => {
 
     it('should infer developer vertical from github.com', () => {
       const skill = createTestSkill('github_skill', 'github.com');
-      memory['skills'].set(skill.id, skill);
+      memory['domainSpecificSkills'].set(skill.id, skill);
 
       const pack = memory.exportSkillPack();
       expect(pack.metadata.verticals).toContain('developer');
@@ -147,7 +148,7 @@ describe('ProceduralMemory Skill Sharing', () => {
 
     it('should infer ecommerce vertical from shop domain', () => {
       const skill = createTestSkill('shop_skill', 'myshop.com');
-      memory['skills'].set(skill.id, skill);
+      memory['domainSpecificSkills'].set(skill.id, skill);
 
       const pack = memory.exportSkillPack();
       expect(pack.metadata.verticals).toContain('ecommerce');
@@ -155,7 +156,7 @@ describe('ProceduralMemory Skill Sharing', () => {
 
     it('should infer documentation vertical from docs subdomain', () => {
       const skill = createTestSkill('docs_skill', 'docs.example.com');
-      memory['skills'].set(skill.id, skill);
+      memory['domainSpecificSkills'].set(skill.id, skill);
 
       const pack = memory.exportSkillPack();
       expect(pack.metadata.verticals).toContain('documentation');
@@ -163,7 +164,7 @@ describe('ProceduralMemory Skill Sharing', () => {
 
     it('should default to general for unknown domains', () => {
       const skill = createTestSkill('random_skill', 'randomsite.xyz');
-      memory['skills'].set(skill.id, skill);
+      memory['domainSpecificSkills'].set(skill.id, skill);
 
       const pack = memory.exportSkillPack();
       expect(pack.metadata.verticals).toContain('general');
@@ -178,10 +179,11 @@ describe('ProceduralMemory Skill Sharing', () => {
       const shopSkill = createTestSkill('shop', 'myshop.com');
       const docsSkill = createTestSkill('docs', 'docs.example.io');
 
-      memory['skills'].set(govSkill.id, govSkill);
-      memory['skills'].set(devSkill.id, devSkill);
-      memory['skills'].set(shopSkill.id, shopSkill);
-      memory['skills'].set(docsSkill.id, docsSkill);
+      // Use the underlying map since skills getter returns a computed view
+      memory['domainSpecificSkills'].set(govSkill.id, govSkill);
+      memory['domainSpecificSkills'].set(devSkill.id, devSkill);
+      memory['domainSpecificSkills'].set(shopSkill.id, shopSkill);
+      memory['domainSpecificSkills'].set(docsSkill.id, docsSkill);
     });
 
     it('should export all skills when no filters', () => {
@@ -223,7 +225,7 @@ describe('ProceduralMemory Skill Sharing', () => {
           timesUsed: 10,
         },
       });
-      memory['skills'].set(lowSuccessSkill.id, lowSuccessSkill);
+      memory['domainSpecificSkills'].set(lowSuccessSkill.id, lowSuccessSkill);
 
       const pack = memory.exportSkillPack({
         minSuccessRate: 0.5,
@@ -252,7 +254,7 @@ describe('ProceduralMemory Skill Sharing', () => {
   describe('Export Metadata', () => {
     it('should include pack metadata', () => {
       const skill = createTestSkill('test', 'example.com');
-      memory['skills'].set(skill.id, skill);
+      memory['domainSpecificSkills'].set(skill.id, skill);
 
       const pack = memory.exportSkillPack({
         packName: 'My Test Pack',
@@ -268,7 +270,7 @@ describe('ProceduralMemory Skill Sharing', () => {
 
     it('should include statistics', () => {
       const skill = createTestSkill('test', 'example.com');
-      memory['skills'].set(skill.id, skill);
+      memory['domainSpecificSkills'].set(skill.id, skill);
 
       const pack = memory.exportSkillPack();
 
@@ -287,8 +289,8 @@ describe('ProceduralMemory Skill Sharing', () => {
     it('should collect domains from skills', () => {
       const skill1 = createTestSkill('skill1', 'site1.com');
       const skill2 = createTestSkill('skill2', 'site2.com');
-      memory['skills'].set(skill1.id, skill1);
-      memory['skills'].set(skill2.id, skill2);
+      memory['domainSpecificSkills'].set(skill1.id, skill1);
+      memory['domainSpecificSkills'].set(skill2.id, skill2);
 
       const pack = memory.exportSkillPack();
 
@@ -301,7 +303,7 @@ describe('ProceduralMemory Skill Sharing', () => {
     it('should include anti-patterns by default', () => {
       const skill = createTestSkill('skill', 'example.com');
       const antiPattern = createTestAntiPattern('ap', 'example.com');
-      memory['skills'].set(skill.id, skill);
+      memory['domainSpecificSkills'].set(skill.id, skill);
       memory['antiPatterns'].set(antiPattern.id, antiPattern);
 
       const pack = memory.exportSkillPack();
@@ -313,7 +315,7 @@ describe('ProceduralMemory Skill Sharing', () => {
     it('should exclude anti-patterns when disabled', () => {
       const skill = createTestSkill('skill', 'example.com');
       const antiPattern = createTestAntiPattern('ap', 'example.com');
-      memory['skills'].set(skill.id, skill);
+      memory['domainSpecificSkills'].set(skill.id, skill);
       memory['antiPatterns'].set(antiPattern.id, antiPattern);
 
       const pack = memory.exportSkillPack({
@@ -327,7 +329,7 @@ describe('ProceduralMemory Skill Sharing', () => {
       const skill = createTestSkill('skill', 'example.com');
       const ap1 = createTestAntiPattern('ap1', 'example.com');
       const ap2 = createTestAntiPattern('ap2', 'other.com');
-      memory['skills'].set(skill.id, skill);
+      memory['domainSpecificSkills'].set(skill.id, skill);
       memory['antiPatterns'].set(ap1.id, ap1);
       memory['antiPatterns'].set(ap2.id, ap2);
 
@@ -344,8 +346,8 @@ describe('ProceduralMemory Skill Sharing', () => {
     it('should include workflows when skills are included', () => {
       const skill1 = createTestSkill('skill1', 'example.com');
       const skill2 = createTestSkill('skill2', 'example.com');
-      memory['skills'].set(skill1.id, skill1);
-      memory['skills'].set(skill2.id, skill2);
+      memory['domainSpecificSkills'].set(skill1.id, skill1);
+      memory['domainSpecificSkills'].set(skill2.id, skill2);
 
       const workflow = createTestWorkflow('wf', [skill1.id, skill2.id]);
       memory['workflows'].set(workflow.id, workflow);
@@ -358,7 +360,7 @@ describe('ProceduralMemory Skill Sharing', () => {
 
     it('should exclude workflows when disabled', () => {
       const skill = createTestSkill('skill', 'example.com');
-      memory['skills'].set(skill.id, skill);
+      memory['domainSpecificSkills'].set(skill.id, skill);
 
       const workflow = createTestWorkflow('wf', [skill.id]);
       memory['workflows'].set(workflow.id, workflow);
@@ -374,7 +376,7 @@ describe('ProceduralMemory Skill Sharing', () => {
   describe('Serialization', () => {
     it('should serialize pack to JSON string', () => {
       const skill = createTestSkill('test', 'example.com');
-      memory['skills'].set(skill.id, skill);
+      memory['domainSpecificSkills'].set(skill.id, skill);
 
       const pack = memory.exportSkillPack();
       const json = memory.serializeSkillPack(pack);
@@ -385,7 +387,7 @@ describe('ProceduralMemory Skill Sharing', () => {
 
     it('should support compact serialization', () => {
       const skill = createTestSkill('test', 'example.com');
-      memory['skills'].set(skill.id, skill);
+      memory['domainSpecificSkills'].set(skill.id, skill);
 
       const pack = memory.exportSkillPack();
       const prettyJson = memory.serializeSkillPack(pack, true);
@@ -450,7 +452,7 @@ describe('ProceduralMemory Skill Sharing', () => {
   describe('Import Conflict Resolution', () => {
     it('should skip conflicts by default', async () => {
       const existingSkill = createTestSkill('existing', 'example.com');
-      memory['skills'].set(existingSkill.id, existingSkill);
+      memory['domainSpecificSkills'].set(existingSkill.id, existingSkill);
 
       // Create a similar skill with same embedding
       const importSkill = { ...existingSkill, id: 'new_id' };
@@ -482,7 +484,7 @@ describe('ProceduralMemory Skill Sharing', () => {
 
     it('should overwrite on conflict when specified', async () => {
       const existingSkill = createTestSkill('existing', 'example.com');
-      memory['skills'].set(existingSkill.id, existingSkill);
+      memory['domainSpecificSkills'].set(existingSkill.id, existingSkill);
 
       const importSkill = {
         ...existingSkill,
@@ -519,7 +521,7 @@ describe('ProceduralMemory Skill Sharing', () => {
 
     it('should merge metrics on conflict when specified', async () => {
       const existingSkill = createTestSkill('existing', 'example.com');
-      memory['skills'].set(existingSkill.id, existingSkill);
+      memory['domainSpecificSkills'].set(existingSkill.id, existingSkill);
       const originalSuccess = existingSkill.metrics.successCount;
 
       const importSkill = {
@@ -555,7 +557,7 @@ describe('ProceduralMemory Skill Sharing', () => {
 
     it('should rename on conflict when specified', async () => {
       const existingSkill = createTestSkill('existing', 'example.com');
-      memory['skills'].set(existingSkill.id, existingSkill);
+      memory['domainSpecificSkills'].set(existingSkill.id, existingSkill);
 
       const importSkill = { ...existingSkill };
       const pack: SkillPack = {
@@ -817,9 +819,9 @@ describe('ProceduralMemory Skill Sharing', () => {
       const govSkill = createTestSkill('gov', 'agency.gov');
       const devSkill1 = createTestSkill('dev1', 'github.com');
       const devSkill2 = createTestSkill('dev2', 'stackoverflow.com');
-      memory['skills'].set(govSkill.id, govSkill);
-      memory['skills'].set(devSkill1.id, devSkill1);
-      memory['skills'].set(devSkill2.id, devSkill2);
+      memory['domainSpecificSkills'].set(govSkill.id, govSkill);
+      memory['domainSpecificSkills'].set(devSkill1.id, devSkill1);
+      memory['domainSpecificSkills'].set(devSkill2.id, devSkill2);
 
       const stats = memory.getSkillPackStats();
 
@@ -830,7 +832,7 @@ describe('ProceduralMemory Skill Sharing', () => {
 
     it('should calculate overall success rate', () => {
       const skill = createTestSkill('test', 'example.com');
-      memory['skills'].set(skill.id, skill);
+      memory['domainSpecificSkills'].set(skill.id, skill);
 
       const stats = memory.getSkillPackStats();
 
@@ -843,7 +845,7 @@ describe('ProceduralMemory Skill Sharing', () => {
       // Add original skills
       const skill = createTestSkill('original', 'example.com');
       const antiPattern = createTestAntiPattern('ap', 'example.com');
-      memory['skills'].set(skill.id, skill);
+      memory['domainSpecificSkills'].set(skill.id, skill);
       memory['antiPatterns'].set(antiPattern.id, antiPattern);
 
       // Export

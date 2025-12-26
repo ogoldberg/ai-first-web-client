@@ -166,6 +166,50 @@ export class ProceduralMemory {
     return merged;
   }
 
+  /**
+   * Set a skill in the appropriate tier-based map
+   */
+  private setSkill(id: string, skill: BrowsingSkill): void {
+    const tier = skill.tier || 'domain-specific';
+    // First, remove from all maps to avoid duplicates
+    this.essentialSkills.delete(id);
+    this.domainSpecificSkills.delete(id);
+    this.advancedSkills.delete(id);
+    // Add to appropriate tier
+    switch (tier) {
+      case 'essential':
+        this.essentialSkills.set(id, skill);
+        break;
+      case 'advanced':
+        this.advancedSkills.set(id, skill);
+        break;
+      case 'domain-specific':
+      default:
+        this.domainSpecificSkills.set(id, skill);
+        break;
+    }
+  }
+
+  /**
+   * Delete a skill from all tier-based maps
+   */
+  private deleteSkill(id: string): boolean {
+    const deleted =
+      this.essentialSkills.delete(id) ||
+      this.domainSpecificSkills.delete(id) ||
+      this.advancedSkills.delete(id);
+    return deleted;
+  }
+
+  /**
+   * Clear all skills from all tier-based maps
+   */
+  private clearSkills(): void {
+    this.essentialSkills.clear();
+    this.domainSpecificSkills.clear();
+    this.advancedSkills.clear();
+  }
+
   private workflows: Map<string, SkillWorkflow> = new Map();
   private trajectoryBuffer: BrowsingTrajectory[] = [];
   private config: ProceduralMemoryConfig;
@@ -870,7 +914,20 @@ export class ProceduralMemory {
       this.evictLeastUsedSkill();
     }
 
-    this.skills.set(skill.id, skill);
+    // Add skill to appropriate tier-based map (not the getter which returns a merged view)
+    const tier = skill.tier || 'domain-specific';
+    switch (tier) {
+      case 'essential':
+        this.essentialSkills.set(skill.id, skill);
+        break;
+      case 'advanced':
+        this.advancedSkills.set(skill.id, skill);
+        break;
+      case 'domain-specific':
+      default:
+        this.domainSpecificSkills.set(skill.id, skill);
+        break;
+    }
 
     // Add to VectorStore for semantic retrieval (LI-006)
     await this.addSkillToVectorStore(skill);
@@ -897,7 +954,7 @@ export class ProceduralMemory {
     }
 
     if (leastUsed) {
-      this.skills.delete(leastUsed.id);
+      this.deleteSkill(leastUsed.id);
       logger.proceduralMemory.info(`Evicted skill: ${leastUsed.name}`);
     }
   }
@@ -1498,7 +1555,7 @@ export class ProceduralMemory {
         }
 
         // Add as new skill
-        this.skills.set(skill.id, skill);
+        this.setSkill(skill.id, skill);
         imported++;
       }
 
@@ -1763,7 +1820,7 @@ export class ProceduralMemory {
 
             case 'overwrite':
               // Delete existing and add new
-              this.skills.delete(existing.id);
+              this.deleteSkill(existing.id);
               break;
 
             case 'merge':
@@ -1802,7 +1859,7 @@ export class ProceduralMemory {
         importedSkill.updatedAt = Date.now();
 
         // Add skill
-        this.skills.set(importedSkill.id, importedSkill);
+        this.setSkill(importedSkill.id, importedSkill);
         await this.addSkillToVectorStore(importedSkill);
         result.skillsImported++;
       }
@@ -1965,7 +2022,7 @@ export class ProceduralMemory {
     }
 
     for (const id of toRemove) {
-      this.skills.delete(id);
+      this.deleteSkill(id);
     }
 
     if (toRemove.length > 0) {
@@ -3132,7 +3189,7 @@ export class ProceduralMemory {
       updatedAt: Date.now(),
     };
 
-    this.skills.set(skill.id, skill);
+    this.setSkill(skill.id, skill);
 
     // Add to VectorStore for semantic retrieval (LI-006)
     // Fire-and-forget to maintain sync return type
@@ -3149,10 +3206,10 @@ export class ProceduralMemory {
   }
 
   /**
-   * Delete a skill by ID
+   * Delete a skill by ID (public API)
    */
-  deleteSkill(skillId: string): boolean {
-    const deleted = this.skills.delete(skillId);
+  removeSkill(skillId: string): boolean {
+    const deleted = this.deleteSkill(skillId);
     if (deleted) {
       this.save();
     }
@@ -3163,7 +3220,7 @@ export class ProceduralMemory {
    * Reset all procedural memory (for testing/debugging)
    */
   async reset(): Promise<void> {
-    this.skills.clear();
+    this.clearSkills();
     this.workflows.clear();
     this.trajectoryBuffer = [];
     this.visitedDomains.clear();
@@ -3996,7 +4053,7 @@ export class ProceduralMemory {
         sourceDomain: domain,
         verificationChecks: [],
       };
-      this.skills.set(domainSkill.id, domainSkill);
+      this.setSkill(domainSkill.id, domainSkill);
     }
 
     // Ensure verificationChecks array exists
@@ -4258,7 +4315,7 @@ export class ProceduralMemory {
     };
 
     // Add to skill store
-    this.skills.set(skill.id, skill);
+    this.setSkill(skill.id, skill);
     await this.save();
 
     logger.proceduralMemory.info('Skill created from workflow', {

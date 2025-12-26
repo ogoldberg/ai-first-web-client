@@ -142,11 +142,21 @@ export class ApiAnalyzer {
     if (request.method === 'GET') {
       score += 2;
     }
-    // POST/PUT/DELETE: Mutation operations (high confidence if successful)
+    // POST/PUT/DELETE: Mutation operations - need auth to be reliable
     else if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method)) {
-      // Successful mutations are just as valuable as GETs
+      // Mutations without auth are less reliable for bypassing
+      // Only give full points if we have auth captured
+      const hasAuth = request.requestHeaders['authorization'] ||
+                      request.requestHeaders['cookie'] ||
+                      request.requestHeaders['x-api-key'];
+
       if (request.status >= 200 && request.status < 300) {
-        score += 2;
+        // With auth, mutations are valuable
+        if (hasAuth) {
+          score += 2;
+        }
+        // Without auth, mutations are medium confidence at best
+        // (we might not be able to replay them successfully)
 
         // Extra points for proper REST status codes
         if (

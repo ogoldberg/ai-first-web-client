@@ -24,8 +24,18 @@ describe('PersistentStore', () => {
   let testDir: string;
   let testFilePath: string;
 
+  // Track all stores created during tests to cancel pending timers
+  const createdStores: Array<{ cancel: () => void }> = [];
+
   // Helper to create a unique test file path
   const createTestPath = (name: string) => path.join(testDir, `${name}-${Date.now()}.json`);
+
+  // Helper to create a store and track it for cleanup
+  const createTrackedStore = <T>(filePath: string, options?: Parameters<typeof createPersistentStore>[1]) => {
+    const store = new PersistentStore<T>(filePath, options);
+    createdStores.push(store);
+    return store;
+  };
 
   // Helper to wait for debounce
   const waitForDebounce = (ms: number = 1100) => new Promise(resolve => setTimeout(resolve, ms));
@@ -38,6 +48,12 @@ describe('PersistentStore', () => {
   });
 
   afterEach(async () => {
+    // Cancel any pending writes to avoid race conditions with directory cleanup
+    for (const store of createdStores) {
+      store.cancel();
+    }
+    createdStores.length = 0;
+
     // Clean up test directory
     try {
       await fs.rm(testDir, { recursive: true, force: true });
@@ -168,7 +184,7 @@ describe('PersistentStore', () => {
     });
 
     it('should respect custom debounce delay', async () => {
-      const shortDebounce = new PersistentStore<{ value: number }>(createTestPath('short'), {
+      const shortDebounce = createTrackedStore<{ value: number }>(createTestPath('short'), {
         debounceMs: 50,
       });
 
@@ -376,7 +392,7 @@ describe('PersistentStore', () => {
   // ============================================
   describe('Statistics', () => {
     it('should track save requests', async () => {
-      const store = new PersistentStore<{ value: number }>(testFilePath, { debounceMs: 50 });
+      const store = createTrackedStore<{ value: number }>(testFilePath, { debounceMs: 50 });
 
       store.save({ value: 1 });
       store.save({ value: 2 });
@@ -388,7 +404,7 @@ describe('PersistentStore', () => {
     });
 
     it('should track actual writes', async () => {
-      const store = new PersistentStore<{ value: number }>(testFilePath, { debounceMs: 0 });
+      const store = createTrackedStore<{ value: number }>(testFilePath, { debounceMs: 0 });
 
       await store.saveImmediate({ value: 1 });
       await store.saveImmediate({ value: 2 });
@@ -398,7 +414,7 @@ describe('PersistentStore', () => {
     });
 
     it('should track debounced skips', async () => {
-      const store = new PersistentStore<{ value: number }>(testFilePath, { debounceMs: 100 });
+      const store = createTrackedStore<{ value: number }>(testFilePath, { debounceMs: 100 });
 
       store.save({ value: 1 });
       store.save({ value: 2 });

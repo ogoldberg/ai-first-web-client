@@ -8,8 +8,8 @@ import { Hono } from 'hono';
 import { validator } from 'hono/validator';
 import { authMiddleware, requirePermission } from '../middleware/auth.js';
 import { rateLimitMiddleware } from '../middleware/rate-limit.js';
-import { ApiDiscoveryOrchestrator } from '../../../src/core/api-discovery-orchestrator.js';
-import { LearningEngine } from '../../../src/core/learning-engine.js';
+import { ApiDiscoveryOrchestrator } from '../../../../src/core/api-discovery-orchestrator.js';
+import { LearningEngine } from '../../../../src/core/learning-engine.js';
 
 interface FuzzDiscoveryRequest {
   domain: string;
