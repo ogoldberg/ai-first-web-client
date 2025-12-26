@@ -36,35 +36,17 @@ import {
   // Tool handlers
   handleSmartBrowse,
   handleBatchBrowse,
-  handleGetDomainIntelligence,
-  handleGetDomainCapabilities,
   handleCaptureScreenshot,
   handleExportHar,
-  handleGetLearningStats,
-  handleGetLearningEffectiveness,
   handleDebugTraces,
   handleSessionManagement,
   handleExecuteApiCall,
-  handleGetBrowserProviders,
-  handleTierManagement,
-  handleGetPerformanceMetrics,
-  handleContentTracking,
-  handleUsageAnalytics,
-  handleGetAnalyticsDashboard,
-  handleGetSystemStatus,
-  handleToolSelectionMetrics,
-  handleSkillManagement,
   handleAiFeedback,
   handleWebhookManagement,
   type SmartBrowseArgs,
   type BatchBrowseArgs,
   type DebugTracesAction,
   type SessionAction,
-  type TierAction,
-  type ContentTrackingAction,
-  type UsageAnalyticsAction,
-  type ToolSelectionMetricsAction,
-  type SkillAction,
   type FeedbackAction,
   type WebhookAction,
 } from './mcp/index.js';
@@ -412,127 +394,6 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
         return result;
       }
 
-      // ============================================
-      // ADMIN TOOLS (TC-005/TC-006/TC-007)
-      // ============================================
-
-      case 'get_browser_providers': {
-        const result = handleGetBrowserProviders(browserManager);
-        await recordToolInvocation(true);
-        return result;
-      }
-
-      case 'tier_management': {
-        const result = await handleTierManagement(
-          smartBrowser,
-          args.action as TierAction,
-          args as Record<string, unknown>
-        );
-        await recordToolInvocation(true);
-        return result;
-      }
-
-      case 'get_performance_metrics': {
-        const result = handleGetPerformanceMetrics(smartBrowser, {
-          domain: args.domain as string,
-          sortBy: args.sortBy as 'avgTime' | 'p95' | 'successRate',
-          order: args.order as 'asc' | 'desc',
-          limit: args.limit as number,
-        });
-        await recordToolInvocation(true);
-        return result;
-      }
-
-      case 'content_tracking': {
-        const result = await handleContentTracking(
-          smartBrowser,
-          args.action as ContentTrackingAction,
-          args as Record<string, unknown>
-        );
-        await recordToolInvocation(true);
-        return result;
-      }
-
-      case 'usage_analytics': {
-        const result = await handleUsageAnalytics(
-          args.action as UsageAnalyticsAction,
-          args as Record<string, unknown>
-        );
-        await recordToolInvocation(true);
-        return result;
-      }
-
-      case 'get_analytics_dashboard': {
-        const result = await handleGetAnalyticsDashboard({
-          period: args.period as 'hour' | 'day' | 'week' | 'month' | 'all',
-          topDomainsLimit: args.topDomainsLimit as number,
-          timeSeriesPoints: args.timeSeriesPoints as number,
-          domain: args.domain as string,
-          tenantId: args.tenantId as string,
-        });
-        await recordToolInvocation(true);
-        return result;
-      }
-
-      case 'get_system_status': {
-        const result = await handleGetSystemStatus();
-        await recordToolInvocation(true);
-        return result;
-      }
-
-      case 'tool_selection_metrics': {
-        const result = await handleToolSelectionMetrics(
-          args.action as ToolSelectionMetricsAction,
-          {
-            period: args.period as 'hour' | 'day' | 'week' | 'month' | 'all',
-            tool: args.tool as string,
-            category: args.category as 'core' | 'debug' | 'admin' | 'deprecated' | 'unknown',
-            sessionId: args.sessionId as string,
-            tenantId: args.tenantId as string,
-          }
-        );
-        await recordToolInvocation(true);
-        return result;
-      }
-
-      // ============================================
-      // DEPRECATED TOOLS (TC-008)
-      // ============================================
-
-      case 'get_domain_intelligence': {
-        const result = await handleGetDomainIntelligence(smartBrowser, args.domain as string);
-        await recordToolInvocation(true);
-        return result;
-      }
-
-      case 'get_domain_capabilities': {
-        const result = await handleGetDomainCapabilities(smartBrowser, args.domain as string);
-        await recordToolInvocation(true);
-        return result;
-      }
-
-      case 'get_learning_stats': {
-        const result = handleGetLearningStats(smartBrowser);
-        await recordToolInvocation(true);
-        return result;
-      }
-
-      case 'get_learning_effectiveness': {
-        const result = await handleGetLearningEffectiveness(smartBrowser);
-        await recordToolInvocation(true);
-        return result;
-      }
-
-      case 'skill_management': {
-        const result = await handleSkillManagement(
-          smartBrowser,
-          args.action as SkillAction,
-          args as Record<string, unknown>
-        );
-        await recordToolInvocation(true);
-        return result;
-      }
-
       case 'ai_feedback': {
         // Generate a session ID for rate limiting
         const sessionId = `session-${Date.now()}`;
@@ -556,97 +417,12 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
         return result;
       }
 
-      // Deprecated individual auth tools (use api_auth instead)
-      case 'get_api_auth_status': {
-        const result = await handleAuthStatus(
-          authWorkflow,
-          args.domain as string,
-          (args.profile as string) || 'default'
-        );
-        await recordToolInvocation(true);
-        return jsonResponse({
-          ...result,
-          deprecation_notice: "This tool is deprecated. Use api_auth with action='status' instead.",
-        });
-      }
-
-      case 'configure_api_auth': {
-        const result = await handleAuthConfigure(
-          authWorkflow,
-          args.domain as string,
-          args.authType as string,
-          args.credentials as Record<string, unknown>,
-          (args.profile as string) || 'default',
-          args.validate !== false
-        );
-        if ('error' in result && !('success' in result)) {
-          return errorResponse(result.error);
-        }
-        await recordToolInvocation(true);
-        return jsonResponse({
-          ...result,
-          deprecation_notice:
-            "This tool is deprecated. Use api_auth with action='configure' instead.",
-        });
-      }
-
-      case 'complete_oauth': {
-        const result = await handleOAuthComplete(
-          authWorkflow,
-          args.code as string,
-          args.state as string
-        );
-        await recordToolInvocation(true);
-        return jsonResponse({
-          ...result,
-          deprecation_notice:
-            "This tool is deprecated. Use api_auth with action='complete_oauth' instead.",
-        });
-      }
-
-      case 'get_auth_guidance': {
-        const result = await handleAuthGuidance(
-          authWorkflow,
-          args.domain as string,
-          args.authType as string | undefined
-        );
-        await recordToolInvocation(true);
-        return jsonResponse({
-          ...result,
-          deprecation_notice:
-            "This tool is deprecated. Use api_auth with action='guidance' instead.",
-        });
-      }
-
-      case 'delete_api_auth': {
-        const result = await handleAuthDelete(
-          authWorkflow,
-          args.domain as string,
-          args.authType as AuthType | undefined,
-          (args.profile as string) || 'default'
-        );
-        await recordToolInvocation(true);
-        return jsonResponse({
-          ...result,
-          deprecation_notice: "This tool is deprecated. Use api_auth with action='delete' instead.",
-        });
-      }
-
-      case 'list_configured_auth': {
-        const result = handleAuthList(authWorkflow);
-        await recordToolInvocation(true);
-        return jsonResponse({
-          ...result,
-          deprecation_notice: "This tool is deprecated. Use api_auth with action='list' instead.",
-        });
-      }
-
       default: {
         // Get list of available tools for helpful error message
         const availableTools = [
           'smart_browse', 'batch_browse', 'execute_api_call', 'session_management', 'api_auth',
-          'capture_screenshot', 'export_har', 'debug_traces', 'get_domain_intelligence',
-          'get_domain_capabilities', 'get_learning_stats', 'skill_management', 'tier_management',
+          'ai_feedback', 'webhook_management',
+          ...(DEBUG_MODE ? ['capture_screenshot', 'export_har', 'debug_traces'] : []),
         ];
         throw new Error(unknownToolError(name, availableTools));
       }
