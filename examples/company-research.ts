@@ -10,7 +10,7 @@
  * Shows how Unbrowser can coordinate complex multi-step research tasks.
  */
 
-import { createLLMBrowser } from '../sdk/index.js';
+import { createLLMBrowser } from '../src/sdk.js';
 
 interface CompanyProfile {
   name: string;

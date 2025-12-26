@@ -11,7 +11,7 @@
  * then uses it directly on subsequent visits for 10x speedup.
  */
 
-import { createLLMBrowser } from '../sdk/index.js';
+import { createLLMBrowser } from '../src/sdk.js';
 
 interface GitHubRepoData {
   name: string;

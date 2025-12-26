@@ -20,7 +20,7 @@
  * Requires 3+ indicators to classify as article.
  */
 
-import { createLLMBrowser } from '../sdk/index.js';
+import { createLLMBrowser } from '../src/sdk.js';
 
 async function extractArticle(url: string) {
   console.log(`\n${'='.repeat(60)}`);

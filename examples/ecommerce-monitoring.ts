@@ -11,7 +11,7 @@
  * reusable skills for efficient future monitoring.
  */
 
-import { createLLMBrowser } from '../sdk/index.js';
+import { createLLMBrowser } from '../src/sdk.js';
 
 interface ProductData {
   url: string;

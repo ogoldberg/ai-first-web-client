@@ -15,7 +15,7 @@
  * - Verifying skill execution
  */
 
-import { createLLMBrowser } from '../sdk/index.js';
+import { createLLMBrowser } from '../src/sdk.js';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
