@@ -271,6 +271,7 @@ export const logger = {
   proceduralMemory: new Logger('ProceduralMemory'),
   knowledgeBase: new Logger('KnowledgeBase'),
   embedding: new Logger('Embedding'),
+  formLearner: new Logger('FormSubmissionLearner'),
 
   // Tools
   browseTool: new Logger('BrowseTool'),

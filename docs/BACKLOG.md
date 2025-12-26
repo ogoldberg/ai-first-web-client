@@ -387,6 +387,73 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 
 ---
 
+## P2: Progressive Optimization Gaps (New Initiative)
+
+**Goal:** Fully utilize "Browser Minimizer" philosophy by connecting existing learning infrastructure to progressive optimization.
+
+**Context:** Analysis revealed that we have all primitives for form automation and mutation learning, but key integrations are missing. See [CAPABILITY_GAPS_ANALYSIS.md](CAPABILITY_GAPS_ANALYSIS.md) for full analysis.
+
+**Success Criteria:**
+- Forms submit 10-25x faster after first learning pass
+- POST/PUT/DELETE patterns learned and reused
+- Auth workflows auto-replay when sessions expire
+- Multi-step workflows progressively optimized
+
+### Phase 1: Forms & Mutations (Current Sprint)
+
+| ID | Task | Effort | Status | Notes |
+|----|------|--------|--------|-------|
+| GAP-001 | Form Submission Learning | L | Complete | FormSubmissionLearner: learns POST patterns from browser submissions, replays via direct API. Handles dynamic fields (CSRF, user IDs, nonces). See [FORM_AUTOMATION_IMPLEMENTATION.md](FORM_AUTOMATION_IMPLEMENTATION.md) |
+| GAP-002 | POST/PUT/DELETE API Learning | S | Complete | Enhanced ApiAnalyzer to score mutations equally with GET. Adds REST-compliant status code detection (201, 204) |
+| GAP-003 | Auth Flow Automation | M | Not Started | Auto-detect auth challenges (401, redirects), replay learned login workflows, fallback to user prompt |
+
+### Phase 2: Workflows (Next Sprint)
+
+| ID | Task | Effort | Status | Notes |
+|----|------|--------|--------|-------|
+| GAP-004 | Multi-Step Workflow Optimization | L | Not Started | Analyze workflows to find shortcut paths. Example: 4-step wizard → direct API call to final endpoint if it contains all data |
+| GAP-005 | Pagination API Discovery | M | Not Started | Learn that "Next page" uses API calls (/api/results?page=2), eliminate browser renders for multi-page scraping |
+| GAP-006 | Search Query Optimization | M | Not Started | Learn search API endpoints (/api/search?q=...), eliminate form rendering for searches |
+
+### Phase 3: Resilience (Following Sprint)
+
+| ID | Task | Effort | Status | Notes |
+|----|------|--------|--------|-------|
+| GAP-007 | CAPTCHA Challenge Detection | M | Not Started | Detect CAPTCHA challenges, prompt user, resume workflow after solved |
+| GAP-008 | Dynamic Content Loading | M | Not Started | Learn which XHR calls load content, monitor specific endpoints instead of networkidle |
+| GAP-010 | Rate Limit Learning | S | ✅ Implemented | Detects 429 responses and rate limit headers (X-RateLimit-*, Retry-After), tracks quota per domain, automatic retry with exponential backoff (max 3 retries), pre-emptive wait checks, warns at 20% remaining quota. See [RATE_LIMITING_SUPPORT.md](RATE_LIMITING_SUPPORT.md) |
+
+### Future Opportunities
+
+| ID | Task | Effort | Status | Notes |
+|----|------|--------|--------|-------|
+| GAP-009 | Multi-Domain Login Reuse | M | Not Started | Detect SSO flows, reuse credentials across domains |
+| GAP-011 | Content Change Prediction | M | Not Started | Learn update patterns (e.g., "updates every 6 hours"), optimize polling |
+
+### Phase 4: Protocol & Format Support
+
+| ID | Task | Effort | Status | Notes |
+|----|------|--------|--------|-------|
+| GAP-012 | File Upload Support | L | ✅ Implemented | Handles multipart/form-data, detects file fields, learns upload patterns. Supports Buffer/base64/filePath. See [FILE_UPLOAD_SUPPORT.md](FILE_UPLOAD_SUPPORT.md) |
+| GAP-013 | GraphQL Mutation Learning | M | ✅ Implemented | Integrated with GraphQL introspection, detects mutations in forms, maps form fields to GraphQL variables. See [GRAPHQL_FORM_SUPPORT.md](GRAPHQL_FORM_SUPPORT.md) |
+| GAP-014 | Two-Factor Auth Support | L | ✅ Implemented | Detects OTP challenges (SMS/email/TOTP), pauses workflow, prompts user via callback, learns OTP patterns. Unblocks ~50% of auth flows. See [TWO_FACTOR_AUTH_SUPPORT.md](TWO_FACTOR_AUTH_SUPPORT.md) |
+| GAP-015 | WebSocket Form Submissions | M | ✅ Implemented | Detects WebSocket/Socket.IO/SockJS patterns via CDP, learns event payloads with intelligent scoring, direct WebSocket replay. 20-30x speedup for real-time forms. See [WEBSOCKET_FORM_SUPPORT.md](WEBSOCKET_FORM_SUPPORT.md) |
+| GAP-016 | Server Action Support | M | ✅ Implemented | Detects Next.js Server Actions (Next-Action header) and Remix Actions (_action field), learns framework-specific patterns, direct replay with 10-15x speedup. Handles redirects, JSON responses, and React Flight Streams. See [SERVER_ACTION_SUPPORT.md](SERVER_ACTION_SUPPORT.md) |
+| GAP-017 | JSON-RPC Form Patterns | S | ✅ Implemented | Detects JSON-RPC 1.0 and 2.0 method calls, learns RPC method and params mapping, direct replay with timestamp IDs. Supports both named and positional parameters. 15-20x speedup. See [JSON_RPC_SUPPORT.md](JSON_RPC_SUPPORT.md) |
+| GAP-018 | OAuth Flow Automation | L | 🚧 Foundation Implemented | OAuth detection via URL parameters, flow type identification (Authorization Code/PKCE/Implicit), data structures for flow tracking. Foundation complete - full automation (redirect tracking, token exchange, PKCE generation, replay) requires Phases 2-5. See [OAUTH_FLOW_SUPPORT.md](OAUTH_FLOW_SUPPORT.md) |
+
+**Expected Impact:**
+- 10-25x speedup for form submissions
+- 50-100x speedup for paginated scraping
+- Higher success rates with auth challenges
+- Automatic adaptation to rate limits
+
+**Related Docs:**
+- [CAPABILITY_GAPS_ANALYSIS.md](CAPABILITY_GAPS_ANALYSIS.md) - Full gap analysis
+- [FORM_AUTOMATION_IMPLEMENTATION.md](FORM_AUTOMATION_IMPLEMENTATION.md) - Implementation details
+
+---
+
 ## P2: Competitive Feature Parity (From Competitive Analysis)
 
 See [COMPETITIVE_ANALYSIS.md](COMPETITIVE_ANALYSIS.md) for context on why these features matter.
