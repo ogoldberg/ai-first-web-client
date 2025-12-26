@@ -12,10 +12,8 @@
 
 Creating practical QA examples to help users understand how to use Unbrowser for testing.
 
-**In Progress:**
-- QA-004 - Workflow recording/replay example
-
 **Completed:**
+- QA-004 - Workflow recording/replay example (`examples/workflow-recording-replay.ts`)
 - QA-003 - Multi-site regression example (`examples/multi-site-regression.ts`)
 - QA-002 - Content validation test suite example (`examples/content-validation-suite.ts`)
 - QA-001 - E2E API testing example (`examples/e2e-api-testing.ts`)
