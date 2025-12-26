@@ -370,10 +370,12 @@ setUsers(users.map(u => u.id === 'temp-123' ? result : u));
 - ✅ **WebSocket submissions (Socket.IO, raw WebSocket, SockJS)** - GAP-015 implemented 2025-12-26
 - ✅ **Server Actions (Next.js 13+, Remix)** - GAP-016 implemented 2025-12-26
 - ✅ **JSON-RPC (1.0 & 2.0)** - GAP-017 implemented 2025-12-26
+- ✅ **Rate limiting (exponential backoff, quota tracking)** - GAP-010 implemented 2025-12-26
+- 🚧 **OAuth flows (foundation: detection, flow types, PKCE)** - GAP-018 foundation 2025-12-26
 
 **Major Gaps:**
-- ❌ OAuth flows
-- ❌ gRPC-Web
+- 🚧 **OAuth flows** - Foundation complete (detection, flow types), full automation pending (redirect tracking, token exchange, PKCE generation, replay)
+- ❌ **gRPC-Web** - Binary protocol support not yet implemented
 
 **Estimated Impact:**
 - ~~File uploads: Blocks ~30% of real-world forms~~ ✅ **SOLVED**
@@ -382,10 +384,11 @@ setUsers(users.map(u => u.id === 'temp-123' ? result : u));
 - ~~WebSocket forms: Blocks ~10% of real-time apps~~ ✅ **SOLVED**
 - ~~Server actions: Blocks ~20-25% of modern React apps~~ ✅ **SOLVED**
 - **ALL P0 GAPS COMPLETE!** 🎉
-- **THREE P1 gaps complete!** 🚀
-- New coverage: **~99% of previously blocked high-priority scenarios now supported**
+- **ALL P1 GAPS HAVE FOUNDATION!** 🚀
 - **Rate limiting support added** - Universal resilience against API quotas
-- Remaining gaps: OAuth Flows (P1) + P2/P3 enhancements
+- **OAuth foundation complete** - Detection and flow tracking infrastructure in place
+- New coverage: **~99% of previously blocked high-priority scenarios now supported**
+- Remaining work: OAuth full automation (Phases 2-5), P2/P3 enhancements
 
 **Next Steps:**
 1. ~~Implement GAP-012 (File Uploads)~~ ✅ **Complete**
@@ -395,4 +398,6 @@ setUsers(users.map(u => u.id === 'temp-123' ? result : u));
 5. ~~Implement GAP-016 (Server Actions)~~ ✅ **Complete**
 6. ~~Implement GAP-017 (JSON-RPC)~~ ✅ **Complete**
 7. ~~Implement GAP-010 (Rate Limiting)~~ ✅ **Complete**
-8. Implement GAP-018 (OAuth Flows) - P1 (final priority gap)
+8. ~~Implement GAP-018 Foundation (OAuth Flow Detection)~~ ✅ **Complete**
+9. **Future:** Complete GAP-018 Phases 2-5 (redirect tracking, token exchange, PKCE generation, flow replay)
+10. **Future:** P2/P3 enhancements (validation handling, optimistic updates, gRPC-Web, SOAP)
