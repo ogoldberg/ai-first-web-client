@@ -296,6 +296,22 @@ export interface SmartBrowseResult extends BrowseResult {
     url: string;
     content: { html: string; markdown: string; text: string };
   }>;
+
+  // GraphQL discovery results (if a GraphQL API was found)
+  graphql?: {
+    /** Whether a GraphQL endpoint was discovered */
+    found: boolean;
+    /** The GraphQL endpoint URL */
+    endpoint?: string;
+    /** List of query names discovered */
+    queries?: string[];
+    /** List of mutation names discovered */
+    mutations?: string[];
+    /** Number of types in the schema */
+    typeCount?: number;
+    /** Error message if introspection failed */
+    error?: string;
+  };
 }
 
 /**

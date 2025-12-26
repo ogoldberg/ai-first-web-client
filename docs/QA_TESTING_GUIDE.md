@@ -140,50 +140,75 @@ for (const api of result.discoveredApis) {
 
 ### GraphQL API Testing
 
-Unbrowser automatically introspects GraphQL endpoints:
+Unbrowser can discover GraphQL endpoints. The `discoveredApis` array will include GraphQL endpoints with their patterns:
 
 ```typescript
 const result = await browser.browse('https://api.example.com/graphql', {
-  includeInsights: true,
+  includeNetwork: true,
 });
 
-if (result.graphql) {
-  console.log('GraphQL Schema Discovered:');
-  console.log(`  Types: ${result.graphql.types.length}`);
-  console.log(`  Queries: ${result.graphql.queries.join(', ')}`);
-  console.log(`  Mutations: ${result.graphql.mutations.join(', ')}`);
+// Check for GraphQL in discovered APIs
+const graphqlApis = result.discoveredApis.filter(api =>
+  api.url.includes('/graphql') || api.templateType === 'graphql'
+);
 
-  // Test each query
-  for (const query of result.graphql.queries) {
-    const queryResult = await browser.executeApiCall({
-      url: 'https://api.example.com/graphql',
-      method: 'POST',
-      body: { query: `{ ${query} { id } }` },
-    });
+if (graphqlApis.length > 0) {
+  console.log('GraphQL endpoints found:', graphqlApis.length);
 
-    console.log(`  Query ${query}: ${queryResult.status === 200 ? 'PASS' : 'FAIL'}`);
+  // Test the GraphQL endpoint with introspection
+  const introspectionResult = await browser.executeApiCall({
+    url: graphqlApis[0].url,
+    method: 'POST',
+    body: {
+      query: '{ __schema { types { name } } }'
+    },
+  });
+
+  if (introspectionResult.status === 200 && introspectionResult.data?.__schema) {
+    console.log('GraphQL introspection successful');
+    console.log('Types:', introspectionResult.data.__schema.types.length);
   }
 }
 ```
 
+> **Note**: Full GraphQL schema exposure in `result.graphql` is coming soon. For now, use the `discoveredApis` array to find GraphQL endpoints.
+
 ### OpenAPI/Swagger Validation
 
-When Unbrowser discovers an OpenAPI spec, it can validate actual responses against the schema:
+Unbrowser can discover OpenAPI specs. Use the API discovery orchestrator for comprehensive spec detection:
 
 ```typescript
+// Check for OpenAPI in discovered APIs
 const result = await browser.browse('https://api.example.com', {
-  includeInsights: true,
+  includeNetwork: true,
 });
 
-if (result.openapi) {
-  console.log('OpenAPI spec found:', result.openapi.title);
-  console.log('Version:', result.openapi.version);
-  console.log('Endpoints:', result.openapi.endpoints.length);
+// Look for OpenAPI spec URLs in discovered APIs
+const specUrls = result.discoveredApis.filter(api =>
+  api.url.includes('openapi') ||
+  api.url.includes('swagger') ||
+  api.url.endsWith('.json') ||
+  api.url.endsWith('.yaml')
+);
 
-  // Unbrowser already validated responses against the spec
-  console.log('Schema violations:', result.openapi.violations || 'None');
+if (specUrls.length > 0) {
+  console.log('Potential OpenAPI specs found:', specUrls.map(s => s.url));
+
+  // Fetch and parse the spec
+  const specResult = await browser.executeApiCall({
+    url: specUrls[0].url,
+    method: 'GET',
+  });
+
+  if (specResult.data?.openapi || specResult.data?.swagger) {
+    console.log('OpenAPI spec version:', specResult.data.openapi || specResult.data.swagger);
+    console.log('Title:', specResult.data.info?.title);
+    console.log('Endpoints:', Object.keys(specResult.data.paths || {}).length);
+  }
 }
 ```
+
+> **Note**: OpenAPI spec parsing is handled internally. The `discoveredApis` array includes endpoints found via OpenAPI discovery.
 
 ### API Regression Testing
 
@@ -471,16 +496,22 @@ console.log('All steps passed:', result.stepsCompleted);
 
 ### Workflow Versioning
 
+Workflows are stored with versioning support in ProceduralMemory:
+
 ```typescript
-// Workflows are versioned
-const versions = await browser.getWorkflowVersions(workflow.id);
+// List all workflows
+const workflows = await browser.listWorkflows();
 
-// Roll back to a previous version
-await browser.rollbackWorkflow(workflow.id, versions[1].version);
+// Get workflow details
+const workflow = await browser.getWorkflow(workflowId);
+console.log('Workflow:', workflow.name);
+console.log('Steps:', workflow.steps.length);
 
-// Compare versions
-const diff = await browser.compareWorkflowVersions(workflow.id, 'v1', 'v2');
+// Delete a workflow
+await browser.deleteWorkflow(workflowId);
 ```
+
+> **Coming Soon**: Workflow version comparison and rollback methods (`getWorkflowVersions`, `rollbackWorkflow`, `compareWorkflowVersions`) are planned for future releases.
 
 ---
 
@@ -745,6 +776,82 @@ const harResult = await browser.exportHar(url, {
 
 // Save for external analysis
 fs.writeFileSync('debug.har', JSON.stringify(harResult.har, null, 2));
+```
+
+---
+
+## Test Reporters for CI/CD
+
+Unbrowser includes test reporters that output results in standard formats for CI/CD pipelines.
+
+### JUnit XML Output
+
+```typescript
+import { createLLMBrowser } from 'llm-browser/sdk';
+import { JUnitReporter, generateTestReport } from 'llm-browser/testing';
+
+const browser = await createLLMBrowser();
+const tests = [];
+
+// Run your tests
+for (const url of urls) {
+  const startTime = Date.now();
+  try {
+    const result = await browser.browse(url, {
+      verify: { mode: 'standard' }
+    });
+    tests.push(JUnitReporter.createTestCase(
+      `Test ${url}`,
+      url,
+      result.verification,
+      Date.now() - startTime
+    ));
+  } catch (error) {
+    tests.push(JUnitReporter.createTestCase(
+      `Test ${url}`,
+      url,
+      undefined,
+      Date.now() - startTime,
+      error.message
+    ));
+  }
+}
+
+// Generate JUnit XML
+const suite = JUnitReporter.createSuite('API Tests', tests);
+const xml = generateTestReport(suite, 'junit');
+
+// Write to file for CI/CD
+fs.writeFileSync('test-results.xml', xml);
+```
+
+### Available Formats
+
+| Format | Function | Use Case |
+|--------|----------|----------|
+| `junit` | `generateTestReport(suite, 'junit')` | GitHub Actions, Jenkins, GitLab CI |
+| `tap` | `generateTestReport(suite, 'tap')` | TAP consumers, simple parsers |
+| `json` | `generateTestReport(suite, 'json')` | Custom processing, dashboards |
+| `console` | `generateTestReport(suite, 'console')` | Human-readable output |
+
+### GitHub Actions Integration
+
+```yaml
+# .github/workflows/api-tests.yml
+- name: Run API Tests
+  run: node test-apis.js
+
+- name: Upload Test Results
+  uses: actions/upload-artifact@v3
+  with:
+    name: test-results
+    path: test-results.xml
+
+- name: Publish Test Results
+  uses: EnricoMi/publish-unit-test-result-action@v2
+  if: always()
+  with:
+    files: test-results.xml
 ```
 
 ---

@@ -23,17 +23,50 @@ import type { SmartBrowseResult } from './smart-browser.js';
 import type { ProceduralMemory } from './procedural-memory.js';
 import { logger } from '../utils/logger.js';
 
+/**
+ * Browser interface for state verification
+ * Minimal interface to avoid circular dependencies with SmartBrowser
+ */
+export interface StateVerificationBrowser {
+  browse(url: string, options?: { maxCostTier?: string }): Promise<SmartBrowseResult>;
+}
+
+/**
+ * API caller interface for state verification
+ */
+export interface StateVerificationApiCaller {
+  executeApiCall(options: { url: string; method?: string }): Promise<{ status: number; data?: unknown }>;
+}
+
 // Minimum confidence threshold for learned verifications
 const MIN_LEARNED_VERIFICATION_CONFIDENCE = 0.7;
 
 export class VerificationEngine {
   private proceduralMemory?: ProceduralMemory;
+  private browser?: StateVerificationBrowser;
+  private apiCaller?: StateVerificationApiCaller;
 
   /**
    * Set ProceduralMemory for learned verifications (COMP-014)
    */
   setProceduralMemory(memory: ProceduralMemory): void {
     this.proceduralMemory = memory;
+  }
+
+  /**
+   * Set browser for state verification (COMP-013)
+   * Required for checkUrl assertions that need to browse a secondary URL
+   */
+  setBrowser(browser: StateVerificationBrowser): void {
+    this.browser = browser;
+  }
+
+  /**
+   * Set API caller for state verification (COMP-013)
+   * Required for checkApi assertions that need to call an API endpoint
+   */
+  setApiCaller(apiCaller: StateVerificationApiCaller): void {
+    this.apiCaller = apiCaller;
   }
 
   /**
@@ -282,24 +315,164 @@ export class VerificationEngine {
   }
 
   /**
-   * Verify state assertions
+   * Verify state assertions (COMP-013)
    *
-   * STUB: State verification is not yet implemented.
-   * This requires a secondary browse operation via SmartBrowser.
-   * Will be enhanced in TieredFetcher integration phase (see COMP-013).
-   * Currently returns true (pass-through) - state checks are skipped.
+   * State verification performs secondary requests to confirm state:
+   * - checkUrl: Browse another URL and verify content
+   * - checkApi: Call an API endpoint and verify response
+   * - checkSelector: Check if element exists (requires checkUrl)
    */
   private async verifyState(
     result: SmartBrowseResult,
     assertion: VerificationAssertion
   ): Promise<boolean> {
-    // TODO(COMP-013): Implement state verification with secondary browse
-    logger.verificationEngine.warn('State verification STUB: returning true without verification', {
-      checkUrl: assertion.checkUrl,
-      checkApi: assertion.checkApi,
-      note: 'State verification not yet implemented - will be added in COMP-013',
-    });
+    // Verify via secondary URL browse
+    if (assertion.checkUrl) {
+      if (!this.browser) {
+        logger.verificationEngine.warn('State verification: browser not set, cannot verify checkUrl', {
+          checkUrl: assertion.checkUrl,
+          hint: 'Call verificationEngine.setBrowser() to enable state verification',
+        });
+        return true; // Graceful degradation - don't fail if browser not configured
+      }
+
+      try {
+        const stateResult = await this.browser.browse(assertion.checkUrl, {
+          maxCostTier: 'intelligence', // Use fastest tier for verification
+        });
+
+        // Check if the page loaded successfully
+        if (!stateResult.content?.markdown || stateResult.content.markdown.length < 50) {
+          logger.verificationEngine.debug('State verification failed: insufficient content from checkUrl', {
+            checkUrl: assertion.checkUrl,
+            contentLength: stateResult.content?.markdown?.length || 0,
+          });
+          return false;
+        }
+
+        // If checkSelector is specified, verify it exists in the result
+        if (assertion.checkSelector) {
+          // Check if the selector pattern appears in the HTML or content
+          const html = stateResult.content.html || '';
+          const selectorPattern = this.selectorToSearchPattern(assertion.checkSelector);
+          if (!selectorPattern.test(html)) {
+            logger.verificationEngine.debug('State verification failed: checkSelector not found', {
+              checkUrl: assertion.checkUrl,
+              checkSelector: assertion.checkSelector,
+            });
+            return false;
+          }
+        }
+
+        logger.verificationEngine.debug('State verification passed via checkUrl', {
+          checkUrl: assertion.checkUrl,
+          checkSelector: assertion.checkSelector,
+        });
+        return true;
+      } catch (error) {
+        logger.verificationEngine.warn('State verification error during checkUrl browse', {
+          checkUrl: assertion.checkUrl,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return false;
+      }
+    }
+
+    // Verify via API call
+    if (assertion.checkApi) {
+      if (!this.apiCaller) {
+        logger.verificationEngine.warn('State verification: apiCaller not set, cannot verify checkApi', {
+          checkApi: assertion.checkApi,
+          hint: 'Call verificationEngine.setApiCaller() to enable API state verification',
+        });
+        return true; // Graceful degradation
+      }
+
+      try {
+        const apiResult = await this.apiCaller.executeApiCall({
+          url: assertion.checkApi,
+          method: 'GET',
+        });
+
+        // Check for successful response
+        if (apiResult.status < 200 || apiResult.status >= 300) {
+          logger.verificationEngine.debug('State verification failed: API returned non-2xx status', {
+            checkApi: assertion.checkApi,
+            status: apiResult.status,
+          });
+          return false;
+        }
+
+        // Check for data presence
+        if (!apiResult.data) {
+          logger.verificationEngine.debug('State verification failed: API returned no data', {
+            checkApi: assertion.checkApi,
+          });
+          return false;
+        }
+
+        logger.verificationEngine.debug('State verification passed via checkApi', {
+          checkApi: assertion.checkApi,
+          status: apiResult.status,
+        });
+        return true;
+      } catch (error) {
+        logger.verificationEngine.warn('State verification error during checkApi call', {
+          checkApi: assertion.checkApi,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return false;
+      }
+    }
+
+    // No state verification specified
     return true;
+  }
+
+  /**
+   * Convert CSS selector to a search pattern for HTML content
+   * This is a simple heuristic - works for common selectors
+   */
+  private selectorToSearchPattern(selector: string): RegExp {
+    // Handle ID selector: #foo -> id="foo" or id='foo'
+    if (selector.startsWith('#')) {
+      const id = selector.slice(1);
+      return new RegExp(`id=['"]${this.escapeRegex(id)}['"]`, 'i');
+    }
+
+    // Handle class selector: .foo -> class="...foo..."
+    if (selector.startsWith('.')) {
+      const className = selector.slice(1);
+      return new RegExp(`class=['"][^'"]*${this.escapeRegex(className)}[^'"]*['"]`, 'i');
+    }
+
+    // Handle data attribute: [data-foo] or [data-foo="bar"]
+    if (selector.startsWith('[') && selector.endsWith(']')) {
+      const attrMatch = selector.slice(1, -1).match(/^([^=]+)(?:="([^"]*)")?$/);
+      if (attrMatch) {
+        const attrName = attrMatch[1];
+        const attrValue = attrMatch[2];
+        if (attrValue) {
+          return new RegExp(`${this.escapeRegex(attrName)}=['"]${this.escapeRegex(attrValue)}['"]`, 'i');
+        }
+        return new RegExp(`${this.escapeRegex(attrName)}=`, 'i');
+      }
+    }
+
+    // Handle tag selector: div, span, etc.
+    if (/^[a-z]+$/i.test(selector)) {
+      return new RegExp(`<${selector}[\\s>]`, 'i');
+    }
+
+    // Fallback: just search for the selector text
+    return new RegExp(this.escapeRegex(selector), 'i');
+  }
+
+  /**
+   * Escape special regex characters
+   */
+  private escapeRegex(str: string): string {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
 
   /**
