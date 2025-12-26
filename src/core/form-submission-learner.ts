@@ -126,6 +126,42 @@ export interface OTPChallenge {
 export type OTPPromptCallback = (challenge: OTPChallenge) => Promise<string | null>;
 
 /**
+ * WebSocket message captured during form submission
+ */
+export interface WebSocketMessage {
+  /** Event name (for Socket.IO-style APIs) or message type */
+  event?: string;
+  /** Message payload */
+  payload: any;
+  /** Timestamp when message was sent */
+  timestamp: number;
+  /** WebSocket URL */
+  url: string;
+  /** Direction: 'send' (client → server) or 'receive' (server → client) */
+  direction: 'send' | 'receive';
+}
+
+/**
+ * Learned WebSocket emission pattern for form submission
+ */
+export interface WebSocketPattern {
+  /** WebSocket server URL */
+  wsUrl: string;
+  /** Event name (e.g., 'form:submit', 'message', 'update') */
+  eventName?: string;
+  /** Payload structure/template */
+  payloadTemplate: Record<string, any>;
+  /** Field mapping (formField → ws payload field) */
+  fieldMapping: Record<string, string>;
+  /** Whether this uses Socket.IO or raw WebSocket */
+  protocol: 'socket.io' | 'websocket' | 'sockjs';
+  /** Response event name to listen for (if any) */
+  responseEvent?: string;
+  /** Expected response fields indicating success */
+  successFields?: string[];
+}
+
+/**
  * Dynamic field that needs to be fetched before each submission
  */
 export interface DynamicField {
@@ -157,7 +193,7 @@ export interface LearnedFormPattern {
   method: string; // POST, PUT, etc.
 
   // Pattern type
-  patternType?: 'rest' | 'graphql' | 'json-rpc'; // Type of API pattern
+  patternType?: 'rest' | 'graphql' | 'json-rpc' | 'websocket'; // Type of API pattern
 
   // Encoding (for file uploads)
   encoding?: 'application/x-www-form-urlencoded' | 'multipart/form-data' | 'application/json';
@@ -174,6 +210,9 @@ export interface LearnedFormPattern {
     query: string;
     variableMapping: Record<string, string>; // formField → GraphQL variable
   };
+
+  // WebSocket-specific (if patternType === 'websocket')
+  websocketPattern?: WebSocketPattern;
 
   // Dynamic fields that must be fetched before each submission
   dynamicFields: DynamicField[];
@@ -720,6 +759,356 @@ export class FormSubmissionLearner {
       patternId: pattern.id,
       otpFieldName,
       detectionFields: pattern.otpPattern.detectionIndicators.responseFields,
+    });
+  }
+
+  /**
+   * Enable WebSocket capture via Chrome DevTools Protocol
+   */
+  private async enableWebSocketCapture(page: Page): Promise<WebSocketMessage[]> {
+    const wsMessages: WebSocketMessage[] = [];
+
+    try {
+      // Get CDP session
+      const client = await page.context().newCDPSession(page);
+
+      // Enable Network domain
+      await client.send('Network.enable');
+
+      // Listen for WebSocket events
+      client.on('Network.webSocketCreated', (params: any) => {
+        logger.formLearner.debug('WebSocket created', { url: params.url });
+      });
+
+      client.on('Network.webSocketFrameSent', (params: any) => {
+        logger.formLearner.debug('WebSocket frame sent', {
+          url: params.response?.url,
+          payloadData: params.response?.payloadData
+        });
+
+        try {
+          const payload = JSON.parse(params.response?.payloadData || '{}');
+
+          wsMessages.push({
+            event: payload.event || payload.type || payload.action,
+            payload,
+            timestamp: Date.now(),
+            url: params.response?.url || 'unknown',
+            direction: 'send',
+          });
+        } catch (e) {
+          // Not JSON or parse error
+          logger.formLearner.debug('Could not parse WebSocket frame', { error: e });
+        }
+      });
+
+      client.on('Network.webSocketFrameReceived', (params: any) => {
+        try {
+          const payload = JSON.parse(params.response?.payloadData || '{}');
+
+          wsMessages.push({
+            event: payload.event || payload.type || payload.action,
+            payload,
+            timestamp: Date.now(),
+            url: params.response?.url || 'unknown',
+            direction: 'receive',
+          });
+        } catch (e) {
+          // Not JSON or parse error
+        }
+      });
+
+    } catch (error) {
+      logger.formLearner.warn('Failed to enable WebSocket capture', {
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+
+    return wsMessages;
+  }
+
+  /**
+   * Analyze WebSocket messages to learn form submission pattern
+   */
+  private analyzeWebSocketPattern(
+    formUrl: string,
+    form: DetectedForm,
+    wsMessages: WebSocketMessage[],
+    domain: string
+  ): LearnedFormPattern | null {
+    // Filter to only sent messages (client → server)
+    const sentMessages = wsMessages.filter(msg => msg.direction === 'send');
+
+    if (sentMessages.length === 0) {
+      logger.formLearner.debug('No WebSocket messages sent during form submission');
+      return null;
+    }
+
+    // Find the most likely form submission message
+    // Look for messages with form field names in payload
+    const formFieldNames = form.fields.map(f => f.name.toLowerCase());
+
+    let bestMatch: WebSocketMessage | null = null;
+    let bestMatchScore = 0;
+
+    for (const msg of sentMessages) {
+      let score = 0;
+      const payloadKeys = Object.keys(msg.payload).map(k => k.toLowerCase());
+
+      // Score based on matching field names
+      for (const fieldName of formFieldNames) {
+        if (payloadKeys.includes(fieldName)) {
+          score += 2;
+        }
+        // Check for camelCase/snake_case variations
+        const camelCase = this.toCamelCase(fieldName);
+        const snakeCase = this.toSnakeCase(fieldName);
+        if (payloadKeys.includes(camelCase) || payloadKeys.includes(snakeCase)) {
+          score += 1;
+        }
+      }
+
+      // Prefer messages with event names containing 'submit', 'create', 'update', 'send'
+      const eventName = (msg.event || '').toLowerCase();
+      if (eventName.includes('submit') || eventName.includes('create') ||
+          eventName.includes('update') || eventName.includes('send')) {
+        score += 3;
+      }
+
+      if (score > bestMatchScore) {
+        bestMatchScore = score;
+        bestMatch = msg;
+      }
+    }
+
+    if (!bestMatch || bestMatchScore === 0) {
+      logger.formLearner.debug('Could not identify form submission in WebSocket messages');
+      return null;
+    }
+
+    logger.formLearner.info('Identified WebSocket form submission pattern', {
+      event: bestMatch.event,
+      url: bestMatch.url,
+      score: bestMatchScore,
+    });
+
+    // Extract field mapping
+    const fieldMapping: Record<string, string> = {};
+    const payloadKeys = Object.keys(bestMatch.payload);
+
+    for (const field of form.fields) {
+      if (field.type === 'submit') continue;
+
+      const fieldName = field.name;
+      const camelCase = this.toCamelCase(fieldName);
+      const snakeCase = this.toSnakeCase(fieldName);
+
+      if (payloadKeys.includes(fieldName)) {
+        fieldMapping[fieldName] = fieldName;
+      } else if (payloadKeys.includes(camelCase)) {
+        fieldMapping[fieldName] = camelCase;
+      } else if (payloadKeys.includes(snakeCase)) {
+        fieldMapping[fieldName] = snakeCase;
+      }
+    }
+
+    // Detect protocol (Socket.IO vs raw WebSocket)
+    const protocol = this.detectWebSocketProtocol(bestMatch);
+
+    // Find response message (if any)
+    const responseMessage = wsMessages.find(msg =>
+      msg.direction === 'receive' &&
+      msg.timestamp > bestMatch!.timestamp &&
+      msg.timestamp - bestMatch!.timestamp < 5000 // Within 5 seconds
+    );
+
+    const pattern: LearnedFormPattern = {
+      id: `ws:${domain}:${Date.now()}`,
+      domain,
+      formUrl,
+      apiEndpoint: bestMatch.url,
+      method: 'WEBSOCKET',
+      patternType: 'websocket',
+      fieldMapping,
+      websocketPattern: {
+        wsUrl: bestMatch.url,
+        eventName: bestMatch.event,
+        payloadTemplate: bestMatch.payload,
+        fieldMapping,
+        protocol,
+        responseEvent: responseMessage?.event,
+        successFields: responseMessage ? Object.keys(responseMessage.payload) : undefined,
+      },
+      requiredFields: form.fields.filter(f => f.required).map(f => f.name),
+      successIndicators: {
+        statusCodes: [200], // WebSocket doesn't have HTTP status, but we keep for consistency
+      },
+      dynamicFields: [],
+      learnedAt: Date.now(),
+      timesUsed: 0,
+      successRate: 1.0,
+    };
+
+    logger.formLearner.info('Learned WebSocket form pattern', {
+      patternId: pattern.id,
+      event: bestMatch.event,
+      protocol,
+      fieldsCount: Object.keys(fieldMapping).length,
+    });
+
+    return pattern;
+  }
+
+  /**
+   * Detect WebSocket protocol (Socket.IO, raw WebSocket, SockJS)
+   */
+  private detectWebSocketProtocol(message: WebSocketMessage): WebSocketPattern['protocol'] {
+    const url = message.url.toLowerCase();
+    const payload = message.payload;
+
+    // Socket.IO detection
+    if (url.includes('socket.io') || payload.type === '42' || 'event' in payload) {
+      return 'socket.io';
+    }
+
+    // SockJS detection
+    if (url.includes('sockjs')) {
+      return 'sockjs';
+    }
+
+    // Default to raw WebSocket
+    return 'websocket';
+  }
+
+  /**
+   * Submit form via WebSocket using learned pattern
+   *
+   * Note: This is a basic implementation. For production use with Socket.IO or
+   * other WebSocket libraries, you may need to install additional dependencies.
+   */
+  private async submitViaWebSocket(
+    data: FormSubmissionData,
+    pattern: LearnedFormPattern
+  ): Promise<{ success: boolean; data?: any }> {
+    if (!pattern.websocketPattern) {
+      throw new Error('WebSocket pattern is missing');
+    }
+
+    const wsPattern = pattern.websocketPattern;
+
+    logger.formLearner.info('Submitting form via WebSocket', {
+      wsUrl: wsPattern.wsUrl,
+      event: wsPattern.eventName,
+      protocol: wsPattern.protocol,
+    });
+
+    return new Promise((resolve, reject) => {
+      // Note: In Node.js, WebSocket is not natively available
+      // Users need to install 'ws' package: npm install ws
+      // For Socket.IO: npm install socket.io-client
+
+      // Check if WebSocket is available (browser or Node.js with 'ws' installed)
+      if (typeof WebSocket === 'undefined') {
+        reject(new Error(
+          'WebSocket is not available. ' +
+          'For Node.js, install the "ws" package: npm install ws. ' +
+          'For Socket.IO, install "socket.io-client": npm install socket.io-client'
+        ));
+        return;
+      }
+
+      const ws = new WebSocket(wsPattern.wsUrl);
+      let responseReceived = false;
+
+      ws.onopen = () => {
+        logger.formLearner.debug('WebSocket connection opened');
+
+        // Build payload from field mapping
+        const payload: Record<string, any> = {};
+
+        for (const [formField, wsField] of Object.entries(wsPattern.fieldMapping)) {
+          if (data.fields[formField] !== undefined) {
+            payload[wsField] = data.fields[formField];
+          }
+        }
+
+        // Merge with payload template (to include any static fields)
+        const fullPayload = {
+          ...wsPattern.payloadTemplate,
+          ...payload,
+        };
+
+        // Send message based on protocol
+        if (wsPattern.protocol === 'socket.io') {
+          // Socket.IO format: ['event', data]
+          const socketIoMessage = JSON.stringify([wsPattern.eventName, fullPayload]);
+          ws.send(socketIoMessage);
+        } else {
+          // Raw WebSocket: send JSON payload
+          const message = wsPattern.eventName
+            ? JSON.stringify({ event: wsPattern.eventName, ...fullPayload })
+            : JSON.stringify(fullPayload);
+          ws.send(message);
+        }
+
+        logger.formLearner.debug('WebSocket message sent', { payload: fullPayload });
+
+        // If no response event expected, resolve immediately
+        if (!wsPattern.responseEvent) {
+          setTimeout(() => {
+            ws.close();
+            if (!responseReceived) {
+              resolve({ success: true });
+            }
+          }, 1000);
+        }
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data.toString());
+
+          logger.formLearner.debug('WebSocket message received', { data });
+
+          // Check if this is the expected response
+          if (wsPattern.responseEvent) {
+            const eventName = data.event || data.type || data.action;
+            if (eventName === wsPattern.responseEvent) {
+              responseReceived = true;
+              ws.close();
+              resolve({ success: true, data });
+            }
+          } else {
+            // No specific response event, accept any response
+            responseReceived = true;
+            ws.close();
+            resolve({ success: true, data });
+          }
+        } catch (e) {
+          // Not JSON or parse error
+          logger.formLearner.debug('Could not parse WebSocket response', { error: e });
+        }
+      };
+
+      ws.onerror = (error) => {
+        logger.formLearner.error('WebSocket error', { error });
+        reject(new Error(`WebSocket error: ${error}`));
+      };
+
+      ws.onclose = () => {
+        logger.formLearner.debug('WebSocket connection closed');
+        if (!responseReceived && wsPattern.responseEvent) {
+          reject(new Error('WebSocket closed without receiving expected response'));
+        }
+      };
+
+      // Timeout after 10 seconds
+      setTimeout(() => {
+        if (!responseReceived) {
+          ws.close();
+          reject(new Error('WebSocket submission timeout'));
+        }
+      }, 10000);
     });
   }
 
