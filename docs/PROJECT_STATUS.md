@@ -12,6 +12,9 @@
 
 Creating practical QA examples and documentation to help users understand how to use Unbrowser for testing.
 
+**In Progress:**
+- QA-007 - Create QA-focused MCP skill prompts
+
 **Completed:**
 - QA-006 - Add verification engine JSDoc (`src/core/verification-engine.ts`, `src/types/verification.ts`)
 - QA-005 - API change detection example (`examples/api-change-detection.ts`)
