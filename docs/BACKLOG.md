@@ -425,8 +425,8 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 
 | ID | Task | Effort | Status | Notes |
 |----|------|--------|--------|-------|
-| GAP-012 | File Upload Support | L | Not Started | Handle multipart/form-data, detect file fields, learn upload patterns. Blocks ~30% of real-world forms. See [FORM_PROTOCOL_COVERAGE.md](FORM_PROTOCOL_COVERAGE.md) |
-| GAP-013 | GraphQL Mutation Learning | M | Not Started | Integrate with existing GraphQL introspection, detect mutations in forms, map form fields to GraphQL variables |
+| GAP-012 | File Upload Support | L | ✅ Implemented | Handles multipart/form-data, detects file fields, learns upload patterns. Supports Buffer/base64/filePath. See [FILE_UPLOAD_SUPPORT.md](FILE_UPLOAD_SUPPORT.md) |
+| GAP-013 | GraphQL Mutation Learning | M | ✅ Implemented | Integrated with GraphQL introspection, detects mutations in forms, maps form fields to GraphQL variables. See [GRAPHQL_FORM_SUPPORT.md](GRAPHQL_FORM_SUPPORT.md) |
 | GAP-014 | Two-Factor Auth Support | L | Not Started | Detect OTP challenges, pause workflow, prompt user for code, resume submission. Critical for auth workflows |
 | GAP-015 | WebSocket Form Submissions | M | Not Started | Detect WebSocket emit patterns, learn event payloads, integrate with AsyncAPI discovery |
 | GAP-016 | Server Action Support | M | Not Started | Handle Next.js/Remix server actions, detect Next-Action header, learn action patterns |

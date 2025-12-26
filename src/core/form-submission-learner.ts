@@ -25,6 +25,7 @@ import type {
 } from '../types/api-patterns.js';
 import { ApiPatternRegistry } from './api-pattern-learner.js';
 import { logger } from '../utils/logger.js';
+import { readFile } from 'fs/promises';
 
 /**
  * Form field detected in HTML
@@ -38,14 +39,43 @@ export interface FormField {
 }
 
 /**
+ * File upload field detected in HTML
+ */
+export interface FileField {
+  name: string;
+  required: boolean;
+  accept?: string; // MIME types or file extensions (e.g., "image/*", ".pdf,.doc")
+  multiple: boolean; // Whether multiple files can be selected
+  selector: string;
+}
+
+/**
  * Detected form structure
  */
 export interface DetectedForm {
   action?: string; // Form action URL
   method: string; // GET or POST
+  encoding?: string; // enctype attribute (multipart/form-data, application/x-www-form-urlencoded)
   fields: FormField[];
+  fileFields: FileField[]; // File upload fields
   submitSelector: string;
   csrfFields: FormField[]; // Hidden fields that look like CSRF tokens
+}
+
+/**
+ * File upload data
+ */
+export interface FileUploadData {
+  /** File path on local filesystem, OR */
+  filePath?: string;
+  /** File contents as Buffer, OR */
+  buffer?: Buffer;
+  /** File contents as base64 string */
+  base64?: string;
+  /** Original filename */
+  filename: string;
+  /** MIME type */
+  mimeType?: string;
 }
 
 /**
@@ -54,6 +84,7 @@ export interface DetectedForm {
 export interface FormSubmissionData {
   url: string; // URL of the page containing the form
   fields: Record<string, string | number | boolean>; // Field values to submit
+  files?: Record<string, FileUploadData | FileUploadData[]>; // File uploads by field name
   formSelector?: string; // Optional selector to identify specific form
   isMultiStep?: boolean; // Whether this is part of a multi-step form
   stepNumber?: number; // Current step number (1-indexed)
@@ -107,8 +138,14 @@ export interface LearnedFormPattern {
   // Pattern type
   patternType?: 'rest' | 'graphql' | 'json-rpc'; // Type of API pattern
 
+  // Encoding (for file uploads)
+  encoding?: 'application/x-www-form-urlencoded' | 'multipart/form-data' | 'application/json';
+
   // Field mapping
   fieldMapping: Record<string, string>; // formField → apiField
+
+  // File upload fields (if any)
+  fileFields?: FileField[];
 
   // GraphQL-specific (if patternType === 'graphql')
   graphqlMutation?: {
@@ -264,10 +301,21 @@ export class FormSubmissionLearner {
       }
     }
 
-    // Make the request (handle GraphQL vs REST differently)
+    // Check if this form has file uploads
+    const hasFileUploads = pattern.fileFields && pattern.fileFields.length > 0;
+    const userProvidedFiles = data.files && Object.keys(data.files).length > 0;
+
+    // Make the request (handle file uploads, GraphQL, and REST differently)
     let response: Response;
 
-    if (pattern.patternType === 'graphql' && pattern.graphqlMutation) {
+    if (hasFileUploads) {
+      // File upload via multipart/form-data
+      if (!userProvidedFiles) {
+        throw new Error('This form requires file uploads, but no files were provided. Please include files in the submission data.');
+      }
+
+      response = await this.submitMultipartForm(pattern, payload, data.files!);
+    } else if (pattern.patternType === 'graphql' && pattern.graphqlMutation) {
       // GraphQL mutation request
       const graphqlPayload = {
         query: pattern.graphqlMutation.query,
@@ -291,13 +339,21 @@ export class FormSubmissionLearner {
       });
     } else {
       // Standard REST request
+      const contentType = pattern.encoding === 'application/x-www-form-urlencoded'
+        ? 'application/x-www-form-urlencoded'
+        : 'application/json';
+
+      const body = contentType === 'application/x-www-form-urlencoded'
+        ? new URLSearchParams(payload as Record<string, string>).toString()
+        : JSON.stringify(payload);
+
       response = await fetch(pattern.apiEndpoint, {
         method: pattern.method,
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': contentType,
           'Accept': 'application/json',
         },
-        body: JSON.stringify(payload),
+        body,
       });
     }
 
@@ -316,6 +372,72 @@ export class FormSubmissionLearner {
       responseUrl: response.url,
       data: responseData,
     };
+  }
+
+  /**
+   * Submit multipart/form-data request with file uploads
+   */
+  private async submitMultipartForm(
+    pattern: LearnedFormPattern,
+    fields: Record<string, any>,
+    files: Record<string, FileUploadData | FileUploadData[]>
+  ): Promise<Response> {
+    const formData = new FormData();
+
+    // Add regular fields
+    for (const [fieldName, value] of Object.entries(fields)) {
+      formData.append(fieldName, String(value));
+    }
+
+    // Add file uploads
+    for (const [fieldName, fileData] of Object.entries(files)) {
+      const fileUploads = Array.isArray(fileData) ? fileData : [fileData];
+
+      for (const upload of fileUploads) {
+        let fileBlob: Blob;
+
+        // Convert file data to Blob
+        if (upload.buffer) {
+          // File provided as Buffer
+          fileBlob = new Blob([upload.buffer], {
+            type: upload.mimeType || 'application/octet-stream',
+          });
+        } else if (upload.base64) {
+          // File provided as base64 string
+          const binaryData = Buffer.from(upload.base64, 'base64');
+          fileBlob = new Blob([binaryData], {
+            type: upload.mimeType || 'application/octet-stream',
+          });
+        } else if (upload.filePath) {
+          // File provided as filesystem path - read it
+          const fileBuffer = await readFile(upload.filePath);
+          fileBlob = new Blob([fileBuffer], {
+            type: upload.mimeType || 'application/octet-stream',
+          });
+        } else {
+          throw new Error(`File upload for field "${fieldName}" must provide either buffer, base64, or filePath`);
+        }
+
+        // Append file to FormData
+        // Note: FormData.append expects a File object, but Blob works too
+        formData.append(fieldName, fileBlob, upload.filename);
+      }
+    }
+
+    logger.formLearner.info('Submitting multipart/form-data request', {
+      endpoint: pattern.apiEndpoint,
+      fieldsCount: Object.keys(fields).length,
+      filesCount: Object.keys(files).length,
+    });
+
+    // Submit multipart request
+    const response = await fetch(pattern.apiEndpoint, {
+      method: pattern.method,
+      body: formData,
+      // Don't set Content-Type - fetch will set it automatically with boundary
+    });
+
+    return response;
   }
 
   /**
@@ -452,16 +574,29 @@ export class FormSubmissionLearner {
 
       const fields: any[] = [];
       const csrfFields: any[] = [];
+      const fileFields: any[] = [];
 
       // Extract all input, select, textarea elements
       const inputs = form.querySelectorAll('input, select, textarea');
       inputs.forEach((input: any) => {
+        // Handle file inputs separately
+        if (input.type === 'file') {
+          fileFields.push({
+            name: input.name || input.id,
+            required: input.required || input.hasAttribute('required'),
+            accept: input.accept || undefined,
+            multiple: input.multiple || input.hasAttribute('multiple'),
+            selector: getSelector(input),
+          });
+          return; // Don't add file inputs to regular fields
+        }
+
         const field = {
           name: input.name || input.id,
           type: input.type || input.tagName.toLowerCase(),
           required: input.required || input.hasAttribute('required'),
           value: input.value,
-          selector: this.getSelector(input),
+          selector: getSelector(input),
         };
 
         fields.push(field);
@@ -483,11 +618,17 @@ export class FormSubmissionLearner {
         form.querySelector('input[type="submit"]') ||
         form.querySelector('button');
 
+      // Get form encoding (enctype)
+      const encoding = form.enctype ||
+        (fileFields.length > 0 ? 'multipart/form-data' : 'application/x-www-form-urlencoded');
+
       return {
         action: form.action,
         method: form.method.toUpperCase() || 'POST',
+        encoding,
         fields,
-        submitSelector: submitButton ? this.getSelector(submitButton) : 'button[type="submit"]',
+        fileFields,
+        submitSelector: submitButton ? getSelector(submitButton) : 'button[type="submit"]',
         csrfFields,
       };
 
@@ -550,7 +691,9 @@ export class FormSubmissionLearner {
       formUrl,
       apiEndpoint: submitRequest.url,
       method: submitRequest.method,
+      encoding: form.encoding as LearnedFormPattern['encoding'],
       fieldMapping,
+      fileFields: form.fileFields && form.fileFields.length > 0 ? form.fileFields : undefined,
       csrfTokenField: csrfHandling?.fieldName,
       csrfTokenSource: csrfHandling?.source,
       csrfTokenSelector: csrfHandling?.selector,
@@ -1144,12 +1287,14 @@ export class FormSubmissionLearner {
       apiEndpoint: request.url,
       method: 'POST',
       patternType: 'graphql',
+      encoding: form.encoding as LearnedFormPattern['encoding'],
       graphqlMutation: {
         mutationName: graphqlMutation.mutationName,
         query: graphqlMutation.query,
         variableMapping,
       },
       fieldMapping,
+      fileFields: form.fileFields && form.fileFields.length > 0 ? form.fileFields : undefined,
       csrfTokenField: csrfHandling?.fieldName,
       csrfTokenSource: csrfHandling?.source,
       csrfTokenSelector: csrfHandling?.selector,
