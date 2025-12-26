@@ -16,3 +16,7 @@ export * from './url-safety.js';
 export * from './vector-store.js';
 export * from './embedding-provider.js';
 export * from './embedding-pipeline.js';
+export * from './http-client.js';
+export * from './url-pattern-matcher.js';
+export * from './service-container.js';
+export * from './service-registration.js';
