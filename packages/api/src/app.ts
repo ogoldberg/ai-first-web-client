@@ -15,6 +15,7 @@ import { browse } from './routes/browse.js';
 import { admin } from './routes/admin.js';
 import { dashboard } from './routes/dashboard.js';
 import { adminUI } from './routes/admin-ui.js';
+import { inspectionUI } from './routes/inspection-ui.js';
 import workflows from './routes/workflows.js';
 import { billing } from './routes/billing.js';
 import { docs } from './routes/docs.js';
@@ -100,6 +101,7 @@ app.route('/v1', browse);
 app.route('/v1/admin', admin);
 app.route('/v1/admin/dashboard', dashboard); // API-008: Admin dashboard API
 app.route('/admin', adminUI); // API-008: Admin dashboard UI
+app.route('/inspect', inspectionUI); // F-013: Human-in-the-loop inspection UI
 app.route('/v1/workflows', workflows); // COMP-009: Workflow recording
 app.route('/v1/billing', billing); // API-007: Stripe billing integration
 app.route('/pricing', pricingCalculator); // API-016: Pricing calculator
@@ -123,6 +125,7 @@ app.get('/', (c) => {
       adminLogs: '/v1/admin/logs',
       adminDashboard: '/admin',
       adminDashboardAPI: '/v1/admin/dashboard',
+      inspectionUI: '/inspect',
       workflows: '/v1/workflows',
       recordWorkflow: '/v1/workflows/record/start',
       replayWorkflow: '/v1/workflows/:id/replay',
