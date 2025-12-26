@@ -8,8 +8,6 @@
 export {
   handleSmartBrowse,
   handleBatchBrowse,
-  handleGetDomainIntelligence,
-  handleGetDomainCapabilities,
   type SmartBrowseArgs,
   type BatchBrowseArgs,
 } from './browse-handlers.js';
@@ -18,8 +16,6 @@ export {
 export {
   handleCaptureScreenshot,
   handleExportHar,
-  handleGetLearningStats,
-  handleGetLearningEffectiveness,
   handleDebugTraces,
   type DebugTracesAction,
 } from './debug-handlers.js';
@@ -28,29 +24,8 @@ export {
 export {
   handleSessionManagement,
   handleExecuteApiCall,
-  handleGetBrowserProviders,
   type SessionAction,
 } from './session-handlers.js';
-
-// Admin handlers
-export {
-  handleTierManagement,
-  handleGetPerformanceMetrics,
-  handleContentTracking,
-  handleUsageAnalytics,
-  handleGetAnalyticsDashboard,
-  handleGetSystemStatus,
-  handleToolSelectionMetrics,
-  handleSkillPromptAnalytics,
-  type TierAction,
-  type ContentTrackingAction,
-  type UsageAnalyticsAction,
-  type ToolSelectionMetricsAction,
-  type SkillPromptAnalyticsAction,
-} from './admin-handlers.js';
-
-// Skill handlers
-export { handleSkillManagement, type SkillAction } from './skill-handlers.js';
 
 // Feedback handlers
 export { handleAiFeedback, type FeedbackAction, type AiFeedbackArgs } from './feedback-handlers.js';
