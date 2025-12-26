@@ -46,6 +46,13 @@ interface BrowseRequest {
       enabled?: boolean; // default: true for basic mode
       mode?: 'basic' | 'standard' | 'thorough'; // default: 'basic'
     };
+    // Debug mode (PLAY-001)
+    debug?: {
+      visible?: boolean;        // Show browser window (Playwright only)
+      slowMotion?: number;      // ms delay between actions
+      screenshots?: boolean;    // Capture screenshots
+      consoleLogs?: boolean;    // Collect console output
+    };
   };
   session?: {
     cookies?: Array<{ name: string; value: string; domain?: string; path?: string }>;
@@ -192,6 +199,22 @@ function formatBrowseResult(
     };
   }
 
+  // Include debug data if present (PLAY-001)
+  if (result.debug) {
+    response.debug = {
+      screenshots: result.debug.screenshots?.map((s: any) => ({
+        action: s.action,
+        timestamp: s.timestamp,
+        // Note: image data (base64) can be very large
+        imageSize: s.image?.length || 0,
+        // Include first 100 chars of base64 for verification
+        imagePreview: s.image?.substring(0, 100),
+      })),
+      consoleLogs: result.debug.consoleLogs,
+      actionTrace: result.debug.actionTrace,
+    };
+  }
+
   return response;
 }
 
@@ -284,6 +307,7 @@ browse.post('/browse', requirePermission('browse'), browseValidator, async (c) =
           maxLatencyMs: body.options?.maxLatencyMs,
           maxCostTier: body.options?.maxCostTier,
           verify: body.options?.verify,
+          debug: body.options?.debug,
         });
 
         // Capture step in workflow recording if session active (COMP-009)
@@ -350,6 +374,7 @@ browse.post('/browse', requirePermission('browse'), browseValidator, async (c) =
       maxLatencyMs: body.options?.maxLatencyMs,
       maxCostTier: body.options?.maxCostTier,
       verify: body.options?.verify,
+      debug: body.options?.debug,
       // TODO: Pass proxy config to browser client when implemented
       // proxy: proxyInfo?.proxy.getPlaywrightProxy(),
     });

@@ -21,6 +21,7 @@ import { billing } from './routes/billing.js';
 import { docs } from './routes/docs.js';
 import { pricingCalculator } from './routes/pricing-calculator.js';
 import { skillPacks } from './routes/skill-packs.js';
+import discovery from './routes/discovery.js'; // FUZZ-001: API discovery
 import { requestLoggerMiddleware } from './middleware/request-logger.js';
 
 // Create the main Hono app
@@ -99,6 +100,7 @@ app.use(
 app.route('/health', health);
 app.route('/docs', docs); // API-011: Interactive API documentation
 app.route('/v1', browse);
+app.route('/v1/discover', discovery); // FUZZ-001: API fuzzing discovery
 app.route('/v1/admin', admin);
 app.route('/v1/admin/dashboard', dashboard); // API-008: Admin dashboard API
 app.route('/admin', adminUI); // API-008: Admin dashboard UI
