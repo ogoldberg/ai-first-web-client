@@ -38,7 +38,7 @@ async function extractProductData(url: string): Promise<ProductData> {
     checkForChanges: true, // Enable change detection
   });
 
-  console.log(`Strategy: ${result.meta.strategy} (${result.meta.timing.total}ms)`);
+  console.log(`Tier: ${result.learning.renderTier || 'unknown'} (${result.metadata.loadTime}ms)`);
 
   // Extract product data from structured content
   const structured = result.content.structured || {};

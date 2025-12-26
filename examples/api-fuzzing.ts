@@ -13,8 +13,8 @@
  * Once discovered, APIs are used directly, bypassing rendering.
  */
 
-import { ApiDiscoveryOrchestrator } from '../core/api-discovery-orchestrator.js';
-import { LearningEngine } from '../core/learning-engine.js';
+import { ApiDiscoveryOrchestrator } from '../src/core/api-discovery-orchestrator.js';
+import { LearningEngine } from '../src/core/learning-engine.js';
 
 async function discoverApis(domain: string, options: {
   methods?: readonly string[];

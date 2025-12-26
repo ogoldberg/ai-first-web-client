@@ -46,7 +46,7 @@ async function analyzeRepository(owner: string, repo: string): Promise<GitHubRep
   console.log('\n[1/3] Fetching repository main page...');
   const mainPage = await browser.browse(baseUrl);
 
-  console.log(`Strategy: ${mainPage.meta.strategy} (${mainPage.meta.timing.total}ms)`);
+  console.log(`Tier: ${mainPage.learning.renderTier || 'unknown'} (${mainPage.metadata.loadTime}ms)`);
 
   // Extract basic info from structured data
   if (mainPage.content.structured) {
@@ -61,7 +61,7 @@ async function analyzeRepository(owner: string, repo: string): Promise<GitHubRep
   console.log('[2/3] Fetching README...');
   const readmePage = await browser.browse(`${baseUrl}#readme`);
 
-  console.log(`Strategy: ${readmePage.meta.strategy} (${readmePage.meta.timing.total}ms)`);
+  console.log(`Tier: ${readmePage.learning.renderTier || 'unknown'} (${readmePage.metadata.loadTime}ms)`);
 
   // Extract README content
   result.readme = readmePage.content.markdown.slice(0, 500); // First 500 chars
@@ -70,7 +70,7 @@ async function analyzeRepository(owner: string, repo: string): Promise<GitHubRep
   console.log('[3/3] Fetching latest release...');
   const releasesPage = await browser.browse(`${baseUrl}/releases`);
 
-  console.log(`Strategy: ${releasesPage.meta.strategy} (${releasesPage.meta.timing.total}ms)`);
+  console.log(`Tier: ${releasesPage.learning.renderTier || 'unknown'} (${releasesPage.metadata.loadTime}ms)`);
 
   if (releasesPage.content.structured?.latestRelease) {
     result.latestRelease = releasesPage.content.structured.latestRelease as {

@@ -43,8 +43,8 @@ async function debugBrowse(url: string, options: {
     maxCostTier: 'playwright',
   });
 
-  console.log(`\nStrategy: ${result.meta.strategy}`);
-  console.log(`Time: ${result.meta.timing.total}ms`);
+  console.log(`\nTier: ${result.learning.renderTier || 'unknown'}`);
+  console.log(`Time: ${result.metadata.loadTime}ms`);
 
   // Display debug data if available
   if (result.debug) {

@@ -61,7 +61,7 @@ async function researchCompany(domain: string): Promise<CompanyProfile> {
   console.log('\n[1/5] Analyzing homepage...');
   try {
     const homepage = await browser.browse(baseUrl);
-    console.log(`  Strategy: ${homepage.meta.strategy} (${homepage.meta.timing.total}ms)`);
+    console.log(`  Tier: ${homepage.learning.renderTier || 'unknown'} (${homepage.metadata.loadTime}ms)`);
 
     if (homepage.content.structured) {
       profile.name = (homepage.content.structured.name as string) || domain;
@@ -97,7 +97,7 @@ async function researchCompany(domain: string): Promise<CompanyProfile> {
   console.log('[2/5] Checking about page...');
   try {
     const aboutPage = await browser.browse(`${baseUrl}/about`);
-    console.log(`  Strategy: ${aboutPage.meta.strategy} (${aboutPage.meta.timing.total}ms)`);
+    console.log(`  Tier: ${aboutPage.learning.renderTier || 'unknown'} (${aboutPage.metadata.loadTime}ms)`);
 
     const structured = aboutPage.content.structured;
     if (structured) {
@@ -122,7 +122,7 @@ async function researchCompany(domain: string): Promise<CompanyProfile> {
   console.log('[3/5] Analyzing products...');
   try {
     const productsPage = await browser.browse(`${baseUrl}/products`);
-    console.log(`  Strategy: ${productsPage.meta.strategy} (${productsPage.meta.timing.total}ms)`);
+    console.log(`  Tier: ${productsPage.learning.renderTier || 'unknown'} (${productsPage.metadata.loadTime}ms)`);
 
     if (productsPage.content.structured?.products) {
       profile.products = productsPage.content.structured.products as string[];
@@ -135,7 +135,7 @@ async function researchCompany(domain: string): Promise<CompanyProfile> {
   console.log('[4/5] Checking careers...');
   try {
     const careersPage = await browser.browse(`${baseUrl}/careers`);
-    console.log(`  Strategy: ${careersPage.meta.strategy} (${careersPage.meta.timing.total}ms)`);
+    console.log(`  Tier: ${careersPage.learning.renderTier || 'unknown'} (${careersPage.metadata.loadTime}ms)`);
 
     const structured = careersPage.content.structured;
     if (structured) {
@@ -162,7 +162,7 @@ async function researchCompany(domain: string): Promise<CompanyProfile> {
   console.log('[5/5] Finding contact info...');
   try {
     const contactPage = await browser.browse(`${baseUrl}/contact`);
-    console.log(`  Strategy: ${contactPage.meta.strategy} (${contactPage.meta.timing.total}ms)`);
+    console.log(`  Tier: ${contactPage.learning.renderTier || 'unknown'} (${contactPage.metadata.loadTime}ms)`);
 
     const structured = contactPage.content.structured;
     if (structured) {
