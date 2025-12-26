@@ -36,14 +36,19 @@ export class ApiAnalyzer {
       return true;
     }
 
+    // GraphQL endpoints
+    if (url.includes('graphql') || url.includes('/gql') || url.includes('/query')) {
+      return true;
+    }
+
     // Common API path patterns
     const apiPatterns = [
       /\/api\//,
       /\/v\d+\//,
-      /\/graphql/,
       /\.json$/,
       /\/rest\//,
       /\/ajax\//,
+      /\/rpc/,
     ];
 
     return apiPatterns.some(pattern => pattern.test(url));
@@ -191,12 +196,20 @@ export class ApiAnalyzer {
     const isRestCompliant =
       (request.method === 'POST' && request.status === 201) ||
       (request.method === 'DELETE' && request.status === 204);
+    const isGraphQL = request.url.toLowerCase().includes('graphql') ||
+                     request.url.toLowerCase().includes('/gql');
 
     if (confidence === 'high') {
+      if (isGraphQL) {
+        return 'GraphQL endpoint with standard auth and JSON response';
+      }
       const mutationType = isMutation ? `${request.method} mutation` : 'GET request';
       const restNote = isRestCompliant ? ' (REST-compliant)' : '';
       return `${mutationType} with standard auth and JSON response${restNote}`;
     } else if (confidence === 'medium') {
+      if (isGraphQL) {
+        return 'GraphQL endpoint but may require complex auth or variables';
+      }
       const requestType = isMutation ? 'Mutation' : 'API call';
       return `${requestType} but may require additional parameters or complex auth`;
     } else {

@@ -104,8 +104,18 @@ export interface LearnedFormPattern {
   apiEndpoint: string;
   method: string; // POST, PUT, etc.
 
+  // Pattern type
+  patternType?: 'rest' | 'graphql' | 'json-rpc'; // Type of API pattern
+
   // Field mapping
   fieldMapping: Record<string, string>; // formField → apiField
+
+  // GraphQL-specific (if patternType === 'graphql')
+  graphqlMutation?: {
+    mutationName: string;
+    query: string;
+    variableMapping: Record<string, string>; // formField → GraphQL variable
+  };
 
   // Dynamic fields that must be fetched before each submission
   dynamicFields: DynamicField[];
@@ -254,15 +264,42 @@ export class FormSubmissionLearner {
       }
     }
 
-    // Make the request
-    const response = await fetch(pattern.apiEndpoint, {
-      method: pattern.method,
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      },
-      body: JSON.stringify(payload),
-    });
+    // Make the request (handle GraphQL vs REST differently)
+    let response: Response;
+
+    if (pattern.patternType === 'graphql' && pattern.graphqlMutation) {
+      // GraphQL mutation request
+      const graphqlPayload = {
+        query: pattern.graphqlMutation.query,
+        variables: {} as Record<string, any>,
+      };
+
+      // Map form fields to GraphQL variables
+      for (const [formField, gqlVariable] of Object.entries(pattern.graphqlMutation.variableMapping)) {
+        if (payload[formField] !== undefined) {
+          graphqlPayload.variables[gqlVariable] = payload[formField];
+        }
+      }
+
+      response = await fetch(pattern.apiEndpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify(graphqlPayload),
+      });
+    } else {
+      // Standard REST request
+      response = await fetch(pattern.apiEndpoint, {
+        method: pattern.method,
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+    }
 
     if (!response.ok) {
       throw new Error(`API request failed: ${response.status} ${response.statusText}`);
@@ -295,6 +332,14 @@ export class FormSubmissionLearner {
 
     // Capture network requests
     const requestListener = (request: any) => {
+      // Try to capture POST data (for GraphQL mutation detection)
+      let requestBody: any = null;
+      try {
+        requestBody = request.postDataJSON();
+      } catch {
+        // Not JSON or no POST data
+      }
+
       request.response().then((response: any) => {
         const req: NetworkRequest = {
           url: request.url(),
@@ -306,6 +351,11 @@ export class FormSubmissionLearner {
           contentType: response.headers()['content-type'],
           timestamp: Date.now(),
         };
+
+        // Store request body if available (needed for GraphQL detection)
+        if (requestBody) {
+          (req as any).requestBody = requestBody;
+        }
 
         // Capture response body for mutation requests
         if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method())) {
@@ -472,6 +522,16 @@ export class FormSubmissionLearner {
 
     // Use the first successful mutation (most likely the form submission)
     const submitRequest = submitRequests[0];
+
+    // Check if this is a GraphQL mutation
+    const graphqlMutation = this.detectGraphQLMutation(submitRequest);
+    if (graphqlMutation) {
+      logger.formLearner.info('Detected GraphQL mutation submission', {
+        endpoint: submitRequest.url,
+        mutationName: graphqlMutation.mutationName,
+      });
+      return this.createGraphQLPattern(formUrl, form, submitRequest, graphqlMutation, domain);
+    }
 
     // Try to extract field mapping from request body
     const fieldMapping = this.extractFieldMapping(form, submitRequest);
@@ -981,5 +1041,134 @@ export class FormSubmissionLearner {
     }
 
     return dynamicFields;
+  }
+
+  /**
+   * Detect if a network request is a GraphQL mutation
+   */
+  private detectGraphQLMutation(request: NetworkRequest): {
+    mutationName: string;
+    query: string;
+    variables: Record<string, any>;
+  } | null {
+    // GraphQL requests are typically POST to /graphql endpoint
+    if (request.method !== 'POST') {
+      return null;
+    }
+
+    // Check if URL looks like GraphQL endpoint
+    const url = request.url.toLowerCase();
+    if (!url.includes('graphql') && !url.includes('/gql') && !url.includes('/query')) {
+      return null;
+    }
+
+    // Get request body (added during network monitoring)
+    const requestBody = (request as any).requestBody;
+    if (!requestBody || typeof requestBody !== 'object') {
+      return null;
+    }
+
+    // GraphQL requests have 'query' and optionally 'variables' fields
+    if (!('query' in requestBody) || typeof requestBody.query !== 'string') {
+      return null;
+    }
+
+    const query = requestBody.query as string;
+
+    // Check if it's a mutation (not a query)
+    if (!query.trim().startsWith('mutation')) {
+      return null;
+    }
+
+    // Extract mutation name from query
+    const mutationMatch = query.match(/mutation\s+(\w+)/);
+    const mutationName = mutationMatch ? mutationMatch[1] : 'UnknownMutation';
+
+    const variables = (requestBody.variables as Record<string, any>) || {};
+
+    return {
+      mutationName,
+      query,
+      variables,
+    };
+  }
+
+  /**
+   * Create a GraphQL-specific learned pattern
+   */
+  private createGraphQLPattern(
+    formUrl: string,
+    form: DetectedForm,
+    request: NetworkRequest,
+    graphqlMutation: { mutationName: string; query: string; variables: Record<string, any> },
+    domain: string
+  ): LearnedFormPattern {
+    // Map form fields to GraphQL variables
+    const variableMapping: Record<string, string> = {};
+    const fieldMapping: Record<string, string> = {};
+
+    // Try to match form fields to GraphQL variables
+    for (const field of form.fields) {
+      if (field.type === 'submit' || !field.name) continue;
+
+      // Look for matching variable names
+      const fieldName = field.name;
+      const variableNames = Object.keys(graphqlMutation.variables);
+
+      // Try exact match first
+      if (variableNames.includes(fieldName)) {
+        variableMapping[fieldName] = fieldName;
+        fieldMapping[fieldName] = fieldName;
+      } else {
+        // Try camelCase/snake_case variations
+        const camelCase = this.toCamelCase(fieldName);
+        const snakeCase = this.toSnakeCase(fieldName);
+
+        if (variableNames.includes(camelCase)) {
+          variableMapping[fieldName] = camelCase;
+          fieldMapping[fieldName] = camelCase;
+        } else if (variableNames.includes(snakeCase)) {
+          variableMapping[fieldName] = snakeCase;
+          fieldMapping[fieldName] = snakeCase;
+        }
+      }
+    }
+
+    // Detect CSRF handling
+    const csrfHandling = this.detectCsrfHandling(form);
+
+    const pattern: LearnedFormPattern = {
+      id: `graphql:${domain}:${Date.now()}`,
+      domain,
+      formUrl,
+      apiEndpoint: request.url,
+      method: 'POST',
+      patternType: 'graphql',
+      graphqlMutation: {
+        mutationName: graphqlMutation.mutationName,
+        query: graphqlMutation.query,
+        variableMapping,
+      },
+      fieldMapping,
+      csrfTokenField: csrfHandling?.fieldName,
+      csrfTokenSource: csrfHandling?.source,
+      csrfTokenSelector: csrfHandling?.selector,
+      requiredFields: form.fields.filter(f => f.required).map(f => f.name),
+      successIndicators: {
+        statusCodes: [request.status],
+      },
+      dynamicFields: [], // Will be populated by multi-submission learning
+      learnedAt: Date.now(),
+      timesUsed: 0,
+      successRate: 1.0,
+    };
+
+    logger.formLearner.info('Created GraphQL mutation pattern', {
+      patternId: pattern.id,
+      mutationName: graphqlMutation.mutationName,
+      variablesCount: Object.keys(variableMapping).length,
+    });
+
+    return pattern;
   }
 }
