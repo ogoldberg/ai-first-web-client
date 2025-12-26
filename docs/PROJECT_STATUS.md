@@ -12,6 +12,9 @@
 
 Creating practical QA examples to help users understand how to use Unbrowser for testing.
 
+**In Progress:**
+- QA-005 - API change detection example
+
 **Completed:**
 - QA-004 - Workflow recording/replay example (`examples/workflow-recording-replay.ts`)
 - QA-003 - Multi-site regression example (`examples/multi-site-regression.ts`)
