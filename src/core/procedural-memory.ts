@@ -158,7 +158,7 @@ export class ProceduralMemory {
 
   // Legacy: unified view for backward compatibility
   private get skills(): Map<string, BrowsingSkill> {
-    // Return merged view of all loaded skills
+    // Return merged view of all skills (loaded and unloaded)
     const merged = new Map<string, BrowsingSkill>();
     for (const [id, skill] of this.essentialSkills) merged.set(id, skill);
     for (const [id, skill] of this.domainSpecificSkills) merged.set(id, skill);

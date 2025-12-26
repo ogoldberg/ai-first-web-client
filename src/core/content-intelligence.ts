@@ -1872,13 +1872,13 @@ export class ContentIntelligence {
     }
 
     // Article tags meta
-    $('meta[property="article:tag"]').each((_: number, el: cheerio.Element) => {
+    $('meta[property="article:tag"]').each((_, el) => {
       const tag = $(el).attr('content');
       if (tag) tags.add(tag.trim());
     });
 
     // Common tag selectors
-    $('.tags a, .tag, [rel="tag"], .post-tags a').each((_: number, el: cheerio.Element) => {
+    $('.tags a, .tag, [rel="tag"], .post-tags a').each((_, el) => {
       const tag = $(el).text().trim();
       if (tag && tag.length > 0 && tag.length < 50) {
         tags.add(tag);
@@ -1941,7 +1941,7 @@ export class ContentIntelligence {
   /**
    * Get text length of an element
    */
-  private getTextLength(element: cheerio.Cheerio): number {
+  private getTextLength(element: ReturnType<cheerio.CheerioAPI>): number {
     return element.text().trim().length;
   }
 
@@ -1952,7 +1952,7 @@ export class ContentIntelligence {
     let largest = '';
     let maxLength = 0;
 
-    $('div, section, main').each((_: number, el: cheerio.Element) => {
+    $('div, section, main').each((_, el) => {
       const element = $(el);
       const text = element.text().trim();
       if (text.length > maxLength) {
@@ -2088,11 +2088,11 @@ export class ContentIntelligence {
         });
 
         if (opts.debug?.screenshots) {
-          const screenshot = await page.screenshot({ encoding: 'base64' });
+          const screenshotBuffer = await page.screenshot();
           debugData.screenshots.push({
             action: 'navigate',
             timestamp: Date.now(),
-            image: screenshot as string,
+            image: screenshotBuffer.toString('base64'),
           });
         }
       }

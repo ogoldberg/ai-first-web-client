@@ -53,7 +53,9 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 }
 ```
 
-### SDK Usage
+### SDK Usage (Local)
+
+For local SDK usage (all processing runs on your machine):
 
 ```typescript
 import { createLLMBrowser } from 'llm-browser/sdk';
@@ -400,18 +402,17 @@ UNBROWSER_API_URL=https://api.unbrowser.ai  # Override API URL
 
 ## Resources
 
-- **Documentation**: https://github.com/unbrowser/llm-browser#readme
+- **Documentation**: https://github.com/ogoldberg/ai-first-web-client#readme
 - **API Reference**: https://api.unbrowser.ai/docs
-- **Examples**: https://github.com/unbrowser/llm-browser/tree/main/examples
+- **Examples**: https://github.com/ogoldberg/ai-first-web-client/tree/main/examples
 - **NPM Package**: https://www.npmjs.com/package/llm-browser
 - **Cloud SDK**: https://www.npmjs.com/package/@unbrowser/core
 
 ## License
 
-MIT License - See [LICENSE](https://github.com/unbrowser/llm-browser/blob/main/LICENSE)
+MIT License - See [LICENSE](https://github.com/ogoldberg/ai-first-web-client/blob/main/LICENSE)
 
 ## Support
 
-- **Issues**: https://github.com/unbrowser/llm-browser/issues
-- **Discussions**: https://github.com/unbrowser/llm-browser/discussions
-- **Discord**: https://discord.gg/unbrowser (coming soon)
+- **Issues**: https://github.com/ogoldberg/ai-first-web-client/issues
+- **Discussions**: https://github.com/ogoldberg/ai-first-web-client/discussions

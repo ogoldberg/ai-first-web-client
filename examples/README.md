@@ -44,10 +44,17 @@ Add to your Claude Desktop config (`~/Library/Application Support/Claude/claude_
 
 Then use the examples in conversation with Claude.
 
-### 2. Using the SDK Directly
+### 2. Using the SDK Directly (Local)
+
+For local processing where all browsing intelligence runs on your machine:
 
 ```typescript
+// Published npm package usage (for end users)
 import { createLLMBrowser } from 'llm-browser/sdk';
+
+// Note: Example files in this directory use relative imports
+// (e.g., '../src/sdk.js') for development - end users should
+// use the npm package import shown above.
 
 const browser = await createLLMBrowser();
 const result = await browser.browse('https://example.com');

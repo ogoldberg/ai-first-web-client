@@ -11,7 +11,7 @@
  */
 
 import { logger } from '../utils/logger.js';
-import type { LearnedApiPattern } from '../types/index.js';
+import type { ApiPattern } from '../types/index.js';
 import type { LearningEngine } from './learning-engine.js';
 
 const discoveryLogger = logger.create('ApiDiscoveryOrchestrator');
@@ -293,24 +293,21 @@ export class ApiDiscoveryOrchestrator {
       }
 
       try {
-        // Create a learned pattern from the discovery
-        const pattern: LearnedApiPattern = {
+        // Create a pattern from the discovery
+        const pattern: ApiPattern = {
           endpoint: discovery.url,
-          method: discovery.method as 'GET' | 'POST' | 'PUT' | 'DELETE',
-          successCount: 1,
-          failureCount: 0,
-          lastUsed: Date.now(),
-          avgResponseTime: discovery.responseTime,
-          reliability: 0.8, // Start with moderate reliability until verified
-          dataFields: [], // Would need to inspect response to determine fields
-          requiresAuth: discovery.statusCode === 401 || discovery.statusCode === 403,
-          rateLimit: null, // Would need to inspect headers
+          method: discovery.method,
+          confidence: 'medium', // Fuzzing discoveries start with medium confidence
+          canBypass: true, // API endpoints can bypass browser rendering
+          responseType: discovery.contentType,
+          reason: 'Discovered via fuzzing',
         };
 
-        // Learn the pattern with fuzzing source
-        await this.learningEngine.learnApiPattern(domain, pattern, {
-          source: 'fuzzing',
+        // Learn the pattern with api_extraction source (closest to fuzzing discovery)
+        this.learningEngine.learnApiPattern(domain, pattern, {
+          source: 'api_extraction',
           sourceUrl: discovery.url,
+          sourceMetadata: { discoveryMethod: 'fuzzing' },
         });
 
         learned++;

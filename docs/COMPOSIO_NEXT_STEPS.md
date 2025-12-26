@@ -596,19 +596,19 @@ class ContentIntelligence {
     // - Long-form text (>500 words)
     // - Paragraphs (<p> tags)
     // - Headings (<h1>, <h2>, etc.)
-    // - Low link density (< 0.3 links per 100 words)
+    // - Low link density (< 0.5 links per 100 words)
 
     const paragraphs = $('p').length;
     const headings = $('h1, h2, h3, h4').length;
     const wordCount = this.countWords($);
     const linkCount = $('a').length;
-    const linkDensity = linkCount / (wordCount / 100);
+    const linkDensity = wordCount > 0 ? linkCount / (wordCount / 100) : 0;
 
     return (
       wordCount > 500 &&
       paragraphs > 5 &&
-      headings > 2 &&
-      linkDensity < 0.3
+      headings >= 2 &&
+      linkDensity < 0.5
     );
   }
 }
