@@ -98,6 +98,25 @@ export interface ArticleMetadata {
   readingTimeMinutes?: number;
 }
 
+export interface PlaywrightDebugData {
+  screenshots: Array<{
+    action: string;
+    timestamp: number;
+    image: string; // Base64
+  }>;
+  consoleLogs: Array<{
+    type: 'log' | 'warn' | 'error' | 'info' | 'debug';
+    message: string;
+    timestamp: number;
+  }>;
+  actionTrace: Array<{
+    action: string;
+    duration: number;
+    success: boolean;
+    error?: string;
+  }>;
+}
+
 export interface ContentResult {
   // The extracted content
   content: {
@@ -109,6 +128,9 @@ export interface ContentResult {
 
   // Article-specific metadata (ART-001)
   article?: ArticleMetadata;
+
+  // Debug data from Playwright tier (PLAY-001)
+  debug?: PlaywrightDebugData;
 
   // Metadata about extraction
   meta: {
@@ -174,6 +196,13 @@ export interface ContentIntelligenceOptions {
   allowBrowser?: boolean;
   // Callback when API extraction succeeds (for pattern learning)
   onExtractionSuccess?: ApiExtractionListener;
+  // Debug mode for Playwright tier (PLAY-001)
+  debug?: {
+    visible?: boolean;
+    slowMotion?: number;
+    screenshots?: boolean;
+    consoleLogs?: boolean;
+  };
 }
 
 // Realistic browser User-Agent to avoid bot detection
@@ -2011,17 +2040,62 @@ export class ContentIntelligence {
     }
 
     let browser;
+    const debugData: PlaywrightDebugData | undefined = opts.debug ? {
+      screenshots: [],
+      consoleLogs: [],
+      actionTrace: [],
+    } : undefined;
+
     try {
-      browser = await pw.chromium.launch({ headless: true });
+      // Launch browser with debug options (PLAY-001)
+      const launchOptions: any = {
+        headless: opts.debug?.visible ? false : true,
+      };
+      if (opts.debug?.slowMotion) {
+        launchOptions.slowMo = opts.debug.slowMotion;
+      }
+
+      browser = await pw.chromium.launch(launchOptions);
       const context = await browser.newContext({
         userAgent: opts.userAgent || DEFAULT_OPTIONS.userAgent,
       });
       const page = await context.newPage();
 
+      // Collect console logs if debug mode enabled
+      if (opts.debug?.consoleLogs && debugData) {
+        page.on('console', (msg) => {
+          debugData.consoleLogs.push({
+            type: msg.type() as any,
+            message: msg.text(),
+            timestamp: Date.now(),
+          });
+        });
+      }
+
+      // Navigate and capture screenshot if debug mode
+      const navStart = Date.now();
       await page.goto(url, {
         waitUntil: 'networkidle',
         timeout: opts.timeout || TIMEOUTS.PAGE_LOAD,
       });
+      const navDuration = Date.now() - navStart;
+
+      if (debugData) {
+        debugData.actionTrace.push({
+          action: `Navigate to ${url}`,
+          duration: navDuration,
+          success: true,
+        });
+
+        if (opts.debug?.screenshots) {
+          const screenshot = await page.screenshot({ encoding: 'base64' });
+          debugData.screenshots.push({
+            action: 'navigate',
+            timestamp: Date.now(),
+            image: screenshot as string,
+          });
+        }
+      }
 
       const html = await page.content();
       const finalUrl = page.url();
@@ -2031,7 +2105,11 @@ export class ContentIntelligence {
       const content = this.parseStaticHTML(html, finalUrl);
 
       if (content.text.length > (opts.minContentLength || 100)) {
-        return this.buildResult(url, finalUrl, 'browser:playwright', content, 'high');
+        const result = this.buildResult(url, finalUrl, 'browser:playwright', content, 'high');
+        if (debugData) {
+          result.debug = debugData;
+        }
+        return result;
       }
 
       return null;
@@ -2039,6 +2117,17 @@ export class ContentIntelligence {
       if (browser) {
         await browser.close().catch(() => {});
       }
+
+      // Log error to debug trace if debug mode
+      if (debugData) {
+        debugData.actionTrace.push({
+          action: 'Playwright execution',
+          duration: 0,
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+
       throw error;
     }
   }

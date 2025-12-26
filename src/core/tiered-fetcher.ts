@@ -95,6 +95,20 @@ export interface TieredFetchOptions {
   // Freshness requirement for content
   // Controls whether cached content is acceptable
   freshnessRequirement?: FreshnessRequirement;
+
+  // === Debug Mode (PLAY-001) ===
+
+  // Debug options for Playwright tier
+  debug?: {
+    // Show browser window (headless: false)
+    visible?: boolean;
+    // Slow motion delay between actions in milliseconds
+    slowMotion?: number;
+    // Capture screenshots after each action
+    screenshots?: boolean;
+    // Collect console logs
+    consoleLogs?: boolean;
+  };
 }
 
 // Default options for fetch
