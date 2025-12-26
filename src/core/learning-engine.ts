@@ -18,6 +18,7 @@
 
 import * as crypto from 'crypto';
 import { PersistentStore } from '../utils/persistent-store.js';
+import { matchDomain } from '../utils/url-pattern-matcher.js';
 import type {
   EnhancedApiPattern,
   EnhancedKnowledgeBaseEntry,
@@ -2649,15 +2650,10 @@ export class LearningEngine {
 
   /**
    * Check if a domain matches a glob-like pattern
+   * Uses centralized url-pattern-matcher utility (D-007)
    */
   private matchesDomainPattern(domain: string, pattern: string): boolean {
-    // Convert glob to regex: * -> .*, ? -> .
-    const regexPattern = pattern
-      .replace(/\./g, '\\.')
-      .replace(/\*/g, '.*')
-      .replace(/\?/g, '.');
-    const regex = new RegExp(`^${regexPattern}$`, 'i');
-    return regex.test(domain);
+    return matchDomain(domain, pattern);
   }
 
   /**
