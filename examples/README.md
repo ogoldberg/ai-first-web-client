@@ -94,6 +94,7 @@ console.log(result.content.markdown);
 | [Playwright Debug](./playwright-debug.ts) | Visual debugging with screenshots | Debug Mode, Teaching Mode |
 | [API Fuzzing](./api-fuzzing.ts) | Discover hidden API endpoints | Fuzzing Discovery, Pattern Learning |
 | [E2E API Testing](./e2e-api-testing.ts) | **QA Use Case**: Full API test suite | API Testing, JUnit Reports, Regression Detection |
+| [Content Validation Suite](./content-validation-suite.ts) | **QA Use Case**: Content validation tests | Verification Checks, Vitest Integration, Confidence Thresholds |
 
 ## Key Features Demonstrated
 
