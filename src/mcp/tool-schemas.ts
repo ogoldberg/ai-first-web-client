@@ -225,11 +225,11 @@ Actions:
 };
 
 // ==========================================================================
-// AI FEEDBACK TOOL
+// DEBUG TOOLS
 // ==========================================================================
 
 /**
- * AI Feedback tool schema for reporting issues and providing feedback
+ * Screenshot capture tool schema
  */
 export const captureScreenshotSchema: Tool = {
   name: 'capture_screenshot',
