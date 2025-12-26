@@ -437,7 +437,9 @@ describe('SmartBrowser.batchBrowse()', () => {
 
       const results = await smartBrowser.batchBrowse(['https://example.com']);
 
-      expect(results[0].durationMs).toBeGreaterThanOrEqual(50);
+      // Use 45ms threshold to account for timer precision variance
+      // setTimeout(50) can fire slightly early on some platforms
+      expect(results[0].durationMs).toBeGreaterThanOrEqual(45);
     });
 
     it('should track duration for failed URLs', async () => {
