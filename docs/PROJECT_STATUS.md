@@ -10,7 +10,10 @@
 
 ## Recent: QA Examples (2025-12-26)
 
-Creating practical QA examples to help users understand how to use Unbrowser for testing.
+Creating practical QA examples and documentation to help users understand how to use Unbrowser for testing.
+
+**In Progress:**
+- QA-006 - Add verification engine JSDoc
 
 **Completed:**
 - QA-005 - API change detection example (`examples/api-change-detection.ts`)
