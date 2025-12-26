@@ -266,6 +266,158 @@ const result = await client.importSkillPack(pack, {
 
 ---
 
+### PLAY-001: Playwright Debug Mode (Completed 2025-12-26)
+
+**Status:** ✅ **Complete** - Visual debugging mode implemented
+
+**Implementation Summary:**
+- ✅ Added PlaywrightDebugData interface to ContentIntelligence
+- ✅ Added debug options to TieredFetchOptions
+- ✅ Enhanced tryPlaywright() method with debug support
+- ✅ Implemented visible browser, slow motion, screenshots, console logs
+- ✅ Action trace with timing and success tracking
+
+**Benefits Achieved:**
+- **Visual Debugging** - Watch browser navigate in real-time
+- **Screenshot Capture** - Visual state after each action (base64)
+- **Console Logs** - JavaScript errors and warnings
+- **Action Trace** - Timing and success of each step
+- **Teaching Mode** - Useful for demos and understanding automation
+
+**Files Changed:**
+- `src/core/content-intelligence.ts` (+105 lines)
+- `src/core/tiered-fetcher.ts` (+10 lines)
+
+**Commit:**
+- `4bfb5f8` - feat(PLAY-001): Add Playwright debug mode with visual inspection
+
+**Usage:**
+```typescript
+const result = await browser.browse(url, {
+  debug: {
+    visible: true,         // Show browser window
+    slowMotion: 150,       // 150ms delay between actions
+    screenshots: true,     // Capture screenshots
+    consoleLogs: true,     // Collect console output
+  },
+});
+
+// Access debug data
+console.log(result.debug.screenshots);    // Base64 images
+console.log(result.debug.consoleLogs);    // Browser console output
+console.log(result.debug.actionTrace);    // Action timing
+```
+
+---
+
+### FUZZ-001: API Fuzzing Discovery (Completed 2025-12-26)
+
+**Status:** ✅ **Complete** - Fuzzing-based API discovery implemented
+
+**Implementation Summary:**
+- ✅ Created ApiDiscoveryOrchestrator class
+- ✅ Implements fuzzing-based endpoint discovery
+- ✅ Probes common API paths (/api, /v1, /graphql, etc.)
+- ✅ Tests multiple HTTP methods with configurable success codes
+- ✅ Learns patterns from discoveries via LearningEngine
+- ✅ Comprehensive result tracking with statistics
+
+**Benefits Achieved:**
+- **Proactive Discovery** - Find APIs before organic access
+- **Multiple Strategies** - Conservative, moderate, aggressive
+- **Pattern Learning** - Successful discoveries cached
+- **Speed Improvement** - Future browse() calls use APIs directly
+- **Configurable** - Timeouts, headers, methods, success codes
+
+**Files Changed:**
+- `src/core/api-discovery-orchestrator.ts` (created, 349 lines)
+
+**Commit:**
+- `9fd5a54` - feat(FUZZ-001): Add API fuzzing discovery orchestrator
+
+**Usage:**
+```typescript
+import { ApiDiscoveryOrchestrator } from './core/api-discovery-orchestrator.js';
+
+const orchestrator = new ApiDiscoveryOrchestrator(learningEngine);
+
+const result = await orchestrator.discoverViaFuzzing('https://api.example.com', {
+  methods: ['GET', 'POST'],
+  learnPatterns: true,
+  probeTimeout: 3000,
+  successCodes: [200, 201, 301, 302],
+});
+
+console.log(`Discovered ${result.successfulEndpoints.length} endpoints`);
+console.log(`Learned ${result.patternsLearned} patterns`);
+```
+
+---
+
+### Example Workflows (Completed 2025-12-26)
+
+**Status:** ✅ **Complete** - 7 comprehensive examples created
+
+**Examples Created:**
+
+1. **article-extraction.ts** - Enhanced article detection (ART-001)
+   - Multi-indicator article detection
+   - Metadata extraction (author, dates, tags)
+   - Clean content isolation
+   - Reading time estimation
+
+2. **github-intelligence.ts** - API discovery & multi-page navigation
+   - Repository data extraction
+   - Multi-page workflow (README, releases, issues)
+   - Progressive learning demonstration
+   - Structured data extraction
+
+3. **ecommerce-monitoring.ts** - Product tracking & change detection
+   - Product data extraction
+   - Price monitoring with alerts
+   - Skill learning for product pages
+   - Availability tracking
+
+4. **playwright-debug.ts** - Visual debugging (PLAY-001)
+   - Visible browser mode
+   - Screenshot capture and save
+   - Console log collection
+   - Action tracing with timing
+
+5. **api-fuzzing.ts** - API discovery via fuzzing (FUZZ-001)
+   - Proactive endpoint discovery
+   - Strategy comparison (conservative/moderate/aggressive)
+   - Pattern learning integration
+   - Statistics and reporting
+
+6. **company-research.ts** - Multi-page workflow orchestration (WORK-001)
+   - 5-page navigation workflow
+   - Data aggregation from multiple sources
+   - Comprehensive company profiling
+   - Social media extraction
+
+7. **README.md** - Complete examples documentation
+   - Setup instructions (MCP, SDK, Cloud API)
+   - Feature matrix with examples
+   - Progressive learning explanation
+   - Usage tips and best practices
+
+**Files Changed:**
+- `examples/README.md` (created)
+- `examples/article-extraction.ts` (created)
+- `examples/github-intelligence.ts` (created)
+- `examples/ecommerce-monitoring.ts` (created)
+- `examples/playwright-debug.ts` (created)
+- `examples/api-fuzzing.ts` (created)
+- `examples/company-research.ts` (created)
+
+**Commit:**
+- `17e677d` - feat: Add comprehensive example workflows
+
+**Total Lines Added:** 1,353 lines of examples and documentation
+
+---
+
 ## Recommended Implementation Order
 
 Based on impact vs. effort analysis (build → validate → promote):
@@ -802,8 +954,8 @@ Track these metrics to measure success:
 - [ ] **Create** first official skill pack (`@unbrowser/skills-linkedin`)
 
 ### Medium Term (4-6 Weeks)
-- [ ] **Complete** Phase 2 validation tasks (WORK-001, PLAY-001, FUZZ-001)
-- [ ] **Create** example workflows demonstrating all capabilities
+- [x] **Complete** Phase 2 validation tasks (WORK-001, PLAY-001, FUZZ-001) ✅
+- [x] **Create** example workflows demonstrating all capabilities ✅
 - [ ] **Test** skill packs with real-world use cases
 - [ ] **Document** all new features
 
