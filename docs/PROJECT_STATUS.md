@@ -8,9 +8,12 @@
 
 ---
 
-## Recent: QA Examples (2025-12-26)
+## In Progress: QA Examples (2025-12-26)
 
 Creating practical QA examples to help users understand how to use Unbrowser for testing.
+
+**In Progress:**
+- QA-002 - Content validation test suite example
 
 **Completed:**
 - QA-001 - E2E API testing example (`examples/e2e-api-testing.ts`)
