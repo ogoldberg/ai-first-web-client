@@ -412,7 +412,7 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 | ID | Task | Effort | Status | Notes |
 |----|------|--------|--------|-------|
 | GAP-004 | Multi-Step Workflow Optimization | L | Complete | WorkflowOptimizer: detects API shortcuts and data sufficiency, tracks metrics, auto-promotes after 90%+ success. PR #184 |
-| GAP-005 | Pagination API Discovery | M | In Progress | Learn that "Next page" uses API calls (/api/results?page=2), eliminate browser renders for multi-page scraping |
+| GAP-005 | Pagination API Discovery | M | Complete | PaginationDiscovery: detects page/offset/cursor/token params, learns response structure (data path, total, has-more, next cursor), generates page URLs, tracks usage metrics. PR #185 |
 | GAP-006 | Search Query Optimization | M | Not Started | Learn search API endpoints (/api/search?q=...), eliminate form rendering for searches |
 
 ### Phase 3: Resilience (Following Sprint)
