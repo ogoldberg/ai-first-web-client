@@ -132,9 +132,26 @@ export class ApiAnalyzer {
       score += 2;
     }
 
-    // Simple GET request
+    // Method-based scoring
+    // GET: Simple read operations (high confidence)
     if (request.method === 'GET') {
       score += 2;
+    }
+    // POST/PUT/DELETE: Mutation operations (high confidence if successful)
+    else if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method)) {
+      // Successful mutations are just as valuable as GETs
+      if (request.status >= 200 && request.status < 300) {
+        score += 2;
+
+        // Extra points for proper REST status codes
+        if (
+          (request.method === 'POST' && request.status === 201) || // Created
+          (request.method === 'DELETE' && (request.status === 204 || request.status === 200)) ||
+          (request.method === 'PUT' && request.status === 200)
+        ) {
+          score += 1;
+        }
+      }
     }
 
     // Has response body
@@ -170,10 +187,18 @@ export class ApiAnalyzer {
    * Get human-readable reason for confidence level
    */
   private getConfidenceReason(request: NetworkRequest, confidence: string): string {
+    const isMutation = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(request.method);
+    const isRestCompliant =
+      (request.method === 'POST' && request.status === 201) ||
+      (request.method === 'DELETE' && request.status === 204);
+
     if (confidence === 'high') {
-      return 'Simple API with standard auth and JSON response';
+      const mutationType = isMutation ? `${request.method} mutation` : 'GET request';
+      const restNote = isRestCompliant ? ' (REST-compliant)' : '';
+      return `${mutationType} with standard auth and JSON response${restNote}`;
     } else if (confidence === 'medium') {
-      return 'API call but may require additional parameters or complex auth';
+      const requestType = isMutation ? 'Mutation' : 'API call';
+      return `${requestType} but may require additional parameters or complex auth`;
     } else {
       return 'Complex request - may need browser context or JS-generated parameters';
     }

@@ -378,6 +378,61 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 
 ---
 
+## P2: Progressive Optimization Gaps (New Initiative)
+
+**Goal:** Fully utilize "Browser Minimizer" philosophy by connecting existing learning infrastructure to progressive optimization.
+
+**Context:** Analysis revealed that we have all primitives for form automation and mutation learning, but key integrations are missing. See [CAPABILITY_GAPS_ANALYSIS.md](CAPABILITY_GAPS_ANALYSIS.md) for full analysis.
+
+**Success Criteria:**
+- Forms submit 10-25x faster after first learning pass
+- POST/PUT/DELETE patterns learned and reused
+- Auth workflows auto-replay when sessions expire
+- Multi-step workflows progressively optimized
+
+### Phase 1: Forms & Mutations (Current Sprint)
+
+| ID | Task | Effort | Status | Notes |
+|----|------|--------|--------|-------|
+| GAP-001 | Form Submission Learning | L | Complete | FormSubmissionLearner: learns POST patterns from browser submissions, replays via direct API. Handles dynamic fields (CSRF, user IDs, nonces). See [FORM_AUTOMATION_IMPLEMENTATION.md](FORM_AUTOMATION_IMPLEMENTATION.md) |
+| GAP-002 | POST/PUT/DELETE API Learning | S | Complete | Enhanced ApiAnalyzer to score mutations equally with GET. Adds REST-compliant status code detection (201, 204) |
+| GAP-003 | Auth Flow Automation | M | Not Started | Auto-detect auth challenges (401, redirects), replay learned login workflows, fallback to user prompt |
+
+### Phase 2: Workflows (Next Sprint)
+
+| ID | Task | Effort | Status | Notes |
+|----|------|--------|--------|-------|
+| GAP-004 | Multi-Step Workflow Optimization | L | Not Started | Analyze workflows to find shortcut paths. Example: 4-step wizard → direct API call to final endpoint if it contains all data |
+| GAP-005 | Pagination API Discovery | M | Not Started | Learn that "Next page" uses API calls (/api/results?page=2), eliminate browser renders for multi-page scraping |
+| GAP-006 | Search Query Optimization | M | Not Started | Learn search API endpoints (/api/search?q=...), eliminate form rendering for searches |
+
+### Phase 3: Resilience (Following Sprint)
+
+| ID | Task | Effort | Status | Notes |
+|----|------|--------|--------|-------|
+| GAP-007 | CAPTCHA Challenge Detection | M | Not Started | Detect CAPTCHA challenges, prompt user, resume workflow after solved |
+| GAP-008 | Dynamic Content Loading | M | Not Started | Learn which XHR calls load content, monitor specific endpoints instead of networkidle |
+| GAP-010 | Rate Limit Learning | S | Not Started | Learn per-domain rate limits from 429 responses, adapt automatically |
+
+### Future Opportunities
+
+| ID | Task | Effort | Status | Notes |
+|----|------|--------|--------|-------|
+| GAP-009 | Multi-Domain Login Reuse | M | Not Started | Detect SSO flows, reuse credentials across domains |
+| GAP-011 | Content Change Prediction | M | Not Started | Learn update patterns (e.g., "updates every 6 hours"), optimize polling |
+
+**Expected Impact:**
+- 10-25x speedup for form submissions
+- 50-100x speedup for paginated scraping
+- Higher success rates with auth challenges
+- Automatic adaptation to rate limits
+
+**Related Docs:**
+- [CAPABILITY_GAPS_ANALYSIS.md](CAPABILITY_GAPS_ANALYSIS.md) - Full gap analysis
+- [FORM_AUTOMATION_IMPLEMENTATION.md](FORM_AUTOMATION_IMPLEMENTATION.md) - Implementation details
+
+---
+
 ## P2: Competitive Feature Parity (From Competitive Analysis)
 
 See [COMPETITIVE_ANALYSIS.md](COMPETITIVE_ANALYSIS.md) for context on why these features matter.
