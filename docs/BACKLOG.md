@@ -11,6 +11,15 @@ Tasks are organized by priority and category. Each task includes:
 
 ## P0: Critical (Do First)
 
+### Phase 2 Integration Issues (2025-12-26)
+
+| ID | Task | Effort | Category | Notes |
+|----|------|--------|----------|-------|
+| PHASE2-001 | Fix TypeScript build errors | M | Debt | Prisma and vector store imports fail compilation. Make optional features truly optional with conditional imports |
+| PHASE2-002 | Runtime test Phase 2 examples | M | Testing | Examples written but not executed. Run `npm install && npm build` then test all 7 examples against real URLs |
+| PHASE2-003 | Add Phase 2 to OpenAPI spec | S | Documentation | Add `/v1/browse` debug option and `/v1/discover/fuzz` endpoint to `docs/api/openapi.yaml` |
+| PHASE2-004 | Update main README | S | Documentation | Add PLAY-001 and FUZZ-001 feature descriptions to README.md |
+
 ### Runtime & Packaging Bugs
 
 | ID | Task | Effort | Category | Notes |
