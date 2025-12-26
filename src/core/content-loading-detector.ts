@@ -10,6 +10,7 @@
  * Expected result: 20-50% faster page loads for dynamic sites
  */
 
+import { randomUUID } from 'crypto';
 import { logger } from '../utils/logger.js';
 import type { NetworkRequest } from '../types/index.js';
 
@@ -173,6 +174,9 @@ const CONTENT_FIELDS = [
   'url', 'link', 'href', 'slug', 'id',
   'price', 'rating', 'score', 'count', 'views',
 ];
+
+/** Pre-computed lowercase content fields for efficient matching */
+const LOWERCASE_CONTENT_FIELDS = CONTENT_FIELDS.map(field => field.toLowerCase());
 
 /** URL patterns that likely return content */
 const CONTENT_URL_PATTERNS = [
@@ -608,7 +612,7 @@ export class ContentLoadingDetector {
 
     for (const key of keys) {
       const lowerKey = key.toLowerCase();
-      if (CONTENT_FIELDS.some(field => lowerKey.includes(field.toLowerCase()))) {
+      if (LOWERCASE_CONTENT_FIELDS.some(field => lowerKey.includes(field))) {
         found.push(key);
       }
     }
@@ -658,7 +662,7 @@ export class ContentLoadingDetector {
     const urlPattern = this.createUrlPattern(url, variableParams);
 
     return {
-      id: `clp-${domain}-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
+      id: `clp-${domain}-${randomUUID()}`,
       domain,
       endpoint: req.url,
       urlPattern,

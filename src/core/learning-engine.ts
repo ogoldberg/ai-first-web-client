@@ -1750,10 +1750,11 @@ export class LearningEngine {
         const existing = entry.contentLoadingPatterns[existingIndex];
         entry.contentLoadingPatterns[existingIndex] = {
           ...pattern,
+          id: existing.id, // Preserve the original stable ID
           // Keep higher confidence between existing and new
           confidence: Math.max(existing.confidence, pattern.confidence),
-          // Average response times
-          avgResponseTime: (existing.avgResponseTime + pattern.avgResponseTime) / 2,
+          // Use exponential moving average for response time
+          avgResponseTime: (existing.avgResponseTime * 0.8) + (pattern.avgResponseTime * 0.2),
           // Keep earliest discovery time
           discoveredAt: Math.min(existing.discoveredAt, pattern.discoveredAt),
           lastUsedAt: now,
