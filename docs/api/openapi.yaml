@@ -59,6 +59,8 @@ servers:
 tags:
   - name: Browse
     description: Web browsing and content extraction
+  - name: Discovery
+    description: API endpoint discovery via fuzzing and analysis
   - name: Intelligence
     description: Domain intelligence and learned patterns
   - name: Usage
@@ -157,6 +159,48 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+
+  /v1/browse/preview:
+    post:
+      tags:
+        - Browse
+      summary: Preview browse execution plan
+      description: |
+        Preview what will happen when browsing a URL without executing it.
+
+        Returns the execution plan including:
+        - Tier that will be used
+        - Estimated time
+        - Learned patterns that will apply
+        - Confidence level
+
+        **Use case**: Plan complex operations before executing.
+        **Performance**: Typically <50ms (compared to 2-5s for actual browse).
+      operationId: previewBrowse
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BrowseRequest'
+            example:
+              url: https://example.com/products
+              options:
+                maxLatencyMs: 2000
+                maxCostTier: lightweight
+      responses:
+        '200':
+          description: Execution plan preview
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreviewResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
 
   /v1/fetch:
     post:
@@ -292,6 +336,69 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
 
+  /v1/discover/fuzz:
+    post:
+      tags:
+        - Discovery
+      summary: Discover APIs via fuzzing
+      description: |
+        Proactively discover API endpoints by fuzzing common paths.
+
+        **How it works**:
+        1. Probes common API paths (/api, /v1, /graphql, etc.)
+        2. Tests common HTTP methods (GET, POST, etc.)
+        3. Analyzes responses to identify valid endpoints
+        4. Optionally learns discovered patterns for future use
+
+        **Use cases**:
+        - Discover undocumented APIs before scraping
+        - Build a complete API map of a domain
+        - Identify authentication requirements
+
+        **Note**: This operation may make many requests. Use responsibly.
+      operationId: discoverFuzz
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FuzzDiscoveryRequest'
+            examples:
+              simple:
+                summary: Basic discovery
+                value:
+                  domain: api.example.com
+              advanced:
+                summary: With options
+                value:
+                  domain: api.example.com
+                  options:
+                    paths:
+                      - /api
+                      - /v1
+                      - /graphql
+                    methods:
+                      - GET
+                      - POST
+                    probeTimeout: 5000
+                    maxDuration: 30000
+                    learnPatterns: true
+      responses:
+        '200':
+          description: Discovery results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FuzzDiscoveryResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -352,6 +459,45 @@ components:
           enum: [intelligence, lightweight, playwright]
           description: Maximum tier to use (limits cost/latency)
           example: lightweight
+        debug:
+          type: object
+          description: Debug options for visual debugging (PLAY-001)
+          properties:
+            visible:
+              type: boolean
+              default: false
+              description: Show browser window (Playwright tier only)
+            slowMotion:
+              type: integer
+              minimum: 0
+              maximum: 5000
+              description: Milliseconds delay between actions
+              example: 100
+            screenshots:
+              type: boolean
+              default: false
+              description: Capture screenshots during browsing
+            consoleLogs:
+              type: boolean
+              default: false
+              description: Collect browser console output
+        verify:
+          type: object
+          description: Content verification options (COMP-015)
+          properties:
+            enabled:
+              type: boolean
+              default: true
+              description: Enable content verification
+            mode:
+              type: string
+              enum: [basic, standard, thorough]
+              default: basic
+              description: |
+                Verification mode:
+                - basic: Quick sanity checks
+                - standard: Content validation
+                - thorough: Deep verification with retries
 
     SessionData:
       type: object
@@ -491,6 +637,79 @@ components:
           description: Cookies set during the request
           items:
             $ref: '#/components/schemas/Cookie'
+        verification:
+          type: object
+          description: Content verification results (when verify.enabled is true)
+          properties:
+            passed:
+              type: boolean
+              description: Whether all verification checks passed
+            confidence:
+              type: number
+              format: float
+              minimum: 0
+              maximum: 1
+              description: Confidence score (0-1)
+            checksRun:
+              type: integer
+              description: Number of verification checks run
+            errors:
+              type: array
+              items:
+                type: string
+              description: Verification errors (if any)
+            warnings:
+              type: array
+              items:
+                type: string
+              description: Verification warnings (if any)
+        debug:
+          type: object
+          description: Debug data (when debug options enabled)
+          properties:
+            screenshots:
+              type: array
+              description: Captured screenshots
+              items:
+                type: object
+                properties:
+                  action:
+                    type: string
+                    description: Action that triggered screenshot
+                  timestamp:
+                    type: integer
+                    description: Unix timestamp
+                  imageSize:
+                    type: integer
+                    description: Size of base64 image data
+                  imagePreview:
+                    type: string
+                    description: First 100 chars of base64 data
+            consoleLogs:
+              type: array
+              items:
+                type: object
+                properties:
+                  level:
+                    type: string
+                    enum: [log, warn, error, info]
+                  message:
+                    type: string
+                  timestamp:
+                    type: integer
+            actionTrace:
+              type: array
+              description: Trace of actions taken
+              items:
+                type: object
+                properties:
+                  action:
+                    type: string
+                  timestamp:
+                    type: integer
+                  details:
+                    type: object
+                    additionalProperties: true
 
     BatchRequest:
       type: object
@@ -606,6 +825,190 @@ components:
               type: boolean
               description: Whether session is recommended
               example: false
+
+    PreviewResponse:
+      type: object
+      required:
+        - success
+        - data
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          required:
+            - url
+            - plan
+          properties:
+            url:
+              type: string
+              format: uri
+              description: URL being previewed
+            plan:
+              type: object
+              properties:
+                recommendedTier:
+                  type: string
+                  enum: [intelligence, lightweight, playwright]
+                  description: Tier that will be used
+                estimatedTimeMs:
+                  type: integer
+                  description: Estimated time in milliseconds
+                confidence:
+                  type: number
+                  format: float
+                  minimum: 0
+                  maximum: 1
+                  description: Confidence in successful extraction
+                patternsAvailable:
+                  type: integer
+                  description: Number of learned patterns for this domain
+                skillsAvailable:
+                  type: array
+                  items:
+                    type: string
+                  description: Applicable procedural skills
+                warnings:
+                  type: array
+                  items:
+                    type: string
+                  description: Potential issues or recommendations
+        metadata:
+          type: object
+          properties:
+            previewDuration:
+              type: integer
+              description: Time taken to generate preview (ms)
+
+    FuzzDiscoveryRequest:
+      type: object
+      required:
+        - domain
+      properties:
+        domain:
+          type: string
+          description: Domain to discover APIs for (with or without protocol)
+          example: api.example.com
+        options:
+          type: object
+          properties:
+            paths:
+              type: array
+              items:
+                type: string
+              description: Custom paths to probe (defaults to common API paths)
+              example: ["/api", "/v1", "/graphql"]
+            methods:
+              type: array
+              items:
+                type: string
+                enum: [GET, POST, PUT, DELETE, PATCH, OPTIONS, HEAD]
+              description: HTTP methods to test (defaults to GET, POST)
+              example: [GET, POST]
+            probeTimeout:
+              type: integer
+              minimum: 1000
+              maximum: 30000
+              description: Timeout per probe in milliseconds
+              default: 5000
+              example: 5000
+            maxDuration:
+              type: integer
+              minimum: 5000
+              maximum: 300000
+              description: Maximum total duration in milliseconds
+              default: 30000
+              example: 30000
+            learnPatterns:
+              type: boolean
+              default: true
+              description: Whether to learn discovered patterns for future use
+            headers:
+              type: object
+              additionalProperties:
+                type: string
+              description: Custom headers to include in probes
+            successCodes:
+              type: array
+              items:
+                type: integer
+              description: HTTP status codes to consider successful
+              default: [200, 201, 204]
+
+    FuzzDiscoveryResponse:
+      type: object
+      required:
+        - success
+        - data
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          required:
+            - domain
+            - discovered
+            - stats
+          properties:
+            domain:
+              type: string
+              description: Domain that was scanned
+            baseUrl:
+              type: string
+              format: uri
+              description: Base URL used for probing
+            discovered:
+              type: array
+              description: Successfully discovered endpoints
+              items:
+                type: object
+                required:
+                  - path
+                  - method
+                  - statusCode
+                properties:
+                  path:
+                    type: string
+                    description: Endpoint path
+                  method:
+                    type: string
+                    description: HTTP method
+                  statusCode:
+                    type: integer
+                    description: Response status code
+                  responseTime:
+                    type: integer
+                    description: Response time in milliseconds
+                  contentType:
+                    type: string
+                    description: Response content type
+            stats:
+              type: object
+              properties:
+                totalProbes:
+                  type: integer
+                  description: Total number of probes sent
+                successfulEndpoints:
+                  type: integer
+                  description: Number of endpoints found
+                failedProbes:
+                  type: integer
+                  description: Number of failed probes
+                patternsLearned:
+                  type: integer
+                  description: Patterns learned for future use
+                duration:
+                  type: integer
+                  description: Total duration in milliseconds
+            metadata:
+              type: object
+              properties:
+                timestamp:
+                  type: integer
+                  description: Unix timestamp
+                requestDuration:
+                  type: integer
+                  description: API request duration (ms)
 
     UsageResponse:
       type: object
