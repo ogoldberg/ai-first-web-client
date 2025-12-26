@@ -4,12 +4,87 @@
  * Automatically validates browse results with built-in and learned checks.
  * Provides fast verification using intelligence tier (<100ms vs 2-5s browser).
  *
- * Key features:
- * - Built-in sanity checks (always enabled)
- * - Content validation (field existence, patterns, length)
- * - State verification (secondary browse for confirmation)
- * - Learned verifications from failure patterns
- * - Confidence scoring
+ * ## Overview
+ *
+ * The VerificationEngine validates browse results to ensure data quality and
+ * detect failures early. It supports three types of verification:
+ *
+ * 1. **Content Verification** - Validates extracted content (fields, patterns, length)
+ * 2. **Action Verification** - Validates HTTP responses (status codes, error text)
+ * 3. **State Verification** - Validates by making secondary requests (browse URL, API call)
+ *
+ * ## Key Features
+ *
+ * - **Built-in Checks**: Basic sanity checks always run (status 200, content exists)
+ * - **Verification Modes**: `basic`, `standard`, `thorough` - progressively more checks
+ * - **Learned Verifications**: Integrates with ProceduralMemory to apply domain-specific checks
+ * - **Confidence Scoring**: Calculates 0-1 confidence based on check results
+ * - **Graceful Degradation**: State verification skips if dependencies not configured
+ *
+ * ## Usage Example
+ *
+ * ```typescript
+ * import { VerificationEngine } from 'llm-browser';
+ *
+ * const verifier = new VerificationEngine();
+ *
+ * // Basic usage with built-in checks
+ * const result = await verifier.verify(browseResult, {
+ *   enabled: true,
+ *   mode: 'standard'
+ * });
+ *
+ * if (!result.passed) {
+ *   console.log('Verification failed:', result.errors);
+ * }
+ *
+ * // Custom checks for specific content
+ * const customResult = await verifier.verify(browseResult, {
+ *   enabled: true,
+ *   mode: 'basic',
+ *   checks: [
+ *     {
+ *       type: 'content',
+ *       assertion: { fieldExists: ['price', 'title'] },
+ *       severity: 'error',
+ *       retryable: true
+ *     }
+ *   ]
+ * });
+ * ```
+ *
+ * ## Integration with ProceduralMemory
+ *
+ * The engine can learn domain-specific verifications from past successes/failures:
+ *
+ * ```typescript
+ * verifier.setProceduralMemory(proceduralMemory);
+ * // Now verify() will include learned checks for the domain
+ * ```
+ *
+ * ## State Verification (COMP-013)
+ *
+ * For critical operations, verify state by making secondary requests:
+ *
+ * ```typescript
+ * verifier.setBrowser(smartBrowser);
+ * verifier.setApiCaller(apiExecutor);
+ *
+ * const result = await verifier.verify(submitResult, {
+ *   enabled: true,
+ *   mode: 'thorough',
+ *   checks: [{
+ *     type: 'state',
+ *     assertion: { checkUrl: 'https://example.com/order/123' },
+ *     severity: 'critical',
+ *     retryable: false
+ *   }]
+ * });
+ * ```
+ *
+ * @see {@link VerifyOptions} for verification configuration
+ * @see {@link VerificationResult} for the result structure
+ * @see {@link VerificationCheck} for custom check definitions
  */
 
 import type {
@@ -24,53 +99,278 @@ import type { ProceduralMemory } from './procedural-memory.js';
 import { logger } from '../utils/logger.js';
 
 /**
- * Browser interface for state verification
- * Minimal interface to avoid circular dependencies with SmartBrowser
+ * Browser interface for state verification.
+ *
+ * This minimal interface allows VerificationEngine to make secondary browse
+ * requests for state verification without creating a circular dependency
+ * with SmartBrowser.
+ *
+ * @example
+ * ```typescript
+ * const browser: StateVerificationBrowser = {
+ *   browse: async (url, options) => smartBrowser.browse(url, options)
+ * };
+ * verificationEngine.setBrowser(browser);
+ * ```
  */
 export interface StateVerificationBrowser {
+  /**
+   * Browse a URL and return the result.
+   *
+   * @param url - The URL to browse for state verification
+   * @param options - Optional browse options (typically maxCostTier: 'intelligence' for speed)
+   * @returns Promise resolving to the browse result
+   */
   browse(url: string, options?: { maxCostTier?: string }): Promise<SmartBrowseResult>;
 }
 
 /**
- * API caller interface for state verification
+ * API caller interface for state verification.
+ *
+ * This interface allows VerificationEngine to make API calls for state
+ * verification, confirming that actions (form submissions, etc.) succeeded.
+ *
+ * @example
+ * ```typescript
+ * const apiCaller: StateVerificationApiCaller = {
+ *   executeApiCall: async (opts) => {
+ *     const response = await fetch(opts.url, { method: opts.method || 'GET' });
+ *     return { status: response.status, data: await response.json() };
+ *   }
+ * };
+ * verificationEngine.setApiCaller(apiCaller);
+ * ```
  */
 export interface StateVerificationApiCaller {
+  /**
+   * Execute an API call for state verification.
+   *
+   * @param options - API call options
+   * @param options.url - The API endpoint URL
+   * @param options.method - HTTP method (defaults to GET)
+   * @returns Promise resolving to status code and optional response data
+   */
   executeApiCall(options: { url: string; method?: string }): Promise<{ status: number; data?: unknown }>;
 }
 
-// Minimum confidence threshold for learned verifications
+/**
+ * Minimum confidence threshold for including learned verifications.
+ * Checks below this threshold are skipped to avoid false positives.
+ */
 const MIN_LEARNED_VERIFICATION_CONFIDENCE = 0.7;
 
+/**
+ * Engine for verifying browse results with configurable checks.
+ *
+ * The VerificationEngine combines built-in checks, learned domain-specific
+ * checks, and custom user-defined checks to validate browse results.
+ *
+ * ## Verification Flow
+ *
+ * 1. Built-in checks run based on verification mode (basic/standard/thorough)
+ * 2. Learned checks from ProceduralMemory are applied (if configured)
+ * 3. User-provided custom checks run
+ * 4. Results are aggregated with confidence scoring
+ *
+ * ## Error Handling
+ *
+ * - Critical check failures stop verification immediately
+ * - Error check failures are recorded but don't stop execution
+ * - Warning check failures are noted but don't affect pass/fail
+ * - Check execution errors are captured with 'error' severity
+ *
+ * @example
+ * ```typescript
+ * const engine = new VerificationEngine();
+ *
+ * // Configure for full verification capabilities
+ * engine.setProceduralMemory(memory);
+ * engine.setBrowser(browser);
+ * engine.setApiCaller(apiCaller);
+ *
+ * // Verify with thorough mode
+ * const result = await engine.verify(browseResult, {
+ *   enabled: true,
+ *   mode: 'thorough',
+ *   checks: [
+ *     { type: 'content', assertion: { fieldExists: ['data'] }, severity: 'error', retryable: true }
+ *   ]
+ * });
+ *
+ * console.log(`Passed: ${result.passed}, Confidence: ${result.confidence}`);
+ * ```
+ */
 export class VerificationEngine {
+  /** ProceduralMemory instance for accessing learned verifications */
   private proceduralMemory?: ProceduralMemory;
+
+  /** Browser instance for state verification via secondary URL browse */
   private browser?: StateVerificationBrowser;
+
+  /** API caller instance for state verification via API calls */
   private apiCaller?: StateVerificationApiCaller;
 
   /**
-   * Set ProceduralMemory for learned verifications (COMP-014)
+   * Connect ProceduralMemory for learned verifications.
+   *
+   * When set, the engine will query ProceduralMemory for domain-specific
+   * verification checks that have been learned from past successes and failures.
+   * Only checks with confidence >= 0.7 are included.
+   *
+   * This enables COMP-014 (Verification Learning) - the engine learns which
+   * checks prevent failures on specific domains.
+   *
+   * @param memory - ProceduralMemory instance with learned verifications
+   *
+   * @example
+   * ```typescript
+   * const memory = new ProceduralMemory();
+   * await memory.initialize();
+   * verificationEngine.setProceduralMemory(memory);
+   *
+   * // Now verify() includes learned checks for the domain
+   * const result = await verificationEngine.verify(browseResult, { mode: 'standard' });
+   * ```
    */
   setProceduralMemory(memory: ProceduralMemory): void {
     this.proceduralMemory = memory;
   }
 
   /**
-   * Set browser for state verification (COMP-013)
-   * Required for checkUrl assertions that need to browse a secondary URL
+   * Connect browser for state verification via secondary URL browse.
+   *
+   * Required for `checkUrl` assertions in state verification checks.
+   * When a check includes `assertion.checkUrl`, the engine browses that URL
+   * and validates the response to confirm state changes.
+   *
+   * This enables COMP-013 (State Verification) - verifying that actions
+   * like form submissions actually succeeded by checking the resulting page.
+   *
+   * @param browser - Browser interface for making secondary browse requests
+   *
+   * @example
+   * ```typescript
+   * verificationEngine.setBrowser({
+   *   browse: (url, opts) => smartBrowser.browse(url, opts)
+   * });
+   *
+   * // Now state verification can browse secondary URLs
+   * const result = await verificationEngine.verify(submitResult, {
+   *   mode: 'thorough',
+   *   checks: [{
+   *     type: 'state',
+   *     assertion: { checkUrl: 'https://example.com/orders/123' },
+   *     severity: 'critical',
+   *     retryable: false
+   *   }]
+   * });
+   * ```
    */
   setBrowser(browser: StateVerificationBrowser): void {
     this.browser = browser;
   }
 
   /**
-   * Set API caller for state verification (COMP-013)
-   * Required for checkApi assertions that need to call an API endpoint
+   * Connect API caller for state verification via API endpoint calls.
+   *
+   * Required for `checkApi` assertions in state verification checks.
+   * When a check includes `assertion.checkApi`, the engine calls that API
+   * endpoint and validates the response confirms expected state.
+   *
+   * This enables COMP-013 (State Verification) - verifying that actions
+   * succeeded by checking an API endpoint (faster than full page browse).
+   *
+   * @param apiCaller - API caller interface for making verification API calls
+   *
+   * @example
+   * ```typescript
+   * verificationEngine.setApiCaller({
+   *   executeApiCall: async ({ url, method }) => {
+   *     const response = await fetch(url, { method: method || 'GET' });
+   *     return { status: response.status, data: await response.json() };
+   *   }
+   * });
+   *
+   * // Now state verification can call API endpoints
+   * const result = await verificationEngine.verify(submitResult, {
+   *   mode: 'thorough',
+   *   checks: [{
+   *     type: 'state',
+   *     assertion: { checkApi: 'https://api.example.com/orders/123' },
+   *     severity: 'critical',
+   *     retryable: false
+   *   }]
+   * });
+   * ```
    */
   setApiCaller(apiCaller: StateVerificationApiCaller): void {
     this.apiCaller = apiCaller;
   }
 
   /**
-   * Verify a browse result
+   * Verify a browse result against configured checks.
+   *
+   * This is the main entry point for verification. It runs all applicable
+   * checks and returns a comprehensive result with pass/fail status,
+   * individual check results, and confidence scoring.
+   *
+   * ## Check Execution Order
+   *
+   * 1. **Built-in checks** based on `options.mode`:
+   *    - `basic`: Status 200, content >= 50 chars
+   *    - `standard`: + excludes "access denied", "rate limit exceeded"
+   *    - `thorough`: + content >= 100 chars (warning)
+   *
+   * 2. **Learned checks** from ProceduralMemory (if configured):
+   *    - Domain-specific checks with confidence >= 0.7
+   *    - Automatically updated based on past success/failure
+   *
+   * 3. **User-provided checks** from `options.checks`:
+   *    - Custom content, action, state, or validator checks
+   *
+   * ## Severity Handling
+   *
+   * - `critical`: Stops verification immediately on failure
+   * - `error`: Recorded as failure, continues checking
+   * - `warning`: Noted but doesn't affect pass/fail
+   *
+   * @param result - The browse result to verify
+   * @param options - Verification configuration (mode, custom checks, etc.)
+   * @returns Promise resolving to comprehensive verification result
+   *
+   * @example
+   * ```typescript
+   * // Basic verification
+   * const result = await engine.verify(browseResult, {
+   *   enabled: true,
+   *   mode: 'basic'
+   * });
+   *
+   * if (!result.passed) {
+   *   console.log('Errors:', result.errors);
+   *   console.log('Warnings:', result.warnings);
+   * }
+   *
+   * // With custom content checks
+   * const productResult = await engine.verify(productPage, {
+   *   enabled: true,
+   *   mode: 'standard',
+   *   checks: [
+   *     {
+   *       type: 'content',
+   *       assertion: {
+   *         fieldExists: ['price', 'title', 'description'],
+   *         fieldNotEmpty: ['price'],
+   *         minLength: 200
+   *       },
+   *       severity: 'error',
+   *       retryable: true
+   *     }
+   *   ]
+   * });
+   *
+   * console.log(`Confidence: ${productResult.confidence}`);
+   * ```
    */
   async verify(
     result: SmartBrowseResult,
