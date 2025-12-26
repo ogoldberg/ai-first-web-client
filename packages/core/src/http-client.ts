@@ -44,6 +44,62 @@ export interface BrowseOptions {
     /** Verification mode: basic, standard, or thorough */
     mode?: 'basic' | 'standard' | 'thorough';
   };
+  /** Debug mode for Playwright tier (PLAY-001) */
+  debug?: {
+    /** Show browser window (headless: false) */
+    visible?: boolean;
+    /** ms delay between actions */
+    slowMotion?: number;
+    /** Capture screenshots after actions */
+    screenshots?: boolean;
+    /** Collect browser console output */
+    consoleLogs?: boolean;
+  };
+}
+
+export interface FuzzDiscoveryOptions {
+  /** Paths to probe (default: common API paths) */
+  paths?: string[];
+  /** HTTP methods to test (default: ['GET']) */
+  methods?: string[];
+  /** Timeout per probe in ms (default: 3000) */
+  probeTimeout?: number;
+  /** Maximum total discovery time in ms (default: 30000) */
+  maxDuration?: number;
+  /** Whether to learn patterns from discoveries (default: true) */
+  learnPatterns?: boolean;
+  /** Custom headers for probes */
+  headers?: Record<string, string>;
+  /** Status codes considered successful (default: [200, 201, 301, 302, 307, 308]) */
+  successCodes?: number[];
+}
+
+export interface FuzzDiscoveryResult {
+  /** Domain that was fuzzed */
+  domain: string;
+  /** Base URL used for fuzzing */
+  baseUrl: string;
+  /** Successfully discovered endpoints */
+  discovered: Array<{
+    path: string;
+    method: string;
+    statusCode: number;
+    responseTime: number;
+    contentType?: string;
+  }>;
+  /** Discovery statistics */
+  stats: {
+    totalProbes: number;
+    successfulEndpoints: number;
+    failedProbes: number;
+    patternsLearned: number;
+    duration: number;
+  };
+  /** Request metadata */
+  metadata: {
+    timestamp: number;
+    requestDuration: number;
+  };
 }
 
 export interface SessionData {
@@ -911,6 +967,50 @@ export class UnbrowserClient {
     };
   }> {
     return this.request('GET', '/v1/skill-packs/stats');
+  }
+
+  /**
+   * Discover API endpoints via fuzzing (FUZZ-001)
+   *
+   * Proactively discovers API endpoints by testing common path patterns.
+   * Once discovered, APIs are cached and used directly for future requests,
+   * bypassing browser rendering for 10x speedup.
+   *
+   * @param domain - Domain to discover APIs on (e.g., 'api.example.com')
+   * @param options - Discovery options (paths, methods, timeouts)
+   * @returns Discovery results with found endpoints and statistics
+   *
+   * @example
+   * ```typescript
+   * // Conservative discovery (GET only, safe)
+   * const result = await client.discoverApis('api.github.com', {
+   *   methods: ['GET'],
+   *   learnPatterns: true,
+   * });
+   *
+   * console.log(`Discovered ${result.discovered.length} endpoints`);
+   * console.log(`Learned ${result.stats.patternsLearned} patterns`);
+   *
+   * // Now browse() will use discovered APIs directly
+   * const data = await client.browse('https://api.github.com/users/octocat');
+   * ```
+   *
+   * @example
+   * ```typescript
+   * // Aggressive discovery (all methods)
+   * const result = await client.discoverApis('api.example.com', {
+   *   methods: ['GET', 'POST', 'PUT', 'DELETE'],
+   *   paths: ['/api', '/api/v1', '/graphql'],
+   *   probeTimeout: 5000,
+   *   maxDuration: 60000,
+   * });
+   * ```
+   */
+  async discoverApis(domain: string, options?: FuzzDiscoveryOptions): Promise<FuzzDiscoveryResult> {
+    return this.request<FuzzDiscoveryResult>('POST', '/v1/discover/fuzz', {
+      domain,
+      options,
+    });
   }
 }
 
