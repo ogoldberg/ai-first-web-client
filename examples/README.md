@@ -97,6 +97,7 @@ console.log(result.content.markdown);
 | [Content Validation Suite](./content-validation-suite.ts) | **QA Use Case**: Content validation tests | Verification Checks, Vitest Integration, Confidence Thresholds |
 | [Multi-Site Regression](./multi-site-regression.ts) | **QA Use Case**: Cross-site pattern testing | Baseline Comparison, Regression Detection, Pattern Reuse |
 | [Workflow Recording/Replay](./workflow-recording-replay.ts) | **QA Use Case**: Record and replay browsing sessions | Workflow Recording, Variable Substitution, Test Automation |
+| [API Change Detection](./api-change-detection.ts) | **QA Use Case**: Detect API response changes | Schema Extraction, Breaking Changes, Baseline Comparison |
 
 ## Key Features Demonstrated
 
