@@ -605,7 +605,7 @@ Browser: { success: true, ... }  // Learns this for future
 | ID | Task | Effort | Category | Notes |
 |----|------|--------|----------|-------|
 | D-005 | Configuration file support | M | Debt | DONE | .llmbrowserrc/.unbrowserrc config file support with Zod validation. Env vars take precedence (PR #171) |
-| D-006 | Dependency injection refactor | L | Debt | Better testability (IN PROGRESS) |
+| D-006 | Dependency injection refactor | L | Debt | DONE | ServiceContainer with singleton/transient lifetimes, factory-based lazy init, test isolation via resetInstances() (PR #176) |
 | D-007 | Improve URL pattern matching | M | Debt | DONE | Centralized url-pattern-matcher.ts with regex, glob, substring matching, caching, variable extraction (PR #175) |
 | D-008 | Session encryption improvement | M | Debt | N/A - Superseded by S-003 (AES-256-GCM encryption with PBKDF2 key derivation) |
 | D-009 | Type-safe configuration | S | Debt | Validate config at runtime (DONE - PR #157) |
