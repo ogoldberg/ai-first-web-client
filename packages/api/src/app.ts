@@ -20,6 +20,7 @@ import workflows from './routes/workflows.js';
 import { billing } from './routes/billing.js';
 import { docs } from './routes/docs.js';
 import { pricingCalculator } from './routes/pricing-calculator.js';
+import { skillPacks } from './routes/skill-packs.js';
 import { requestLoggerMiddleware } from './middleware/request-logger.js';
 
 // Create the main Hono app
@@ -103,6 +104,7 @@ app.route('/v1/admin/dashboard', dashboard); // API-008: Admin dashboard API
 app.route('/admin', adminUI); // API-008: Admin dashboard UI
 app.route('/inspect', inspectionUI); // F-013: Human-in-the-loop inspection UI
 app.route('/v1/workflows', workflows); // COMP-009: Workflow recording
+app.route('/v1/skill-packs', skillPacks); // PACK-001: Skill pack distribution
 app.route('/v1/billing', billing); // API-007: Stripe billing integration
 app.route('/pricing', pricingCalculator); // API-016: Pricing calculator
 
@@ -122,6 +124,12 @@ app.get('/', (c) => {
       fetch: '/v1/fetch',
       intelligence: '/v1/domains/:domain/intelligence',
       usage: '/v1/usage',
+      skillPacks: '/v1/skill-packs',
+      exportSkillPack: '/v1/skill-packs/export',
+      importSkillPack: '/v1/skill-packs/import',
+      skillPackLibrary: '/v1/skill-packs/library',
+      installSkillPack: '/v1/skill-packs/install',
+      skillPackStats: '/v1/skill-packs/stats',
       adminLogs: '/v1/admin/logs',
       adminDashboard: '/admin',
       adminDashboardAPI: '/v1/admin/dashboard',
