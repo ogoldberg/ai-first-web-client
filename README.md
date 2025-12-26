@@ -133,6 +133,42 @@ Skills are matched using neural embeddings (when `@xenova/transformers` is insta
 - Automatic domain similarity detection
 - Cross-domain pattern transfer
 
+### New in v0.6: Enhanced Features
+
+**Playwright Debug Mode** - Visual debugging for teaching and troubleshooting:
+```typescript
+const result = await browser.browse('https://example.com', {
+  debug: {
+    visible: true,         // Show browser window
+    slowMotion: 150,       // 150ms delay between actions
+    screenshots: true,     // Capture screenshots
+    consoleLogs: true,     // Collect console output
+  }
+});
+// Access debug data: result.debug.screenshots, result.debug.consoleLogs
+```
+
+**API Fuzzing Discovery** - Proactively discover API endpoints:
+```typescript
+import { ApiDiscoveryOrchestrator } from 'llm-browser/discovery';
+
+const orchestrator = new ApiDiscoveryOrchestrator(learningEngine);
+const result = await orchestrator.discoverViaFuzzing('https://api.example.com', {
+  methods: ['GET', 'POST'],
+  learnPatterns: true,  // Cache discovered patterns
+});
+
+// Future browse() calls use discovered APIs directly (~10x faster)
+```
+
+**Example Workflows** - See `examples/` directory for complete demonstrations:
+- Article extraction with metadata
+- GitHub repository intelligence
+- E-commerce product monitoring
+- Multi-page company research
+- Visual debugging with Playwright
+- API discovery strategies
+
 ## MCP Tools
 
 The LLM Browser exposes **5 core tools** by default, designed to minimize cognitive load:

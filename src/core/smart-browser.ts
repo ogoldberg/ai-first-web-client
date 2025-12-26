@@ -158,6 +158,17 @@ export interface SmartBrowseOptions extends BrowseOptions {
   // 'any': Use cache if available and not stale, otherwise fetch (default)
   freshnessRequirement?: FreshnessRequirement;
 
+  // === Playwright Debug Mode (PLAY-001) ===
+
+  // Enable visual debugging for Playwright tier
+  // Useful for teaching, debugging, and understanding automation
+  debug?: {
+    visible?: boolean;        // Show browser window (headless: false)
+    slowMotion?: number;      // ms delay between actions (default: 100)
+    screenshots?: boolean;    // Capture screenshots after actions
+    consoleLogs?: boolean;    // Collect browser console output
+  };
+
   // === Debug Recording (O-005) ===
 
   // Record debug trace for this operation
@@ -420,6 +431,14 @@ export class SmartBrowser {
     const enableLearning = options.enableLearning !== false;
     const useSkills = options.useSkills !== false;
     const recordTrajectory = options.recordTrajectory !== false;
+
+    // Progressive loading (PROG-001): Lazy load domain-specific skills
+    if (useSkills) {
+      const loadedCount = await this.proceduralMemory.loadSkillsForDomain(domain);
+      if (loadedCount > 0) {
+        logger.smartBrowser.debug(`Lazy loaded ${loadedCount} skills for domain: ${domain}`);
+      }
+    }
 
     // Emit initializing progress
     this.emitProgress(onProgress, 'initializing', `Starting browse for ${domain}`, url, startTime);
@@ -1138,6 +1157,8 @@ export class SmartBrowser {
         maxLatencyMs: options.maxLatencyMs,
         maxCostTier: options.maxCostTier,
         freshnessRequirement: options.freshnessRequirement,
+        // Debug mode (PLAY-001)
+        debug: options.debug,
       });
 
       // If it fell back to playwright and returned a page, we should use the full Playwright path

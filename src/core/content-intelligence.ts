@@ -86,6 +86,37 @@ import {
 const require = createRequire(import.meta.url);
 
 // Types
+export interface ArticleMetadata {
+  isArticle: boolean;
+  author?: string;
+  publishDate?: Date;
+  modifiedDate?: Date;
+  tags?: string[];
+  category?: string;
+  mainContent?: string;
+  wordCount?: number;
+  readingTimeMinutes?: number;
+}
+
+export interface PlaywrightDebugData {
+  screenshots: Array<{
+    action: string;
+    timestamp: number;
+    image: string; // Base64
+  }>;
+  consoleLogs: Array<{
+    type: 'log' | 'warn' | 'error' | 'info' | 'debug';
+    message: string;
+    timestamp: number;
+  }>;
+  actionTrace: Array<{
+    action: string;
+    duration: number;
+    success: boolean;
+    error?: string;
+  }>;
+}
+
 export interface ContentResult {
   // The extracted content
   content: {
@@ -94,6 +125,12 @@ export interface ContentResult {
     markdown: string;
     structured?: Record<string, unknown>;
   };
+
+  // Article-specific metadata (ART-001)
+  article?: ArticleMetadata;
+
+  // Debug data from Playwright tier (PLAY-001)
+  debug?: PlaywrightDebugData;
 
   // Metadata about extraction
   meta: {
@@ -159,6 +196,13 @@ export interface ContentIntelligenceOptions {
   allowBrowser?: boolean;
   // Callback when API extraction succeeds (for pattern learning)
   onExtractionSuccess?: ApiExtractionListener;
+  // Debug mode for Playwright tier (PLAY-001)
+  debug?: {
+    visible?: boolean;
+    slowMotion?: number;
+    screenshots?: boolean;
+    consoleLogs?: boolean;
+  };
 }
 
 // Realistic browser User-Agent to avoid bot detection
@@ -1649,8 +1693,292 @@ export class ContentIntelligence {
     return null;
   }
 
-  private parseStaticHTML(html: string, url: string): { title: string; text: string; markdown: string } {
+  // ============================================
+  // Article Detection (ART-001)
+  // ============================================
+
+  /**
+   * Detect if page is an article and extract article-specific metadata
+   */
+  private detectArticle($: cheerio.CheerioAPI, url: string): ArticleMetadata {
+    const indicators = {
+      hasArticleTag: $('article').length > 0,
+      hasArticleSchema: this.hasSchemaType($, 'Article') || this.hasSchemaType($, 'NewsArticle') || this.hasSchemaType($, 'BlogPosting'),
+      hasOgArticle: $('meta[property="og:type"]').attr('content') === 'article',
+      hasAuthor: $('meta[name="author"]').length > 0 || $('.author, .byline, [rel="author"]').length > 0,
+      hasPublishDate: this.findPublishDate($) !== null,
+      hasArticleStructure: this.detectArticleStructure($),
+    };
+
+    const score = Object.values(indicators).filter(Boolean).length;
+    const isArticle = score >= 3; // At least 3 indicators must match
+
+    if (!isArticle) {
+      return { isArticle: false };
+    }
+
+    const wordCount = this.countWords($);
+    const readingTime = Math.ceil(wordCount / 200); // Average reading speed: 200 words/minute
+
+    return {
+      isArticle: true,
+      author: this.extractAuthor($),
+      publishDate: this.findPublishDate($) || undefined,
+      modifiedDate: this.findModifiedDate($) || undefined,
+      tags: this.extractTags($),
+      category: this.extractCategory($),
+      mainContent: this.extractMainArticleContent($),
+      wordCount,
+      readingTimeMinutes: readingTime,
+    };
+  }
+
+  /**
+   * Check if page has specific schema.org type
+   */
+  private hasSchemaType($: cheerio.CheerioAPI, type: string): boolean {
+    const jsonLdScripts = $('script[type="application/ld+json"]');
+    for (let i = 0; i < jsonLdScripts.length; i++) {
+      try {
+        const data = JSON.parse($(jsonLdScripts[i]).html() || '');
+        const checkType = (obj: any): boolean => {
+          if (!obj) return false;
+          if (obj['@type'] === type) return true;
+          if (Array.isArray(obj['@type']) && obj['@type'].includes(type)) return true;
+          if (obj['@graph'] && Array.isArray(obj['@graph'])) {
+            return obj['@graph'].some((item: any) => checkType(item));
+          }
+          return false;
+        };
+        if (checkType(data)) return true;
+      } catch {
+        // Invalid JSON-LD, skip
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Detect article structure heuristics
+   */
+  private detectArticleStructure($: cheerio.CheerioAPI): boolean {
+    // Articles typically have:
+    // - Long-form text (>500 words)
+    // - Multiple paragraphs (<p> tags)
+    // - Headings (<h1>, <h2>, etc.)
+    // - Low link density (< 0.3 links per 100 words)
+
+    const paragraphs = $('p').length;
+    const headings = $('h1, h2, h3, h4, h5, h6').length;
+    const wordCount = this.countWords($);
+    const linkCount = $('a').length;
+    const linkDensity = wordCount > 0 ? linkCount / (wordCount / 100) : 0;
+
+    return (
+      wordCount > 500 &&
+      paragraphs > 5 &&
+      headings >= 2 &&
+      linkDensity < 0.5
+    );
+  }
+
+  /**
+   * Extract article author
+   */
+  private extractAuthor($: cheerio.CheerioAPI): string | undefined {
+    // Try meta tags first
+    const metaAuthor = $('meta[name="author"]').attr('content') ||
+                      $('meta[property="article:author"]').attr('content') ||
+                      $('meta[name="byl"]').attr('content');
+    if (metaAuthor) return metaAuthor.trim();
+
+    // Try common author selectors
+    const selectors = [
+      '.author-name',
+      '.author',
+      '.byline',
+      '[rel="author"]',
+      '[itemprop="author"]',
+      '.post-author',
+      '.entry-author',
+    ];
+
+    for (const selector of selectors) {
+      const author = $(selector).first().text().trim();
+      if (author && author.length > 0 && author.length < 100) {
+        return author.replace(/^(by|written by|author:|posted by)\s*/i, '').trim();
+      }
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Find publish date
+   */
+  private findPublishDate($: cheerio.CheerioAPI): Date | null {
+    // Try meta tags first
+    const metaDate = $('meta[property="article:published_time"]').attr('content') ||
+                    $('meta[name="publish-date"]').attr('content') ||
+                    $('meta[name="date"]').attr('content') ||
+                    $('meta[property="og:published_time"]').attr('content') ||
+                    $('meta[itemprop="datePublished"]').attr('content');
+
+    if (metaDate) {
+      const date = new Date(metaDate);
+      if (!isNaN(date.getTime())) return date;
+    }
+
+    // Try time tags
+    const timeTag = $('time[datetime]').first().attr('datetime') ||
+                   $('time[pubdate]').first().attr('datetime') ||
+                   $('[itemprop="datePublished"]').first().attr('content');
+
+    if (timeTag) {
+      const date = new Date(timeTag);
+      if (!isNaN(date.getTime())) return date;
+    }
+
+    return null;
+  }
+
+  /**
+   * Find modified date
+   */
+  private findModifiedDate($: cheerio.CheerioAPI): Date | null {
+    const metaDate = $('meta[property="article:modified_time"]').attr('content') ||
+                    $('meta[name="last-modified"]').attr('content') ||
+                    $('meta[property="og:updated_time"]').attr('content') ||
+                    $('meta[itemprop="dateModified"]').attr('content');
+
+    if (metaDate) {
+      const date = new Date(metaDate);
+      if (!isNaN(date.getTime())) return date;
+    }
+
+    return null;
+  }
+
+  /**
+   * Extract article tags
+   */
+  private extractTags($: cheerio.CheerioAPI): string[] {
+    const tags = new Set<string>();
+
+    // Meta keywords
+    const metaKeywords = $('meta[name="keywords"]').attr('content');
+    if (metaKeywords) {
+      metaKeywords.split(',').forEach((tag: string) => tags.add(tag.trim()));
+    }
+
+    // Article tags meta
+    $('meta[property="article:tag"]').each((_, el) => {
+      const tag = $(el).attr('content');
+      if (tag) tags.add(tag.trim());
+    });
+
+    // Common tag selectors
+    $('.tags a, .tag, [rel="tag"], .post-tags a').each((_, el) => {
+      const tag = $(el).text().trim();
+      if (tag && tag.length > 0 && tag.length < 50) {
+        tags.add(tag);
+      }
+    });
+
+    return Array.from(tags).filter(tag => tag.length > 0);
+  }
+
+  /**
+   * Extract article category
+   */
+  private extractCategory($: cheerio.CheerioAPI): string | undefined {
+    const category = $('meta[property="article:section"]').attr('content') ||
+                    $('.category').first().text().trim() ||
+                    $('.post-category').first().text().trim();
+
+    return category || undefined;
+  }
+
+  /**
+   * Extract main article content (cleaned)
+   */
+  private extractMainArticleContent($: cheerio.CheerioAPI): string {
+    // Priority order for article content:
+    // 1. <article> tag
+    // 2. [itemprop="articleBody"]
+    // 3. Common CMS classes
+    // 4. Largest content block
+
+    const selectors = [
+      'article',
+      '[itemprop="articleBody"]',
+      '.post-content',
+      '.article-content',
+      '.entry-content',
+      '.article-body',
+      'main article',
+      '.content article',
+    ];
+
+    for (const selector of selectors) {
+      const content = $(selector).first();
+      if (content.length && this.getTextLength(content) > 200) {
+        // Clone to avoid modifying original
+        const cleaned = content.clone();
+        // Remove navigation, ads, related posts, comments
+        cleaned.find('nav, aside, .related-posts, .advertisement, .comments, .sidebar, .social-share').remove();
+        const markdown = this.turndown.turndown(cleaned.html() || '');
+        if (markdown.length > 200) {
+          return markdown;
+        }
+      }
+    }
+
+    // Fallback: Find largest content block
+    return this.findLargestContentBlock($);
+  }
+
+  /**
+   * Get text length of an element
+   */
+  private getTextLength(element: ReturnType<cheerio.CheerioAPI>): number {
+    return element.text().trim().length;
+  }
+
+  /**
+   * Find the largest content block (fallback)
+   */
+  private findLargestContentBlock($: cheerio.CheerioAPI): string {
+    let largest = '';
+    let maxLength = 0;
+
+    $('div, section, main').each((_, el) => {
+      const element = $(el);
+      const text = element.text().trim();
+      if (text.length > maxLength) {
+        maxLength = text.length;
+        const html = element.html() || '';
+        largest = this.turndown.turndown(html);
+      }
+    });
+
+    return largest;
+  }
+
+  /**
+   * Count words in the entire page
+   */
+  private countWords($: cheerio.CheerioAPI): number {
+    const text = $('body').text();
+    const words = text.trim().split(/\s+/);
+    return words.filter((word: string) => word.length > 0).length;
+  }
+
+  private parseStaticHTML(html: string, url: string): { title: string; text: string; markdown: string; article?: ArticleMetadata } {
     const $ = cheerio.load(html);
+
+    // Detect if this is an article (ART-001)
+    const articleMetadata = this.detectArticle($, url);
 
     // Remove unwanted elements
     $('script, style, noscript, iframe, svg, nav, footer, aside, header').remove();
@@ -1662,8 +1990,20 @@ export class ContentIntelligence {
                   $('h1').first().text() ||
                   $('meta[property="og:title"]').attr('content') || '';
 
-    // Find main content
-    let mainContent = $('main, article, [role="main"], .content, #content, .post, .article').first();
+    // Find main content (use article detection if available)
+    let mainContent;
+    if (articleMetadata.isArticle && articleMetadata.mainContent) {
+      // For articles, we already extracted clean content
+      return {
+        title: title.trim(),
+        text: articleMetadata.mainContent.replace(/\s+/g, ' ').trim(),
+        markdown: articleMetadata.mainContent,
+        article: articleMetadata,
+      };
+    }
+
+    // Non-article content extraction
+    mainContent = $('main, article, [role="main"], .content, #content, .post, .article').first();
     if (mainContent.length === 0) {
       mainContent = $('body');
     }
@@ -1679,6 +2019,7 @@ export class ContentIntelligence {
       title: title.trim(),
       text,
       markdown,
+      article: articleMetadata.isArticle ? articleMetadata : undefined,
     };
   }
 
@@ -1699,17 +2040,62 @@ export class ContentIntelligence {
     }
 
     let browser;
+    const debugData: PlaywrightDebugData | undefined = opts.debug ? {
+      screenshots: [],
+      consoleLogs: [],
+      actionTrace: [],
+    } : undefined;
+
     try {
-      browser = await pw.chromium.launch({ headless: true });
+      // Launch browser with debug options (PLAY-001)
+      const launchOptions: any = {
+        headless: opts.debug?.visible ? false : true,
+      };
+      if (opts.debug?.slowMotion) {
+        launchOptions.slowMo = opts.debug.slowMotion;
+      }
+
+      browser = await pw.chromium.launch(launchOptions);
       const context = await browser.newContext({
         userAgent: opts.userAgent || DEFAULT_OPTIONS.userAgent,
       });
       const page = await context.newPage();
 
+      // Collect console logs if debug mode enabled
+      if (opts.debug?.consoleLogs && debugData) {
+        page.on('console', (msg) => {
+          debugData.consoleLogs.push({
+            type: msg.type() as any,
+            message: msg.text(),
+            timestamp: Date.now(),
+          });
+        });
+      }
+
+      // Navigate and capture screenshot if debug mode
+      const navStart = Date.now();
       await page.goto(url, {
         waitUntil: 'networkidle',
         timeout: opts.timeout || TIMEOUTS.PAGE_LOAD,
       });
+      const navDuration = Date.now() - navStart;
+
+      if (debugData) {
+        debugData.actionTrace.push({
+          action: `Navigate to ${url}`,
+          duration: navDuration,
+          success: true,
+        });
+
+        if (opts.debug?.screenshots) {
+          const screenshotBuffer = await page.screenshot();
+          debugData.screenshots.push({
+            action: 'navigate',
+            timestamp: Date.now(),
+            image: screenshotBuffer.toString('base64'),
+          });
+        }
+      }
 
       const html = await page.content();
       const finalUrl = page.url();
@@ -1719,7 +2105,11 @@ export class ContentIntelligence {
       const content = this.parseStaticHTML(html, finalUrl);
 
       if (content.text.length > (opts.minContentLength || 100)) {
-        return this.buildResult(url, finalUrl, 'browser:playwright', content, 'high');
+        const result = this.buildResult(url, finalUrl, 'browser:playwright', content, 'high');
+        if (debugData) {
+          result.debug = debugData;
+        }
+        return result;
       }
 
       return null;
@@ -1727,6 +2117,17 @@ export class ContentIntelligence {
       if (browser) {
         await browser.close().catch(() => {});
       }
+
+      // Log error to debug trace if debug mode
+      if (debugData) {
+        debugData.actionTrace.push({
+          action: 'Playwright execution',
+          duration: 0,
+          success: false,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+
       throw error;
     }
   }
@@ -1812,7 +2213,7 @@ export class ContentIntelligence {
     originalUrl: string,
     finalUrl: string,
     strategy: ExtractionStrategy,
-    content: { title: string; text: string; structured?: unknown; markdown?: string },
+    content: { title: string; text: string; structured?: unknown; markdown?: string; article?: ArticleMetadata },
     confidence: 'high' | 'medium' | 'low'
   ): ContentResult {
     return {
@@ -1822,6 +2223,7 @@ export class ContentIntelligence {
         markdown: content.markdown || this.turndown.turndown(content.text),
         structured: content.structured as Record<string, unknown> | undefined,
       },
+      article: content.article,
       meta: {
         url: originalUrl,
         finalUrl,

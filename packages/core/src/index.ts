@@ -52,4 +52,17 @@ export {
   type TimeEstimate,
   type ConfidenceLevel,
   type ConfidenceFactors,
+
+  // Skill Pack Types (PACK-001)
+  type SkillVertical,
+  type SkillTier,
+  type BrowsingSkill,
+  type AntiPattern,
+  type SkillWorkflow,
+  type SkillPackMetadata,
+  type SkillPack,
+  type SkillExportOptions,
+  type SkillConflictResolution,
+  type SkillImportOptions,
+  type SkillImportResult,
 } from './http-client.js';

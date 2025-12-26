@@ -3,6 +3,7 @@ node_modules/
 
 # Build output
 dist/
+*.tsbuildinfo
 
 # Compiled output in source directories (should only be in dist/)
 src/**/*.js
