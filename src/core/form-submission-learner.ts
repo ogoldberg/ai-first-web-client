@@ -400,10 +400,19 @@ export class FormSubmissionLearner {
 
         // Use appropriate submission method based on pattern type
         if (pattern.patternType === 'websocket') {
-          result = await this.submitViaWebSocket(data, pattern);
-          result.responseUrl = pattern.websocketPattern?.wsUrl || pattern.apiEndpoint;
+          const wsResult = await this.submitViaWebSocket(data, pattern);
+          result = {
+            success: wsResult.success,
+            data: wsResult.data,
+            responseUrl: pattern.websocketPattern?.wsUrl || pattern.apiEndpoint,
+          };
         } else {
-          result = await this.submitViaApi(data, pattern, options);
+          const apiResult = await this.submitViaApi(data, pattern, options);
+          result = {
+            success: true, // If we got here without throwing, it succeeded
+            data: apiResult.data,
+            responseUrl: apiResult.responseUrl,
+          };
         }
 
         // Update pattern metrics
@@ -719,21 +728,25 @@ export class FormSubmissionLearner {
         let fileBlob: Blob;
 
         // Convert file data to Blob
+        // Note: Node.js Buffers always use ArrayBuffer (not SharedArrayBuffer)
         if (upload.buffer) {
-          // File provided as Buffer
-          fileBlob = new Blob([upload.buffer], {
+          // File provided as Buffer - copy to new ArrayBuffer for Blob compatibility
+          const arrayBuffer = (upload.buffer.buffer as ArrayBuffer).slice(upload.buffer.byteOffset, upload.buffer.byteOffset + upload.buffer.byteLength);
+          fileBlob = new Blob([arrayBuffer], {
             type: upload.mimeType || 'application/octet-stream',
           });
         } else if (upload.base64) {
           // File provided as base64 string
           const binaryData = Buffer.from(upload.base64, 'base64');
-          fileBlob = new Blob([binaryData], {
+          const arrayBuffer = (binaryData.buffer as ArrayBuffer).slice(binaryData.byteOffset, binaryData.byteOffset + binaryData.byteLength);
+          fileBlob = new Blob([arrayBuffer], {
             type: upload.mimeType || 'application/octet-stream',
           });
         } else if (upload.filePath) {
           // File provided as filesystem path - read it
           const fileBuffer = await readFile(upload.filePath);
-          fileBlob = new Blob([fileBuffer], {
+          const arrayBuffer = (fileBuffer.buffer as ArrayBuffer).slice(fileBuffer.byteOffset, fileBuffer.byteOffset + fileBuffer.byteLength);
+          fileBlob = new Blob([arrayBuffer], {
             type: upload.mimeType || 'application/octet-stream',
           });
         } else {
@@ -1531,7 +1544,8 @@ export class FormSubmissionLearner {
       // Helper to generate CSS selector
       function getSelector(el: Element): string {
         if (el.id) return `#${el.id}`;
-        if (el.name) return `[name="${el.name}"]`;
+        const name = el.getAttribute('name');
+        if (name) return `[name="${name}"]`;
         return el.tagName.toLowerCase();
       }
     }, formSelector);
@@ -2374,7 +2388,7 @@ export class FormSubmissionLearner {
     let responseType: 'redirect' | 'json' | 'flight-stream' = 'json';
     if (request.status >= 300 && request.status < 400) {
       responseType = 'redirect';
-    } else if (request.responseHeaders?.['content-type']?.includes('text/x-component')) {
+    } else if (request.headers?.['content-type']?.includes('text/x-component')) {
       responseType = 'flight-stream'; // React Server Components streaming
     }
 
@@ -2393,7 +2407,7 @@ export class FormSubmissionLearner {
         isStableId: false, // Assume non-stable for Next.js (changes per build)
         fieldMapping,
         responseType,
-        redirectPattern: responseType === 'redirect' ? request.responseHeaders?.['location'] : undefined,
+        redirectPattern: responseType === 'redirect' ? request.headers?.['location'] : undefined,
       },
       fieldMapping,
       fileFields: form.fileFields && form.fileFields.length > 0 ? form.fileFields : undefined,
