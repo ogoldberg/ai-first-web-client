@@ -1,10 +1,18 @@
 # Unbrowser - Project Status
 
-**Last Updated:** 2025-12-25
+**Last Updated:** 2025-12-26
 **Version:** 0.5.0
 **Current Phase:** Production Readiness (Phase 2)
 **Total Code:** ~20,000 lines TypeScript
-**Tests:** 2340+ passing + 44 live tests
+**Tests:** 3418+ passing + 44 live tests
+
+---
+
+## In Progress: QA Examples (2025-12-26)
+
+Working on creating practical QA examples to help users understand how to use Unbrowser for testing.
+
+**Current Task:** QA-001 - Create E2E API testing example
 
 ---
 
