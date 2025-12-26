@@ -84,6 +84,12 @@ import {
 } from '../utils/skill-prompt-analytics.js';
 import { FeedbackService, type FeedbackServiceConfig } from './feedback-service.js';
 import { WebhookService, type WebhookServiceConfig } from './webhook-service.js';
+import {
+  CaptchaHandler,
+  createCaptchaHandler,
+  type ChallengeCallback,
+  type CaptchaHandlingResult,
+} from './captcha-handler.js';
 
 // Procedural memory thresholds
 const SKILL_APPLICATION_THRESHOLD = 0.8;  // Minimum similarity to auto-apply a skill
@@ -197,6 +203,25 @@ export interface SmartBrowseOptions extends BrowseOptions {
   // Workflow step number within the skill prompt (1-based)
   // Helps track multi-step skill workflows
   skillPromptStep?: number;
+
+  // === CAPTCHA Handling (GAP-007) ===
+
+  // Callback when interactive CAPTCHA is detected
+  // Return true if user solved the challenge, false to abort
+  // The callback receives challenge info including elements and suggested actions
+  onChallengeDetected?: ChallengeCallback;
+
+  // Attempt to auto-solve simple challenges (checkboxes, etc.)
+  // Default: true
+  autoSolveCaptcha?: boolean;
+
+  // Maximum time to wait for user to solve CAPTCHA (ms)
+  // Default: 30000 (30 seconds)
+  captchaSolveTimeout?: number;
+
+  // Skip CAPTCHA handling entirely
+  // Useful when you know the page won't have CAPTCHAs or want to handle them yourself
+  skipCaptchaHandling?: boolean;
 }
 
 /**
@@ -288,6 +313,22 @@ export interface SmartBrowseResult extends BrowseResult {
       appliedRetryConfig: import('../types/index.js').RetryConfig;
       // Whether the config was learned for future use
       learnedForFuture: boolean;
+    };
+
+    // CAPTCHA handling result (GAP-007)
+    captchaHandling?: {
+      // Whether a CAPTCHA was detected
+      detected: boolean;
+      // Type of CAPTCHA if detected
+      challengeType?: import('../types/index.js').BotDetectionType;
+      // Whether the CAPTCHA was resolved
+      resolved: boolean;
+      // How it was resolved
+      resolutionMethod?: 'auto_wait' | 'auto_solve' | 'user_solved' | 'timeout' | 'skipped';
+      // Time spent handling (ms)
+      durationMs: number;
+      // Error if not resolved
+      error?: string;
     };
   };
 
@@ -551,6 +592,7 @@ export class SmartBrowser {
       page: Page;
       network: BrowseResult['network'];
       console: BrowseResult['console'];
+      captchaResult: CaptchaHandlingResult;
     }> => {
       // Apply rate limiting
       if (options.useRateLimiting !== false) {
@@ -595,10 +637,10 @@ export class SmartBrowser {
         await this.scrollToLoadContent(result.page);
       }
 
-      // Check for and wait through bot challenge pages
-      await this.waitForBotChallenge(result.page, domain);
+      // Check for and wait through bot challenge pages (GAP-007)
+      const captchaResult = await this.waitForBotChallenge(result.page, domain, options);
 
-      return result;
+      return { ...result, captchaResult };
     };
 
     // Execute with retry and failure learning
@@ -656,7 +698,7 @@ export class SmartBrowser {
       throw error;
     }
 
-    const { page, network, console: consoleMessages } = result;
+    const { page, network, console: consoleMessages, captchaResult } = result;
 
     // Get initial content (may be challenge page)
     let html = await page.content();
@@ -1021,6 +1063,18 @@ export class SmartBrowser {
       finalUrl,
       playwrightTierAttempts
     );
+
+    // Add CAPTCHA handling result to learning (GAP-007)
+    if (captchaResult) {
+      learning.captchaHandling = {
+        detected: captchaResult.detected,
+        challengeType: captchaResult.challengeType,
+        resolved: captchaResult.resolved,
+        resolutionMethod: captchaResult.resolutionMethod,
+        durationMs: captchaResult.durationMs,
+        error: captchaResult.error,
+      };
+    }
 
     const browseResult: SmartBrowseResult = {
       url,
@@ -1713,72 +1767,41 @@ export class SmartBrowser {
 
   /**
    * Detect and wait through bot challenge pages (Cloudflare, Voight-Kampff, etc.)
+   * Enhanced with GAP-007: CAPTCHA detection and user callback support
    */
-  private async waitForBotChallenge(page: Page, domain: string): Promise<boolean> {
-    // Common indicators of bot challenge pages
-    const challengeIndicators = [
-      'Checking Your Browser',
-      'Please wait',
-      'Voight-Kampff',
-      'Just a moment',
-      'DDoS protection',
-      'Cloudflare',
-      'Attention Required',
-      'Access Denied',
-      'Verifying you are human',
-      'Please verify you are a human',
-      'Security check',
-      'challenge-running',
-      'cf-browser-verification',
-    ];
+  private async waitForBotChallenge(
+    page: Page,
+    domain: string,
+    options?: SmartBrowseOptions
+  ): Promise<CaptchaHandlingResult> {
+    // Create CAPTCHA handler with options from SmartBrowseOptions
+    const captchaHandler = createCaptchaHandler({
+      autoSolve: options?.autoSolveCaptcha ?? true,
+      userSolveTimeout: options?.captchaSolveTimeout,
+      onChallengeDetected: options?.onChallengeDetected,
+      skipCaptchaHandling: options?.skipCaptchaHandling,
+    });
 
-    // Check if we're on a challenge page
-    const pageContent = await page.content();
-    const pageText = await page.evaluate(() => document.body?.innerText || '');
+    // Use the new CAPTCHA handler which integrates challenge-detector
+    const result = await captchaHandler.handleChallenge(page, domain);
 
-    const isChallengePage = challengeIndicators.some(indicator =>
-      pageContent.toLowerCase().includes(indicator.toLowerCase()) ||
-      pageText.toLowerCase().includes(indicator.toLowerCase())
-    );
-
-    if (!isChallengePage) {
-      return false;
-    }
-
-    logger.smartBrowser.info(`Bot challenge detected on ${domain}, waiting for completion...`);
-
-    // Wait for the challenge to complete
-    const maxWaitTime = TIMEOUTS.BOT_CHALLENGE_MAX;
-    const checkInterval = TIMEOUTS.BOT_CHECK_INTERVAL;
-    const startTime = Date.now();
-
-    while (Date.now() - startTime < maxWaitTime) {
-      await page.waitForTimeout(checkInterval);
-
-      // Check if challenge is still present
-      const currentText = await page.evaluate(() => document.body?.innerText || '');
-      const stillChallenging = challengeIndicators.some(indicator =>
-        currentText.toLowerCase().includes(indicator.toLowerCase())
-      );
-
-      if (!stillChallenging) {
-        logger.smartBrowser.info(`Bot challenge completed on ${domain}`);
-        // Wait a bit more for page to fully load after challenge
-        await page.waitForTimeout(TIMEOUTS.CLOUDFLARE_WAIT);
-        return true;
-      }
-
-      // Check if URL changed (redirect after challenge)
-      const currentUrl = page.url();
-      if (!currentUrl.includes(domain)) {
-        logger.smartBrowser.info(`Redirected after challenge to ${currentUrl}`);
-        await page.waitForTimeout(TIMEOUTS.CAPTCHA_WAIT);
-        return true;
+    // Log result for debugging
+    if (result.detected) {
+      if (result.resolved) {
+        logger.smartBrowser.info(`Bot challenge resolved on ${domain}`, {
+          method: result.resolutionMethod,
+          type: result.challengeType,
+          durationMs: result.durationMs,
+        });
+      } else {
+        logger.smartBrowser.warn(`Bot challenge not resolved on ${domain}`, {
+          type: result.challengeType,
+          error: result.error,
+        });
       }
     }
 
-    logger.smartBrowser.warn(`Bot challenge timeout on ${domain} - may need session cookies`);
-    return false;
+    return result;
   }
 
   /**
