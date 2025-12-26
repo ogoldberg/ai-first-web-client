@@ -288,13 +288,23 @@ export class FormSubmissionLearner {
     // Try learned pattern first
     const pattern = this.findMatchingPattern(data.url, data.formSelector);
     if (pattern) {
-      logger.formLearner.info('Found learned form pattern, attempting direct API submission', {
+      const submissionMethod = pattern.patternType === 'websocket' ? 'WebSocket' : 'API';
+      logger.formLearner.info(`Found learned form pattern, attempting direct ${submissionMethod} submission`, {
         patternId: pattern.id,
+        patternType: pattern.patternType,
         endpoint: pattern.apiEndpoint,
       });
 
       try {
-        const result = await this.submitViaApi(data, pattern, options);
+        let result: { responseUrl?: string; data?: any; success: boolean };
+
+        // Use appropriate submission method based on pattern type
+        if (pattern.patternType === 'websocket') {
+          result = await this.submitViaWebSocket(data, pattern);
+          result.responseUrl = pattern.websocketPattern?.wsUrl || pattern.apiEndpoint;
+        } else {
+          result = await this.submitViaApi(data, pattern, options);
+        }
 
         // Update pattern metrics
         pattern.timesUsed++;
@@ -303,15 +313,16 @@ export class FormSubmissionLearner {
 
         return {
           success: true,
-          method: 'api',
+          method: 'api', // Keep as 'api' for backward compatibility (includes WebSocket)
           responseUrl: result.responseUrl,
           responseData: result.data,
           duration: Date.now() - startTime,
           learned: false,
         };
       } catch (error) {
-        logger.formLearner.warn('Direct API submission failed, falling back to browser', {
+        logger.formLearner.warn(`Direct ${submissionMethod} submission failed, falling back to browser`, {
           patternId: pattern.id,
+          patternType: pattern.patternType,
           error: error instanceof Error ? error.message : String(error),
         });
 
@@ -1124,6 +1135,9 @@ export class FormSubmissionLearner {
   ): Promise<FormSubmissionResult> {
     const networkRequests: NetworkRequest[] = [];
 
+    // Enable WebSocket capture
+    const wsMessagesPromise = this.enableWebSocketCapture(page);
+
     // Capture network requests
     const requestListener = (request: any) => {
       // Try to capture POST data (for GraphQL mutation detection)
@@ -1195,18 +1209,42 @@ export class FormSubmissionLearner {
         page.click(form.submitSelector),
       ]);
 
-      // Analyze network requests to learn the pattern
-      const learnedPattern = this.analyzeFormSubmission(
-        data.url,
-        form,
-        networkRequests,
-        domain
-      );
+      // Get captured WebSocket messages
+      const wsMessages = await wsMessagesPromise;
+
+      // Try to learn WebSocket pattern first
+      let learnedPattern: LearnedFormPattern | null = null;
+
+      if (wsMessages.length > 0) {
+        logger.formLearner.debug('Analyzing WebSocket messages for form pattern', {
+          messagesCount: wsMessages.length,
+        });
+
+        learnedPattern = this.analyzeWebSocketPattern(
+          data.url,
+          form,
+          wsMessages,
+          domain
+        );
+      }
+
+      // If no WebSocket pattern found, try REST/GraphQL pattern
+      if (!learnedPattern) {
+        logger.formLearner.debug('No WebSocket pattern found, analyzing HTTP requests');
+
+        learnedPattern = this.analyzeFormSubmission(
+          data.url,
+          form,
+          networkRequests,
+          domain
+        );
+      }
 
       if (learnedPattern) {
         this.formPatterns.set(learnedPattern.id, learnedPattern);
         logger.formLearner.info('Learned new form pattern', {
           patternId: learnedPattern.id,
+          patternType: learnedPattern.patternType || 'rest',
           endpoint: learnedPattern.apiEndpoint,
           fieldsCount: Object.keys(learnedPattern.fieldMapping).length,
         });
