@@ -126,10 +126,10 @@ describe('Memory-Efficient Structures', () => {
         cache.set('b', 2);
         cache.set('c', 3);
 
-        expect(cache.keys()).toEqual(['c', 'b', 'a']);
+        expect(Array.from(cache.keys())).toEqual(['c', 'b', 'a']);
 
         cache.get('a'); // Move to head
-        expect(cache.keys()).toEqual(['a', 'c', 'b']);
+        expect(Array.from(cache.keys())).toEqual(['a', 'c', 'b']);
       });
 
       it('should return values in LRU order', () => {
@@ -137,14 +137,14 @@ describe('Memory-Efficient Structures', () => {
         cache.set('b', 2);
         cache.set('c', 3);
 
-        expect(cache.values()).toEqual([3, 2, 1]);
+        expect(Array.from(cache.values())).toEqual([3, 2, 1]);
       });
 
       it('should return entries in LRU order', () => {
         cache.set('a', 1);
         cache.set('b', 2);
 
-        expect(cache.entries()).toEqual([
+        expect(Array.from(cache.entries())).toEqual([
           ['b', 2],
           ['a', 1],
         ]);
@@ -230,6 +230,14 @@ describe('Memory-Efficient Structures', () => {
       it('should handle eviction from empty cache gracefully', () => {
         const evicted = cache.evictMultiple(5);
         expect(evicted).toHaveLength(0);
+      });
+
+      it('should throw for zero maxSize', () => {
+        expect(() => new LRUCache<string, number>(0)).toThrow('maxSize must be a positive number');
+      });
+
+      it('should throw for negative maxSize', () => {
+        expect(() => new LRUCache<string, number>(-5)).toThrow('maxSize must be a positive number');
       });
     });
   });
@@ -406,8 +414,9 @@ describe('Memory-Efficient Structures', () => {
         const restored = quantized.toFloatArray();
 
         // Check each value is within tolerance (1/255 ~= 0.004)
+        // Using 2 decimal precision (0.01 tolerance)
         for (let i = 0; i < original.length; i++) {
-          expect(restored[i]).toBeCloseTo(original[i], 1);
+          expect(restored[i]).toBeCloseTo(original[i], 2);
         }
       });
 
@@ -428,6 +437,17 @@ describe('Memory-Efficient Structures', () => {
         expect(raw[0]).toBe(0);
         expect(raw[1]).toBe(128); // ~127.5 rounded
         expect(raw[2]).toBe(255);
+      });
+
+      it('should handle zero range (all same values)', () => {
+        const embedding = [5, 5, 5];
+        const quantized = new QuantizedEmbedding(embedding, 5, 5);
+        const raw = quantized.getRawData();
+
+        // All values should be mapped to middle (128)
+        expect(raw[0]).toBe(128);
+        expect(raw[1]).toBe(128);
+        expect(raw[2]).toBe(128);
       });
     });
 
@@ -586,6 +606,26 @@ describe('Memory-Efficient Structures', () => {
       it('should estimate Uint8Array sizes', () => {
         const arr = new Uint8Array(100);
         expect(estimateSize(arr)).toBe(100);
+      });
+
+      it('should handle circular references', () => {
+        const obj: Record<string, unknown> = { name: 'test' };
+        obj.self = obj; // Circular reference
+
+        // Should not throw and should return finite size
+        const size = estimateSize(obj);
+        expect(size).toBeGreaterThan(0);
+        expect(Number.isFinite(size)).toBe(true);
+      });
+
+      it('should handle deeply nested circular references', () => {
+        const a: Record<string, unknown> = { name: 'a' };
+        const b: Record<string, unknown> = { name: 'b', parent: a };
+        a.child = b;
+
+        const size = estimateSize(a);
+        expect(size).toBeGreaterThan(0);
+        expect(Number.isFinite(size)).toBe(true);
       });
     });
   });

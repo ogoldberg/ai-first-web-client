@@ -46,6 +46,9 @@ export class LRUCache<K, V> {
   private readonly maxSize: number;
 
   constructor(maxSize: number) {
+    if (maxSize <= 0) {
+      throw new Error('maxSize must be a positive number');
+    }
     this.maxSize = maxSize;
   }
 
@@ -155,41 +158,38 @@ export class LRUCache<K, V> {
 
   /**
    * Get all keys in LRU order (most recent first).
+   * Uses a generator for memory efficiency.
    */
-  keys(): K[] {
-    const result: K[] = [];
+  *keys(): IterableIterator<K> {
     let node = this.head;
     while (node) {
-      result.push(node.key);
+      yield node.key;
       node = node.next;
     }
-    return result;
   }
 
   /**
    * Get all values in LRU order (most recent first).
+   * Uses a generator for memory efficiency.
    */
-  values(): V[] {
-    const result: V[] = [];
+  *values(): IterableIterator<V> {
     let node = this.head;
     while (node) {
-      result.push(node.value);
+      yield node.value;
       node = node.next;
     }
-    return result;
   }
 
   /**
    * Get all entries as [key, value] pairs in LRU order.
+   * Uses a generator for memory efficiency.
    */
-  entries(): [K, V][] {
-    const result: [K, V][] = [];
+  *entries(): IterableIterator<[K, V]> {
     let node = this.head;
     while (node) {
-      result.push([node.key, node.value]);
+      yield [node.key, node.value];
       node = node.next;
     }
-    return result;
   }
 
   /**
@@ -332,6 +332,21 @@ export class DomainIndexedMap<K, V> {
   private keyToDomains: Map<K, Set<string>> = new Map();
 
   /**
+   * Remove a key from the domain index.
+   */
+  private removeFromIndex(key: K, domains: Set<string>): void {
+    for (const domain of domains) {
+      const domainSet = this.domainIndex.get(domain);
+      if (domainSet) {
+        domainSet.delete(key);
+        if (domainSet.size === 0) {
+          this.domainIndex.delete(domain);
+        }
+      }
+    }
+  }
+
+  /**
    * Set an item with its associated domains.
    */
   set(key: K, value: V, domains: string | string[]): void {
@@ -341,15 +356,7 @@ export class DomainIndexedMap<K, V> {
     // Remove from old domain indices if exists
     const oldDomains = this.keyToDomains.get(key);
     if (oldDomains) {
-      for (const domain of oldDomains) {
-        const domainSet = this.domainIndex.get(domain);
-        if (domainSet) {
-          domainSet.delete(key);
-          if (domainSet.size === 0) {
-            this.domainIndex.delete(domain);
-          }
-        }
-      }
+      this.removeFromIndex(key, oldDomains);
     }
 
     // Store item
@@ -389,15 +396,7 @@ export class DomainIndexedMap<K, V> {
   delete(key: K): boolean {
     const domains = this.keyToDomains.get(key);
     if (domains) {
-      for (const domain of domains) {
-        const domainSet = this.domainIndex.get(domain);
-        if (domainSet) {
-          domainSet.delete(key);
-          if (domainSet.size === 0) {
-            this.domainIndex.delete(domain);
-          }
-        }
-      }
+      this.removeFromIndex(key, domains);
       this.keyToDomains.delete(key);
     }
 
@@ -532,6 +531,12 @@ export class QuantizedEmbedding {
    */
   private quantize(embedding: number[]): void {
     const range = this.maxVal - this.minVal;
+
+    // Handle zero range (all values are the same)
+    if (range === 0) {
+      this.data.fill(128);
+      return;
+    }
 
     for (let i = 0; i < embedding.length; i++) {
       // Clamp to range
@@ -687,10 +692,22 @@ export function formatBytes(bytes: number): string {
  * Estimate memory size of a JavaScript value.
  *
  * This is a rough estimate as actual memory depends on V8 implementation.
+ * Handles circular references by tracking visited objects.
+ *
+ * @param value - The value to estimate size for
+ * @param seen - Internal set of visited objects to handle circular references
  */
-export function estimateSize(value: unknown): number {
+export function estimateSize(value: unknown, seen: Set<object> = new Set()): number {
   if (value === null || value === undefined) {
     return 0;
+  }
+
+  // Handle circular references for objects
+  if (typeof value === 'object') {
+    if (seen.has(value as object)) {
+      return 0; // Already counted
+    }
+    seen.add(value as object);
   }
 
   switch (typeof value) {
@@ -702,7 +719,7 @@ export function estimateSize(value: unknown): number {
       return (value as string).length * 2; // UTF-16
     case 'object':
       if (Array.isArray(value)) {
-        return value.reduce((sum, item) => sum + estimateSize(item), 24); // Array overhead
+        return value.reduce((sum, item) => sum + estimateSize(item, seen), 24); // Array overhead
       }
       if (value instanceof Uint8Array) {
         return value.byteLength;
@@ -710,14 +727,14 @@ export function estimateSize(value: unknown): number {
       if (value instanceof Map) {
         let size = 40; // Map overhead
         for (const [k, v] of value) {
-          size += estimateSize(k) + estimateSize(v) + 16; // Entry overhead
+          size += estimateSize(k, seen) + estimateSize(v, seen) + 16; // Entry overhead
         }
         return size;
       }
       if (value instanceof Set) {
         let size = 40; // Set overhead
         for (const v of value) {
-          size += estimateSize(v) + 8; // Entry overhead
+          size += estimateSize(v, seen) + 8; // Entry overhead
         }
         return size;
       }
@@ -725,7 +742,7 @@ export function estimateSize(value: unknown): number {
       let size = 24; // Object overhead
       for (const key in value) {
         if (Object.prototype.hasOwnProperty.call(value, key)) {
-          size += estimateSize(key) + estimateSize((value as Record<string, unknown>)[key]) + 16;
+          size += estimateSize(key, seen) + estimateSize((value as Record<string, unknown>)[key], seen) + 16;
         }
       }
       return size;
