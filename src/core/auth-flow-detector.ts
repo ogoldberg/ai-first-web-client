@@ -453,23 +453,8 @@ export class AuthFlowDetector {
 
     const workflows = this.proceduralMemory.listWorkflows();
 
-    // Look for workflows tagged as 'login' or 'auth' for this domain
-    const loginWorkflow = workflows.find(w =>
-      w.domain === domain &&
-      (w.tags.includes('login') || w.tags.includes('auth') || w.tags.includes('authentication'))
-    );
-
-    if (loginWorkflow) {
-      return loginWorkflow;
-    }
-
-    // Also check for workflows with 'login' in the name
-    const namedLoginWorkflow = workflows.find(w =>
-      w.domain === domain &&
-      (/login/i.test(w.name) || /sign\s*in/i.test(w.name) || /auth/i.test(w.name))
-    );
-
-    return namedLoginWorkflow || null;
+    // Use the comprehensive isLoginWorkflow method to find a matching workflow
+    return workflows.find(w => w.domain === domain && this.isLoginWorkflow(w)) || null;
   }
 
   // ============================================
@@ -558,6 +543,11 @@ export class AuthFlowDetector {
    * Check if a workflow is a login workflow
    */
   isLoginWorkflow(workflow: Workflow): boolean {
+    // Check explicit type first for clear identification
+    if (workflow.type === 'login') {
+      return true;
+    }
+
     // Check tags
     if (workflow.tags.some(tag =>
       ['login', 'auth', 'authentication', 'signin', 'sign-in'].includes(tag.toLowerCase())

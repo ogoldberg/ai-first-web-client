@@ -254,6 +254,25 @@ describe('AuthFlowDetector', () => {
   });
 
   describe('isLoginWorkflow', () => {
+    it('should identify workflow with type "login"', () => {
+      const workflow: Workflow = {
+        id: 'wf-type-login',
+        name: 'Some process',
+        description: 'A workflow with an explicit login type',
+        domain: 'app.example.com',
+        tags: [],
+        type: 'login',
+        steps: [],
+        version: 1,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+        usageCount: 0,
+        successRate: 0,
+      };
+
+      expect(detector.isLoginWorkflow(workflow)).toBe(true);
+    });
+
     it('should identify workflow with login tag', () => {
       const workflow: Workflow = {
         id: 'wf-1',
