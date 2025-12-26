@@ -471,6 +471,67 @@ describe('PaginationDiscovery', () => {
     });
   });
 
+  describe('path-based pagination', () => {
+    it('should detect path-based pagination from URL pattern', async () => {
+      const context = createPaginationContext({
+        networkRequests: [
+          createNetworkRequest({
+            url: 'https://api.example.com/items/page/2',
+            contentType: 'application/json',
+            status: 200,
+            responseBody: JSON.stringify({ data: [{ id: 1 }, { id: 2 }] }),
+          }),
+        ],
+      });
+
+      const result = await discovery.analyze(context);
+
+      expect(result.detected).toBe(true);
+      expect(result.pattern).toBeDefined();
+      expect(result.pattern!.paginationParam.location).toBe('path');
+      expect(result.pattern!.paginationParam.type).toBe('page');
+    });
+
+    it('should build base URL with placeholder for path-based pagination', async () => {
+      const context = createPaginationContext({
+        networkRequests: [
+          createNetworkRequest({
+            url: 'https://api.example.com/items/page/3',
+            contentType: 'application/json',
+            status: 200,
+            responseBody: JSON.stringify({ data: [{ id: 1 }] }),
+          }),
+        ],
+      });
+
+      const result = await discovery.analyze(context);
+
+      expect(result.detected).toBe(true);
+      expect(result.pattern!.baseUrl).toContain('{page}');
+      expect(result.pattern!.baseUrl).not.toContain('/3');
+    });
+
+    it('should generate URL for path-based pagination', async () => {
+      const context = createPaginationContext({
+        networkRequests: [
+          createNetworkRequest({
+            url: 'https://api.example.com/items/page/1',
+            contentType: 'application/json',
+            status: 200,
+            responseBody: JSON.stringify({ data: [{ id: 1 }] }),
+          }),
+        ],
+      });
+
+      const result = await discovery.analyze(context);
+      expect(result.detected).toBe(true);
+
+      const nextUrl = discovery.generatePageUrl(result.pattern!, 5);
+      expect(nextUrl).toContain('/page/5');
+      expect(nextUrl).not.toContain('{page}');
+    });
+  });
+
   describe('getNextPageValue', () => {
     it('should calculate next page for page-based pagination', async () => {
       const context = createPaginationContext({

@@ -304,8 +304,8 @@ export class PaginationDiscovery {
         if (score > 0) {
           candidates.push({ request: req, score });
         }
-      } catch {
-        // Invalid URL, skip
+      } catch (error) {
+        paginationLogger.debug('Skipping candidate due to invalid URL', { url: req.url, error });
       }
     }
 
@@ -400,7 +400,7 @@ export class PaginationDiscovery {
       confidence += 0.3;
 
       // Build base URL (without pagination param)
-      const baseUrl = this.buildBaseUrl(url, paginationParam.name);
+      const baseUrl = this.buildBaseUrl(url, paginationParam);
 
       // Extract required headers
       const headers = this.extractRelevantHeaders(request.requestHeaders);
@@ -604,10 +604,30 @@ export class PaginationDiscovery {
   /**
    * Build base URL without pagination parameter
    */
-  private buildBaseUrl(url: URL, paginationParam: string): string {
-    const base = new URL(url.toString());
-    base.searchParams.delete(paginationParam);
-    return base.toString();
+  private buildBaseUrl(url: URL, paginationParam: PaginationParam): string {
+    if (paginationParam.location === 'query') {
+      const base = new URL(url.toString());
+      base.searchParams.delete(paginationParam.name);
+      return base.toString();
+    } else if (paginationParam.location === 'path') {
+      // Find the numeric page value in the path and replace it with a placeholder
+      const pathParts = url.pathname.split('/');
+      // Find the last numeric segment (search backwards for ES2022 compatibility)
+      let pageIndex = -1;
+      for (let i = pathParts.length - 1; i >= 0; i--) {
+        if (/^\d+$/.test(pathParts[i])) {
+          pageIndex = i;
+          break;
+        }
+      }
+      if (pageIndex > -1) {
+        pathParts[pageIndex] = '{page}';
+        // Build URL string manually to avoid encoding of placeholder
+        const newPathname = pathParts.join('/');
+        return `${url.origin}${newPathname}${url.search}`;
+      }
+    }
+    return url.toString();
   }
 
   /**
@@ -615,14 +635,11 @@ export class PaginationDiscovery {
    */
   private extractRelevantHeaders(headers: Record<string, string>): Record<string, string> {
     const relevant: Record<string, string> = {};
-    const importantHeaders = ['authorization', 'x-api-key', 'cookie', 'accept'];
+    const importantHeaders = new Set(['authorization', 'x-api-key', 'cookie', 'accept']);
 
-    for (const header of importantHeaders) {
-      const lowerHeader = header.toLowerCase();
-      for (const [key, value] of Object.entries(headers)) {
-        if (key.toLowerCase() === lowerHeader) {
-          relevant[key] = value;
-        }
+    for (const [key, value] of Object.entries(headers)) {
+      if (importantHeaders.has(key.toLowerCase())) {
+        relevant[key] = value;
       }
     }
 
@@ -826,13 +843,18 @@ export class PaginationDiscovery {
    * Generate URL for a specific page using a pattern
    */
   generatePageUrl(pattern: PaginationApiPattern, pageValue: number | string): string {
-    const url = new URL(pattern.baseUrl);
-
     if (pattern.paginationParam.location === 'query') {
+      const url = new URL(pattern.baseUrl);
       url.searchParams.set(pattern.paginationParam.name, String(pageValue));
+      return url.toString();
     }
 
-    return url.toString();
+    if (pattern.paginationParam.location === 'path') {
+      // Replace {page} placeholder in baseUrl
+      return pattern.baseUrl.replace('{page}', String(pageValue));
+    }
+
+    return pattern.baseUrl;
   }
 
   /**
