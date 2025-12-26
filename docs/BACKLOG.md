@@ -568,7 +568,7 @@ See [COMPETITIVE_ANALYSIS.md](COMPETITIVE_ANALYSIS.md) for context on why these 
 
 | ID | Task | Effort | Status | Notes |
 |----|------|--------|--------|-------|
-| QA-001 | Create E2E API testing example | M | Not Started | Full example: discover APIs, test each endpoint, report results |
+| QA-001 | Create E2E API testing example | M | Complete | Full example: discover APIs, test each endpoint, report results. See `examples/e2e-api-testing.ts` |
 | QA-002 | Create content validation test suite example | M | Not Started | Example using verify options with Vitest/Jest integration |
 | QA-003 | Create multi-site regression example | M | Not Started | Test same patterns across multiple similar sites |
 | QA-004 | Create workflow recording/replay example | M | Not Started | Record workflow, replay with different params, validate results |

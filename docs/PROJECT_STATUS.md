@@ -8,11 +8,12 @@
 
 ---
 
-## In Progress: QA Examples (2025-12-26)
+## Recent: QA Examples (2025-12-26)
 
-Working on creating practical QA examples to help users understand how to use Unbrowser for testing.
+Creating practical QA examples to help users understand how to use Unbrowser for testing.
 
-**Current Task:** QA-001 - Create E2E API testing example
+**Completed:**
+- QA-001 - E2E API testing example (`examples/e2e-api-testing.ts`)
 
 ---
 
