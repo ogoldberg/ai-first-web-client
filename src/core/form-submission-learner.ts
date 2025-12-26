@@ -162,6 +162,26 @@ export interface WebSocketPattern {
 }
 
 /**
+ * Learned server action pattern (Next.js/Remix)
+ */
+export interface ServerActionPattern {
+  /** Framework type */
+  framework: 'nextjs' | 'remix';
+  /** Action ID (Next.js only - from Next-Action header) */
+  actionId?: string;
+  /** Action name (Remix only - from _action field) */
+  actionName?: string;
+  /** Whether action ID is stable across builds (usually false for Next.js) */
+  isStableId: boolean;
+  /** Field mapping (form field → server action param) */
+  fieldMapping: Record<string, string>;
+  /** Response type indicator */
+  responseType: 'redirect' | 'json' | 'flight-stream';
+  /** Expected redirect pattern (if responseType === 'redirect') */
+  redirectPattern?: string;
+}
+
+/**
  * Dynamic field that needs to be fetched before each submission
  */
 export interface DynamicField {
@@ -193,7 +213,7 @@ export interface LearnedFormPattern {
   method: string; // POST, PUT, etc.
 
   // Pattern type
-  patternType?: 'rest' | 'graphql' | 'json-rpc' | 'websocket'; // Type of API pattern
+  patternType?: 'rest' | 'graphql' | 'json-rpc' | 'websocket' | 'server-action'; // Type of API pattern
 
   // Encoding (for file uploads)
   encoding?: 'application/x-www-form-urlencoded' | 'multipart/form-data' | 'application/json';
@@ -213,6 +233,9 @@ export interface LearnedFormPattern {
 
   // WebSocket-specific (if patternType === 'websocket')
   websocketPattern?: WebSocketPattern;
+
+  // Server Action-specific (if patternType === 'server-action')
+  serverActionPattern?: ServerActionPattern;
 
   // Dynamic fields that must be fetched before each submission
   dynamicFields: DynamicField[];
@@ -392,7 +415,7 @@ export class FormSubmissionLearner {
     const hasFileUploads = pattern.fileFields && pattern.fileFields.length > 0;
     const userProvidedFiles = data.files && Object.keys(data.files).length > 0;
 
-    // Make the request (handle file uploads, GraphQL, and REST differently)
+    // Make the request (handle file uploads, server actions, GraphQL, and REST differently)
     let response: Response;
 
     if (hasFileUploads) {
@@ -402,6 +425,46 @@ export class FormSubmissionLearner {
       }
 
       response = await this.submitMultipartForm(pattern, payload, data.files!);
+    } else if (pattern.patternType === 'server-action' && pattern.serverActionPattern) {
+      // Server Action (Next.js/Remix)
+      const serverActionPattern = pattern.serverActionPattern;
+
+      // For Remix actions with _action field, add it to payload
+      if (serverActionPattern.framework === 'remix' && serverActionPattern.actionName) {
+        payload._action = serverActionPattern.actionName;
+      }
+
+      // Build headers
+      const headers: Record<string, string> = {
+        'Accept': 'application/json, text/x-component',
+      };
+
+      // Add Next-Action header for Next.js
+      if (serverActionPattern.framework === 'nextjs' && serverActionPattern.actionId) {
+        headers['Next-Action'] = serverActionPattern.actionId;
+      }
+
+      // Determine content type based on encoding
+      let body: string | FormData;
+      if (pattern.encoding === 'multipart/form-data') {
+        // Use FormData for multipart
+        const formData = new FormData();
+        for (const [key, value] of Object.entries(payload)) {
+          formData.append(key, String(value));
+        }
+        body = formData;
+        // Don't set Content-Type - browser will set it with boundary
+      } else {
+        // Use URL-encoded for everything else (default for server actions)
+        headers['Content-Type'] = 'application/x-www-form-urlencoded';
+        body = new URLSearchParams(payload as Record<string, string>).toString();
+      }
+
+      response = await fetch(pattern.apiEndpoint, {
+        method: 'POST',
+        headers,
+        body,
+      });
     } else if (pattern.patternType === 'graphql' && pattern.graphqlMutation) {
       // GraphQL mutation request
       const graphqlPayload = {
@@ -1374,6 +1437,18 @@ export class FormSubmissionLearner {
     // Use the first successful mutation (most likely the form submission)
     const submitRequest = submitRequests[0];
 
+    // Check if this is a Server Action (Next.js/Remix) - check first as it's most specific
+    const serverAction = this.detectServerAction(submitRequest, formUrl);
+    if (serverAction) {
+      logger.formLearner.info('Detected server action submission', {
+        framework: serverAction.framework,
+        endpoint: submitRequest.url,
+        actionId: serverAction.actionId,
+        actionName: serverAction.actionName,
+      });
+      return this.createServerActionPattern(formUrl, form, submitRequest, serverAction, domain);
+    }
+
     // Check if this is a GraphQL mutation
     const graphqlMutation = this.detectGraphQLMutation(submitRequest);
     if (graphqlMutation) {
@@ -2022,6 +2097,191 @@ export class FormSubmissionLearner {
       patternId: pattern.id,
       mutationName: graphqlMutation.mutationName,
       variablesCount: Object.keys(variableMapping).length,
+    });
+
+    return pattern;
+  }
+
+  /**
+   * Detect server action pattern (Next.js Server Actions or Remix Actions)
+   */
+  private detectServerAction(request: NetworkRequest, formUrl: string): {
+    framework: 'nextjs' | 'remix';
+    actionId?: string;
+    actionName?: string;
+    requestBody: any;
+  } | null {
+    // Server actions are POST requests
+    if (request.method !== 'POST') {
+      return null;
+    }
+
+    // Get request headers and body
+    const headers = request.requestHeaders || {};
+    const requestBody = (request as any).requestBody;
+
+    // Check for Next.js Server Action (Next-Action header)
+    const nextActionHeader = headers['next-action'] || headers['Next-Action'];
+    if (nextActionHeader) {
+      logger.formLearner.info('Detected Next.js Server Action', {
+        actionId: nextActionHeader,
+        url: request.url,
+      });
+
+      return {
+        framework: 'nextjs',
+        actionId: String(nextActionHeader),
+        requestBody,
+      };
+    }
+
+    // Check for Remix Action (_action field in form data)
+    // Remix actions POST to the same route, often with _action field
+    const urlObj = new URL(request.url);
+    const formUrlObj = new URL(formUrl);
+
+    // Check if request URL matches form URL (or is the same route)
+    const isSameRoute = urlObj.pathname === formUrlObj.pathname;
+
+    if (isSameRoute && requestBody) {
+      // Look for _action field (Remix convention for multiple actions)
+      if (typeof requestBody === 'object' && '_action' in requestBody) {
+        logger.formLearner.info('Detected Remix Action with _action field', {
+          actionName: requestBody._action,
+          url: request.url,
+        });
+
+        return {
+          framework: 'remix',
+          actionName: String(requestBody._action),
+          requestBody,
+        };
+      }
+
+      // Even without _action, if it POSTs to same route, likely Remix Action
+      // But we'll be conservative and only detect if we have strong indicators
+      const hasRemixIndicators =
+        headers['content-type']?.includes('application/x-www-form-urlencoded') ||
+        headers['content-type']?.includes('multipart/form-data');
+
+      if (hasRemixIndicators && isSameRoute) {
+        logger.formLearner.info('Detected Remix Action (same-route POST)', {
+          url: request.url,
+        });
+
+        return {
+          framework: 'remix',
+          requestBody,
+        };
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Create a server action pattern
+   */
+  private createServerActionPattern(
+    formUrl: string,
+    form: DetectedForm,
+    request: NetworkRequest,
+    serverAction: {
+      framework: 'nextjs' | 'remix';
+      actionId?: string;
+      actionName?: string;
+      requestBody: any;
+    },
+    domain: string
+  ): LearnedFormPattern {
+    // Extract field mapping from request body
+    const fieldMapping: Record<string, string> = {};
+
+    if (serverAction.requestBody && typeof serverAction.requestBody === 'object') {
+      for (const field of form.fields) {
+        if (field.type === 'submit' || !field.name) continue;
+
+        // Skip _action field for Remix (it's a framework field, not user data)
+        if (field.name === '_action') continue;
+
+        const fieldName = field.name;
+
+        // Try exact match
+        if (fieldName in serverAction.requestBody) {
+          fieldMapping[fieldName] = fieldName;
+        } else {
+          // Try camelCase/snake_case variations
+          const camelCase = this.toCamelCase(fieldName);
+          const snakeCase = this.toSnakeCase(fieldName);
+
+          if (camelCase in serverAction.requestBody) {
+            fieldMapping[fieldName] = camelCase;
+          } else if (snakeCase in serverAction.requestBody) {
+            fieldMapping[fieldName] = snakeCase;
+          } else {
+            // Default to 1:1 mapping
+            fieldMapping[fieldName] = fieldName;
+          }
+        }
+      }
+    } else {
+      // Fallback: assume 1:1 mapping
+      for (const field of form.fields) {
+        if (field.name && field.type !== 'submit' && field.name !== '_action') {
+          fieldMapping[field.name] = field.name;
+        }
+      }
+    }
+
+    // Detect CSRF handling
+    const csrfHandling = this.detectCsrfHandling(form);
+
+    // Determine response type based on status code and content-type
+    let responseType: 'redirect' | 'json' | 'flight-stream' = 'json';
+    if (request.status >= 300 && request.status < 400) {
+      responseType = 'redirect';
+    } else if (request.responseHeaders?.['content-type']?.includes('text/x-component')) {
+      responseType = 'flight-stream'; // React Server Components streaming
+    }
+
+    const pattern: LearnedFormPattern = {
+      id: `server-action:${domain}:${Date.now()}`,
+      domain,
+      formUrl,
+      apiEndpoint: request.url,
+      method: 'POST',
+      patternType: 'server-action',
+      encoding: form.encoding as LearnedFormPattern['encoding'],
+      serverActionPattern: {
+        framework: serverAction.framework,
+        actionId: serverAction.actionId,
+        actionName: serverAction.actionName,
+        isStableId: false, // Assume non-stable for Next.js (changes per build)
+        fieldMapping,
+        responseType,
+        redirectPattern: responseType === 'redirect' ? request.responseHeaders?.['location'] : undefined,
+      },
+      fieldMapping,
+      fileFields: form.fileFields && form.fileFields.length > 0 ? form.fileFields : undefined,
+      csrfTokenField: csrfHandling?.fieldName,
+      csrfTokenSource: csrfHandling?.source,
+      csrfTokenSelector: csrfHandling?.selector,
+      requiredFields: form.fields.filter(f => f.required).map(f => f.name),
+      successIndicators: {
+        statusCodes: [request.status],
+      },
+      dynamicFields: [], // Will be populated by multi-submission learning
+      learnedAt: Date.now(),
+      timesUsed: 0,
+      successRate: 1.0,
+    };
+
+    logger.formLearner.info('Created server action pattern', {
+      patternId: pattern.id,
+      framework: serverAction.framework,
+      actionId: serverAction.actionId,
+      actionName: serverAction.actionName,
+      fieldsCount: Object.keys(fieldMapping).length,
     });
 
     return pattern;
