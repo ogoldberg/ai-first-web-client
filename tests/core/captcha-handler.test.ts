@@ -34,15 +34,32 @@ import { detectChallengeElements, waitForChallengeResolution } from '../../src/c
 function createMockPage(options: {
   bodyText?: string;
   url?: string;
+  waitForFunctionResult?: 'resolve' | 'timeout';
 } = {}) {
+  let evaluateCallCount = 0;
+  let currentBodyText = options.bodyText ?? '';
+
   return {
     evaluate: vi.fn().mockImplementation(async (fn: Function) => {
+      evaluateCallCount++;
       if (fn.toString().includes('innerText')) {
-        return options.bodyText ?? '';
+        return currentBodyText;
       }
       return undefined;
     }),
     url: vi.fn().mockReturnValue(options.url ?? 'https://example.com/page'),
+    // Mock waitForFunction - resolves immediately by default (simulating challenge resolved)
+    // Set waitForFunctionResult to 'timeout' to simulate timeout
+    waitForFunction: vi.fn().mockImplementation(async (_fn: Function, _arg: any, opts?: { timeout?: number }) => {
+      if (options.waitForFunctionResult === 'timeout') {
+        throw new Error('Timeout 15000ms exceeded');
+      }
+      // Simulate successful resolution
+      return true;
+    }),
+    // Allow tests to update body text for simulate resolution
+    _setBodyText: (text: string) => { currentBodyText = text; },
+    _getEvaluateCallCount: () => evaluateCallCount,
   } as any;
 }
 
@@ -136,17 +153,11 @@ describe('CaptchaHandler', () => {
     it('should wait for auto-resolving challenges like Cloudflare', async () => {
       const handler = new CaptchaHandler();
 
-      // First call returns challenge text, subsequent calls return normal content
-      let callCount = 0;
+      // Create page with auto-resolving challenge text
       const page = createMockPage({
+        bodyText: 'Checking your browser before accessing the site. Please wait...',
         url: 'https://example.com/page',
-      });
-      page.evaluate = vi.fn().mockImplementation(async () => {
-        callCount++;
-        if (callCount <= 2) {
-          return 'Checking your browser before accessing the site. Please wait...';
-        }
-        return 'Welcome to our website!';
+        // waitForFunction resolves successfully (simulating challenge auto-resolved)
       });
 
       const result = await handler.handleChallenge(page, 'example.com');
@@ -330,21 +341,12 @@ describe('CaptchaHandler', () => {
         vi.clearAllMocks();
 
         const handler = new CaptchaHandler();
-        let callCount = 0;
+        // Create page with proper mock setup for this test case
         const page = createMockPage({
+          bodyText: testCase.text,
           url: 'https://example.com',
-        });
-
-        page.evaluate = vi.fn().mockImplementation(async () => {
-          callCount++;
-          if (callCount <= 2) {
-            return testCase.text;
-          }
-          // For auto-resolving, return normal content after wait
-          if (testCase.expectedAuto) {
-            return 'Welcome!';
-          }
-          return testCase.text;
+          // Auto-resolving cases should have waitForFunction succeed
+          // Non-auto cases will go through detectChallengeElements
         });
 
         if (!testCase.expectedAuto) {

@@ -104,6 +104,9 @@ const AUTO_WAIT_TIMEOUT = 15000;
 /** Interval for checking if challenge resolved */
 const CHECK_INTERVAL = 1000;
 
+/** Timeout for auto-solve attempts (ms) */
+const AUTO_SOLVE_TIMEOUT = 10000;
+
 /** Text patterns that indicate a waiting/processing challenge (not interactive) */
 const AUTO_RESOLVE_PATTERNS = [
   /checking your browser/i,
@@ -195,7 +198,7 @@ export class CaptchaHandler {
     // Step 3: Detect interactive challenge elements
     const detection = await detectChallengeElements(page, {
       autoSolve: this.options.autoSolve ?? true,
-      solveTimeout: 10000,
+      solveTimeout: AUTO_SOLVE_TIMEOUT,
     });
 
     if (!detection.detected) {
@@ -290,7 +293,10 @@ export class CaptchaHandler {
   private async getPageText(page: Page): Promise<string> {
     try {
       return await page.evaluate(() => document.body?.innerText || '');
-    } catch {
+    } catch (error) {
+      captchaLogger.debug('Failed to get page text, page might have navigated or closed', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
       return '';
     }
   }
@@ -326,26 +332,44 @@ export class CaptchaHandler {
     page: Page,
     domain: string
   ): Promise<{ resolved: boolean }> {
-    const startTime = Date.now();
+    // Build regex patterns string for use in browser context
+    const autoPatterns = AUTO_RESOLVE_PATTERNS.map(p => p.source).join('|');
+    const interactivePatterns = INTERACTIVE_PATTERNS.map(p => p.source).join('|');
 
-    while (Date.now() - startTime < AUTO_WAIT_TIMEOUT) {
-      await new Promise(resolve => setTimeout(resolve, CHECK_INTERVAL));
+    try {
+      // Use page.waitForFunction for more reliable polling than manual setTimeout loop
+      // This runs in browser context and is more efficient
+      await page.waitForFunction(
+        (patterns: { auto: string; interactive: string }) => {
+          const text = document.body?.innerText?.toLowerCase() || '';
+          const autoRegex = new RegExp(patterns.auto, 'i');
+          const interactiveRegex = new RegExp(patterns.interactive, 'i');
 
-      const pageText = await this.getPageText(page);
+          // Resolved if neither auto nor interactive patterns are present
+          const matchesAuto = autoRegex.test(text);
+          const matchesInteractive = interactiveRegex.test(text);
 
-      // Check if challenge is gone
-      if (!this.looksLikeChallengePage(pageText)) {
-        return { resolved: true };
-      }
+          return !matchesAuto && !matchesInteractive;
+        },
+        { auto: autoPatterns, interactive: interactivePatterns },
+        { timeout: AUTO_WAIT_TIMEOUT, polling: CHECK_INTERVAL }
+      );
 
+      return { resolved: true };
+    } catch (error) {
       // Check if URL changed (redirect after challenge)
       const currentUrl = page.url();
       if (!currentUrl.includes(domain)) {
         return { resolved: true };
       }
-    }
 
-    return { resolved: false };
+      // Timeout or other error - challenge not resolved
+      captchaLogger.debug('Auto-resolution timed out', {
+        domain,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      return { resolved: false };
+    }
   }
 
   /**

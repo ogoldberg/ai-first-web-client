@@ -316,20 +316,7 @@ export interface SmartBrowseResult extends BrowseResult {
     };
 
     // CAPTCHA handling result (GAP-007)
-    captchaHandling?: {
-      // Whether a CAPTCHA was detected
-      detected: boolean;
-      // Type of CAPTCHA if detected
-      challengeType?: import('../types/index.js').BotDetectionType;
-      // Whether the CAPTCHA was resolved
-      resolved: boolean;
-      // How it was resolved
-      resolutionMethod?: 'auto_wait' | 'auto_solve' | 'user_solved' | 'timeout' | 'skipped';
-      // Time spent handling (ms)
-      durationMs: number;
-      // Error if not resolved
-      error?: string;
-    };
+    captchaHandling?: CaptchaHandlingResult;
   };
 
   // Additional pages if pagination was followed
@@ -1066,14 +1053,7 @@ export class SmartBrowser {
 
     // Add CAPTCHA handling result to learning (GAP-007)
     if (captchaResult) {
-      learning.captchaHandling = {
-        detected: captchaResult.detected,
-        challengeType: captchaResult.challengeType,
-        resolved: captchaResult.resolved,
-        resolutionMethod: captchaResult.resolutionMethod,
-        durationMs: captchaResult.durationMs,
-        error: captchaResult.error,
-      };
+      learning.captchaHandling = captchaResult;
     }
 
     const browseResult: SmartBrowseResult = {
