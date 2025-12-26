@@ -571,7 +571,7 @@ See [COMPETITIVE_ANALYSIS.md](COMPETITIVE_ANALYSIS.md) for context on why these 
 | QA-001 | Create E2E API testing example | M | Complete | Full example: discover APIs, test each endpoint, report results. See `examples/e2e-api-testing.ts` |
 | QA-002 | Create content validation test suite example | M | Complete | Example using verify options with Vitest/Jest integration. See `examples/content-validation-suite.ts` |
 | QA-003 | Create multi-site regression example | M | Complete | Test same patterns across multiple similar sites. See `examples/multi-site-regression.ts` |
-| QA-004 | Create workflow recording/replay example | M | Not Started | Record workflow, replay with different params, validate results |
+| QA-004 | Create workflow recording/replay example | M | Complete | Record workflow, replay with different params, validate results. See `examples/workflow-recording-replay.ts` |
 | QA-005 | Create API change detection example | S | Not Started | Detect when API responses change from baseline |
 | QA-006 | Add verification engine JSDoc | S | Not Started | Document VerificationEngine API with TypeDoc |
 | QA-007 | Create QA-focused MCP skill prompts | M | Not Started | Skills for common QA workflows (validate site, test APIs, etc.) |
