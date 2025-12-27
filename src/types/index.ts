@@ -20,6 +20,15 @@ export * from './provenance.js';
 // Re-export progress event types (DX-009)
 export * from './progress.js';
 
+// Re-export WebSocket pattern types (FEAT-003)
+export * from './websocket-patterns.js';
+
+// Re-export pattern health types (FEAT-002)
+export * from './pattern-health.js';
+
+// Re-export verification types (FEAT-001)
+export * from './verification.js';
+
 export interface NetworkRequest {
   url: string;
   method: string;
@@ -562,6 +571,9 @@ export interface EnhancedKnowledgeBaseEntry {
 
   // API patterns (enhanced)
   apiPatterns: EnhancedApiPattern[];
+
+  // WebSocket patterns (FEAT-003)
+  websocketPatterns?: WebSocketPattern[];
 
   // Content extraction
   selectorChains: SelectorChain[];
