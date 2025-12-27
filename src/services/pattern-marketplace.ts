@@ -459,15 +459,15 @@ export class PatternMarketplaceService {
     // Update pattern execution stats
     const pattern = this.patterns.get(patternId);
     if (pattern) {
-      pattern.totalExecutions++;
+      pattern.totalExecutions = (pattern.totalExecutions || 0) + 1;
       if (success) {
-        pattern.successfulExecutions++;
+        pattern.successfulExecutions = (pattern.successfulExecutions || 0) + 1;
       } else {
-        pattern.failedExecutions++;
+        pattern.failedExecutions = (pattern.failedExecutions || 0) + 1;
       }
 
       // Calculate success rate
-      pattern.successRate = pattern.successfulExecutions / pattern.totalExecutions;
+      pattern.successRate = (pattern.successfulExecutions || 0) / (pattern.totalExecutions || 1);
     }
 
     // Track usage by day
@@ -573,9 +573,9 @@ export class PatternMarketplaceService {
       totalInstalls: pattern.installCount,
       installsLast7Days,
       installsLast30Days,
-      totalUsage: pattern.totalExecutions,
-      successfulUsage: pattern.successfulExecutions,
-      failedUsage: pattern.failedExecutions,
+      totalUsage: pattern.totalExecutions || 0,
+      successfulUsage: pattern.successfulExecutions || 0,
+      failedUsage: pattern.failedExecutions || 0,
       successRate: pattern.successRate || 0,
       avgRating: pattern.avgRating || 0,
       ratingDistribution,

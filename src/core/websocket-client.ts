@@ -119,7 +119,7 @@ export class WebSocketClient extends EventEmitter {
         this.handleMessage(data, 'receive', options);
       });
 
-      this.ws.on('error', (error) => {
+      this.ws.on('error', (error: Error) => {
         log.error('WebSocket error', { error });
         this.errors.push({
           type: 'websocket_error',
@@ -128,7 +128,7 @@ export class WebSocketClient extends EventEmitter {
         });
       });
 
-      this.ws.on('close', (code, reason) => {
+      this.ws.on('close', (code: number, reason: Buffer) => {
         log.info('WebSocket closed', { code, reason: reason.toString() });
         this.closedAt = Date.now();
 
