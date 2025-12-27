@@ -853,7 +853,7 @@ export class SessionManager {
     }
 
     return {
-      healthy: expiredSessions === 0 && sessions.length > 0,
+      healthy: healthySessions === sessions.length && sessions.length > 0,
       totalSessions: sessions.length,
       healthySessions,
       expiredSessions,
@@ -866,6 +866,7 @@ export class SessionManager {
   /**
    * Get sessions that depend on a given session
    * Useful for cascading invalidation when a parent session expires
+   * Uses BFS to handle cycles safely (prevents infinite loops)
    *
    * @param domain - The domain of the parent session
    * @param profile - The profile of the parent session
@@ -876,27 +877,42 @@ export class SessionManager {
     profile: string = 'default'
   ): Array<{ session: SessionStore; domain: string; profile: string }> {
     const sessionKey = `${domain}:${profile}`;
-    const session = this.sessions.get(sessionKey);
+    const startSession = this.sessions.get(sessionKey);
 
-    if (!session?.metadata?.childSessions) {
+    if (!startSession?.metadata?.childSessions) {
       return [];
     }
 
     const dependents: Array<{ session: SessionStore; domain: string; profile: string }> = [];
+    const queue: Array<{ domain: string; profile: string }> = [...startSession.metadata.childSessions];
+    const visited = new Set<string>([sessionKey]); // Include starting node to prevent cycles back to it
 
-    for (const child of session.metadata.childSessions) {
-      const childKey = `${child.domain}:${child.profile}`;
-      const childSession = this.sessions.get(childKey);
-      if (childSession) {
+    // Add initial children to visited set
+    for (const child of startSession.metadata.childSessions) {
+      visited.add(`${child.domain}:${child.profile}`);
+    }
+
+    while (queue.length > 0) {
+      const { domain: currentDomain, profile: currentProfile } = queue.shift()!;
+      const currentKey = `${currentDomain}:${currentProfile}`;
+      const currentSession = this.sessions.get(currentKey);
+
+      if (currentSession) {
         dependents.push({
-          session: childSession,
-          domain: child.domain,
-          profile: child.profile,
+          session: currentSession,
+          domain: currentDomain,
+          profile: currentProfile,
         });
 
-        // Recursively get children's dependents
-        const grandchildren = this.getDependentSessions(child.domain, child.profile);
-        dependents.push(...grandchildren);
+        if (currentSession.metadata?.childSessions) {
+          for (const grandchild of currentSession.metadata.childSessions) {
+            const grandchildKey = `${grandchild.domain}:${grandchild.profile}`;
+            if (!visited.has(grandchildKey)) {
+              visited.add(grandchildKey);
+              queue.push(grandchild);
+            }
+          }
+        }
       }
     }
 

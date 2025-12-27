@@ -782,6 +782,22 @@ describe('SessionManager', () => {
         expect(health.expiringSoonSessions).toBe(1);
         expect(health.issues).toContain('agenciatributaria.es:spain-tax expires soon');
       });
+
+      it('should return unhealthy when sessions are stale or expiring soon', async () => {
+        const sessions = (sessionManager as any).sessions;
+
+        // Session expiring soon (not expired, but not fully healthy)
+        sessions.set('agenciatributaria.es:spain-tax', createMockSession('agenciatributaria.es', {
+          metadata: { portalGroup: 'spain-gov' },
+          cookies: [{ name: 'session_id', expires: Math.floor(Date.now() / 1000) + 3600 }], // expires in 1 hour
+        }));
+
+        const health = sessionManager.getPortalGroupHealth('spain-gov');
+        // Should be unhealthy because not all sessions are fully healthy
+        expect(health.healthy).toBe(false);
+        expect(health.healthySessions).toBe(0);
+        expect(health.expiringSoonSessions).toBe(1);
+      });
     });
 
     describe('Session Dependencies', () => {
@@ -841,6 +857,41 @@ describe('SessionManager', () => {
         expect(dependents).toHaveLength(2);
         expect(dependents.map(d => d.domain)).toContain('agenciatributaria.es');
         expect(dependents.map(d => d.domain)).toContain('sede.agenciatributaria.gob.es');
+      });
+
+      it('should handle cyclic session dependencies without infinite loop', async () => {
+        const sessions = (sessionManager as any).sessions;
+
+        // Create a cycle: A -> B -> C -> A
+        sessions.set('portal-a.gov.es:default', createMockSession('portal-a.gov.es', {
+          metadata: {
+            portalGroup: 'cyclic-group',
+            childSessions: [{ domain: 'portal-b.gov.es', profile: 'default' }],
+          },
+        }));
+        sessions.set('portal-b.gov.es:default', createMockSession('portal-b.gov.es', {
+          metadata: {
+            portalGroup: 'cyclic-group',
+            parentSession: { domain: 'portal-a.gov.es', profile: 'default' },
+            childSessions: [{ domain: 'portal-c.gov.es', profile: 'default' }],
+          },
+        }));
+        sessions.set('portal-c.gov.es:default', createMockSession('portal-c.gov.es', {
+          metadata: {
+            portalGroup: 'cyclic-group',
+            parentSession: { domain: 'portal-b.gov.es', profile: 'default' },
+            // Create cycle back to A
+            childSessions: [{ domain: 'portal-a.gov.es', profile: 'default' }],
+          },
+        }));
+
+        // Should complete without infinite loop and return B and C (not A since it's the start)
+        const dependents = sessionManager.getDependentSessions('portal-a.gov.es', 'default');
+        expect(dependents).toHaveLength(2);
+        expect(dependents.map(d => d.domain)).toContain('portal-b.gov.es');
+        expect(dependents.map(d => d.domain)).toContain('portal-c.gov.es');
+        // Should not include portal-a.gov.es (the starting point)
+        expect(dependents.map(d => d.domain)).not.toContain('portal-a.gov.es');
       });
     });
 
