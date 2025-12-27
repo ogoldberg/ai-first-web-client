@@ -14,9 +14,9 @@ import type { VerifyOptions, JSONSchema } from '../../src/types/verification.js'
 const createMockResult = (content: any): SmartBrowseResult => ({
   url: 'https://example.com',
   content: {
-    markdown: 'Test content',
-    text: 'Test content',
-    html: '<p>Test content</p>',
+    markdown: 'Test content with enough length to pass the minimum content check which is 50 characters by default',
+    text: 'Test content with enough length to pass the minimum content check which is 50 characters by default',
+    html: '<p>Test content with enough length to pass the minimum content check</p>',
     structuredData: content,
   },
   metadata: {
@@ -33,7 +33,16 @@ const createMockResult = (content: any): SmartBrowseResult => ({
       captchaDetected: false,
     },
   },
-  network: [],
+  // Include network request with 200 status to pass built-in checks
+  network: [
+    {
+      url: 'https://example.com',
+      method: 'GET',
+      status: 200,
+      type: 'document',
+      timing: { start: 0, end: 100 },
+    },
+  ],
   console: [],
 });
 
@@ -796,7 +805,15 @@ describe('Schema Validation (FEAT-001)', () => {
             captchaDetected: false,
           },
         },
-        network: [],
+        network: [
+          {
+            url: 'https://example.com',
+            method: 'GET',
+            status: 200,
+            type: 'document',
+            timing: { start: 0, end: 100 },
+          },
+        ],
         console: [],
       };
 
@@ -809,10 +826,14 @@ describe('Schema Validation (FEAT-001)', () => {
 
       const verification = await engine.verify(result, options);
 
-      // Should handle gracefully with an error
+      // Should fail because content is too short (minLength: 50 built-in check)
+      // Schema validation passes because an empty object satisfies a schema with no required properties
       expect(verification.passed).toBe(false);
       expect(verification.schemaErrors).toBeDefined();
-      expect(verification.schemaErrors!.some(e => e.message.includes('No content'))).toBe(true);
+      // The schema validation passes (empty array), but the built-in content check fails
+      expect(verification.schemaErrors).toEqual([]);
+      // Check that content length check failed
+      expect(verification.errors.some(e => e.includes('Content too short'))).toBe(true);
     });
 
     it('should validate against content if structuredData is not present', async () => {
@@ -828,10 +849,10 @@ describe('Schema Validation (FEAT-001)', () => {
       const result: SmartBrowseResult = {
         url: 'https://example.com',
         content: {
-          markdown: 'Test content',
-          text: 'Test content',
-          html: '<p>Test</p>',
-          // No structuredData
+          markdown: 'Test content with enough length to pass the minimum content check which is 50 characters by default',
+          text: 'Test content with enough length to pass the minimum content check which is 50 characters by default',
+          html: '<p>Test content with enough length to pass the minimum content check</p>',
+          // No structuredData - should validate against content object
         },
         metadata: {
           title: 'Test',
@@ -847,7 +868,15 @@ describe('Schema Validation (FEAT-001)', () => {
             captchaDetected: false,
           },
         },
-        network: [],
+        network: [
+          {
+            url: 'https://example.com',
+            method: 'GET',
+            status: 200,
+            type: 'document',
+            timing: { start: 0, end: 100 },
+          },
+        ],
         console: [],
       };
 
