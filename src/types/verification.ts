@@ -56,6 +56,21 @@
  *   ],
  *   onFailure: 'retry'
  * };
+ *
+ * // Schema validation (FEAT-001)
+ * const schemaValidation: VerifyOptions = {
+ *   enabled: true,
+ *   mode: 'standard',
+ *   validateSchema: true,
+ *   schema: {
+ *     type: 'object',
+ *     properties: {
+ *       price: { type: 'number' },
+ *       title: { type: 'string' }
+ *     },
+ *     required: ['price', 'title']
+ *   }
+ * };
  * ```
  */
 export interface VerifyOptions {
@@ -89,6 +104,35 @@ export interface VerifyOptions {
    * - `report`: Just report the failure, don't retry
    */
   onFailure?: 'retry' | 'fallback' | 'report';
+
+  /**
+   * Whether to validate the response against a JSON schema (FEAT-001).
+   * When true, uses the `schema` option to validate extracted content.
+   * @default false
+   */
+  validateSchema?: boolean;
+
+  /**
+   * JSON Schema (draft-07) for validating the response structure (FEAT-001).
+   * Used when `validateSchema: true`.
+   *
+   * Schema is validated against `result.content.structuredData` if present,
+   * otherwise against `result.content` itself.
+   *
+   * @example
+   * ```typescript
+   * schema: {
+   *   type: 'object',
+   *   properties: {
+   *     price: { type: 'number', minimum: 0 },
+   *     title: { type: 'string', minLength: 1 },
+   *     inStock: { type: 'boolean' }
+   *   },
+   *   required: ['price', 'title']
+   * }
+   * ```
+   */
+  schema?: JSONSchema;
 }
 
 /**
@@ -333,6 +377,14 @@ export interface VerificationAssertion {
  *   console.log('Warnings:', result.warnings);
  *   console.log('Confidence:', result.confidence);
  *
+ *   // Check schema validation errors (FEAT-001)
+ *   if (result.schemaErrors && result.schemaErrors.length > 0) {
+ *     console.log('Schema validation failed:');
+ *     result.schemaErrors.forEach(err => {
+ *       console.log(`  ${err.path}: ${err.message}`);
+ *     });
+ *   }
+ *
  *   // Inspect individual check results
  *   for (const check of result.checks) {
  *     if (!check.passed) {
@@ -378,6 +430,56 @@ export interface VerificationResult {
    * Higher values indicate more reliable results.
    */
   confidence: number;
+
+  /**
+   * Schema validation errors (FEAT-001).
+   * Present only when schema validation is enabled and fails.
+   * Empty array if schema validation passed or was not run.
+   */
+  schemaErrors?: SchemaValidationError[];
+}
+
+/**
+ * Schema validation error details (FEAT-001).
+ *
+ * Describes a specific validation failure when verifying content
+ * against a JSON schema.
+ *
+ * @example
+ * ```typescript
+ * const error: SchemaValidationError = {
+ *   path: '/price',
+ *   message: 'must be number',
+ *   keyword: 'type',
+ *   params: { type: 'number' }
+ * };
+ * ```
+ */
+export interface SchemaValidationError {
+  /**
+   * JSON path to the failing property.
+   * Uses JSON Pointer format (RFC 6901).
+   * @example '/price', '/product/title', '/items/0/id'
+   */
+  path: string;
+
+  /**
+   * Human-readable error message.
+   * @example 'must be number', 'must be >= 0', 'must have required property price'
+   */
+  message: string;
+
+  /**
+   * JSON Schema keyword that failed validation.
+   * @example 'type', 'minimum', 'required', 'pattern'
+   */
+  keyword: string;
+
+  /**
+   * Additional error parameters from the schema validator.
+   * Content depends on the failing keyword.
+   */
+  params?: Record<string, any>;
 }
 
 /**
@@ -486,4 +588,89 @@ export interface LearnedVerification {
    * Timestamp when this check was last used.
    */
   lastUsed: number;
+}
+
+/**
+ * JSON Schema definition (draft-07 compatible).
+ *
+ * Used for validating extracted content structure. Supports the full
+ * JSON Schema draft-07 specification.
+ *
+ * @see https://json-schema.org/draft-07/schema
+ *
+ * @example
+ * ```typescript
+ * const productSchema: JSONSchema = {
+ *   type: 'object',
+ *   properties: {
+ *     id: { type: 'string', pattern: '^[0-9]+$' },
+ *     price: { type: 'number', minimum: 0 },
+ *     title: { type: 'string', minLength: 1 },
+ *     tags: { type: 'array', items: { type: 'string' } },
+ *     inStock: { type: 'boolean' }
+ *   },
+ *   required: ['id', 'price', 'title']
+ * };
+ * ```
+ */
+export interface JSONSchema {
+  /** The data type */
+  type?: 'string' | 'number' | 'integer' | 'boolean' | 'object' | 'array' | 'null' | string[];
+
+  /** Object properties (for type: 'object') */
+  properties?: { [key: string]: JSONSchema };
+
+  /** Required properties (for type: 'object') */
+  required?: string[];
+
+  /** Array item schema (for type: 'array') */
+  items?: JSONSchema | JSONSchema[];
+
+  /** Minimum value (for type: 'number' | 'integer') */
+  minimum?: number;
+
+  /** Maximum value (for type: 'number' | 'integer') */
+  maximum?: number;
+
+  /** Minimum length (for type: 'string' | 'array') */
+  minLength?: number;
+
+  /** Maximum length (for type: 'string' | 'array') */
+  maxLength?: number;
+
+  /** Minimum number of items (for type: 'array') */
+  minItems?: number;
+
+  /** Maximum number of items (for type: 'array') */
+  maxItems?: number;
+
+  /** Pattern to match (for type: 'string') */
+  pattern?: string;
+
+  /** Enum values */
+  enum?: any[];
+
+  /** Constant value */
+  const?: any;
+
+  /** Description of the field */
+  description?: string;
+
+  /** Default value */
+  default?: any;
+
+  /** Additional properties allowed (for type: 'object') */
+  additionalProperties?: boolean | JSONSchema;
+
+  /** All of these schemas must match */
+  allOf?: JSONSchema[];
+
+  /** Any of these schemas must match */
+  anyOf?: JSONSchema[];
+
+  /** Exactly one of these schemas must match */
+  oneOf?: JSONSchema[];
+
+  /** Must not match this schema */
+  not?: JSONSchema;
 }
