@@ -3603,6 +3603,162 @@ export class SmartBrowser {
     return 0.3;
   }
 
+  // ============================================
+  // WORKFLOW REPLAY (FEAT-004)
+  // ============================================
+
+  /**
+   * Replay a saved workflow with optional variable substitution
+   */
+  async replayWorkflow(
+    workflow: import('../types/workflow.js').Workflow,
+    variables?: import('../types/workflow.js').WorkflowVariables
+  ): Promise<import('../types/workflow.js').WorkflowReplayResult> {
+    const startTime = Date.now();
+    const results: import('../types/workflow.js').WorkflowStepResult[] = [];
+
+    logger.smartBrowser.info('Replaying workflow', {
+      workflowId: workflow.id,
+      name: workflow.name,
+      steps: workflow.steps.length,
+    });
+
+    let overallSuccess = true;
+
+    for (const step of workflow.steps) {
+      const stepStart = Date.now();
+      let stepSuccess = false;
+      let stepData: any = undefined;
+      let stepError: string | undefined;
+      let tier: 'intelligence' | 'lightweight' | 'playwright' | undefined;
+
+      try {
+        // Substitute variables in URL if needed
+        let url = step.url || '';
+        if (variables) {
+          for (const [key, value] of Object.entries(variables)) {
+            url = url.replace(new RegExp(`{{${key}}}`, 'g'), String(value));
+          }
+        }
+
+        // Execute step based on action type
+        switch (step.action) {
+          case 'browse': {
+            if (!url) {
+              throw new Error('No URL specified for browse action');
+            }
+
+            const result = await this.browse(url, {
+              enableLearning: true,
+              useSkills: true,
+            });
+
+            tier = result.learning.renderTier;
+            stepData = {
+              title: result.title,
+              url: result.url,
+              markdown: result.content.markdown.substring(0, 1000), // Truncate
+            };
+            stepSuccess = result.content.markdown.length > 0;
+            break;
+          }
+
+          case 'extract': {
+            if (!url) {
+              throw new Error('No URL specified for extract action');
+            }
+
+            const result = await this.browse(url, {
+              enableLearning: true,
+            });
+
+            tier = result.learning.renderTier;
+            stepData = step.extractedData;
+            stepSuccess = result.content.markdown.length > 0;
+            break;
+          }
+
+          case 'navigate': {
+            if (!url) {
+              throw new Error('No URL specified for navigate action');
+            }
+
+            const result = await this.browse(url, {
+              enableLearning: false,
+              extractContent: false,
+            });
+
+            tier = result.learning.renderTier;
+            stepSuccess = true; // Navigation success if no error
+            break;
+          }
+
+          case 'wait': {
+            // Wait for specified duration (from step.duration or default 1s)
+            const duration = step.duration || 1000;
+            await new Promise(resolve => setTimeout(resolve, duration));
+            stepSuccess = true;
+            tier = 'intelligence';
+            break;
+          }
+
+          default: {
+            throw new Error(`Unknown workflow action: ${step.action}`);
+          }
+        }
+      } catch (error) {
+        stepError = error instanceof Error ? error.message : String(error);
+        stepSuccess = false;
+        overallSuccess = false;
+
+        logger.smartBrowser.error('Workflow step failed', {
+          workflowId: workflow.id,
+          stepNumber: step.stepNumber,
+          action: step.action,
+          error: stepError,
+        });
+      }
+
+      const stepResult: import('../types/workflow.js').WorkflowStepResult = {
+        stepNumber: step.stepNumber,
+        success: stepSuccess,
+        data: stepData,
+        error: stepError,
+        duration: Date.now() - stepStart,
+        tier,
+      };
+
+      results.push(stepResult);
+
+      // Stop if critical step failed
+      if (!stepSuccess && step.importance === 'critical') {
+        overallSuccess = false;
+        logger.smartBrowser.warn('Critical workflow step failed, stopping execution', {
+          workflowId: workflow.id,
+          stepNumber: step.stepNumber,
+        });
+        break;
+      }
+    }
+
+    const replayResult: import('../types/workflow.js').WorkflowReplayResult = {
+      workflowId: workflow.id,
+      executedAt: startTime,
+      results,
+      overallSuccess,
+      totalDuration: Date.now() - startTime,
+    };
+
+    logger.smartBrowser.info('Workflow replay completed', {
+      workflowId: workflow.id,
+      success: overallSuccess,
+      stepsExecuted: results.length,
+      totalDuration: replayResult.totalDuration,
+    });
+
+    return replayResult;
+  }
+
   /**
    * Enable debug trace recording globally
    */

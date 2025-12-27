@@ -132,3 +132,96 @@ export interface WorkflowStepResult {
 export interface WorkflowVariables {
   [key: string]: string | number | boolean;
 }
+
+/**
+ * FEAT-004: Scheduled Workflow Types
+ */
+
+/**
+ * Scheduled workflow configuration
+ */
+export interface ScheduledWorkflow {
+  id: string;
+  workflowId: string;
+  name: string;
+  description?: string;
+
+  // Schedule configuration
+  schedule: string; // Cron expression (e.g., "0 0 * * *" for daily at midnight)
+  timezone?: string; // IANA timezone (default: UTC)
+  enabled: boolean;
+
+  // Webhook delivery
+  webhookUrl?: string;
+  webhookSecret?: string; // HMAC secret for webhook signature
+
+  // Execution options
+  variables?: WorkflowVariables;
+  retryOnFailure?: boolean;
+  maxRetries?: number;
+
+  // Metadata
+  createdAt: number;
+  updatedAt: number;
+  createdBy: string; // tenant ID
+  lastExecutedAt?: number;
+  nextExecutionAt?: number;
+
+  // Statistics
+  totalExecutions: number;
+  successfulExecutions: number;
+  failedExecutions: number;
+}
+
+/**
+ * Request to create a scheduled workflow
+ */
+export interface CreateScheduledWorkflowRequest {
+  workflowId: string;
+  name: string;
+  description?: string;
+  schedule: string;
+  timezone?: string;
+  webhookUrl?: string;
+  webhookSecret?: string;
+  variables?: WorkflowVariables;
+  retryOnFailure?: boolean;
+  maxRetries?: number;
+  tenantId: string;
+}
+
+/**
+ * Request to update a scheduled workflow
+ */
+export interface UpdateScheduledWorkflowRequest {
+  name?: string;
+  description?: string;
+  schedule?: string;
+  timezone?: string;
+  enabled?: boolean;
+  webhookUrl?: string;
+  webhookSecret?: string;
+  variables?: WorkflowVariables;
+  retryOnFailure?: boolean;
+  maxRetries?: number;
+}
+
+/**
+ * Result of a scheduled workflow execution
+ */
+export interface ScheduledWorkflowExecution {
+  id: string;
+  scheduledWorkflowId: string;
+  workflowId: string;
+  executedAt: number;
+  duration: number;
+  success: boolean;
+  result: WorkflowReplayResult;
+  error?: string;
+
+  // Webhook delivery
+  webhookDelivered?: boolean;
+  webhookDeliveryStatus?: number;
+  webhookDeliveryError?: string;
+  webhookDeliveredAt?: number;
+}
