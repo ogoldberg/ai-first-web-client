@@ -12,6 +12,10 @@
 
 import { logger } from '../utils/logger.js';
 import type { NetworkRequest, PaginationPattern } from '../types/index.js';
+import {
+  getPaginationPreset,
+  type PaginationPresetConfig,
+} from '../utils/domain-presets.js';
 
 const paginationLogger = logger.create('PaginationDiscovery');
 
@@ -184,9 +188,11 @@ const NEXT_CURSOR_PATHS = [
 export class PaginationDiscovery {
   private patterns: Map<string, PaginationApiPattern> = new Map();
   private patternsByDomain: Map<string, string[]> = new Map();
+  private presetPatterns: Map<string, PaginationApiPattern> = new Map();
 
   /**
    * Analyze network requests to discover pagination API patterns
+   * First checks for domain presets, then falls back to discovery
    */
   async analyze(context: PaginationContext): Promise<PaginationAnalysisResult> {
     paginationLogger.info('Analyzing for pagination API patterns', {
@@ -196,6 +202,18 @@ export class PaginationDiscovery {
     });
 
     const reasons: string[] = [];
+
+    // INT-005: Check for preset first
+    const presetResult = this.tryPreset(context.originalUrl);
+    if (presetResult.detected && presetResult.pattern) {
+      reasons.push(`Using preset pagination for ${presetResult.pattern.domain}`);
+      return {
+        detected: true,
+        pattern: presetResult.pattern,
+        confidence: presetResult.confidence,
+        reasons,
+      };
+    }
 
     // Filter to JSON API requests only
     const apiRequests = context.networkRequests.filter(req =>
@@ -911,7 +929,154 @@ export class PaginationDiscovery {
   clear(): void {
     this.patterns.clear();
     this.patternsByDomain.clear();
+    this.presetPatterns.clear();
     paginationLogger.info('Cleared all pagination patterns');
+  }
+
+  // ============================================
+  // INT-005: PRESET SUPPORT FOR LEGAL DOCUMENTS
+  // ============================================
+
+  /**
+   * Try to use a domain preset for pagination configuration
+   */
+  tryPreset(url: string): PaginationAnalysisResult {
+    const reasons: string[] = [];
+
+    try {
+      const parsed = new URL(url);
+      const domain = parsed.hostname.replace(/^www\./, '');
+
+      // Check if we already have a preset pattern cached
+      const cachedPattern = this.presetPatterns.get(domain);
+      if (cachedPattern) {
+        reasons.push(`Using cached preset pattern for ${domain}`);
+        return {
+          detected: true,
+          pattern: cachedPattern,
+          confidence: 0.9,
+          reasons,
+        };
+      }
+
+      // Try to get preset from domain-presets
+      const preset = getPaginationPreset(url);
+      if (!preset) {
+        reasons.push('No pagination preset found for domain');
+        return { detected: false, confidence: 0, reasons };
+      }
+
+      // Create pattern from preset
+      const pattern = this.createPatternFromPreset(domain, parsed, preset);
+
+      // Cache the preset pattern
+      this.presetPatterns.set(domain, pattern);
+      this.storePattern(pattern);
+
+      paginationLogger.info('Created pagination pattern from preset', {
+        domain,
+        paramName: pattern.paginationParam.name,
+        paramType: pattern.paginationParam.type,
+      });
+
+      reasons.push(`Created pattern from ${domain} preset`);
+      return {
+        detected: true,
+        pattern,
+        confidence: 0.9, // High confidence for presets
+        reasons,
+      };
+    } catch (error) {
+      paginationLogger.debug('Error trying preset', { url, error });
+      reasons.push(`Preset check error: ${error instanceof Error ? error.message : 'unknown'}`);
+      return { detected: false, confidence: 0, reasons };
+    }
+  }
+
+  /**
+   * Create a PaginationApiPattern from a preset configuration
+   */
+  private createPatternFromPreset(
+    domain: string,
+    parsedUrl: URL,
+    preset: PaginationPresetConfig
+  ): PaginationApiPattern {
+    // Determine pagination param type
+    let paramType: 'page' | 'offset' | 'cursor' | 'token' = 'page';
+    if (preset.paramName) {
+      const lower = preset.paramName.toLowerCase();
+      if (['offset', 'start', 'skip'].includes(lower)) {
+        paramType = 'offset';
+      } else if (['cursor', 'after', 'before'].includes(lower)) {
+        paramType = 'cursor';
+      } else if (['token', 'nexttoken', 'continuation'].includes(lower)) {
+        paramType = 'token';
+      }
+    }
+
+    // Determine param location
+    let location: 'query' | 'path' | 'body' = 'query';
+    if (preset.type === 'path_segment') {
+      location = 'path';
+    }
+
+    // Build base URL
+    const baseUrl = preset.apiEndpoint
+      ? `${parsedUrl.origin}${preset.apiEndpoint}`
+      : `${parsedUrl.origin}${parsedUrl.pathname}`;
+
+    return {
+      id: `preset_${domain}_${Date.now()}`,
+      domain,
+      baseUrl,
+      paginationParam: {
+        name: preset.paramName || 'page',
+        type: paramType,
+        startValue: preset.startValue ?? 1,
+        increment: preset.increment,
+        location,
+        nextValuePath: preset.nextCursorPath,
+      },
+      method: 'GET',
+      headers: {},
+      responseStructure: {
+        dataPath: preset.responseDataPath || 'data',
+        totalCountPath: preset.totalCountPath,
+        hasMorePath: preset.hasMorePath,
+        nextCursorPath: preset.nextCursorPath,
+        itemsPerPage: preset.itemsPerPage || 10,
+      },
+      metrics: this.createEmptyMetrics(),
+      discoveredAt: Date.now(),
+      lastUsedAt: Date.now(),
+      isValidated: true, // Presets are pre-validated
+    };
+  }
+
+  /**
+   * Get preset pattern for a domain (if available)
+   */
+  getPresetPattern(url: string): PaginationApiPattern | undefined {
+    try {
+      const domain = new URL(url).hostname.replace(/^www\./, '');
+      return this.presetPatterns.get(domain);
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
+   * Check if a URL has a pagination preset available
+   */
+  hasPreset(url: string): boolean {
+    return getPaginationPreset(url) !== undefined;
+  }
+
+  /**
+   * Get all domains with pagination presets loaded
+   */
+  getPresetDomains(): string[] {
+    return Array.from(this.presetPatterns.keys());
   }
 }
 
