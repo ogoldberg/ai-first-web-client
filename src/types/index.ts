@@ -2,6 +2,9 @@
  * Core types for LLM Browser MCP Server
  */
 
+// Import types for use in this file
+import type { WebSocketPattern, WebSocketConnection } from './websocket-patterns.js';
+
 // Re-export API pattern types
 export * from './api-patterns.js';
 
@@ -1618,6 +1621,7 @@ export interface TieredFetchResult {
   tierReason: string;
   networkRequests: NetworkRequest[];
   discoveredApis: ApiPattern[];
+  websocketConnections?: WebSocketConnection[]; // FEAT-003
   timing: {
     total: number;
     perTier: Record<RenderTier, number>;

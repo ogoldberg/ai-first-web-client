@@ -75,6 +75,7 @@
     "pino": "^10.1.0",
     "tough-cookie": "^6.0.0",
     "turndown": "^7.2.0",
+    "ws": "^8.14.0",
     "zod": "^4.2.1"
   },
   "optionalDependencies": {
@@ -92,6 +93,7 @@
     "@types/pdf-parse": "^1.1.4",
     "@types/tough-cookie": "^4.0.5",
     "@types/turndown": "^5.0.5",
+    "@types/ws": "^8.5.8",
     "@vitest/coverage-v8": "^4.0.16",
     "ajv": "^8.12.0",
     "ajv-formats": "^2.1.1",

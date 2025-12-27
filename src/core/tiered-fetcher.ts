@@ -587,6 +587,7 @@ export class TieredFetcher {
       timeout: options.tierTimeout || TIMEOUTS.TIER_ATTEMPT,
       captureNetwork: true,
       captureConsole: false,
+      captureWebSockets: true, // FEAT-003
     });
 
     // Wait for specific selector if requested
@@ -604,6 +605,7 @@ export class TieredFetcher {
       content,
       finalUrl,
       networkRequests: result.network,
+      websocketConnections: result.websockets, // FEAT-003
       discoveredApis: [], // API analysis happens at higher level
       page: result.page,
     };

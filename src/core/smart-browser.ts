@@ -34,6 +34,7 @@ import type {
   TableConfidence,
   ApiConfidence,
   OnProgressCallback,
+  WebSocketConnection, // FEAT-003
 } from '../types/index.js';
 import {
   createProgressEvent,
@@ -595,6 +596,7 @@ export class SmartBrowser {
       page: Page;
       network: BrowseResult['network'];
       console: BrowseResult['console'];
+      websockets: WebSocketConnection[]; // FEAT-003
       captchaResult: CaptchaHandlingResult;
     }> => {
       // Apply rate limiting
@@ -617,6 +619,7 @@ export class SmartBrowser {
       const result = await this.browserManager.browse(url, {
         captureNetwork: options.captureNetwork !== false,
         captureConsole: options.captureConsole !== false,
+        captureWebSockets: true, // FEAT-003
         waitFor,
         timeout: options.timeout || TIMEOUTS.PAGE_LOAD,
         profile: options.sessionProfile,
@@ -701,7 +704,7 @@ export class SmartBrowser {
       throw error;
     }
 
-    const { page, network, console: consoleMessages, captchaResult } = result;
+    const { page, network, console: consoleMessages, websockets, captchaResult } = result;
 
     // Get initial content (may be challenge page)
     let html = await page.content();
@@ -902,6 +905,18 @@ export class SmartBrowser {
       }
     } catch (apiError) {
       logger.smartBrowser.error(`API analysis failed (non-fatal): ${apiError}`);
+    }
+
+    // Learn WebSocket patterns (FEAT-003) (with error boundary)
+    if (enableLearning && websockets && websockets.length > 0) {
+      try {
+        for (const connection of websockets) {
+          this.learningEngine.learnWebSocketPattern(connection, domain);
+        }
+        logger.smartBrowser.debug(`Learned ${websockets.length} WebSocket connection(s) from ${domain}`);
+      } catch (wsError) {
+        logger.smartBrowser.error(`WebSocket pattern learning failed (non-fatal): ${wsError}`);
+      }
     }
 
     // Check for content changes (with error boundary)

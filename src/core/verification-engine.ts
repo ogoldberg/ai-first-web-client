@@ -99,8 +99,13 @@ import type {
 import type { SmartBrowseResult } from './smart-browser.js';
 import type { ProceduralMemory } from './procedural-memory.js';
 import { logger } from '../utils/logger.js';
-import Ajv from 'ajv';
-import addFormats from 'ajv-formats';
+import AjvModule from 'ajv';
+import addFormatsModule from 'ajv-formats';
+import type { ValidateFunction, ErrorObject } from 'ajv';
+
+// Handle CommonJS/ESM interop
+const Ajv = (AjvModule as any).default || AjvModule;
+const addFormats = (addFormatsModule as any).default || addFormatsModule;
 
 /**
  * Browser interface for state verification.
@@ -215,7 +220,7 @@ export class VerificationEngine {
   private apiCaller?: StateVerificationApiCaller;
 
   /** AJV validator instance for JSON Schema validation (FEAT-001) */
-  private ajv: Ajv;
+  private ajv: any;
 
   /**
    * Initialize VerificationEngine with AJV validator for schema validation.
@@ -984,8 +989,8 @@ export class VerificationEngine {
    * ```
    */
   private validateSchema(result: SmartBrowseResult, schema: JSONSchema): SchemaValidationError[] {
-    // Determine what to validate: structuredData if present, otherwise content
-    const dataToValidate = result.content?.structuredData || result.content;
+    // Validate the result content
+    const dataToValidate = result.content;
 
     if (!dataToValidate) {
       logger.verificationEngine.warn('Schema validation skipped: no content to validate');
@@ -1007,7 +1012,7 @@ export class VerificationEngine {
     }
 
     // Convert AJV errors to our SchemaValidationError format
-    const errors: SchemaValidationError[] = (validate.errors || []).map((error) => ({
+    const errors: SchemaValidationError[] = (validate.errors || []).map((error: ErrorObject) => ({
       path: error.instancePath || '/',
       message: error.message || 'Schema validation failed',
       keyword: error.keyword,
