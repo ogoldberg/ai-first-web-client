@@ -65,7 +65,7 @@ export class WebSocketPatternLearner {
         lastVerified: Date.now(),
         verificationCount: 1,
         failureCount: 0,
-        provenance: createProvenance('runtime_capture', {
+        provenance: createProvenance('api_extraction', {
           sourceUrl: connection.url,
           sourceDomain: domain,
         }),
