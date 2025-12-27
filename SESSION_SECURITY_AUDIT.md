@@ -413,43 +413,32 @@ Add to Privacy Policy Section 3 (Data Storage & Retention):
 
 ### High Priority (P1)
 
-1. **Add Session Data to GDPR Export** (`GET /v1/tenants/:id/data`)
+1. ✅ **COMPLETED: Add Session Data to GDPR Export** (`GET /v1/tenants/:id/data`)
 
-   Currently marked as TODO in `packages/api/src/routes/tenants.ts:500-501`:
-   ```typescript
-   // TODO: Add session data (if any)
-   // sessions: await getAllSessions(tenant.id),
-   ```
-
-   **Fix:**
+   **Implementation:**
    ```typescript
    import { getAllSessions } from '../services/redis-session.js';
 
    dataCategories: {
      account: formatTenantResponse(tenant),
-     sessions: await getAllSessions(tenant.id), // ✅ Add this
+     sessions: await getAllSessions(tenant.id), // ✅ IMPLEMENTED
    }
    ```
 
-2. **Add Session Cleanup to Data Deletion** (`DELETE /v1/tenants/:id/data`)
+   **Status:** Implemented in `packages/api/src/routes/tenants.ts:502`
 
-   Currently marked as TODO in `packages/api/src/routes/tenants.ts:591-592`:
-   ```typescript
-   // 2. Delete all sessions
-   // TODO: await clearTenantSessions(tenant.id);
-   ```
+2. ✅ **COMPLETED: Add Session Cleanup to Data Deletion** (`DELETE /v1/tenants/:id/data`)
 
-   **Fix:**
+   **Implementation:**
    ```typescript
    import { clearTenantSessions } from '../services/redis-session.js';
 
-   // Delete all tenant data
-   // 1. Revoke all API keys
-   // TODO: await revokeAllApiKeys(tenant.id);
-
-   // 2. Delete all sessions
-   await clearTenantSessions(tenant.id); // ✅ Add this
+   // 2. Delete all sessions (cookies, localStorage, authentication tokens)
+   const sessionsDeleted = await clearTenantSessions(tenant.id);
+   console.log(`[GDPR] Deleted ${sessionsDeleted} sessions for tenant ${tenant.id}`);
    ```
+
+   **Status:** Implemented in `packages/api/src/routes/tenants.ts:592-594`
 
 ### Medium Priority (P2)
 
@@ -516,8 +505,8 @@ Add to Privacy Policy Section 3 (Data Storage & Retention):
 
 ### 📋 Complete TODOs
 
-1. Add session export to `GET /v1/tenants/:id/data`
-2. Add session cleanup to `DELETE /v1/tenants/:id/data`
+1. ✅ **COMPLETED:** Add session export to `GET /v1/tenants/:id/data`
+2. ✅ **COMPLETED:** Add session cleanup to `DELETE /v1/tenants/:id/data`
 3. (Optional) Add session listing endpoint (`GET /v1/sessions`)
 4. (Optional) Add timing-safe API key comparison
 5. (Optional) Add session access audit logging

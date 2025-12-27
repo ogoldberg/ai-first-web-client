@@ -158,7 +158,7 @@ This document summarizes all legal and compliance work completed for Unbrowser's
     "dataCategories": {
       "account": { /* full account data */ },
       "usage": { /* usage statistics - TODO */ },
-      "sessions": [ /* session data - TODO */ ],
+      "sessions": [ /* session data - ✅ IMPLEMENTED */ ],
       "workflows": [ /* workflows - TODO */ ],
       "apiKeys": [ /* hashes only - TODO */ ]
     },
@@ -167,7 +167,7 @@ This document summarizes all legal and compliance work completed for Unbrowser's
 }
 ```
 
-**Status:** ✅ Implemented with TODOs for full data integration
+**Status:** ✅ Implemented - Session data export complete, other data categories pending
 
 ---
 
@@ -181,7 +181,7 @@ This document summarizes all legal and compliance work completed for Unbrowser's
 
 **Actions:**
 1. Revoke all API keys (TODO)
-2. Delete all sessions (TODO)
+2. Delete all sessions ✅ **IMPLEMENTED**
 3. Delete workflows (TODO)
 4. Delete usage stats (TODO)
 5. Delete tenant account (cascades to related data) ✅
@@ -199,7 +199,7 @@ This document summarizes all legal and compliance work completed for Unbrowser's
 }
 ```
 
-**Status:** ✅ Implemented with TODOs for comprehensive cleanup
+**Status:** ✅ Implemented - Session cleanup complete, other data categories pending
 
 ---
 
@@ -254,10 +254,10 @@ This document summarizes all legal and compliance work completed for Unbrowser's
 - [x] Data export endpoint implemented (GET /v1/tenants/:id/data)
 - [x] Data deletion endpoint implemented (DELETE /v1/tenants/:id/data)
 - [ ] **Integrate usage statistics** export
-- [ ] **Integrate session data** export
+- [x] **Integrate session data** export ✅
 - [ ] **Integrate workflow data** export
 - [ ] **Integrate API key list** (hashes only)
-- [ ] **Add session cleanup** on deletion
+- [x] **Add session cleanup** on deletion ✅
 - [ ] **Add usage cleanup** on deletion
 
 ### Website Updates (P1)

@@ -16,6 +16,7 @@ import {
   type ListTenantsOptions,
 } from '../services/tenants.js';
 import type { Plan } from '../middleware/types.js';
+import { getAllSessions, clearTenantSessions } from '../services/redis-session.js';
 
 const tenants = new Hono();
 
@@ -497,8 +498,8 @@ tenants.get('/:id/data', async (c) => {
         account: formatTenantResponse(tenant),
         // TODO: Add usage statistics
         // usage: await getUsageStats(tenant.id),
-        // TODO: Add session data (if any)
-        // sessions: await getAllSessions(tenant.id),
+        // Session data (cookies, localStorage, authentication tokens)
+        sessions: await getAllSessions(tenant.id),
         // TODO: Add workflow data
         // workflows: workflowRecorder.listWorkflows(),
         // TODO: Add API keys (hashes only, not plaintext)
@@ -588,8 +589,9 @@ tenants.delete('/:id/data', async (c) => {
     // 1. Revoke all API keys
     // TODO: await revokeAllApiKeys(tenant.id);
 
-    // 2. Delete all sessions
-    // TODO: await clearTenantSessions(tenant.id);
+    // 2. Delete all sessions (cookies, localStorage, authentication tokens)
+    const sessionsDeleted = await clearTenantSessions(tenant.id);
+    console.log(`[GDPR] Deleted ${sessionsDeleted} sessions for tenant ${tenant.id}`);
 
     // 3. Delete workflows
     // TODO: workflow recorder cleanup
