@@ -265,6 +265,7 @@ export const logger = {
   smartBrowser: new Logger('SmartBrowser'),
   verificationEngine: new Logger('VerificationEngine'),
   workflowRecorder: new Logger('WorkflowRecorder'),
+  workflowScheduler: new Logger('WorkflowScheduler'),
 
   // Learning components
   learning: new Logger('LearningEngine'),

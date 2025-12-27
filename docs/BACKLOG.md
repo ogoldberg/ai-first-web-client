@@ -489,13 +489,13 @@ See [COMPETITIVE_ANALYSIS.md](COMPETITIVE_ANALYSIS.md) for context on why these 
 |----|------|--------|--------|-------|
 | FEAT-001 | Schema validation for API discovery | M | Complete | Extend VerificationEngine with JSON schema validation. Define expected response schema, get typed validation errors. Natural extension of API-015. Implementation complete, tests passing (30+ test cases), example created. Ready for review. |
 | FEAT-002 | Change monitoring for learned patterns | M | Complete | Detect when learned API patterns break. Track pattern health, notify on failures, suggest re-learning. Builds on ProceduralMemory versioning. Implementation complete, 40+ tests passing, example created, LearningEngine integration done. Ready for review. |
-| FEAT-003 | WebSocket API support | L | In Progress | Discover and replay WebSocket/Socket.IO/SSE real-time APIs. Detect WS endpoints, learn message patterns, direct replay. Completes API discovery. Core implementation complete (types, pattern learner, WebSocket client, example). Integration pending (browser capture, LearningEngine storage, TieredFetcher). |
+| FEAT-003 | WebSocket API support | L | ✅ Complete (2025-12-27) | Discover and replay WebSocket/Socket.IO/SSE real-time APIs. Detect WS endpoints, learn message patterns, direct replay. Completes API discovery. Full integration complete (browser capture, LearningEngine storage, TieredFetcher, SmartBrowser replay). See docs/FEAT-003-IMPLEMENTATION-SUMMARY.md |
 
 ### Medium Priority (Advanced Features)
 
 | ID | Task | Effort | Status | Notes |
 |----|------|--------|--------|-------|
-| FEAT-004 | Scheduled workflow runs with webhooks | L | Not Started | Schedule recorded workflows (cron), POST results to webhooks. Natural extension of COMP-009 (workflow recording). Makes workflows production-ready. |
+| FEAT-004 | Scheduled workflow runs with webhooks | L | ✅ Complete (2025-12-27) | Schedule recorded workflows (cron), POST results to webhooks. Natural extension of COMP-009 (workflow recording). Makes workflows production-ready. Full implementation with cron scheduling, variable substitution, HMAC webhooks. See docs/FEAT-004-IMPLEMENTATION-SUMMARY.md |
 | FEAT-005 | Community pattern marketplace | XL | Not Started | User-published patterns, discovery/install, rating system, categories. Amplifies collective learning. Requires moderation, API endpoints, UI. |
 | FEAT-006 | Geographic proxy routing | M | Not Started | Smart geo routing based on site requirements. Auto-detect region restrictions, select optimal proxy location. Extends CLOUD-003 (proxy management). |
 
