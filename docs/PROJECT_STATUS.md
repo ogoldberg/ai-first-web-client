@@ -13,9 +13,10 @@
 Working on MoveAhead.ai integration tasks (INT initiative).
 
 **In Progress:**
-- INT-002 - Enhance session persistence for multi-portal (extend session management to track SSO relationships)
+- (none)
 
 **Completed:**
+- INT-002 - Enhance session persistence for multi-portal (extend session management to track SSO relationships)
 - INT-001 - Create SDK wrapper for research use case (specialized factory function with research presets)
 - GAP-009 - Multi-Domain Login Reuse (SSO flow detection, cross-domain session sharing)
 
