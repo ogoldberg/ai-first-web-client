@@ -621,4 +621,412 @@ describe('SessionManager', () => {
       expect(fs.readFile).toHaveBeenCalledTimes(1);
     });
   });
+
+  // ============================================================================
+  // Multi-Portal Session Tracking Tests (INT-002)
+  // ============================================================================
+
+  describe('Multi-Portal Session Tracking (INT-002)', () => {
+    const createMockSession = (domain: string, overrides: any = {}) => ({
+      domain,
+      cookies: [],
+      localStorage: {},
+      sessionStorage: {},
+      isAuthenticated: true,
+      lastUsed: Date.now(),
+      ...overrides,
+    });
+
+    describe('Portal Group Management', () => {
+      it('should return empty array when no portal groups exist', () => {
+        expect(sessionManager.listPortalGroups()).toEqual([]);
+      });
+
+      it('should return empty array for non-existent portal group', () => {
+        const sessions = sessionManager.getPortalGroupSessions('spain-gov');
+        expect(sessions).toEqual([]);
+      });
+
+      it('should assign session to portal group', async () => {
+        const sessions = (sessionManager as any).sessions;
+        sessions.set('agenciatributaria.es:spain-tax', createMockSession('agenciatributaria.es'));
+
+        await sessionManager.assignToPortalGroup('agenciatributaria.es', 'spain-tax', 'spain-gov', {
+          isPrimary: true,
+          loginSequence: 1,
+        });
+
+        const session = sessions.get('agenciatributaria.es:spain-tax');
+        expect(session.metadata?.portalGroup).toBe('spain-gov');
+        expect(session.metadata?.isPrimarySession).toBe(true);
+        expect(session.metadata?.loginSequence).toBe(1);
+      });
+
+      it('should list portal groups', async () => {
+        const sessions = (sessionManager as any).sessions;
+
+        // Add sessions to different portal groups
+        sessions.set('agenciatributaria.es:spain-tax', createMockSession('agenciatributaria.es', {
+          metadata: { portalGroup: 'spain-gov' },
+        }));
+        sessions.set('seg-social.es:spain-social', createMockSession('seg-social.es', {
+          metadata: { portalGroup: 'spain-gov' },
+        }));
+        sessions.set('aima.gov.pt:portugal-immigration', createMockSession('aima.gov.pt', {
+          metadata: { portalGroup: 'portugal-gov' },
+        }));
+
+        const groups = sessionManager.listPortalGroups();
+        expect(groups).toHaveLength(2);
+        expect(groups).toContain('spain-gov');
+        expect(groups).toContain('portugal-gov');
+      });
+
+      it('should get all sessions in a portal group', async () => {
+        const sessions = (sessionManager as any).sessions;
+
+        sessions.set('agenciatributaria.es:spain-tax', createMockSession('agenciatributaria.es', {
+          metadata: { portalGroup: 'spain-gov', loginSequence: 1 },
+        }));
+        sessions.set('seg-social.es:spain-social', createMockSession('seg-social.es', {
+          metadata: { portalGroup: 'spain-gov', loginSequence: 2 },
+        }));
+        sessions.set('aima.gov.pt:portugal-immigration', createMockSession('aima.gov.pt', {
+          metadata: { portalGroup: 'portugal-gov' },
+        }));
+
+        const spainSessions = sessionManager.getPortalGroupSessions('spain-gov');
+        expect(spainSessions).toHaveLength(2);
+        // Should be sorted by loginSequence
+        expect(spainSessions[0].domain).toBe('agenciatributaria.es');
+        expect(spainSessions[1].domain).toBe('seg-social.es');
+      });
+
+      it('should get primary session for portal group', async () => {
+        const sessions = (sessionManager as any).sessions;
+
+        sessions.set('agenciatributaria.es:spain-tax', createMockSession('agenciatributaria.es', {
+          metadata: { portalGroup: 'spain-gov', isPrimarySession: true, loginSequence: 1 },
+        }));
+        sessions.set('seg-social.es:spain-social', createMockSession('seg-social.es', {
+          metadata: { portalGroup: 'spain-gov', loginSequence: 2 },
+        }));
+
+        const primary = sessionManager.getPrimarySession('spain-gov');
+        expect(primary?.domain).toBe('agenciatributaria.es');
+      });
+
+      it('should return first session if no explicit primary', async () => {
+        const sessions = (sessionManager as any).sessions;
+
+        sessions.set('agenciatributaria.es:spain-tax', createMockSession('agenciatributaria.es', {
+          metadata: { portalGroup: 'spain-gov', loginSequence: 1 },
+        }));
+        sessions.set('seg-social.es:spain-social', createMockSession('seg-social.es', {
+          metadata: { portalGroup: 'spain-gov', loginSequence: 2 },
+        }));
+
+        const primary = sessionManager.getPrimarySession('spain-gov');
+        expect(primary?.domain).toBe('agenciatributaria.es');
+      });
+    });
+
+    describe('Portal Group Health', () => {
+      it('should return healthy status for portal group with all healthy sessions', async () => {
+        const sessions = (sessionManager as any).sessions;
+
+        sessions.set('agenciatributaria.es:spain-tax', createMockSession('agenciatributaria.es', {
+          metadata: { portalGroup: 'spain-gov' },
+          cookies: [{ name: 'session_id', expires: Math.floor(Date.now() / 1000) + 86400 * 7 }],
+        }));
+        sessions.set('seg-social.es:spain-social', createMockSession('seg-social.es', {
+          metadata: { portalGroup: 'spain-gov' },
+          cookies: [{ name: 'auth_token', expires: Math.floor(Date.now() / 1000) + 86400 * 7 }],
+        }));
+
+        const health = sessionManager.getPortalGroupHealth('spain-gov');
+        expect(health.healthy).toBe(true);
+        expect(health.totalSessions).toBe(2);
+        expect(health.healthySessions).toBe(2);
+        expect(health.expiredSessions).toBe(0);
+        expect(health.issues).toHaveLength(0);
+      });
+
+      it('should return unhealthy status when any session is expired', async () => {
+        const sessions = (sessionManager as any).sessions;
+
+        sessions.set('agenciatributaria.es:spain-tax', createMockSession('agenciatributaria.es', {
+          metadata: { portalGroup: 'spain-gov' },
+          cookies: [{ name: 'session_id', expires: Math.floor(Date.now() / 1000) + 86400 * 7 }],
+        }));
+        sessions.set('seg-social.es:spain-social', createMockSession('seg-social.es', {
+          metadata: { portalGroup: 'spain-gov' },
+          cookies: [{ name: 'auth_token', expires: Math.floor(Date.now() / 1000) - 3600 }],
+        }));
+
+        const health = sessionManager.getPortalGroupHealth('spain-gov');
+        expect(health.healthy).toBe(false);
+        expect(health.expiredSessions).toBe(1);
+        expect(health.issues).toContain('seg-social.es:spain-social is expired');
+      });
+
+      it('should report expiring soon sessions', async () => {
+        const sessions = (sessionManager as any).sessions;
+
+        sessions.set('agenciatributaria.es:spain-tax', createMockSession('agenciatributaria.es', {
+          metadata: { portalGroup: 'spain-gov' },
+          cookies: [{ name: 'session_id', expires: Math.floor(Date.now() / 1000) + 3600 }], // expires in 1 hour
+        }));
+
+        const health = sessionManager.getPortalGroupHealth('spain-gov');
+        expect(health.expiringSoonSessions).toBe(1);
+        expect(health.issues).toContain('agenciatributaria.es:spain-tax expires soon');
+      });
+
+      it('should return unhealthy when sessions are stale or expiring soon', async () => {
+        const sessions = (sessionManager as any).sessions;
+
+        // Session expiring soon (not expired, but not fully healthy)
+        sessions.set('agenciatributaria.es:spain-tax', createMockSession('agenciatributaria.es', {
+          metadata: { portalGroup: 'spain-gov' },
+          cookies: [{ name: 'session_id', expires: Math.floor(Date.now() / 1000) + 3600 }], // expires in 1 hour
+        }));
+
+        const health = sessionManager.getPortalGroupHealth('spain-gov');
+        // Should be unhealthy because not all sessions are fully healthy
+        expect(health.healthy).toBe(false);
+        expect(health.healthySessions).toBe(0);
+        expect(health.expiringSoonSessions).toBe(1);
+      });
+    });
+
+    describe('Session Dependencies', () => {
+      it('should track parent-child session relationships', async () => {
+        const sessions = (sessionManager as any).sessions;
+
+        // Create parent session
+        sessions.set('clave.gob.es:spain-clave', createMockSession('clave.gob.es', {
+          metadata: { portalGroup: 'spain-gov', isPrimarySession: true },
+        }));
+
+        // Add child session with parent relationship
+        sessions.set('agenciatributaria.es:spain-tax', createMockSession('agenciatributaria.es'));
+
+        await sessionManager.assignToPortalGroup('agenciatributaria.es', 'spain-tax', 'spain-gov', {
+          loginSequence: 2,
+          parentDomain: 'clave.gob.es',
+          parentProfile: 'spain-clave',
+        });
+
+        // Check child session has parent reference
+        const childSession = sessions.get('agenciatributaria.es:spain-tax');
+        expect(childSession.metadata?.parentSession?.domain).toBe('clave.gob.es');
+        expect(childSession.metadata?.parentSession?.profile).toBe('spain-clave');
+
+        // Check parent session has child reference
+        const parentSession = sessions.get('clave.gob.es:spain-clave');
+        expect(parentSession.metadata?.childSessions).toHaveLength(1);
+        expect(parentSession.metadata?.childSessions[0].domain).toBe('agenciatributaria.es');
+      });
+
+      it('should get dependent sessions recursively', async () => {
+        const sessions = (sessionManager as any).sessions;
+
+        // Create chain: clave -> agenciatributaria -> sede.agenciatributaria
+        sessions.set('clave.gob.es:spain-clave', createMockSession('clave.gob.es', {
+          metadata: {
+            portalGroup: 'spain-gov',
+            childSessions: [{ domain: 'agenciatributaria.es', profile: 'spain-tax' }],
+          },
+        }));
+        sessions.set('agenciatributaria.es:spain-tax', createMockSession('agenciatributaria.es', {
+          metadata: {
+            portalGroup: 'spain-gov',
+            parentSession: { domain: 'clave.gob.es', profile: 'spain-clave' },
+            childSessions: [{ domain: 'sede.agenciatributaria.gob.es', profile: 'spain-tax' }],
+          },
+        }));
+        sessions.set('sede.agenciatributaria.gob.es:spain-tax', createMockSession('sede.agenciatributaria.gob.es', {
+          metadata: {
+            portalGroup: 'spain-gov',
+            parentSession: { domain: 'agenciatributaria.es', profile: 'spain-tax' },
+          },
+        }));
+
+        const dependents = sessionManager.getDependentSessions('clave.gob.es', 'spain-clave');
+        expect(dependents).toHaveLength(2);
+        expect(dependents.map(d => d.domain)).toContain('agenciatributaria.es');
+        expect(dependents.map(d => d.domain)).toContain('sede.agenciatributaria.gob.es');
+      });
+
+      it('should handle cyclic session dependencies without infinite loop', async () => {
+        const sessions = (sessionManager as any).sessions;
+
+        // Create a cycle: A -> B -> C -> A
+        sessions.set('portal-a.gov.es:default', createMockSession('portal-a.gov.es', {
+          metadata: {
+            portalGroup: 'cyclic-group',
+            childSessions: [{ domain: 'portal-b.gov.es', profile: 'default' }],
+          },
+        }));
+        sessions.set('portal-b.gov.es:default', createMockSession('portal-b.gov.es', {
+          metadata: {
+            portalGroup: 'cyclic-group',
+            parentSession: { domain: 'portal-a.gov.es', profile: 'default' },
+            childSessions: [{ domain: 'portal-c.gov.es', profile: 'default' }],
+          },
+        }));
+        sessions.set('portal-c.gov.es:default', createMockSession('portal-c.gov.es', {
+          metadata: {
+            portalGroup: 'cyclic-group',
+            parentSession: { domain: 'portal-b.gov.es', profile: 'default' },
+            // Create cycle back to A
+            childSessions: [{ domain: 'portal-a.gov.es', profile: 'default' }],
+          },
+        }));
+
+        // Should complete without infinite loop and return B and C (not A since it's the start)
+        const dependents = sessionManager.getDependentSessions('portal-a.gov.es', 'default');
+        expect(dependents).toHaveLength(2);
+        expect(dependents.map(d => d.domain)).toContain('portal-b.gov.es');
+        expect(dependents.map(d => d.domain)).toContain('portal-c.gov.es');
+        // Should not include portal-a.gov.es (the starting point)
+        expect(dependents.map(d => d.domain)).not.toContain('portal-a.gov.es');
+      });
+    });
+
+    describe('Portal Group Operations', () => {
+      it('should invalidate all sessions in portal group', async () => {
+        const sessions = (sessionManager as any).sessions;
+
+        sessions.set('agenciatributaria.es:spain-tax', createMockSession('agenciatributaria.es', {
+          metadata: { portalGroup: 'spain-gov' },
+        }));
+        sessions.set('seg-social.es:spain-social', createMockSession('seg-social.es', {
+          metadata: { portalGroup: 'spain-gov' },
+        }));
+        sessions.set('aima.gov.pt:portugal-immigration', createMockSession('aima.gov.pt', {
+          metadata: { portalGroup: 'portugal-gov' },
+        }));
+
+        const invalidated = await sessionManager.invalidatePortalGroup('spain-gov');
+        expect(invalidated).toBe(2);
+
+        // Spain sessions should be deleted
+        expect(sessions.has('agenciatributaria.es:spain-tax')).toBe(false);
+        expect(sessions.has('seg-social.es:spain-social')).toBe(false);
+
+        // Portugal session should still exist
+        expect(sessions.has('aima.gov.pt:portugal-immigration')).toBe(true);
+      });
+
+      it('should mark session as verified', async () => {
+        const sessions = (sessionManager as any).sessions;
+        sessions.set('agenciatributaria.es:spain-tax', createMockSession('agenciatributaria.es'));
+
+        const before = Date.now();
+        await sessionManager.markSessionVerified('agenciatributaria.es', 'spain-tax');
+        const after = Date.now();
+
+        const session = sessions.get('agenciatributaria.es:spain-tax');
+        expect(session.metadata?.lastVerified).toBeGreaterThanOrEqual(before);
+        expect(session.metadata?.lastVerified).toBeLessThanOrEqual(after);
+      });
+
+      it('should get sessions by provider ID', async () => {
+        const sessions = (sessionManager as any).sessions;
+
+        sessions.set('agenciatributaria.es:spain-tax', createMockSession('agenciatributaria.es', {
+          metadata: { providerId: 'clave' },
+        }));
+        sessions.set('seg-social.es:spain-social', createMockSession('seg-social.es', {
+          metadata: { providerId: 'clave' },
+        }));
+        sessions.set('google.com:default', createMockSession('google.com', {
+          metadata: { providerId: 'google' },
+        }));
+
+        const claveSessions = sessionManager.getSessionsByProvider('clave');
+        expect(claveSessions).toHaveLength(2);
+        expect(claveSessions.map(s => s.domain)).toContain('agenciatributaria.es');
+        expect(claveSessions.map(s => s.domain)).toContain('seg-social.es');
+      });
+    });
+
+    describe('Auto-Assign Portal Group', () => {
+      const domainGroups = {
+        'spain-gov': [
+          'agenciatributaria.es',
+          'agenciatributaria.gob.es',
+          'seg-social.es',
+          'extranjeros.inclusion.gob.es',
+        ],
+        'portugal-gov': [
+          'aima.gov.pt',
+          'portaldasfinancas.gov.pt',
+        ],
+      };
+
+      it('should auto-assign exact domain match', async () => {
+        const sessions = (sessionManager as any).sessions;
+        sessions.set('agenciatributaria.es:default', createMockSession('agenciatributaria.es'));
+
+        const assigned = await sessionManager.autoAssignPortalGroup(
+          'agenciatributaria.es',
+          'default',
+          domainGroups
+        );
+
+        expect(assigned).toBe('spain-gov');
+        const session = sessions.get('agenciatributaria.es:default');
+        expect(session.metadata?.portalGroup).toBe('spain-gov');
+        expect(session.metadata?.isPrimarySession).toBe(true); // First in group
+        expect(session.metadata?.loginSequence).toBe(1);
+      });
+
+      it('should auto-assign subdomain match', async () => {
+        const sessions = (sessionManager as any).sessions;
+        sessions.set('sede.agenciatributaria.gob.es:default', createMockSession('sede.agenciatributaria.gob.es'));
+
+        const assigned = await sessionManager.autoAssignPortalGroup(
+          'sede.agenciatributaria.gob.es',
+          'default',
+          domainGroups
+        );
+
+        expect(assigned).toBe('spain-gov');
+      });
+
+      it('should increment login sequence for subsequent sessions', async () => {
+        const sessions = (sessionManager as any).sessions;
+
+        // First session
+        sessions.set('agenciatributaria.es:default', createMockSession('agenciatributaria.es', {
+          metadata: { portalGroup: 'spain-gov', loginSequence: 1 },
+        }));
+
+        // Second session
+        sessions.set('seg-social.es:default', createMockSession('seg-social.es'));
+
+        await sessionManager.autoAssignPortalGroup('seg-social.es', 'default', domainGroups);
+
+        const session = sessions.get('seg-social.es:default');
+        expect(session.metadata?.loginSequence).toBe(2);
+        expect(session.metadata?.isPrimarySession).toBeFalsy(); // Not primary
+      });
+
+      it('should return undefined for unknown domain', async () => {
+        const sessions = (sessionManager as any).sessions;
+        sessions.set('unknown.com:default', createMockSession('unknown.com'));
+
+        const assigned = await sessionManager.autoAssignPortalGroup(
+          'unknown.com',
+          'default',
+          domainGroups
+        );
+
+        expect(assigned).toBeUndefined();
+      });
+    });
+  });
 });
