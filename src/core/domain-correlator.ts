@@ -51,6 +51,7 @@ export interface CorrelationStats {
 export interface CorrelatorState {
   version: number;
   relationships: DomainSSORelationship[];
+  providerInfo?: Array<{ id: string; name: string }>;
   lastUpdated: number;
 }
 
@@ -402,6 +403,7 @@ export class DomainCorrelator {
     return {
       version: STATE_VERSION,
       relationships: allRelationships,
+      providerInfo: Array.from(this.providerInfo.values()),
       lastUpdated: Date.now(),
     };
   }
@@ -422,6 +424,14 @@ export class DomainCorrelator {
     // Clear existing data
     this.relationships.clear();
     this.providerDomains.clear();
+    this.providerInfo.clear();
+
+    // Restore provider info if present (for backward compatibility)
+    if (state.providerInfo) {
+      for (const info of state.providerInfo) {
+        this.providerInfo.set(info.id, info);
+      }
+    }
 
     // Import relationships
     for (const relationship of state.relationships) {

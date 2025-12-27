@@ -411,6 +411,372 @@ describe('DomainCorrelator', () => {
 });
 
 // ============================================
+// SESSION SHARING SERVICE TESTS
+// ============================================
+
+import { SessionSharingService } from '../../src/core/session-sharing.js';
+import type { SessionStore } from '../../src/types/index.js';
+import type { SessionHealth } from '../../src/core/session-manager.js';
+
+// Mock SessionManager for testing
+class MockSessionManager {
+  private sessions: Map<string, SessionStore> = new Map();
+
+  getSession(domain: string, profile: string = 'default'): SessionStore | undefined {
+    return this.sessions.get(`${domain}:${profile}`);
+  }
+
+  hasSession(domain: string, profile: string = 'default'): boolean {
+    return this.sessions.has(`${domain}:${profile}`);
+  }
+
+  getSessionHealth(domain: string, profile: string = 'default'): SessionHealth {
+    const session = this.getSession(domain, profile);
+    if (!session) {
+      return {
+        status: 'not_found',
+        domain,
+        profile,
+        isAuthenticated: false,
+        expiredCookies: 0,
+        totalCookies: 0,
+        lastUsed: 0,
+        staleDays: 0,
+        message: 'Session not found',
+      };
+    }
+    return {
+      status: 'healthy',
+      domain,
+      profile,
+      isAuthenticated: session.isAuthenticated,
+      expiredCookies: 0,
+      totalCookies: session.cookies.length,
+      lastUsed: session.lastUsed,
+      staleDays: 0,
+      message: 'Session is healthy',
+    };
+  }
+
+  async saveSessionData(session: SessionStore, profile: string = 'default'): Promise<void> {
+    this.sessions.set(`${session.domain}:${profile}`, session);
+  }
+
+  // Helper for setting up test sessions
+  setSession(session: SessionStore, profile: string = 'default'): void {
+    this.sessions.set(`${session.domain}:${profile}`, session);
+  }
+
+  getAllSessions(): Map<string, SessionStore> {
+    return this.sessions;
+  }
+}
+
+describe('SessionSharingService', () => {
+  let mockSessionManager: MockSessionManager;
+  let sharingService: SessionSharingService;
+
+  beforeEach(() => {
+    mockSessionManager = new MockSessionManager();
+    sharingService = new SessionSharingService(mockSessionManager as any);
+  });
+
+  describe('processUrl', () => {
+    it('should detect SSO flow and learn domain relationships', () => {
+      const flow = sharingService.processUrl(
+        'https://accounts.google.com/o/oauth2/auth?client_id=abc&redirect_uri=https://myapp.com/callback',
+        'myapp.com'
+      );
+
+      expect(flow).not.toBeNull();
+      expect(flow!.provider.id).toBe('google');
+    });
+
+    it('should return null for non-SSO URLs', () => {
+      const flow = sharingService.processUrl(
+        'https://example.com/regular-page',
+        'example.com'
+      );
+
+      expect(flow).toBeNull();
+    });
+  });
+
+  describe('findSessionCandidates', () => {
+    it('should find candidates from related domains with sessions', async () => {
+      // Set up a session on source domain
+      mockSessionManager.setSession({
+        domain: 'app1.com',
+        cookies: [{ name: 'auth_token', value: 'abc123' }],
+        localStorage: {},
+        sessionStorage: {},
+        isAuthenticated: true,
+        lastUsed: Date.now(),
+      });
+
+      // Learn that both domains use Google SSO
+      sharingService.processUrl(
+        'https://accounts.google.com/o/oauth2/auth?client_id=a&redirect_uri=https://app1.com/cb',
+        'app1.com'
+      );
+      sharingService.processUrl(
+        'https://accounts.google.com/o/oauth2/auth?client_id=b&redirect_uri=https://app2.com/cb',
+        'app2.com'
+      );
+
+      const candidates = await sharingService.findSessionCandidates('app2.com');
+
+      expect(candidates.length).toBe(1);
+      expect(candidates[0].domain).toBe('app1.com');
+      expect(candidates[0].providerId).toBe('google');
+    });
+
+    it('should return empty array when no candidates exist', async () => {
+      const candidates = await sharingService.findSessionCandidates('unknown.com');
+      expect(candidates.length).toBe(0);
+    });
+  });
+
+  describe('shareSession', () => {
+    it('should share session from source to target domain', async () => {
+      // Set up source session with auth cookies
+      mockSessionManager.setSession({
+        domain: 'source.com',
+        cookies: [
+          { name: 'session_id', value: 'sess123', domain: '.source.com' },
+          { name: 'auth_token', value: 'token456', domain: '.source.com' },
+          { name: 'tracking', value: 'track789', domain: '.source.com' }, // Should be filtered
+        ],
+        localStorage: { 'auth_state': 'authenticated' },
+        sessionStorage: {},
+        isAuthenticated: true,
+        lastUsed: Date.now(),
+      });
+
+      // Learn domain relationship
+      sharingService.processUrl(
+        'https://accounts.google.com/o/oauth2/auth?client_id=a&redirect_uri=https://source.com/cb',
+        'source.com'
+      );
+      sharingService.processUrl(
+        'https://accounts.google.com/o/oauth2/auth?client_id=b&redirect_uri=https://target.com/cb',
+        'target.com'
+      );
+
+      const result = await sharingService.shareSession('source.com', 'target.com');
+
+      expect(result.success).toBe(true);
+      expect(result.sourceDomain).toBe('source.com');
+      expect(result.targetDomain).toBe('target.com');
+      expect(result.sharedItems).toContain('cookies');
+      expect(result.sharedItems).toContain('localStorage');
+
+      // Verify target session was created
+      const targetSession = mockSessionManager.getSession('target.com');
+      expect(targetSession).toBeDefined();
+      expect(targetSession!.isAuthenticated).toBe(true);
+      // Auth cookies should be shared
+      expect(targetSession!.cookies.some((c: any) => c.name === 'session_id')).toBe(true);
+      expect(targetSession!.cookies.some((c: any) => c.name === 'auth_token')).toBe(true);
+      // Tracking cookie should be filtered out (doesn't match IdP patterns)
+      expect(targetSession!.cookies.some((c: any) => c.name === 'tracking')).toBe(false);
+    });
+
+    it('should fail when source session does not exist', async () => {
+      const result = await sharingService.shareSession('nonexistent.com', 'target.com');
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('Source session not found');
+    });
+
+    it('should fail when source session is expired', async () => {
+      // Set up an expired session
+      mockSessionManager.setSession({
+        domain: 'expired.com',
+        cookies: [],
+        localStorage: {},
+        sessionStorage: {},
+        isAuthenticated: false,
+        lastUsed: Date.now() - 100 * 24 * 60 * 60 * 1000, // 100 days ago
+      });
+
+      // Override getSessionHealth to return expired
+      (mockSessionManager as any).getSessionHealth = () => ({
+        status: 'expired',
+        domain: 'expired.com',
+        profile: 'default',
+        isAuthenticated: false,
+        expiredCookies: 5,
+        totalCookies: 5,
+        lastUsed: Date.now() - 100 * 24 * 60 * 60 * 1000,
+        staleDays: 100,
+        message: 'Session expired',
+      });
+
+      const result = await sharingService.shareSession('expired.com', 'target.com');
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('expired');
+    });
+
+    it('should respect filterCookies option', async () => {
+      mockSessionManager.setSession({
+        domain: 'source.com',
+        cookies: [
+          { name: 'random_cookie', value: 'value1', domain: '.source.com' },
+        ],
+        localStorage: {},
+        sessionStorage: {},
+        isAuthenticated: true,
+        lastUsed: Date.now(),
+      });
+
+      // Without filter, all cookies shared
+      const resultNoFilter = await sharingService.shareSession('source.com', 'target1.com', {
+        filterCookies: false,
+      });
+
+      // With random cookie and no IdP relationship, sharing might fail or succeed with unfiltered
+      // The key is that filterCookies: false doesn't apply IdP patterns
+      expect(resultNoFilter.success).toBe(true);
+      const target1Session = mockSessionManager.getSession('target1.com');
+      expect(target1Session!.cookies.length).toBe(1);
+    });
+  });
+
+  describe('getOrShareSession', () => {
+    it('should return success with no shared items if target already has valid session', async () => {
+      mockSessionManager.setSession({
+        domain: 'target.com',
+        cookies: [{ name: 'existing', value: 'session' }],
+        localStorage: {},
+        sessionStorage: {},
+        isAuthenticated: true,
+        lastUsed: Date.now(),
+      });
+
+      const result = await sharingService.getOrShareSession('target.com');
+
+      // Should return success with no sharing needed
+      expect(result).not.toBeNull();
+      expect(result!.success).toBe(true);
+      expect(result!.sourceDomain).toBe('target.com'); // Points to itself
+      expect(result!.sharedItems).toEqual([]); // Nothing was shared
+    });
+
+    it('should share session from best candidate when no session exists', async () => {
+      // Set up source with session
+      mockSessionManager.setSession({
+        domain: 'source.com',
+        cookies: [{ name: 'auth_token', value: 'abc' }],
+        localStorage: {},
+        sessionStorage: {},
+        isAuthenticated: true,
+        lastUsed: Date.now(),
+      });
+
+      // Learn relationship
+      sharingService.processUrl(
+        'https://accounts.google.com/o/oauth2/auth?client_id=a&redirect_uri=https://source.com/cb',
+        'source.com'
+      );
+      sharingService.processUrl(
+        'https://accounts.google.com/o/oauth2/auth?client_id=b&redirect_uri=https://target.com/cb',
+        'target.com'
+      );
+
+      const result = await sharingService.getOrShareSession('target.com');
+
+      expect(result).not.toBeNull();
+      expect(result!.success).toBe(true);
+      expect(result!.sourceDomain).toBe('source.com');
+    });
+  });
+
+  describe('getRelatedDomains', () => {
+    it('should return domains that share same IdP', () => {
+      sharingService.processUrl(
+        'https://github.com/login/oauth/authorize?client_id=a&redirect_uri=https://app1.com/cb',
+        'app1.com'
+      );
+      sharingService.processUrl(
+        'https://github.com/login/oauth/authorize?client_id=b&redirect_uri=https://app2.com/cb',
+        'app2.com'
+      );
+
+      const related = sharingService.getRelatedDomains('app1.com');
+
+      expect(related).toContain('app2.com');
+    });
+  });
+
+  describe('getDomainGroups', () => {
+    it('should return grouped domains by provider', () => {
+      sharingService.processUrl(
+        'https://accounts.google.com/o/oauth2/auth?client_id=a&redirect_uri=https://g1.com/cb',
+        'g1.com'
+      );
+      sharingService.processUrl(
+        'https://accounts.google.com/o/oauth2/auth?client_id=b&redirect_uri=https://g2.com/cb',
+        'g2.com'
+      );
+      sharingService.processUrl(
+        'https://github.com/login/oauth/authorize?client_id=c&redirect_uri=https://gh1.com/cb',
+        'gh1.com'
+      );
+
+      const groups = sharingService.getDomainGroups();
+
+      expect(groups.length).toBe(2);
+      const googleGroup = groups.find(g => g.providerId === 'google');
+      expect(googleGroup).toBeDefined();
+      expect(googleGroup!.domains).toContain('g1.com');
+      expect(googleGroup!.domains).toContain('g2.com');
+    });
+  });
+
+  describe('state export/import', () => {
+    it('should export and import state correctly', () => {
+      sharingService.processUrl(
+        'https://accounts.google.com/o/oauth2/auth?client_id=a&redirect_uri=https://app.com/cb',
+        'app.com'
+      );
+
+      const state = sharingService.exportState();
+
+      expect(state.relationships.length).toBe(1);
+      expect(state.providerInfo).toBeDefined();
+
+      // Create new service and import
+      const newService = new SessionSharingService(mockSessionManager as any);
+      newService.importState(state);
+
+      const groups = newService.getDomainGroups();
+      expect(groups.length).toBe(1);
+    });
+  });
+
+  describe('getStats', () => {
+    it('should return accurate statistics', () => {
+      sharingService.processUrl(
+        'https://accounts.google.com/o/oauth2/auth?client_id=a&redirect_uri=https://a.com/cb',
+        'a.com'
+      );
+      sharingService.processUrl(
+        'https://accounts.google.com/o/oauth2/auth?client_id=b&redirect_uri=https://b.com/cb',
+        'b.com'
+      );
+
+      const stats = sharingService.getStats();
+
+      expect(stats.totalRelationships).toBe(2);
+      expect(stats.totalProviders).toBe(1);
+      expect(stats.totalDomains).toBe(2);
+    });
+  });
+});
+
+// ============================================
 // INTEGRATION TESTS
 // ============================================
 

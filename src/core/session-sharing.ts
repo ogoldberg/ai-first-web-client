@@ -89,7 +89,8 @@ const IDP_COOKIE_PATTERNS = [
   /id_token/i,
   /access_token/i,
   /refresh_token/i,
-  /_ga/i,  // Google Analytics can contain SSO state
+  // Note: _ga (Google Analytics) cookies are intentionally excluded for privacy
+  // as they track user behavior across sites beyond what's needed for SSO
 ];
 
 // ============================================
@@ -259,7 +260,7 @@ export class SessionSharingService {
 
     try {
       // Get the source session
-      const sourceSession = await this.sessionManager.getSession(
+      const sourceSession = this.sessionManager.getSession(
         sourceDomain,
         opts.sessionProfile
       );
