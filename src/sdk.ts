@@ -73,6 +73,31 @@ export {
   ApiAnalyzer,
 };
 
+// Re-export SSO/session sharing types and classes (GAP-009)
+export type {
+  IdentityProvider,
+  SSOFlowInfo,
+  DomainSSORelationship,
+  SSODetectorOptions,
+} from './core/sso-flow-detector.js';
+
+export type {
+  SessionShareResult,
+  SessionCandidate,
+  SessionSharingOptions,
+  SessionSharingConfig,
+} from './core/session-sharing.js';
+
+export type {
+  DomainGroup,
+  CorrelationStats,
+  CorrelatorState,
+} from './core/domain-correlator.js';
+
+export { SSOFlowDetector, KNOWN_PROVIDERS } from './core/sso-flow-detector.js';
+export { SessionSharingService } from './core/session-sharing.js';
+export { DomainCorrelator } from './core/domain-correlator.js';
+
 // =============================================================================
 // SDK CONFIGURATION
 // =============================================================================
@@ -279,6 +304,98 @@ export class LLMBrowserClient {
    */
   getContentExtractor(): ContentExtractor {
     return this.contentExtractor;
+  }
+
+  // =============================================================================
+  // SESSION SHARING (GAP-009)
+  // =============================================================================
+
+  /**
+   * Detect SSO flow from a URL and learn domain relationships
+   * Call this when navigating to capture OAuth/SAML/OIDC flows
+   *
+   * @param url - The URL to check for SSO flow
+   * @param initiatingDomain - The domain that initiated the SSO flow
+   * @returns SSO flow info if detected, null otherwise
+   *
+   * @example
+   * ```typescript
+   * // Check if a URL is an SSO redirect
+   * const flow = browser.detectSSOFlow(
+   *   'https://accounts.google.com/o/oauth2/auth?client_id=...',
+   *   'myapp.com'
+   * );
+   * if (flow) {
+   *   console.log(`Detected ${flow.provider.name} SSO for ${flow.initiatingDomain}`);
+   * }
+   * ```
+   */
+  detectSSOFlow(
+    url: string,
+    initiatingDomain?: string
+  ): import('./core/sso-flow-detector.js').SSOFlowInfo | null {
+    return this.smartBrowser.detectSSOFlow(url, initiatingDomain);
+  }
+
+  /**
+   * Find and share a session from a related domain that uses the same identity provider
+   *
+   * @param targetDomain - The domain to get a session for
+   * @param options - Session sharing options
+   * @returns Result including success status and source domain
+   *
+   * @example
+   * ```typescript
+   * // Try to reuse an existing session from a related domain
+   * const result = await browser.shareSessionFromRelatedDomain('app2.com');
+   * if (result.success) {
+   *   console.log(`Shared session from ${result.sourceDomain} via ${result.providerId}`);
+   * }
+   * ```
+   */
+  async shareSessionFromRelatedDomain(
+    targetDomain: string,
+    options?: { sessionProfile?: string; minConfidence?: number }
+  ): Promise<{ success: boolean; sourceDomain?: string; providerId?: string }> {
+    await this.ensureInitialized();
+    return this.smartBrowser.shareSessionFromRelatedDomain(targetDomain, options);
+  }
+
+  /**
+   * Get domains that share the same identity provider with the given domain
+   *
+   * @param domain - The domain to find related domains for
+   * @param minConfidence - Minimum confidence threshold (0-1)
+   * @returns Array of related domain names
+   *
+   * @example
+   * ```typescript
+   * // Find domains using the same SSO provider
+   * const related = browser.getRelatedDomains('app1.com');
+   * console.log(`Related domains: ${related.join(', ')}`);
+   * ```
+   */
+  getRelatedDomains(domain: string, minConfidence?: number): string[] {
+    return this.smartBrowser.getRelatedDomains(domain, minConfidence);
+  }
+
+  /**
+   * Get domain groups organized by identity provider
+   *
+   * @param minConfidence - Minimum confidence threshold (0-1)
+   * @returns Array of domain groups
+   *
+   * @example
+   * ```typescript
+   * // See which domains share SSO providers
+   * const groups = browser.getDomainGroups();
+   * for (const group of groups) {
+   *   console.log(`${group.providerName}: ${group.domains.join(', ')}`);
+   * }
+   * ```
+   */
+  getDomainGroups(minConfidence?: number): import('./core/domain-correlator.js').DomainGroup[] {
+    return this.smartBrowser.getDomainGroups(minConfidence);
   }
 
   // =============================================================================
