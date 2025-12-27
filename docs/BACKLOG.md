@@ -896,7 +896,7 @@ Browser: { success: true, ... }  // Learns this for future
 |----|------|--------|--------|-------|
 | INT-004 | Add VerificationEngine presets | M | Complete | Pre-configured verification checks for government content (requirements, fees, timeline fields). 19 pre-built VERIFICATION_CHECKS with helper functions. PR #206 |
 | INT-005 | Add pagination learning for legal docs | S | Complete | Pagination presets for BOE, EUR-Lex, UK Legislation, Legifrance, Normattiva, Rechtspraak, CURIA, Gesetze im Internet. PaginationPresetConfig interface with date-based filtering. PR #208 |
-| INT-006 | Add research workflow templates | M | Not Started | Pre-built workflow templates for visa research, document extraction, fee tracking |
+| INT-006 | Add research workflow templates | M | Complete | 5 pre-built workflow templates (visaResearch, documentExtraction, feeTracking, crossCountryComparison, taxObligations) with country portal mappings, variable validation, and executeTemplate method |
 
 ### Phase 3: Intelligence (Priority: Medium)
 
