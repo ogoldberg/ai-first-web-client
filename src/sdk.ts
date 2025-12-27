@@ -432,7 +432,8 @@ export function createContentFetcher(): {
 } {
   const browserManager = new BrowserManager();
   const contentExtractor = new ContentExtractor();
-  const tieredFetcher = new TieredFetcher(browserManager, contentExtractor);
+  const learningEngine = new LearningEngine(); // FEAT-003
+  const tieredFetcher = new TieredFetcher(browserManager, contentExtractor, learningEngine); // FEAT-003
 
   return {
     fetch: (url: string, options?: TieredFetchOptions) => tieredFetcher.fetch(url, options),

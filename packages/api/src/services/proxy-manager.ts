@@ -2,7 +2,7 @@
  * Proxy Manager
  *
  * Central orchestrator for proxy management. Combines health tracking,
- * domain risk classification, and intelligent proxy selection.
+ * domain risk classification, intelligent proxy selection, and geographic routing (FEAT-006).
  */
 
 import type { Plan } from '../middleware/types.js';
@@ -27,6 +27,16 @@ import {
   createBrightDataEndpoints,
   resetBrightDataCounters,
 } from './brightdata-provider.js';
+// FEAT-006: Geographic routing
+import { GeoRoutingService, getGeoRoutingService } from './geo-routing-service.js';
+import { GeoRestrictionDetector, getGeoRestrictionDetector } from './geo-restriction-detector.js';
+import type {
+  CountryCode,
+  GeoRoutingRequest,
+  GeoRoutingRecommendation,
+  GeoRoutingResult,
+  RegionRestriction,
+} from './geo-routing-types.js';
 
 // Number of endpoints to create per country for each Bright Data tier
 const BRIGHTDATA_ENDPOINTS_RESIDENTIAL = 3;
@@ -44,6 +54,12 @@ export interface ProxyRequestResult {
   poolId: string;
   selectionReason: string;
   fallbacksAvailable: number;
+  // FEAT-006: Geographic routing
+  geoRouting?: {
+    recommendedCountry: CountryCode;
+    confidence: string;
+    reason: string;
+  };
 }
 
 /**
@@ -63,12 +79,16 @@ export class ProxyManager {
   private healthTracker: ProxyHealthTracker;
   private riskClassifier: DomainRiskClassifier;
   private proxySelector: ProxySelector;
+  private geoRoutingService: GeoRoutingService; // FEAT-006
+  private geoRestrictionDetector: GeoRestrictionDetector; // FEAT-006
   private initialized: boolean = false;
 
   constructor() {
     this.healthTracker = getHealthTracker();
     this.riskClassifier = getDomainRiskClassifier();
     this.proxySelector = getProxySelector();
+    this.geoRoutingService = getGeoRoutingService(); // FEAT-006
+    this.geoRestrictionDetector = getGeoRestrictionDetector(); // FEAT-006
   }
 
   /**
@@ -200,12 +220,26 @@ export class ProxyManager {
       this.initialize();
     }
 
+    // FEAT-006: Get geo-routing recommendation if no preferred country specified
+    let geoRecommendation: GeoRoutingRecommendation | undefined;
+    let preferredCountry = options.proxyOptions?.preferredCountry;
+
+    if (!preferredCountry) {
+      const geoRequest: GeoRoutingRequest = {
+        domain: options.domain,
+        url: `https://${options.domain}`, // Construct URL from domain
+        strategy: 'auto',
+      };
+      geoRecommendation = this.geoRoutingService.getRecommendation(geoRequest);
+      preferredCountry = geoRecommendation.country;
+    }
+
     const result = await this.proxySelector.selectProxy({
       domain: options.domain,
       tenantId: options.tenantId,
       tenantPlan: options.tenantPlan,
       preferredTier: options.proxyOptions?.preferredTier,
-      preferredCountry: options.proxyOptions?.preferredCountry,
+      preferredCountry,
       requireFresh: options.proxyOptions?.requireFresh,
       stickySessionId: options.proxyOptions?.stickySessionId,
     });
@@ -217,6 +251,12 @@ export class ProxyManager {
       poolId: result.proxy.poolId,
       selectionReason: result.selectionReason,
       fallbacksAvailable: result.fallbacksAvailable,
+      // FEAT-006: Include geo-routing info
+      geoRouting: geoRecommendation ? {
+        recommendedCountry: geoRecommendation.country,
+        confidence: geoRecommendation.confidence,
+        reason: geoRecommendation.reason,
+      } : undefined,
     };
   }
 
@@ -256,6 +296,69 @@ export class ProxyManager {
     body?: string
   ): void {
     this.riskClassifier.detectProtectionFromResponse(domain, headers, body);
+  }
+
+  // ============================================
+  // FEAT-006: Geographic Routing Methods
+  // ============================================
+
+  /**
+   * Detect geo-restrictions from HTTP response
+   */
+  detectGeoRestriction(
+    url: string,
+    statusCode: number,
+    headers: Record<string, string>,
+    body?: string
+  ): RegionRestriction {
+    return this.geoRestrictionDetector.detect({
+      url,
+      statusCode,
+      headers,
+      body,
+    });
+  }
+
+  /**
+   * Record geo-routing result for learning
+   */
+  recordGeoRoutingResult(
+    domain: string,
+    country: CountryCode,
+    success: boolean,
+    responseTime: number,
+    restriction?: RegionRestriction
+  ): void {
+    const result: GeoRoutingResult = {
+      success,
+      country,
+      restrictionDetected: !!restriction?.detected,
+      restriction,
+      responseTime,
+      statusCode: undefined,
+      shouldRecord: true,
+    };
+
+    this.geoRoutingService.recordResult(domain, result);
+  }
+
+  /**
+   * Get geo-routing statistics
+   */
+  getGeoRoutingStats() {
+    return this.geoRoutingService.getStats();
+  }
+
+  /**
+   * Get geo-routing recommendation for a domain
+   */
+  getGeoRecommendation(domain: string, url: string): GeoRoutingRecommendation {
+    const request: GeoRoutingRequest = {
+      domain,
+      url,
+      strategy: 'auto',
+    };
+    return this.geoRoutingService.getRecommendation(request);
   }
 
   /**
