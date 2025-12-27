@@ -1,11 +1,12 @@
 /**
- * Tests for Research Browser SDK (INT-001)
+ * Tests for Research Browser SDK (INT-001, INT-004)
  *
  * Tests the specialized research SDK wrapper including:
  * - Research verification presets
  * - Government session profiles
  * - SSO detection and session sharing
  * - Pagination handling
+ * - Verification check builders (INT-004)
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
@@ -14,9 +15,13 @@ import {
   createResearchBrowser,
   RESEARCH_VERIFICATION_PRESETS,
   GOVERNMENT_SESSION_PROFILES,
+  VERIFICATION_CHECKS,
+  createVerificationCheck,
+  composeChecks,
   type ResearchConfig,
   type ResearchTopic,
   type ResearchBrowseOptions,
+  type VerificationPreset,
 } from '../../src/sdk.js';
 
 // Mock the SmartBrowser browse method
@@ -78,6 +83,274 @@ describe('Research Browser SDK', () => {
       expect(preset.expectedFields).toContain('rates');
       expect(preset.expectedFields).toContain('deadlines');
       expect(preset.excludePatterns).toContain('Session expired');
+    });
+
+    // INT-004: Tests for pre-built verification checks in presets
+    describe('pre-built verification checks (INT-004)', () => {
+      it('should have pre-built checks array for each preset', () => {
+        const expectedTopics: ResearchTopic[] = [
+          'government_portal',
+          'legal_document',
+          'visa_immigration',
+          'tax_finance',
+          'official_registry',
+          'general_research',
+        ];
+
+        for (const topic of expectedTopics) {
+          expect(RESEARCH_VERIFICATION_PRESETS[topic].checks).toBeDefined();
+          expect(RESEARCH_VERIFICATION_PRESETS[topic].checks).toBeInstanceOf(Array);
+          expect(RESEARCH_VERIFICATION_PRESETS[topic].checks!.length).toBeGreaterThan(0);
+        }
+      });
+
+      it('government_portal should include required documents and contact checks', () => {
+        const preset = RESEARCH_VERIFICATION_PRESETS.government_portal;
+
+        // Check that specific VERIFICATION_CHECKS are included
+        expect(preset.checks).toContain(VERIFICATION_CHECKS.hasRequiredDocuments);
+        expect(preset.checks).toContain(VERIFICATION_CHECKS.hasEmailContact);
+        expect(preset.checks).toContain(VERIFICATION_CHECKS.hasPhoneContact);
+        expect(preset.checks).toContain(VERIFICATION_CHECKS.excludeErrorPages);
+        expect(preset.checks).toContain(VERIFICATION_CHECKS.excludePageNotFound);
+        expect(preset.checks).toContain(VERIFICATION_CHECKS.excludeAccessDenied);
+      });
+
+      it('visa_immigration should include fees, timeline, and identity checks', () => {
+        const preset = RESEARCH_VERIFICATION_PRESETS.visa_immigration;
+
+        // Check that specific VERIFICATION_CHECKS are included
+        expect(preset.checks).toContain(VERIFICATION_CHECKS.hasFees);
+        expect(preset.checks).toContain(VERIFICATION_CHECKS.hasTimeline);
+        expect(preset.checks).toContain(VERIFICATION_CHECKS.hasIdentityRequirements);
+        expect(preset.checks).toContain(VERIFICATION_CHECKS.minLength500);
+      });
+
+      it('legal_document should include legal structure and effective date checks', () => {
+        const preset = RESEARCH_VERIFICATION_PRESETS.legal_document;
+
+        // Check that specific VERIFICATION_CHECKS are included
+        expect(preset.checks).toContain(VERIFICATION_CHECKS.hasLegalStructure);
+        expect(preset.checks).toContain(VERIFICATION_CHECKS.hasEffectiveDate);
+        expect(preset.checks).toContain(VERIFICATION_CHECKS.minLength1000);
+      });
+
+      it('tax_finance should include tax rate and deadline checks', () => {
+        const preset = RESEARCH_VERIFICATION_PRESETS.tax_finance;
+
+        // Check that specific VERIFICATION_CHECKS are included
+        expect(preset.checks).toContain(VERIFICATION_CHECKS.hasTaxRates);
+        expect(preset.checks).toContain(VERIFICATION_CHECKS.hasTaxDeadlines);
+        expect(preset.checks).toContain(VERIFICATION_CHECKS.excludeSessionExpired);
+      });
+
+      it('each check should have required properties', () => {
+        for (const topic of Object.keys(RESEARCH_VERIFICATION_PRESETS) as ResearchTopic[]) {
+          const preset = RESEARCH_VERIFICATION_PRESETS[topic];
+          for (const check of preset.checks!) {
+            expect(check.type).toBe('content');
+            expect(check.assertion).toBeDefined();
+            expect(['warning', 'error', 'critical']).toContain(check.severity);
+            expect(typeof check.retryable).toBe('boolean');
+          }
+        }
+      });
+    });
+  });
+
+  describe('VERIFICATION_CHECKS (INT-004)', () => {
+    describe('fee validation checks', () => {
+      it('hasFees should match fee patterns with currencies', () => {
+        const check = VERIFICATION_CHECKS.hasFees;
+        expect(check.type).toBe('content');
+        expect(check.assertion.fieldMatches?.content).toBeInstanceOf(RegExp);
+        expect(check.severity).toBe('warning');
+        expect(check.retryable).toBe(false);
+
+        // Test pattern matches
+        const pattern = check.assertion.fieldMatches?.content as RegExp;
+        expect(pattern.test('Fee: 100 EUR')).toBe(true);
+        expect(pattern.test('cost: 50 USD')).toBe(true);
+        expect(pattern.test('tarifa 200 euros')).toBe(true);
+      });
+    });
+
+    describe('timeline validation checks', () => {
+      it('hasTimeline should match duration patterns', () => {
+        const check = VERIFICATION_CHECKS.hasTimeline;
+        expect(check.type).toBe('content');
+        const pattern = check.assertion.fieldMatches?.content as RegExp;
+        expect(pattern.test('processing: 2-3 weeks')).toBe(true);
+        expect(pattern.test('plazo: 30 dias')).toBe(true);
+        expect(pattern.test('duration 6 months')).toBe(true);
+      });
+
+      it('hasDeadline should match deadline patterns', () => {
+        const check = VERIFICATION_CHECKS.hasDeadline;
+        const pattern = check.assertion.fieldMatches?.content as RegExp;
+        expect(pattern.test('deadline: 15/06/2025')).toBe(true);
+        expect(pattern.test('fecha limite: 31 enero')).toBe(true);
+      });
+    });
+
+    describe('document requirements checks', () => {
+      it('hasRequiredDocuments should match requirement patterns', () => {
+        const check = VERIFICATION_CHECKS.hasRequiredDocuments;
+        expect(check.type).toBe('content');
+        expect(check.severity).toBe('warning');
+        const pattern = check.assertion.fieldMatches?.content as RegExp;
+        // Tests for various document requirement patterns
+        expect(pattern.test('required documents')).toBe(true);
+        expect(pattern.test('required document list')).toBe(true);
+        expect(pattern.test('necessary forms must be submitted')).toBe(true);
+        // Pattern matches adjective followed by noun
+        expect(pattern.test('needed papers for')).toBe(true);
+      });
+
+      it('hasIdentityRequirements should match ID patterns', () => {
+        const check = VERIFICATION_CHECKS.hasIdentityRequirements;
+        const pattern = check.assertion.fieldMatches?.content as RegExp;
+        expect(pattern.test('passport required')).toBe(true);
+        expect(pattern.test('NIE number')).toBe(true);
+        expect(pattern.test('DNI valido')).toBe(true);
+        expect(pattern.test('Your identity card')).toBe(true);
+      });
+    });
+
+    describe('legal document checks', () => {
+      it('hasLegalStructure should match legal patterns', () => {
+        const check = VERIFICATION_CHECKS.hasLegalStructure;
+        const pattern = check.assertion.fieldMatches?.content as RegExp;
+        expect(pattern.test('Article 5')).toBe(true);
+        expect(pattern.test('Section III')).toBe(true);
+        expect(pattern.test('Capitulo 2')).toBe(true);
+      });
+
+      it('hasEffectiveDate should match effective date patterns', () => {
+        const check = VERIFICATION_CHECKS.hasEffectiveDate;
+        const pattern = check.assertion.fieldMatches?.content as RegExp;
+        expect(pattern.test('effective: 01/01/2025')).toBe(true);
+        expect(pattern.test('entrada en vigor: 15/06/2024')).toBe(true);
+      });
+    });
+
+    describe('tax/financial checks', () => {
+      it('hasTaxRates should match tax rate patterns', () => {
+        const check = VERIFICATION_CHECKS.hasTaxRates;
+        const pattern = check.assertion.fieldMatches?.content as RegExp;
+        expect(pattern.test('IRPF: 19%')).toBe(true);
+        expect(pattern.test('IVA: 21%')).toBe(true);
+        expect(pattern.test('tax rate: 15.5%')).toBe(true);
+      });
+    });
+
+    describe('error page exclusion checks', () => {
+      it('excludeErrorPages should exclude 404', () => {
+        const check = VERIFICATION_CHECKS.excludeErrorPages;
+        expect(check.assertion.excludesText).toBe('404');
+        expect(check.severity).toBe('critical');
+        expect(check.retryable).toBe(true);
+      });
+
+      it('excludePageNotFound should exclude page not found', () => {
+        const check = VERIFICATION_CHECKS.excludePageNotFound;
+        expect(check.assertion.excludesText).toBe('page not found');
+        expect(check.severity).toBe('critical');
+      });
+
+      it('excludeAccessDenied should exclude access denied', () => {
+        const check = VERIFICATION_CHECKS.excludeAccessDenied;
+        expect(check.assertion.excludesText).toBe('access denied');
+        expect(check.severity).toBe('critical');
+      });
+    });
+
+    describe('contact information checks', () => {
+      it('hasEmailContact should match email patterns', () => {
+        const check = VERIFICATION_CHECKS.hasEmailContact;
+        const pattern = check.assertion.fieldMatches?.content as RegExp;
+        expect(pattern.test('contact@example.com')).toBe(true);
+        expect(pattern.test('info@gov.es')).toBe(true);
+      });
+
+      it('hasPhoneContact should match phone patterns', () => {
+        const check = VERIFICATION_CHECKS.hasPhoneContact;
+        const pattern = check.assertion.fieldMatches?.content as RegExp;
+        expect(pattern.test('tel: +34 123 456 789')).toBe(true);
+        expect(pattern.test('telefono: 900 123 456')).toBe(true);
+      });
+    });
+
+    describe('minimum content length checks', () => {
+      it('minLength200 should require 200 chars', () => {
+        const check = VERIFICATION_CHECKS.minLength200;
+        expect(check.assertion.minLength).toBe(200);
+        expect(check.severity).toBe('error');
+      });
+
+      it('minLength500 should require 500 chars', () => {
+        const check = VERIFICATION_CHECKS.minLength500;
+        expect(check.assertion.minLength).toBe(500);
+      });
+
+      it('minLength1000 should require 1000 chars', () => {
+        const check = VERIFICATION_CHECKS.minLength1000;
+        expect(check.assertion.minLength).toBe(1000);
+      });
+    });
+  });
+
+  describe('Verification check helpers (INT-004)', () => {
+    describe('createVerificationCheck', () => {
+      it('should create a check with default severity and retryable', () => {
+        const check = createVerificationCheck({ fieldExists: ['title', 'price'] });
+        expect(check.type).toBe('content');
+        expect(check.assertion.fieldExists).toEqual(['title', 'price']);
+        expect(check.severity).toBe('warning');
+        expect(check.retryable).toBe(false);
+      });
+
+      it('should create a check with custom severity', () => {
+        const check = createVerificationCheck({ minLength: 500 }, 'error');
+        expect(check.severity).toBe('error');
+        expect(check.retryable).toBe(false);
+      });
+
+      it('should create a check with custom retryable', () => {
+        const check = createVerificationCheck({ excludesText: '404' }, 'critical', true);
+        expect(check.severity).toBe('critical');
+        expect(check.retryable).toBe(true);
+      });
+    });
+
+    describe('composeChecks', () => {
+      it('should compose multiple checks into an array', () => {
+        const checks = composeChecks(
+          VERIFICATION_CHECKS.hasFees,
+          VERIFICATION_CHECKS.hasTimeline,
+          VERIFICATION_CHECKS.excludeErrorPages
+        );
+        expect(checks).toHaveLength(3);
+        expect(checks[0]).toBe(VERIFICATION_CHECKS.hasFees);
+        expect(checks[1]).toBe(VERIFICATION_CHECKS.hasTimeline);
+        expect(checks[2]).toBe(VERIFICATION_CHECKS.excludeErrorPages);
+      });
+
+      it('should return empty array when no checks provided', () => {
+        const checks = composeChecks();
+        expect(checks).toEqual([]);
+      });
+
+      it('should work with custom and pre-built checks mixed', () => {
+        const customCheck = createVerificationCheck({ fieldExists: ['custom_field'] }, 'error');
+        const checks = composeChecks(
+          VERIFICATION_CHECKS.hasFees,
+          customCheck,
+          VERIFICATION_CHECKS.excludeErrorPages
+        );
+        expect(checks).toHaveLength(3);
+        expect(checks[1].assertion.fieldExists).toEqual(['custom_field']);
+      });
     });
   });
 
