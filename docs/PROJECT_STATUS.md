@@ -12,10 +12,8 @@
 
 Working on MoveAhead.ai integration tasks (INT initiative).
 
-**In Progress:**
-- INT-008 - Add content change prediction (dynamic refresh schedules based on observed update patterns)
-
 **Completed:**
+- INT-008 - Add content change prediction (DynamicRefreshScheduler with 9 content type presets, 10 domain patterns, intelligent refresh scheduling replacing fixed 90-day staleness)
 - INT-007 - Create government portal skill pack (12 skills for ES, PT, DE: NIE, Digital Nomad Visa, Social Security, Tax Residency, NIF, D7 Visa, NHR, Anmeldung, Freelance Visa, Tax ID, Health Insurance)
 - INT-006 - Add research workflow templates (5 templates: visaResearch, documentExtraction, feeTracking, crossCountryComparison, taxObligations)
 - INT-005 - Add pagination learning for legal docs (8 legal document sites with PaginationPresetConfig)
