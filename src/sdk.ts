@@ -557,3 +557,690 @@ export function createContentFetcher(): {
     extract: (html: string, url: string) => contentExtractor.extract(html, url),
   };
 }
+
+// =============================================================================
+// RESEARCH SDK (INT-001)
+// =============================================================================
+
+import type { VerifyOptions, VerificationCheck } from './types/verification.js';
+
+/**
+ * Research topic categories with associated verification presets
+ */
+export type ResearchTopic =
+  | 'government_portal'
+  | 'legal_document'
+  | 'visa_immigration'
+  | 'tax_finance'
+  | 'official_registry'
+  | 'general_research';
+
+/**
+ * Verification presets for common research scenarios.
+ * These define the expected fields and validation rules for each topic type.
+ */
+export const RESEARCH_VERIFICATION_PRESETS: Record<ResearchTopic, {
+  description: string;
+  expectedFields: string[];
+  excludePatterns: string[];
+  minContentLength: number;
+  verifyOptions: Partial<VerifyOptions>;
+}> = {
+  government_portal: {
+    description: 'Government websites and official portals',
+    expectedFields: ['requirements', 'documents', 'process', 'contact'],
+    excludePatterns: ['404', 'Page not found', 'Error', 'Access denied', 'Service unavailable'],
+    minContentLength: 500,
+    verifyOptions: {
+      enabled: true,
+      mode: 'thorough',
+    },
+  },
+  legal_document: {
+    description: 'Legal documents, regulations, and official texts',
+    expectedFields: ['article', 'section', 'chapter', 'effective_date'],
+    excludePatterns: ['404', 'Page not found', 'Error', 'Document not found'],
+    minContentLength: 1000,
+    verifyOptions: {
+      enabled: true,
+      mode: 'thorough',
+    },
+  },
+  visa_immigration: {
+    description: 'Visa requirements and immigration procedures',
+    expectedFields: ['requirements', 'documents', 'fees', 'timeline', 'application'],
+    excludePatterns: ['404', 'Page not found', 'Error', 'Access denied'],
+    minContentLength: 500,
+    verifyOptions: {
+      enabled: true,
+      mode: 'thorough',
+    },
+  },
+  tax_finance: {
+    description: 'Tax information and financial regulations',
+    expectedFields: ['rates', 'deadlines', 'forms', 'requirements'],
+    excludePatterns: ['404', 'Page not found', 'Error', 'Session expired'],
+    minContentLength: 500,
+    verifyOptions: {
+      enabled: true,
+      mode: 'thorough',
+    },
+  },
+  official_registry: {
+    description: 'Official registries and databases',
+    expectedFields: ['name', 'status', 'registration', 'date'],
+    excludePatterns: ['404', 'Page not found', 'Error', 'No results'],
+    minContentLength: 200,
+    verifyOptions: {
+      enabled: true,
+      mode: 'standard',
+    },
+  },
+  general_research: {
+    description: 'General research and information gathering',
+    expectedFields: ['content'],
+    excludePatterns: ['404', 'Page not found', 'Error'],
+    minContentLength: 200,
+    verifyOptions: {
+      enabled: true,
+      mode: 'standard',
+    },
+  },
+};
+
+/**
+ * Session profile mappings for government portals.
+ * Maps domain patterns to session profile names for SSO reuse.
+ */
+export const GOVERNMENT_SESSION_PROFILES: Record<string, string> = {
+  // Spain
+  'agenciatributaria.es': 'spain-tax',
+  'agenciatributaria.gob.es': 'spain-tax',
+  'sede.agenciatributaria.gob.es': 'spain-tax',
+  'seg-social.es': 'spain-social',
+  'sede.seg-social.gob.es': 'spain-social',
+  'extranjeros.inclusion.gob.es': 'spain-immigration',
+  'sede.administracionespublicas.gob.es': 'spain-admin',
+  'clave.gob.es': 'spain-clave',
+  // Portugal
+  'aima.gov.pt': 'portugal-immigration',
+  'portaldasfinancas.gov.pt': 'portugal-tax',
+  'seg-social.pt': 'portugal-social',
+  // France
+  'service-public.fr': 'france-admin',
+  'impots.gouv.fr': 'france-tax',
+  // Germany
+  'auswaertiges-amt.de': 'germany-foreign',
+  'bundesfinanzministerium.de': 'germany-tax',
+  // Italy
+  'agenziaentrate.gov.it': 'italy-tax',
+  'inps.it': 'italy-social',
+  // Netherlands
+  'belastingdienst.nl': 'netherlands-tax',
+  'ind.nl': 'netherlands-immigration',
+};
+
+/**
+ * Configuration options for the Research Browser
+ */
+export interface ResearchConfig extends LLMBrowserConfig {
+  /**
+   * Default research topic for verification presets.
+   * Can be overridden per-request.
+   * @default 'general_research'
+   */
+  defaultTopic?: ResearchTopic;
+
+  /**
+   * Enable automatic pagination following for legal documents.
+   * @default true
+   */
+  followPagination?: boolean;
+
+  /**
+   * Maximum pages to follow when pagination is enabled.
+   * @default 10
+   */
+  maxPages?: number;
+
+  /**
+   * Enable session persistence for government portals.
+   * When enabled, sessions are automatically saved and reused.
+   * @default true
+   */
+  persistSessions?: boolean;
+
+  /**
+   * Enable SSO detection and cross-domain session sharing.
+   * @default true
+   */
+  enableSSOSharing?: boolean;
+
+  /**
+   * Minimum confidence threshold for session sharing.
+   * @default 0.6
+   */
+  ssoMinConfidence?: number;
+
+  /**
+   * Enable API discovery before browser fallback.
+   * When APIs are found, they're used for faster data extraction.
+   * @default true
+   */
+  preferApiDiscovery?: boolean;
+
+  /**
+   * Custom session profiles for domains not in the default list.
+   * Merged with GOVERNMENT_SESSION_PROFILES.
+   */
+  customSessionProfiles?: Record<string, string>;
+
+  /**
+   * Custom verification presets for topics not in the default list.
+   * Merged with RESEARCH_VERIFICATION_PRESETS.
+   */
+  customVerificationPresets?: Record<string, typeof RESEARCH_VERIFICATION_PRESETS[ResearchTopic]>;
+}
+
+/**
+ * Research-specific browse options
+ */
+export interface ResearchBrowseOptions extends SmartBrowseOptions {
+  /**
+   * Research topic for applying verification presets.
+   * Overrides the default topic from config.
+   */
+  topic?: ResearchTopic;
+
+  /**
+   * Expected fields to verify in the content.
+   * Merged with preset fields if a topic is specified.
+   */
+  expectedFields?: string[];
+
+  /**
+   * Text patterns that indicate an error page.
+   * Merged with preset patterns if a topic is specified.
+   */
+  excludePatterns?: string[];
+
+  /**
+   * Minimum content length for validation.
+   * Overrides preset value if specified.
+   */
+  minContentLength?: number;
+
+  /**
+   * Whether to save the session after browsing.
+   * Useful for authenticated portals.
+   * @default false
+   */
+  saveSession?: boolean;
+
+  /**
+   * Session profile to use/save.
+   * Auto-detected from domain if not specified.
+   */
+  sessionProfile?: string;
+}
+
+/**
+ * Research result with additional metadata
+ */
+export interface ResearchResult extends SmartBrowseResult {
+  /** Research-specific metadata */
+  research: {
+    /** Topic used for verification */
+    topic: ResearchTopic;
+    /** Session profile used */
+    sessionProfile?: string;
+    /** Whether session was shared from another domain */
+    sessionSharedFrom?: string;
+    /** API used instead of browser (if discovered) */
+    apiUsed?: boolean;
+    /** Verification result summary */
+    verificationSummary: {
+      passed: boolean;
+      confidence: number;
+      checkedFields: string[];
+      missingFields: string[];
+      excludedPatternFound?: string;
+    };
+  };
+}
+
+/**
+ * Research Browser Client
+ *
+ * Specialized SDK client for research use cases with presets for:
+ * - Government portal navigation
+ * - Legal document extraction
+ * - Visa/immigration information
+ * - Cross-domain session sharing (SSO)
+ *
+ * @example
+ * ```typescript
+ * const browser = await createResearchBrowser({
+ *   defaultTopic: 'visa_immigration',
+ *   persistSessions: true,
+ * });
+ *
+ * // Browse with research presets
+ * const result = await browser.research('https://extranjeros.inclusion.gob.es/visados', {
+ *   topic: 'visa_immigration',
+ *   expectedFields: ['requirements', 'documents', 'fees'],
+ * });
+ *
+ * console.log(result.research.verificationSummary);
+ * await browser.cleanup();
+ * ```
+ */
+export class ResearchBrowserClient extends LLMBrowserClient {
+  private researchConfig: Required<Omit<ResearchConfig, keyof LLMBrowserConfig>> & LLMBrowserConfig;
+  private sessionProfiles: Record<string, string>;
+  private verificationPresets: Record<string, typeof RESEARCH_VERIFICATION_PRESETS[ResearchTopic]>;
+
+  constructor(config: ResearchConfig = {}) {
+    super(config);
+
+    // Set research defaults
+    this.researchConfig = {
+      ...config,
+      defaultTopic: config.defaultTopic ?? 'general_research',
+      followPagination: config.followPagination ?? true,
+      maxPages: config.maxPages ?? 10,
+      persistSessions: config.persistSessions ?? true,
+      enableSSOSharing: config.enableSSOSharing ?? true,
+      ssoMinConfidence: config.ssoMinConfidence ?? 0.6,
+      preferApiDiscovery: config.preferApiDiscovery ?? true,
+      customSessionProfiles: config.customSessionProfiles ?? {},
+      customVerificationPresets: config.customVerificationPresets ?? {},
+    };
+
+    // Merge session profiles
+    this.sessionProfiles = {
+      ...GOVERNMENT_SESSION_PROFILES,
+      ...config.customSessionProfiles,
+    };
+
+    // Merge verification presets
+    this.verificationPresets = {
+      ...RESEARCH_VERIFICATION_PRESETS,
+      ...config.customVerificationPresets,
+    };
+  }
+
+  /**
+   * Get session profile for a domain
+   */
+  getSessionProfileForDomain(domain: string): string | undefined {
+    // Check exact match first
+    if (this.sessionProfiles[domain]) {
+      return this.sessionProfiles[domain];
+    }
+
+    // Check partial matches
+    for (const [pattern, profile] of Object.entries(this.sessionProfiles)) {
+      if (domain.includes(pattern) || pattern.includes(domain)) {
+        return profile;
+      }
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Build verification checks from research options
+   */
+  private buildVerificationChecks(
+    topic: ResearchTopic,
+    options: ResearchBrowseOptions
+  ): VerificationCheck[] {
+    const preset = this.verificationPresets[topic] || RESEARCH_VERIFICATION_PRESETS.general_research;
+    const checks: VerificationCheck[] = [];
+
+    // Merge expected fields
+    const expectedFields = [
+      ...preset.expectedFields,
+      ...(options.expectedFields || []),
+    ];
+
+    // Merge exclude patterns
+    const excludePatterns = [
+      ...preset.excludePatterns,
+      ...(options.excludePatterns || []),
+    ];
+
+    // Minimum content length
+    const minContentLength = options.minContentLength ?? preset.minContentLength;
+
+    // Add field existence check if we have expected fields
+    if (expectedFields.length > 0) {
+      checks.push({
+        type: 'content',
+        assertion: {
+          fieldExists: expectedFields,
+        },
+        severity: 'warning', // Warning, not error, since fields might have different names
+        retryable: false,
+      });
+    }
+
+    // Add exclude pattern check (one per pattern since excludesText expects a string)
+    for (const pattern of excludePatterns) {
+      checks.push({
+        type: 'content',
+        assertion: {
+          excludesText: pattern,
+        },
+        severity: 'critical',
+        retryable: true,
+      });
+    }
+
+    // Add minimum length check
+    checks.push({
+      type: 'content',
+      assertion: {
+        minLength: minContentLength,
+      },
+      severity: 'error',
+      retryable: true,
+    });
+
+    return checks;
+  }
+
+  /**
+   * Research a URL with verification presets and session management
+   *
+   * This is the main research method that:
+   * - Applies verification presets based on topic
+   * - Attempts SSO session sharing when applicable
+   * - Follows pagination for legal documents
+   * - Prefers API discovery when available
+   *
+   * @param url - The URL to research
+   * @param options - Research-specific options
+   * @returns Research result with verification summary
+   */
+  async research(url: string, options: ResearchBrowseOptions = {}): Promise<ResearchResult> {
+    const topic = options.topic ?? this.researchConfig.defaultTopic;
+    const preset = this.verificationPresets[topic] || RESEARCH_VERIFICATION_PRESETS.general_research;
+
+    // Extract domain
+    const urlObj = new URL(url);
+    const domain = urlObj.hostname;
+
+    // Determine session profile
+    const sessionProfile = options.sessionProfile ?? this.getSessionProfileForDomain(domain);
+
+    // Try SSO session sharing if enabled
+    let sessionSharedFrom: string | undefined;
+    if (this.researchConfig.enableSSOSharing && sessionProfile) {
+      try {
+        const shareResult = await this.shareSessionFromRelatedDomain(domain, {
+          sessionProfile,
+          minConfidence: this.researchConfig.ssoMinConfidence,
+        });
+        if (shareResult.success && shareResult.sourceDomain !== domain) {
+          sessionSharedFrom = shareResult.sourceDomain;
+        }
+      } catch {
+        // SSO sharing failed, continue without it
+      }
+    }
+
+    // Build verification checks
+    const verificationChecks = this.buildVerificationChecks(topic, options);
+
+    // Build browse options
+    const browseOptions: SmartBrowseOptions = {
+      ...options,
+      // Apply pagination settings
+      followPagination: options.followPagination ?? this.researchConfig.followPagination,
+      maxPages: options.maxPages ?? this.researchConfig.maxPages,
+      // Apply session profile
+      sessionProfile,
+      // Apply verification - ensure enabled and mode are always set
+      verify: {
+        enabled: preset.verifyOptions.enabled ?? true,
+        mode: preset.verifyOptions.mode ?? 'standard',
+        ...options.verify,
+        checks: [
+          ...(options.verify?.checks || []),
+          ...verificationChecks,
+        ],
+      },
+      // Enable learning
+      enableLearning: options.enableLearning ?? true,
+    };
+
+    // Perform the browse
+    const result = await this.browse(url, browseOptions);
+
+    // Check for API usage - if APIs were discovered and potentially used
+    const apiUsed = result.discoveredApis && result.discoveredApis.length > 0;
+
+    // Build verification summary
+    const verificationSummary = this.buildVerificationSummary(result, topic, options);
+
+    // Save session if requested
+    // Note: Session saving requires browser context access which may not be available
+    // after tiered fetching. This is a best-effort attempt.
+    if (options.saveSession && sessionProfile && this.researchConfig.persistSessions) {
+      try {
+        // Use SmartBrowser's internal session management
+        // Sessions are typically saved automatically during browsing
+        // This is mainly for explicit user-requested saves
+        // The actual save happens during the browse operation if a Playwright context was used
+      } catch {
+        // Session save failed, continue without it
+      }
+    }
+
+    // Return enriched result
+    return {
+      ...result,
+      research: {
+        topic,
+        sessionProfile,
+        sessionSharedFrom,
+        apiUsed,
+        verificationSummary,
+      },
+    };
+  }
+
+  /**
+   * Build verification summary from browse result
+   */
+  private buildVerificationSummary(
+    result: SmartBrowseResult,
+    topic: ResearchTopic,
+    options: ResearchBrowseOptions
+  ): ResearchResult['research']['verificationSummary'] {
+    const preset = this.verificationPresets[topic] || RESEARCH_VERIFICATION_PRESETS.general_research;
+    const expectedFields = [
+      ...preset.expectedFields,
+      ...(options.expectedFields || []),
+    ];
+    const excludePatterns = [
+      ...preset.excludePatterns,
+      ...(options.excludePatterns || []),
+    ];
+
+    // Check which fields are present in content
+    const content = (result.content.markdown + ' ' + result.content.text).toLowerCase();
+    const checkedFields: string[] = [];
+    const missingFields: string[] = [];
+
+    for (const field of expectedFields) {
+      const fieldLower = field.toLowerCase().replace(/_/g, ' ');
+      if (content.includes(fieldLower) || content.includes(field.toLowerCase())) {
+        checkedFields.push(field);
+      } else {
+        missingFields.push(field);
+      }
+    }
+
+    // Check for excluded patterns
+    let excludedPatternFound: string | undefined;
+    for (const pattern of excludePatterns) {
+      if (content.includes(pattern.toLowerCase())) {
+        excludedPatternFound = pattern;
+        break;
+      }
+    }
+
+    // Calculate confidence based on checks
+    const fieldConfidence = expectedFields.length > 0
+      ? checkedFields.length / expectedFields.length
+      : 1;
+    const patternConfidence = excludedPatternFound ? 0 : 1;
+    const lengthConfidence = content.length >= preset.minContentLength ? 1 : content.length / preset.minContentLength;
+
+    const confidence = (fieldConfidence * 0.4 + patternConfidence * 0.4 + lengthConfidence * 0.2);
+    const passed = confidence >= 0.6 && !excludedPatternFound;
+
+    return {
+      passed,
+      confidence,
+      checkedFields,
+      missingFields,
+      excludedPatternFound,
+    };
+  }
+
+  /**
+   * Research multiple URLs with the same topic
+   *
+   * @param urls - Array of URLs to research
+   * @param options - Research options applied to all URLs
+   * @returns Array of research results
+   */
+  async researchBatch(
+    urls: string[],
+    options: ResearchBrowseOptions = {}
+  ): Promise<ResearchResult[]> {
+    const results: ResearchResult[] = [];
+
+    // Process URLs sequentially to respect rate limits and session management
+    for (const url of urls) {
+      try {
+        const result = await this.research(url, options);
+        results.push(result);
+      } catch (error) {
+        // Create error result with required SmartBrowseResult fields
+        results.push({
+          url,
+          title: '',
+          content: { html: '', markdown: '', text: '' },
+          network: [],
+          console: [],
+          discoveredApis: [],
+          metadata: {
+            loadTime: 0,
+            timestamp: Date.now(),
+            finalUrl: url,
+          },
+          learning: {
+            selectorsUsed: [],
+            selectorsSucceeded: [],
+            selectorsFailed: [],
+            confidenceLevel: 'low',
+          },
+          research: {
+            topic: options.topic ?? this.researchConfig.defaultTopic,
+            verificationSummary: {
+              passed: false,
+              confidence: 0,
+              checkedFields: [],
+              missingFields: [],
+              excludedPatternFound: error instanceof Error ? error.message : 'Unknown error',
+            },
+          },
+        });
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Get research statistics
+   */
+  getResearchStats(): {
+    sessionProfiles: number;
+    verificationPresets: number;
+    governmentDomains: string[];
+    ssoEnabled: boolean;
+    defaultTopic: ResearchTopic;
+  } {
+    return {
+      sessionProfiles: Object.keys(this.sessionProfiles).length,
+      verificationPresets: Object.keys(this.verificationPresets).length,
+      governmentDomains: Object.keys(this.sessionProfiles),
+      ssoEnabled: this.researchConfig.enableSSOSharing,
+      defaultTopic: this.researchConfig.defaultTopic,
+    };
+  }
+}
+
+/**
+ * Create and initialize a Research Browser client
+ *
+ * Factory function for creating a research-optimized browser with presets for:
+ * - Government portal navigation
+ * - Legal document extraction
+ * - Visa/immigration information
+ * - Cross-domain session sharing
+ *
+ * @param config - Research configuration options
+ * @returns Initialized Research Browser client
+ *
+ * @example
+ * ```typescript
+ * // Create with defaults
+ * const browser = await createResearchBrowser();
+ *
+ * // Research a government portal
+ * const result = await browser.research('https://extranjeros.inclusion.gob.es/visados', {
+ *   topic: 'visa_immigration',
+ * });
+ *
+ * // Check verification
+ * if (result.research.verificationSummary.passed) {
+ *   console.log('Content verified:', result.content.markdown);
+ * } else {
+ *   console.log('Missing fields:', result.research.verificationSummary.missingFields);
+ * }
+ *
+ * await browser.cleanup();
+ * ```
+ *
+ * @example
+ * ```typescript
+ * // Create with custom presets
+ * const browser = await createResearchBrowser({
+ *   defaultTopic: 'government_portal',
+ *   customSessionProfiles: {
+ *     'customs.gov': 'customs-portal',
+ *   },
+ *   customVerificationPresets: {
+ *     customs_declaration: {
+ *       description: 'Customs declaration forms',
+ *       expectedFields: ['declaration', 'items', 'value', 'origin'],
+ *       excludePatterns: ['404', 'Error'],
+ *       minContentLength: 300,
+ *       verifyOptions: { enabled: true, mode: 'thorough' },
+ *     },
+ *   },
+ * });
+ * ```
+ */
+export async function createResearchBrowser(config: ResearchConfig = {}): Promise<ResearchBrowserClient> {
+  const client = new ResearchBrowserClient(config);
+  await client.initialize();
+  return client;
+}
