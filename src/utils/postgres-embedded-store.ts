@@ -195,7 +195,7 @@ export class PostgresEmbeddedStore {
         where: { namespace },
         select: { key: true },
       });
-      return records.map((r) => r.key);
+      return records.map((r: { key: string }) => r.key);
     } catch (error) {
       this.stats.failures++;
       logger.server.error('Failed to get keys', { namespace, error });
@@ -289,7 +289,7 @@ export class PostgresEmbeddedStore {
    */
   async transaction<T>(fn: (tx: PrismaClient) => Promise<T>): Promise<T> {
     this.ensureInitialized();
-    return this.prisma.$transaction(async (tx) => {
+    return this.prisma.$transaction(async (tx: unknown) => {
       return fn(tx as PrismaClient);
     });
   }

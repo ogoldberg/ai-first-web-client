@@ -97,6 +97,14 @@ export interface PublishedPattern {
   isOfficial?: boolean; // Published by Unbrowser team
   requiresAuth?: boolean; // Pattern requires authentication
   isPremium?: boolean; // Premium patterns (future: paid patterns)
+
+  // Ownership tracking
+  createdBy?: string; // Tenant ID that created the pattern
+
+  // Execution statistics
+  totalExecutions?: number;
+  successfulExecutions?: number;
+  failedExecutions?: number;
 }
 
 /**
@@ -115,6 +123,7 @@ export interface PublishPatternRequest {
   version?: string; // Default: 1.0.0
   changelog?: string;
   updateExisting?: string; // ID of existing pattern to update
+  tenantId: string; // The tenant publishing the pattern
 }
 
 /**

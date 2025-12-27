@@ -70,14 +70,37 @@ export class GeoRoutingService {
   }
 
   /**
-   * Auto strategy: Use learned preferences, fall back to TLD hint
+   * Auto strategy: User preference first, then learned preferences, fall back to TLD hint
    */
   private recommendAuto(
     request: GeoRoutingRequest,
     domain: string,
     domainPref?: DomainGeoPreference
   ): GeoRoutingRecommendation {
-    // 1. Check learned preferences
+    // 1. Check user preference first (explicit user intent takes priority)
+    if (request.preferredCountry) {
+      return {
+        country: request.preferredCountry,
+        confidence: 'high',
+        reason: 'User preference',
+        fallbacks: this.buildFallbackChain(request.preferredCountry, request.avoidCountries),
+        strategyUsed: 'auto',
+      };
+    }
+
+    // 2. Check required country (e.g., geo-locked content)
+    if (domainPref?.restrictions?.requiredCountry) {
+      return {
+        country: domainPref.restrictions.requiredCountry,
+        confidence: 'high',
+        reason: 'Domain requires specific country',
+        fallbacks: [],
+        learnedPreference: true,
+        strategyUsed: 'auto',
+      };
+    }
+
+    // 3. Check learned preferences
     if (domainPref && domainPref.preferredCountries.length > 0) {
       const best = domainPref.preferredCountries[0];
       if (best.successRate > 0.7) {
@@ -98,29 +121,6 @@ export class GeoRoutingService {
           strategyUsed: 'auto',
         };
       }
-    }
-
-    // 2. Check required country (e.g., geo-locked content)
-    if (domainPref?.restrictions?.requiredCountry) {
-      return {
-        country: domainPref.restrictions.requiredCountry,
-        confidence: 'high',
-        reason: 'Domain requires specific country',
-        fallbacks: [],
-        learnedPreference: true,
-        strategyUsed: 'auto',
-      };
-    }
-
-    // 3. Check user preference
-    if (request.preferredCountry) {
-      return {
-        country: request.preferredCountry,
-        confidence: 'medium',
-        reason: 'User preference',
-        fallbacks: this.buildFallbackChain(request.preferredCountry, request.avoidCountries),
-        strategyUsed: 'auto',
-      };
     }
 
     // 4. Use TLD hint

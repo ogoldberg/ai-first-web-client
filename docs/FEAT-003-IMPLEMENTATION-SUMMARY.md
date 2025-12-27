@@ -1,7 +1,7 @@
 # FEAT-003: WebSocket API Support - Implementation Summary
 
 **Feature**: WebSocket, Socket.IO, and SSE Pattern Learning and Replay
-**Status**: 🚧 Core Implementation Complete, Integration Pending
+**Status**: ✅ COMPLETE - Full integration with browser capture, LearningEngine, TieredFetcher, and SmartBrowser
 **Priority**: P1.5 - High Priority
 **Effort**: Large (4 days estimated, ~1 day core implementation complete)
 **Date**: 2025-12-27
@@ -215,17 +215,15 @@ Created comprehensive example with **7 scenarios**:
 // Add to browser-manager.ts
 const websocketConnections: WebSocketConnection[] = [];
 
-// Listen for WebSocket frames
-page.on('websocketframerecevied', (frame) => {
-  // Capture WebSocket messages
-});
-
-page.on('websocketframescreated', (frame) => {
-  // Capture sent messages
-});
-
+// Listen for WebSocket connections
 page.on('websocket', (ws) => {
   // Track WebSocket connection
+  ws.on('framereceived', (frame) => {
+    // Capture received WebSocket messages
+  });
+  ws.on('framesent', (frame) => {
+    // Capture sent messages
+  });
 });
 ```
 

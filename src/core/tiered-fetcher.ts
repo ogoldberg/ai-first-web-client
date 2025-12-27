@@ -145,6 +145,8 @@ export interface TieredFetchResult {
   networkRequests: NetworkRequest[];
   // Discovered APIs (Playwright only)
   discoveredApis: ApiPattern[];
+  // WebSocket connections captured (FEAT-003)
+  websocketConnections?: import('../types/websocket-patterns.js').WebSocketConnection[];
   // Page reference if Playwright was used (for further interactions)
   page?: Page;
   // Timing breakdown
@@ -627,7 +629,7 @@ export class TieredFetcher {
       websocketConnections: result.websockets, // FEAT-003
       discoveredApis: [], // API analysis happens at higher level
       page: result.page,
-    } as any; // Type assertion needed because return includes 'page' which is not in TieredFetchResult
+    };
   }
 
   /**

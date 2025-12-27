@@ -383,6 +383,8 @@ export class SmartBrowser {
   private debugRecorder: DebugTraceRecorder;
   private feedbackService: FeedbackService;
   private webhookService: WebhookService;
+  private replayWorkflowDepth: number = 0;
+  private static readonly MAX_WORKFLOW_DEPTH = 10;
 
   constructor(
     private browserManager: BrowserManager,
@@ -3614,6 +3616,29 @@ export class SmartBrowser {
     workflow: import('../types/workflow.js').Workflow,
     variables?: import('../types/workflow.js').WorkflowVariables
   ): Promise<import('../types/workflow.js').WorkflowReplayResult> {
+    // Check recursion depth to prevent infinite loops
+    if (this.replayWorkflowDepth >= SmartBrowser.MAX_WORKFLOW_DEPTH) {
+      throw new Error(
+        `Maximum workflow recursion depth (${SmartBrowser.MAX_WORKFLOW_DEPTH}) exceeded. ` +
+        `Possible infinite loop detected.`
+      );
+    }
+
+    this.replayWorkflowDepth++;
+    try {
+      return await this.executeWorkflowReplay(workflow, variables);
+    } finally {
+      this.replayWorkflowDepth--;
+    }
+  }
+
+  /**
+   * Internal method to execute workflow replay (separated for recursion depth tracking)
+   */
+  private async executeWorkflowReplay(
+    workflow: import('../types/workflow.js').Workflow,
+    variables?: import('../types/workflow.js').WorkflowVariables
+  ): Promise<import('../types/workflow.js').WorkflowReplayResult> {
     const startTime = Date.now();
     const results: import('../types/workflow.js').WorkflowStepResult[] = [];
 
@@ -3621,6 +3646,7 @@ export class SmartBrowser {
       workflowId: workflow.id,
       name: workflow.name,
       steps: workflow.steps.length,
+      depth: this.replayWorkflowDepth,
     });
 
     let overallSuccess = true;

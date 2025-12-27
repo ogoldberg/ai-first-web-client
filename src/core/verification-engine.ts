@@ -989,8 +989,8 @@ export class VerificationEngine {
    * ```
    */
   private validateSchema(result: SmartBrowseResult, schema: JSONSchema): SchemaValidationError[] {
-    // Validate the result content
-    const dataToValidate = result.content;
+    // Validate structuredData if present, otherwise validate content itself
+    const dataToValidate = (result.content as { structuredData?: unknown }).structuredData ?? result.content;
 
     if (!dataToValidate) {
       logger.verificationEngine.warn('Schema validation skipped: no content to validate');
