@@ -16,6 +16,7 @@ Working on MoveAhead.ai integration tasks (INT initiative).
 - (none)
 
 **Completed:**
+- INT-004 - Add VerificationEngine presets (19 pre-built VERIFICATION_CHECKS for government content validation)
 - INT-003 - Integrate API discovery for gov portals (check for APIs before browser fallback - 10-50x speedup)
 - INT-002 - Enhance session persistence for multi-portal (extend session management to track SSO relationships)
 - INT-001 - Create SDK wrapper for research use case (specialized factory function with research presets)

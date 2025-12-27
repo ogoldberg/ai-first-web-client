@@ -894,7 +894,7 @@ Browser: { success: true, ... }  // Learns this for future
 
 | ID | Task | Effort | Status | Notes |
 |----|------|--------|--------|-------|
-| INT-004 | Add VerificationEngine presets | M | Not Started | Pre-configured verification checks for government content (requirements, fees, timeline fields) |
+| INT-004 | Add VerificationEngine presets | M | Complete | Pre-configured verification checks for government content (requirements, fees, timeline fields). 19 pre-built VERIFICATION_CHECKS with helper functions. PR #206 |
 | INT-005 | Add pagination learning for legal docs | S | Not Started | Optimize pagination discovery for BOE, EUR-Lex style legal document sites |
 | INT-006 | Add research workflow templates | M | Not Started | Pre-built workflow templates for visa research, document extraction, fee tracking |
 
