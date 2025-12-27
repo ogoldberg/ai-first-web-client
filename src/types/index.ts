@@ -32,6 +32,9 @@ export * from './pattern-health.js';
 // Re-export verification types (FEAT-001)
 export * from './verification.js';
 
+// Re-export content change prediction types (GAP-011)
+export * from './content-change.js';
+
 export interface NetworkRequest {
   url: string;
   method: string;
