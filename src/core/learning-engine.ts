@@ -71,6 +71,13 @@ import type {
   WebSocketPattern,
   WebSocketConnection,
 } from '../types/websocket-patterns.js';
+import { ContentChangePredictor } from './content-change-predictor.js';
+import type {
+  ContentChangePattern,
+  ContentChangeAnalysis,
+  PollRecommendation,
+  ContentChangePredictionConfig,
+} from '../types/content-change.js';
 
 // Create a logger for learning engine operations
 const log = logger.create('LearningEngine');
@@ -152,6 +159,12 @@ export class LearningEngine {
    */
   private wsPatternLearner: WebSocketPatternLearner;
 
+  /**
+   * Content change predictor (GAP-011)
+   * Learns content update patterns and predicts when content will change
+   */
+  private changePredictor: ContentChangePredictor;
+
   constructor(
     filePath: string = './enhanced-knowledge-base.json',
     decayConfig: ConfidenceDecayConfig = DEFAULT_DECAY_CONFIG,
@@ -173,6 +186,9 @@ export class LearningEngine {
 
     // Initialize WebSocket pattern learner (FEAT-003)
     this.wsPatternLearner = new WebSocketPatternLearner();
+
+    // Initialize content change predictor (GAP-011)
+    this.changePredictor = new ContentChangePredictor();
   }
 
   async initialize(): Promise<void> {
@@ -1212,6 +1228,10 @@ export class LearningEngine {
 
     pattern.lastChecked = now;
     entry.lastUpdated = now;
+
+    // Record observation in change predictor (GAP-011)
+    this.changePredictor.recordObservation(domain, urlPattern, contentHash, changed);
+
     this.save();
   }
 
@@ -3556,6 +3576,60 @@ export class LearningEngine {
    */
   getAntiPatterns(): AntiPattern[] {
     return Array.from(this.antiPatterns.values());
+  }
+
+  // ============================================
+  // CONTENT CHANGE PREDICTION (GAP-011)
+  // ============================================
+
+  /**
+   * Get content change pattern for a URL
+   */
+  getContentChangePattern(domain: string, urlPattern: string): ContentChangePattern | null {
+    return this.changePredictor.getPattern(domain, urlPattern);
+  }
+
+  /**
+   * Analyze content change pattern and get recommendations
+   */
+  analyzeContentChangePattern(domain: string, urlPattern: string): ContentChangeAnalysis {
+    return this.changePredictor.analyzePattern(domain, urlPattern);
+  }
+
+  /**
+   * Check if we should poll this content now
+   */
+  shouldCheckContentNow(domain: string, urlPattern: string): PollRecommendation {
+    return this.changePredictor.shouldCheckNow(domain, urlPattern);
+  }
+
+  /**
+   * Get next predicted change time for a URL
+   */
+  getNextPredictedChange(domain: string, urlPattern: string): number | null {
+    const pattern = this.changePredictor.getPattern(domain, urlPattern);
+    return pattern?.nextPrediction?.predictedAt ?? null;
+  }
+
+  /**
+   * Get all content change patterns
+   */
+  getAllContentChangePatterns(): ContentChangePattern[] {
+    return this.changePredictor.getAllPatterns();
+  }
+
+  /**
+   * Export content change patterns for persistence
+   */
+  exportContentChangePatterns(): Record<string, ContentChangePattern> {
+    return this.changePredictor.exportPatterns();
+  }
+
+  /**
+   * Import content change patterns from persistence
+   */
+  importContentChangePatterns(data: Record<string, ContentChangePattern>): void {
+    this.changePredictor.importPatterns(data);
   }
 }
 
