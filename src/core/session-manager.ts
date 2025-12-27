@@ -644,4 +644,371 @@ export class SessionManager {
       // No sessions directory yet
     }
   }
+
+  // ============================================================================
+  // Multi-Portal Session Tracking (INT-002)
+  // ============================================================================
+
+  /**
+   * Get all sessions in a portal group
+   * Portal groups are sets of domains that share authentication (e.g., Spanish gov portals via CLAVE)
+   *
+   * @param portalGroup - The portal group identifier (e.g., 'spain-gov', 'portugal-gov')
+   * @returns Array of sessions in the group with their health status
+   */
+  getPortalGroupSessions(portalGroup: string): Array<{
+    session: SessionStore;
+    health: SessionHealth;
+    domain: string;
+    profile: string;
+  }> {
+    const results: Array<{
+      session: SessionStore;
+      health: SessionHealth;
+      domain: string;
+      profile: string;
+    }> = [];
+
+    for (const [key, session] of this.sessions) {
+      if (session.metadata?.portalGroup === portalGroup) {
+        const [domain, profile] = key.split(':');
+        results.push({
+          session,
+          health: this.getSessionHealth(domain, profile),
+          domain,
+          profile,
+        });
+      }
+    }
+
+    // Sort by login sequence if available, otherwise by lastUsed
+    return results.sort((a, b) => {
+      const seqA = a.session.metadata?.loginSequence ?? Infinity;
+      const seqB = b.session.metadata?.loginSequence ?? Infinity;
+      if (seqA !== seqB) return seqA - seqB;
+      return b.session.lastUsed - a.session.lastUsed;
+    });
+  }
+
+  /**
+   * Get all unique portal groups
+   * @returns Array of portal group identifiers
+   */
+  listPortalGroups(): string[] {
+    const groups = new Set<string>();
+
+    for (const session of this.sessions.values()) {
+      if (session.metadata?.portalGroup) {
+        groups.add(session.metadata.portalGroup);
+      }
+    }
+
+    return Array.from(groups).sort();
+  }
+
+  /**
+   * Assign a session to a portal group
+   * This establishes the relationship between domains that share authentication
+   *
+   * @param domain - The domain to assign
+   * @param profile - The session profile
+   * @param portalGroup - The portal group identifier
+   * @param options - Additional options for the assignment
+   */
+  async assignToPortalGroup(
+    domain: string,
+    profile: string = 'default',
+    portalGroup: string,
+    options?: {
+      isPrimary?: boolean;
+      loginSequence?: number;
+      parentDomain?: string;
+      parentProfile?: string;
+    }
+  ): Promise<void> {
+    const sessionKey = `${domain}:${profile}`;
+    const session = this.sessions.get(sessionKey);
+
+    if (!session) {
+      logger.session.warn('Cannot assign non-existent session to portal group', {
+        domain,
+        profile,
+        portalGroup,
+      });
+      return;
+    }
+
+    // Initialize metadata if needed
+    session.metadata = session.metadata || {};
+    session.metadata.portalGroup = portalGroup;
+
+    if (options?.isPrimary) {
+      session.metadata.isPrimarySession = true;
+    }
+
+    if (options?.loginSequence !== undefined) {
+      session.metadata.loginSequence = options.loginSequence;
+    }
+
+    // Set up parent relationship
+    if (options?.parentDomain && options?.parentProfile) {
+      session.metadata.parentSession = {
+        domain: options.parentDomain,
+        profile: options.parentProfile,
+      };
+
+      // Update parent's child sessions
+      const parentKey = `${options.parentDomain}:${options.parentProfile}`;
+      const parentSession = this.sessions.get(parentKey);
+      if (parentSession) {
+        parentSession.metadata = parentSession.metadata || {};
+        parentSession.metadata.childSessions = parentSession.metadata.childSessions || [];
+        const exists = parentSession.metadata.childSessions.some(
+          (c) => c.domain === domain && c.profile === profile
+        );
+        if (!exists) {
+          parentSession.metadata.childSessions.push({ domain, profile });
+          await this.persistSession(parentKey, parentSession);
+        }
+      }
+    }
+
+    await this.persistSession(sessionKey, session);
+
+    logger.session.info('Assigned session to portal group', {
+      domain,
+      profile,
+      portalGroup,
+      isPrimary: options?.isPrimary,
+      loginSequence: options?.loginSequence,
+    });
+  }
+
+  /**
+   * Get the primary session for a portal group
+   * The primary session is typically the first login (e.g., the IdP login)
+   *
+   * @param portalGroup - The portal group identifier
+   * @returns The primary session or undefined if none exists
+   */
+  getPrimarySession(portalGroup: string): SessionStore | undefined {
+    for (const session of this.sessions.values()) {
+      if (
+        session.metadata?.portalGroup === portalGroup &&
+        session.metadata?.isPrimarySession
+      ) {
+        return session;
+      }
+    }
+
+    // If no explicit primary, return the session with the lowest login sequence
+    const groupSessions = this.getPortalGroupSessions(portalGroup);
+    if (groupSessions.length > 0) {
+      return groupSessions[0].session;
+    }
+
+    return undefined;
+  }
+
+  /**
+   * Check if all sessions in a portal group are healthy
+   * @param portalGroup - The portal group identifier
+   * @returns Summary of portal group health
+   */
+  getPortalGroupHealth(portalGroup: string): {
+    healthy: boolean;
+    totalSessions: number;
+    healthySessions: number;
+    expiredSessions: number;
+    expiringSoonSessions: number;
+    staleSessions: number;
+    issues: string[];
+  } {
+    const sessions = this.getPortalGroupSessions(portalGroup);
+    const issues: string[] = [];
+
+    let healthySessions = 0;
+    let expiredSessions = 0;
+    let expiringSoonSessions = 0;
+    let staleSessions = 0;
+
+    for (const { health, domain, profile } of sessions) {
+      switch (health.status) {
+        case 'healthy':
+          healthySessions++;
+          break;
+        case 'expired':
+          expiredSessions++;
+          issues.push(`${domain}:${profile} is expired`);
+          break;
+        case 'expiring_soon':
+          expiringSoonSessions++;
+          issues.push(`${domain}:${profile} expires soon`);
+          break;
+        case 'stale':
+          staleSessions++;
+          issues.push(`${domain}:${profile} is stale`);
+          break;
+      }
+    }
+
+    return {
+      healthy: expiredSessions === 0 && sessions.length > 0,
+      totalSessions: sessions.length,
+      healthySessions,
+      expiredSessions,
+      expiringSoonSessions,
+      staleSessions,
+      issues,
+    };
+  }
+
+  /**
+   * Get sessions that depend on a given session
+   * Useful for cascading invalidation when a parent session expires
+   *
+   * @param domain - The domain of the parent session
+   * @param profile - The profile of the parent session
+   * @returns Array of dependent sessions
+   */
+  getDependentSessions(
+    domain: string,
+    profile: string = 'default'
+  ): Array<{ session: SessionStore; domain: string; profile: string }> {
+    const sessionKey = `${domain}:${profile}`;
+    const session = this.sessions.get(sessionKey);
+
+    if (!session?.metadata?.childSessions) {
+      return [];
+    }
+
+    const dependents: Array<{ session: SessionStore; domain: string; profile: string }> = [];
+
+    for (const child of session.metadata.childSessions) {
+      const childKey = `${child.domain}:${child.profile}`;
+      const childSession = this.sessions.get(childKey);
+      if (childSession) {
+        dependents.push({
+          session: childSession,
+          domain: child.domain,
+          profile: child.profile,
+        });
+
+        // Recursively get children's dependents
+        const grandchildren = this.getDependentSessions(child.domain, child.profile);
+        dependents.push(...grandchildren);
+      }
+    }
+
+    return dependents;
+  }
+
+  /**
+   * Invalidate all sessions in a portal group
+   * Use when user logs out of primary portal
+   *
+   * @param portalGroup - The portal group identifier
+   * @returns Number of sessions invalidated
+   */
+  async invalidatePortalGroup(portalGroup: string): Promise<number> {
+    const sessions = this.getPortalGroupSessions(portalGroup);
+    let count = 0;
+
+    for (const { domain, profile } of sessions) {
+      await this.deleteSession(domain, profile);
+      count++;
+    }
+
+    logger.session.info('Invalidated portal group sessions', {
+      portalGroup,
+      count,
+    });
+
+    return count;
+  }
+
+  /**
+   * Update session verification timestamp
+   * Call this after verifying a session is still valid (e.g., after successful API call)
+   *
+   * @param domain - The domain
+   * @param profile - The session profile
+   */
+  async markSessionVerified(domain: string, profile: string = 'default'): Promise<void> {
+    const sessionKey = `${domain}:${profile}`;
+    const session = this.sessions.get(sessionKey);
+
+    if (!session) {
+      return;
+    }
+
+    session.metadata = session.metadata || {};
+    session.metadata.lastVerified = Date.now();
+    await this.persistSession(sessionKey, session);
+  }
+
+  /**
+   * Get sessions by provider ID
+   * Useful for finding all sessions authenticated via the same IdP
+   *
+   * @param providerId - The identity provider ID (e.g., 'google', 'clave', 'franceconnect')
+   * @returns Array of sessions authenticated via this provider
+   */
+  getSessionsByProvider(providerId: string): Array<{
+    session: SessionStore;
+    domain: string;
+    profile: string;
+  }> {
+    const results: Array<{
+      session: SessionStore;
+      domain: string;
+      profile: string;
+    }> = [];
+
+    for (const [key, session] of this.sessions) {
+      if (session.metadata?.providerId === providerId) {
+        const [domain, profile] = key.split(':');
+        results.push({ session, domain, profile });
+      }
+    }
+
+    return results.sort((a, b) => b.session.lastUsed - a.session.lastUsed);
+  }
+
+  /**
+   * Auto-assign portal group based on domain matching
+   * Uses predefined domain groups (e.g., Spanish gov portals)
+   *
+   * @param domain - The domain to check
+   * @param profile - The session profile
+   * @param domainGroups - Map of portal group to domain patterns
+   * @returns The assigned portal group or undefined
+   */
+  async autoAssignPortalGroup(
+    domain: string,
+    profile: string = 'default',
+    domainGroups: Record<string, string[]>
+  ): Promise<string | undefined> {
+    for (const [portalGroup, patterns] of Object.entries(domainGroups)) {
+      for (const pattern of patterns) {
+        if (domain === pattern || domain.endsWith(`.${pattern}`)) {
+          // Find existing sessions in this group to determine sequence
+          const groupSessions = this.getPortalGroupSessions(portalGroup);
+          const maxSequence = groupSessions.reduce(
+            (max, s) => Math.max(max, s.session.metadata?.loginSequence ?? 0),
+            0
+          );
+
+          await this.assignToPortalGroup(domain, profile, portalGroup, {
+            isPrimary: groupSessions.length === 0,
+            loginSequence: maxSequence + 1,
+          });
+
+          return portalGroup;
+        }
+      }
+    }
+
+    return undefined;
+  }
 }

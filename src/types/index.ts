@@ -83,11 +83,32 @@ export interface SessionStore {
   createdAt?: number;
   expiresAt?: number;
   username?: string;
-  /** Metadata for session sharing (GAP-009) */
+  /** Metadata for session sharing and multi-portal tracking (GAP-009, INT-002) */
   metadata?: {
+    /** Domain the session was shared from (GAP-009) */
     sharedFrom?: string;
+    /** Timestamp when session was shared (GAP-009) */
     sharedAt?: number;
+    /** Identity provider ID connecting domains (GAP-009) */
     providerId?: string;
+    /** Portal group identifier for multi-portal tracking (INT-002) */
+    portalGroup?: string;
+    /** Login sequence number within portal group (INT-002) */
+    loginSequence?: number;
+    /** Parent session this depends on (INT-002) */
+    parentSession?: {
+      domain: string;
+      profile: string;
+    };
+    /** Child sessions that depend on this one (INT-002) */
+    childSessions?: Array<{
+      domain: string;
+      profile: string;
+    }>;
+    /** Whether this is the primary/root session in the group (INT-002) */
+    isPrimarySession?: boolean;
+    /** Last verified timestamp for session validity (INT-002) */
+    lastVerified?: number;
   };
 }
 
