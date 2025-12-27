@@ -8,6 +8,15 @@
 
 ---
 
+## Recent: Progressive Optimization (2025-12-26)
+
+Continuing work on Progressive Optimization Gaps (P2 initiative).
+
+**In Progress:**
+- GAP-009 - Multi-Domain Login Reuse (SSO flow detection, credential sharing across domains)
+
+---
+
 ## Recent: QA Examples (2025-12-26)
 
 Creating practical QA examples and documentation to help users understand how to use Unbrowser for testing.
