@@ -620,6 +620,71 @@ export type {
   GovernmentSkillPack,
 } from './core/government-skill-pack.js';
 
+// =============================================================================
+// DYNAMIC REFRESH SCHEDULER (INT-008)
+// =============================================================================
+
+/**
+ * Dynamic refresh scheduler for intelligent content update scheduling.
+ * Replaces fixed staleness thresholds with learned update patterns.
+ *
+ * @example
+ * ```typescript
+ * import { createDynamicRefreshScheduler, CONTENT_TYPE_PRESETS } from 'llm-browser/sdk';
+ *
+ * const scheduler = createDynamicRefreshScheduler();
+ *
+ * // Record content observations
+ * scheduler.recordContentCheck(
+ *   'https://exteriores.gob.es/visa-requirements',
+ *   'abc123hash',
+ *   true, // content changed
+ *   'requirements'
+ * );
+ *
+ * // Get optimal refresh schedule
+ * const schedule = scheduler.getRefreshSchedule(url);
+ * console.log(schedule.recommendedRefreshHours); // e.g., 168 (weekly)
+ * console.log(schedule.nextCheckAt); // timestamp when to check next
+ * console.log(schedule.isLearned); // true if based on observed patterns
+ *
+ * // Get URLs needing refresh
+ * const needsRefresh = scheduler.getUrlsNeedingRefresh();
+ * for (const { url, recommendation } of needsRefresh) {
+ *   console.log(`${url}: ${recommendation.reason}`);
+ * }
+ * ```
+ */
+export {
+  DynamicRefreshScheduler,
+  createDynamicRefreshScheduler,
+  CONTENT_TYPE_PRESETS,
+  KNOWN_DOMAIN_PATTERNS,
+} from './core/dynamic-refresh-scheduler.js';
+
+export type {
+  GovernmentContentType,
+  ContentTypePreset,
+  DomainPattern,
+  RefreshSchedule,
+  DynamicRefreshSchedulerConfig,
+} from './core/dynamic-refresh-scheduler.js';
+
+// Re-export content change predictor types for advanced usage
+export { ContentChangePredictor } from './core/content-change-predictor.js';
+export type {
+  ContentChangePattern,
+  ContentChangeAnalysis,
+  PollRecommendation,
+  ContentChangePredictionConfig,
+  ChangePatternType,
+  ChangeObservation,
+  TemporalPattern,
+  ChangeFrequencyStats,
+  ChangePrediction,
+} from './types/content-change.js';
+export { DEFAULT_CHANGE_PREDICTION_CONFIG } from './types/content-change.js';
+
 /**
  * Research topic categories with associated verification presets
  */

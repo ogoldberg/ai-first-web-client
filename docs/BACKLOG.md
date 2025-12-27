@@ -903,8 +903,8 @@ Browser: { success: true, ... }  // Learns this for future
 | ID | Task | Effort | Status | Notes |
 |----|------|--------|--------|-------|
 | INT-007 | Create government portal skill pack | M | Complete | 12 skills for ES, PT, DE covering visa, tax, social security, healthcare. Includes GOVERNMENT_SKILL_PACK export/import, skill-to-pattern conversion, search/filter functions. 66 tests |
-| INT-008 | Add content change prediction | S | Not Started | Dynamic refresh schedules based on observed update patterns |
-| INT-009 | Create MoveAhead example integration | L | Not Started | Full example showing SDK usage for relocation research pipeline |
+| INT-008 | Add content change prediction | S | Complete | DynamicRefreshScheduler with 9 content type presets (regulations, fees, forms, requirements, procedures, contact_info, news, deadlines, portal_status), 10 domain patterns for ES/PT/DE/UK/US gov sites. Replaces fixed 90-day staleness with intelligent scheduling. 67 tests |
+| INT-009 | Create MoveAhead example integration | L | Not Started | Full example showing API usage for relocation research pipeline (must use HTTP API, not local SDK) |
 
 **Dependencies:**
 - GAP-009 (Multi-Domain Login Reuse) - Complete, enables INT-002
