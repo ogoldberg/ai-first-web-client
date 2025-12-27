@@ -891,4 +891,210 @@ describe('PaginationDiscovery', () => {
       expect(pattern!.lastUsedAt).toBeGreaterThanOrEqual(initialLastUsed);
     });
   });
+
+  // ============================================
+  // INT-005: Legal Document Pagination Presets
+  // ============================================
+
+  describe('INT-005: Legal Document Pagination Presets', () => {
+    describe('tryPreset', () => {
+      it('should detect BOE (boe.es) preset', () => {
+        const result = discovery.tryPreset('https://www.boe.es/buscar/');
+
+        expect(result.detected).toBe(true);
+        expect(result.confidence).toBe(0.9);
+        expect(result.pattern).toBeDefined();
+        expect(result.pattern!.domain).toBe('boe.es');
+        expect(result.pattern!.paginationParam.name).toBe('p');
+        expect(result.pattern!.paginationParam.type).toBe('page');
+        expect(result.pattern!.paginationParam.startValue).toBe(1);
+        expect(result.pattern!.paginationParam.increment).toBe(1);
+        expect(result.pattern!.isValidated).toBe(true);
+      });
+
+      it('should detect EUR-Lex preset', () => {
+        const result = discovery.tryPreset('https://eur-lex.europa.eu/search.html');
+
+        expect(result.detected).toBe(true);
+        expect(result.confidence).toBe(0.9);
+        expect(result.pattern).toBeDefined();
+        expect(result.pattern!.domain).toBe('eur-lex.europa.eu');
+        expect(result.pattern!.paginationParam.name).toBe('page');
+        expect(result.pattern!.responseStructure.dataPath).toBe('results');
+        expect(result.pattern!.responseStructure.totalCountPath).toBe('totalHits');
+        expect(result.pattern!.responseStructure.hasMorePath).toBe('hasMore');
+      });
+
+      it('should detect UK Legislation preset', () => {
+        const result = discovery.tryPreset('https://www.legislation.gov.uk/search');
+
+        expect(result.detected).toBe(true);
+        expect(result.pattern!.domain).toBe('legislation.gov.uk');
+        expect(result.pattern!.paginationParam.name).toBe('page');
+        expect(result.pattern!.responseStructure.itemsPerPage).toBe(20);
+      });
+
+      it('should detect Legifrance preset', () => {
+        const result = discovery.tryPreset('https://www.legifrance.gouv.fr/liste/codes');
+
+        expect(result.detected).toBe(true);
+        expect(result.pattern!.domain).toBe('legifrance.gouv.fr');
+        expect(result.pattern!.paginationParam.name).toBe('page');
+      });
+
+      it('should detect CURIA (EU Court of Justice) preset', () => {
+        const result = discovery.tryPreset('https://curia.europa.eu/juris/');
+
+        expect(result.detected).toBe(true);
+        expect(result.pattern!.domain).toBe('curia.europa.eu');
+        expect(result.pattern!.responseStructure.dataPath).toBe('results');
+      });
+
+      it('should detect Normattiva (Italian legislation) preset', () => {
+        const result = discovery.tryPreset('https://www.normattiva.it/ricerca');
+
+        expect(result.detected).toBe(true);
+        expect(result.pattern!.domain).toBe('normattiva.it');
+        expect(result.pattern!.paginationParam.name).toBe('page');
+        expect(result.pattern!.responseStructure.itemsPerPage).toBe(20);
+      });
+
+      it('should detect Rechtspraak (Dutch case law) preset', () => {
+        const result = discovery.tryPreset('https://www.rechtspraak.nl/');
+
+        expect(result.detected).toBe(true);
+        expect(result.pattern!.domain).toBe('rechtspraak.nl');
+        expect(result.pattern!.paginationParam.name).toBe('pagina');
+      });
+
+      it('should detect Gesetze im Internet (German law) preset with reference_based type', () => {
+        const result = discovery.tryPreset('https://www.gesetze-im-internet.de/bgb/');
+
+        expect(result.detected).toBe(true);
+        expect(result.pattern!.domain).toBe('gesetze-im-internet.de');
+        // reference_based type uses default page param
+        expect(result.pattern!.paginationParam.location).toBe('query');
+      });
+
+      it('should return cached pattern on second request', () => {
+        // First request creates the pattern
+        const result1 = discovery.tryPreset('https://www.boe.es/buscar/');
+        expect(result1.detected).toBe(true);
+        const patternId1 = result1.pattern!.id;
+
+        // Second request should use cached pattern
+        const result2 = discovery.tryPreset('https://www.boe.es/buscar/documento');
+        expect(result2.detected).toBe(true);
+        expect(result2.pattern!.id).toBe(patternId1);
+        expect(result2.reasons).toContain('Using cached preset pattern for boe.es');
+      });
+
+      it('should not detect preset for unknown domain', () => {
+        const result = discovery.tryPreset('https://www.random-site.com/page');
+
+        expect(result.detected).toBe(false);
+        expect(result.confidence).toBe(0);
+        expect(result.reasons).toContain('No pagination preset found for domain');
+      });
+
+      it('should handle invalid URL gracefully', () => {
+        const result = discovery.tryPreset('not-a-valid-url');
+
+        expect(result.detected).toBe(false);
+        expect(result.confidence).toBe(0);
+      });
+    });
+
+    describe('hasPreset', () => {
+      it('should return true for domains with pagination presets', () => {
+        expect(discovery.hasPreset('https://www.boe.es/buscar/')).toBe(true);
+        expect(discovery.hasPreset('https://eur-lex.europa.eu/search.html')).toBe(true);
+        expect(discovery.hasPreset('https://www.legislation.gov.uk/')).toBe(true);
+        expect(discovery.hasPreset('https://www.legifrance.gouv.fr/')).toBe(true);
+        expect(discovery.hasPreset('https://curia.europa.eu/')).toBe(true);
+      });
+
+      it('should return false for domains without pagination presets', () => {
+        expect(discovery.hasPreset('https://www.google.com/')).toBe(false);
+        expect(discovery.hasPreset('https://www.example.com/')).toBe(false);
+      });
+    });
+
+    describe('getPresetPattern', () => {
+      it('should return undefined before tryPreset is called', () => {
+        expect(discovery.getPresetPattern('https://www.boe.es/')).toBeUndefined();
+      });
+
+      it('should return pattern after tryPreset is called', () => {
+        discovery.tryPreset('https://www.boe.es/buscar/');
+        const pattern = discovery.getPresetPattern('https://www.boe.es/');
+
+        expect(pattern).toBeDefined();
+        expect(pattern!.domain).toBe('boe.es');
+      });
+    });
+
+    describe('getPresetDomains', () => {
+      it('should return empty array initially', () => {
+        expect(discovery.getPresetDomains()).toEqual([]);
+      });
+
+      it('should return loaded preset domains', () => {
+        discovery.tryPreset('https://www.boe.es/');
+        discovery.tryPreset('https://eur-lex.europa.eu/');
+
+        const domains = discovery.getPresetDomains();
+        expect(domains).toContain('boe.es');
+        expect(domains).toContain('eur-lex.europa.eu');
+      });
+    });
+
+    describe('analyze with presets', () => {
+      it('should use preset before falling back to discovery', async () => {
+        const context = createPaginationContext({
+          originalUrl: 'https://www.boe.es/buscar/doc.php',
+          networkRequests: [], // No network requests
+        });
+
+        const result = await discovery.analyze(context);
+
+        expect(result.detected).toBe(true);
+        expect(result.pattern!.domain).toBe('boe.es');
+        expect(result.reasons).toContain('Using preset pagination for boe.es');
+      });
+
+      it('should fall back to discovery when no preset exists', async () => {
+        const context = createPaginationContext({
+          originalUrl: 'https://api.unknown-site.com/items',
+          networkRequests: [
+            createNetworkRequest({
+              url: 'https://api.unknown-site.com/items?page=2',
+              contentType: 'application/json',
+              status: 200,
+              responseBody: JSON.stringify({ data: [{ id: 1 }] }),
+            }),
+          ],
+        });
+
+        const result = await discovery.analyze(context);
+
+        expect(result.detected).toBe(true);
+        expect(result.pattern!.paginationParam.name).toBe('page');
+        // Should not mention preset
+        expect(result.reasons.join(' ')).not.toContain('preset');
+      });
+    });
+
+    describe('clear includes presets', () => {
+      it('should clear preset patterns when clear() is called', () => {
+        discovery.tryPreset('https://www.boe.es/');
+        expect(discovery.getPresetDomains()).toContain('boe.es');
+
+        discovery.clear();
+
+        expect(discovery.getPresetDomains()).toEqual([]);
+        expect(discovery.getPresetPattern('https://www.boe.es/')).toBeUndefined();
+      });
+    });
+  });
 });
