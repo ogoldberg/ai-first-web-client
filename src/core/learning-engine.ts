@@ -58,6 +58,14 @@ import type {
   SemanticPatternMatcher,
   SimilarPattern,
 } from './semantic-pattern-matcher.js';
+import { PatternHealthTracker } from './pattern-health-tracker.js';
+import type {
+  PatternHealthConfig,
+  PatternHealthNotification,
+  PatternHealth,
+  HealthCheckOptions,
+  HealthCheckResult,
+} from '../types/pattern-health.js';
 
 // Create a logger for learning engine operations
 const log = logger.create('LearningEngine');
@@ -78,6 +86,8 @@ interface LearningEngineData {
   lastSaved: number;
   /** Persisted high-confidence anti-patterns (LI-002) */
   antiPatterns?: AntiPattern[];
+  /** Pattern health data (FEAT-002) */
+  healthData?: Record<string, PatternHealth>;
 }
 
 /**
@@ -125,9 +135,16 @@ export class LearningEngine {
    */
   private pathnameIndex: Map<string, EnhancedApiPattern[]> = new Map();
 
+  /**
+   * Pattern health tracker (FEAT-002)
+   * Monitors learned pattern health over time and detects degradation
+   */
+  private healthTracker: PatternHealthTracker;
+
   constructor(
     filePath: string = './enhanced-knowledge-base.json',
-    decayConfig: ConfidenceDecayConfig = DEFAULT_DECAY_CONFIG
+    decayConfig: ConfidenceDecayConfig = DEFAULT_DECAY_CONFIG,
+    healthConfig?: Partial<PatternHealthConfig>
   ) {
     this.store = new PersistentStore<LearningEngineData>(filePath, {
       componentName: 'LearningEngine',
@@ -139,6 +156,9 @@ export class LearningEngine {
     for (const group of getDomainGroups()) {
       this.domainGroups.set(group.name, group);
     }
+
+    // Initialize pattern health tracker (FEAT-002)
+    this.healthTracker = new PatternHealthTracker(healthConfig);
   }
 
   async initialize(): Promise<void> {
@@ -1987,6 +2007,14 @@ export class LearningEngine {
         pattern.provenance = recordVerification(pattern.provenance);
       }
 
+      // Record pattern health success (FEAT-002)
+      this.healthTracker.recordSuccess(
+        domain,
+        endpoint,
+        pattern.verificationCount,
+        pattern.failureCount
+      );
+
       this.recordLearningEvent({
         type: 'pattern_verified',
         domain,
@@ -2042,11 +2070,113 @@ export class LearningEngine {
         );
       }
 
+      // Record pattern health failure (FEAT-002)
+      const notification = this.healthTracker.recordFailure(
+        domain,
+        endpoint,
+        pattern.verificationCount,
+        pattern.failureCount,
+        failure.type
+      );
+
+      // Log health status changes
+      if (notification) {
+        log.warn('Pattern health status changed', {
+          domain,
+          endpoint,
+          previousStatus: notification.previousStatus,
+          newStatus: notification.newStatus,
+          suggestedActions: notification.suggestedActions,
+        });
+      }
+
       this.save();
     }
 
     // Also record in general failure history
     this.recordFailure(domain, failure);
+  }
+
+  // ============================================
+  // PATTERN HEALTH METHODS (FEAT-002)
+  // ============================================
+
+  /**
+   * Get health status for a specific pattern
+   */
+  getPatternHealth(domain: string, endpoint: string): PatternHealth | null {
+    return this.healthTracker.getHealth(domain, endpoint);
+  }
+
+  /**
+   * Get all patterns with non-healthy status
+   */
+  getUnhealthyPatterns(): Array<{ domain: string; endpoint: string; health: PatternHealth }> {
+    return this.healthTracker.getUnhealthyPatterns();
+  }
+
+  /**
+   * Get all recent health notifications
+   */
+  getHealthNotifications(): PatternHealthNotification[] {
+    return this.healthTracker.getAllNotifications();
+  }
+
+  /**
+   * Clear all health notifications
+   */
+  clearHealthNotifications(): void {
+    this.healthTracker.clearNotifications();
+  }
+
+  /**
+   * Perform manual health check for a pattern
+   */
+  checkPatternHealth(
+    domain: string,
+    endpoint: string,
+    options?: HealthCheckOptions
+  ): HealthCheckResult | null {
+    const entry = this.entries.get(domain);
+    if (!entry) return null;
+
+    const pattern = entry.apiPatterns.find(p => p.endpoint === endpoint);
+    if (!pattern) return null;
+
+    return this.healthTracker.checkHealth(
+      domain,
+      endpoint,
+      pattern.verificationCount,
+      pattern.failureCount,
+      options
+    );
+  }
+
+  /**
+   * Get health statistics summary
+   */
+  getHealthStats(): {
+    total: number;
+    healthy: number;
+    degraded: number;
+    failing: number;
+    broken: number;
+  } {
+    return this.healthTracker.getHealthStats();
+  }
+
+  /**
+   * Export health data for persistence
+   */
+  exportHealthData(): Record<string, PatternHealth> {
+    return this.healthTracker.exportHealthData();
+  }
+
+  /**
+   * Import health data from persistence
+   */
+  importHealthData(data: Record<string, PatternHealth>): void {
+    this.healthTracker.importHealthData(data);
   }
 
   // ============================================
@@ -2544,6 +2674,14 @@ export class LearningEngine {
         });
       }
 
+      // Load pattern health data (FEAT-002)
+      if (data.healthData) {
+        this.healthTracker.importHealthData(data.healthData);
+        log.info('Loaded pattern health data', {
+          patterns: Object.keys(data.healthData).length,
+        });
+      }
+
       logger.learning.info('Loaded knowledge base', { totalDomains: this.entries.size });
 
       // Rebuild pathname index after loading entries (P-002)
@@ -2696,6 +2834,8 @@ export class LearningEngine {
       lastSaved: Date.now(),
       // Persist anti-patterns (LI-002)
       antiPatterns: [...this.antiPatterns.values()],
+      // Persist pattern health data (FEAT-002)
+      healthData: this.healthTracker.exportHealthData(),
     };
 
     // Fire-and-forget save (debounced by PersistentStore)
