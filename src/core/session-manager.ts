@@ -221,6 +221,27 @@ export class SessionManager {
   }
 
   /**
+   * Get raw session data (GAP-009: for session sharing)
+   */
+  getSession(domain: string, profile: string = 'default'): SessionStore | undefined {
+    const sessionKey = `${domain}:${profile}`;
+    return this.sessions.get(sessionKey);
+  }
+
+  /**
+   * Save session data directly without a browser context (GAP-009: for shared sessions)
+   */
+  async saveSessionData(session: SessionStore, profile: string = 'default'): Promise<void> {
+    const sessionKey = `${session.domain}:${profile}`;
+    this.sessions.set(sessionKey, session);
+    await this.persistSession(sessionKey, session);
+    logger.session.info('Saved shared session', {
+      domain: session.domain,
+      profile,
+    });
+  }
+
+  /**
    * List all saved sessions
    */
   listSessions(): Array<{ domain: string; profile: string; lastUsed: number }> {

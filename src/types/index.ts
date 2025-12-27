@@ -58,14 +58,22 @@ export interface ApiPattern {
 
 export interface SessionStore {
   domain: string;
+  profile?: string;
   cookies: any[];
   localStorage: Record<string, string>;
   sessionStorage: Record<string, string>;
   isAuthenticated: boolean;
   authType?: string;
   lastUsed: number;
+  createdAt?: number;
   expiresAt?: number;
   username?: string;
+  /** Metadata for session sharing (GAP-009) */
+  metadata?: {
+    sharedFrom?: string;
+    sharedAt?: number;
+    providerId?: string;
+  };
 }
 
 export interface KnowledgeBaseEntry {
