@@ -4,15 +4,30 @@ This directory contains Claude skill prompts that guide AI assistants in using U
 
 ## Available Skills
 
+### Research & Data Collection
+
 | Skill | File | Description |
 |-------|------|-------------|
 | Research Product | [research-product.md](research-product.md) | Research product info across retailers, compare prices |
-| Monitor Changes | [monitor-changes.md](monitor-changes.md) | Track websites for content changes |
 | Scrape Catalog | [scrape-catalog.md](scrape-catalog.md) | Extract product catalogs with pagination |
 | Discover APIs | [discover-apis.md](discover-apis.md) | Find and document website APIs |
 | Compare Sources | [compare-sources.md](compare-sources.md) | Cross-reference facts across multiple sources |
 | Extract Government Forms | [extract-government-forms.md](extract-government-forms.md) | Navigate gov sites, extract requirements, fees, timelines |
+
+### Monitoring & Tracking
+
+| Skill | File | Description |
+|-------|------|-------------|
+| Monitor Changes | [monitor-changes.md](monitor-changes.md) | Track websites for content changes |
 | Track Competitors | [track-competitors.md](track-competitors.md) | Monitor competitor sites, extract metrics, detect changes |
+
+### QA & Testing
+
+| Skill | File | Description |
+|-------|------|-------------|
+| Validate Site | [validate-site.md](validate-site.md) | Test site content for quality, verify data accuracy |
+| Test APIs | [test-apis.md](test-apis.md) | End-to-end API testing with schema validation |
+| Regression Test | [regression-test.md](regression-test.md) | Detect unintended changes via baseline comparison |
 
 ## How to Use
 
