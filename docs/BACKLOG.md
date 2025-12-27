@@ -489,7 +489,7 @@ See [COMPETITIVE_ANALYSIS.md](COMPETITIVE_ANALYSIS.md) for context on why these 
 |----|------|--------|--------|-------|
 | FEAT-001 | Schema validation for API discovery | M | Complete | Extend VerificationEngine with JSON schema validation. Define expected response schema, get typed validation errors. Natural extension of API-015. Implementation complete, tests passing (30+ test cases), example created. Ready for review. |
 | FEAT-002 | Change monitoring for learned patterns | M | Complete | Detect when learned API patterns break. Track pattern health, notify on failures, suggest re-learning. Builds on ProceduralMemory versioning. Implementation complete, 40+ tests passing, example created, LearningEngine integration done. Ready for review. |
-| FEAT-003 | WebSocket API support | L | Not Started | Discover and replay WebSocket/Socket.IO/SSE real-time APIs. Detect WS endpoints, learn message patterns, direct replay. Completes API discovery. |
+| FEAT-003 | WebSocket API support | L | In Progress | Discover and replay WebSocket/Socket.IO/SSE real-time APIs. Detect WS endpoints, learn message patterns, direct replay. Completes API discovery. Core implementation complete (types, pattern learner, WebSocket client, example). Integration pending (browser capture, LearningEngine storage, TieredFetcher). |
 
 ### Medium Priority (Advanced Features)
 
