@@ -902,7 +902,7 @@ Browser: { success: true, ... }  // Learns this for future
 
 | ID | Task | Effort | Status | Notes |
 |----|------|--------|--------|-------|
-| INT-007 | Create government portal skill pack | M | Not Started | Exportable skill pack for EU government portals (Spain, Portugal, Germany) |
+| INT-007 | Create government portal skill pack | M | Complete | 12 skills for ES, PT, DE covering visa, tax, social security, healthcare. Includes GOVERNMENT_SKILL_PACK export/import, skill-to-pattern conversion, search/filter functions. 66 tests |
 | INT-008 | Add content change prediction | S | Not Started | Dynamic refresh schedules based on observed update patterns |
 | INT-009 | Create MoveAhead example integration | L | Not Started | Full example showing SDK usage for relocation research pipeline |
 
