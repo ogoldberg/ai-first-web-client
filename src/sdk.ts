@@ -565,7 +565,7 @@ export function createContentFetcher(): {
 // RESEARCH SDK (INT-001)
 // =============================================================================
 
-import type { VerifyOptions, VerificationCheck } from './types/verification.js';
+import type { VerifyOptions, VerificationCheck, VerificationAssertion } from './types/verification.js';
 
 /**
  * Research topic categories with associated verification presets
@@ -578,17 +578,391 @@ export type ResearchTopic =
   | 'official_registry'
   | 'general_research';
 
+// =============================================================================
+// VERIFICATION CHECK BUILDERS (INT-004)
+// =============================================================================
+
 /**
- * Verification presets for common research scenarios.
- * These define the expected fields and validation rules for each topic type.
+ * Pre-built verification checks for government content validation.
+ * These can be composed into custom verification presets.
+ *
+ * @example
+ * ```typescript
+ * import { VERIFICATION_CHECKS } from 'llm-browser/sdk';
+ *
+ * const customPreset = {
+ *   checks: [
+ *     VERIFICATION_CHECKS.hasFees,
+ *     VERIFICATION_CHECKS.hasTimeline,
+ *     VERIFICATION_CHECKS.excludeErrorPages,
+ *   ]
+ * };
+ * ```
  */
-export const RESEARCH_VERIFICATION_PRESETS: Record<ResearchTopic, {
+export const VERIFICATION_CHECKS = {
+  // ============ Fee Validation ============
+
+  /**
+   * Checks for presence of fee-related content.
+   * Matches common fee patterns in multiple currencies.
+   */
+  hasFees: {
+    type: 'content' as const,
+    assertion: {
+      fieldMatches: {
+        content: /(?:fee|cost|price|tarifa|tasa|precio|gebuhr|cout)[\s:]*[\d.,]+\s*(?:EUR|USD|GBP|\u20AC|\$|\u00A3|euro|euros)/i,
+      },
+    },
+    severity: 'warning' as const,
+    retryable: false,
+  } satisfies VerificationCheck,
+
+  /**
+   * Validates that fee amounts are reasonable (between 0 and 10,000).
+   */
+  feeAmountReasonable: {
+    type: 'content' as const,
+    assertion: {
+      fieldMatches: {
+        content: /(?:fee|cost|price|tarifa|tasa)[\s:]*(?:[\d.,]+)\s*(?:EUR|USD|GBP|\u20AC|\$|\u00A3)/i,
+      },
+    },
+    severity: 'warning' as const,
+    retryable: false,
+  } satisfies VerificationCheck,
+
+  // ============ Timeline Validation ============
+
+  /**
+   * Checks for presence of timeline/duration information.
+   * Matches patterns like "2-3 weeks", "30 days", "3 meses".
+   */
+  hasTimeline: {
+    type: 'content' as const,
+    assertion: {
+      fieldMatches: {
+        content: /(?:timeline|duration|processing|plazo|tiempo|dauer|delai)[\s:]*(?:\d+[-\s]?\d*)\s*(?:day|week|month|year|dia|semana|mes|ano|tag|woche|monat|jour|semaine|mois)/i,
+      },
+    },
+    severity: 'warning' as const,
+    retryable: false,
+  } satisfies VerificationCheck,
+
+  /**
+   * Checks for deadline or due date information.
+   */
+  hasDeadline: {
+    type: 'content' as const,
+    assertion: {
+      fieldMatches: {
+        content: /(?:deadline|due|fecha\s*limite|vencimiento|frist|echeance)[\s:]*(?:\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4}|\d{1,2}\s*(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec|enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|octubre|noviembre|diciembre))/i,
+      },
+    },
+    severity: 'warning' as const,
+    retryable: false,
+  } satisfies VerificationCheck,
+
+  // ============ Document Requirements ============
+
+  /**
+   * Checks for required documents list.
+   */
+  hasRequiredDocuments: {
+    type: 'content' as const,
+    assertion: {
+      fieldMatches: {
+        content: /(?:required|necessary|needed|requerid|necesari|erforderlich|requis)\s*(?:document|paper|form|documento|formulario|unterlagen|papier)/i,
+      },
+    },
+    severity: 'warning' as const,
+    retryable: false,
+  } satisfies VerificationCheck,
+
+  /**
+   * Checks for passport/ID requirements.
+   */
+  hasIdentityRequirements: {
+    type: 'content' as const,
+    assertion: {
+      fieldMatches: {
+        content: /(?:passport|identity|identification|NIE|NIF|DNI|pasaporte|identidad|reisepass|ausweis|carte\s*d'identite)/i,
+      },
+    },
+    severity: 'warning' as const,
+    retryable: false,
+  } satisfies VerificationCheck,
+
+  // ============ Legal Document Validation ============
+
+  /**
+   * Checks for article/section numbering typical in legal documents.
+   */
+  hasLegalStructure: {
+    type: 'content' as const,
+    assertion: {
+      fieldMatches: {
+        content: /(?:article|section|chapter|paragraph|articulo|seccion|capitulo|artikel|abschnitt|kapitel)[\s.]*(?:\d+|[IVXLCDM]+)/i,
+      },
+    },
+    severity: 'warning' as const,
+    retryable: false,
+  } satisfies VerificationCheck,
+
+  /**
+   * Checks for effective date in legal documents.
+   */
+  hasEffectiveDate: {
+    type: 'content' as const,
+    assertion: {
+      fieldMatches: {
+        content: /(?:effective|entry\s*into\s*force|vigor|entrada\s*en\s*vigor|geltung|inkrafttreten|entree\s*en\s*vigueur)[\s:]*(?:\d{1,2}[-\/]\d{1,2}[-\/]\d{2,4})/i,
+      },
+    },
+    severity: 'warning' as const,
+    retryable: false,
+  } satisfies VerificationCheck,
+
+  // ============ Tax/Financial Validation ============
+
+  /**
+   * Checks for tax rate information.
+   */
+  hasTaxRates: {
+    type: 'content' as const,
+    assertion: {
+      fieldMatches: {
+        content: /(?:tax\s*rate|rate|IRPF|IVA|VAT|tipo\s*impositivo|steuersatz|taux)[\s:]*\d+(?:[.,]\d+)?%/i,
+      },
+    },
+    severity: 'warning' as const,
+    retryable: false,
+  } satisfies VerificationCheck,
+
+  /**
+   * Checks for tax filing deadline information.
+   */
+  hasTaxDeadlines: {
+    type: 'content' as const,
+    assertion: {
+      fieldMatches: {
+        content: /(?:filing|declaration|declaracion|steuererkl|declaration\s*fiscale)[\s]*(?:deadline|date|fecha|frist|limite)/i,
+      },
+    },
+    severity: 'warning' as const,
+    retryable: false,
+  } satisfies VerificationCheck,
+
+  // ============ Error Page Detection ============
+
+  /**
+   * Excludes common error page patterns.
+   */
+  excludeErrorPages: {
+    type: 'content' as const,
+    assertion: {
+      excludesText: '404',
+    },
+    severity: 'critical' as const,
+    retryable: true,
+  } satisfies VerificationCheck,
+
+  /**
+   * Excludes "page not found" variations.
+   */
+  excludePageNotFound: {
+    type: 'content' as const,
+    assertion: {
+      excludesText: 'page not found',
+    },
+    severity: 'critical' as const,
+    retryable: true,
+  } satisfies VerificationCheck,
+
+  /**
+   * Excludes access denied pages.
+   */
+  excludeAccessDenied: {
+    type: 'content' as const,
+    assertion: {
+      excludesText: 'access denied',
+    },
+    severity: 'critical' as const,
+    retryable: true,
+  } satisfies VerificationCheck,
+
+  /**
+   * Excludes service unavailable pages.
+   */
+  excludeServiceUnavailable: {
+    type: 'content' as const,
+    assertion: {
+      excludesText: 'service unavailable',
+    },
+    severity: 'critical' as const,
+    retryable: true,
+  } satisfies VerificationCheck,
+
+  /**
+   * Excludes session expired pages.
+   */
+  excludeSessionExpired: {
+    type: 'content' as const,
+    assertion: {
+      excludesText: 'session expired',
+    },
+    severity: 'critical' as const,
+    retryable: true,
+  } satisfies VerificationCheck,
+
+  // ============ Contact Information ============
+
+  /**
+   * Checks for email contact information.
+   */
+  hasEmailContact: {
+    type: 'content' as const,
+    assertion: {
+      fieldMatches: {
+        content: /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/,
+      },
+    },
+    severity: 'warning' as const,
+    retryable: false,
+  } satisfies VerificationCheck,
+
+  /**
+   * Checks for phone contact information.
+   */
+  hasPhoneContact: {
+    type: 'content' as const,
+    assertion: {
+      fieldMatches: {
+        content: /(?:tel|phone|telefono|telefon|telephone)[\s.:]*[+]?[\d\s\-().]{8,}/i,
+      },
+    },
+    severity: 'warning' as const,
+    retryable: false,
+  } satisfies VerificationCheck,
+
+  // ============ Minimum Content Length ============
+
+  /**
+   * Requires at least 200 characters of content.
+   */
+  minLength200: {
+    type: 'content' as const,
+    assertion: {
+      minLength: 200,
+    },
+    severity: 'error' as const,
+    retryable: true,
+  } satisfies VerificationCheck,
+
+  /**
+   * Requires at least 500 characters of content.
+   */
+  minLength500: {
+    type: 'content' as const,
+    assertion: {
+      minLength: 500,
+    },
+    severity: 'error' as const,
+    retryable: true,
+  } satisfies VerificationCheck,
+
+  /**
+   * Requires at least 1000 characters of content.
+   */
+  minLength1000: {
+    type: 'content' as const,
+    assertion: {
+      minLength: 1000,
+    },
+    severity: 'error' as const,
+    retryable: true,
+  } satisfies VerificationCheck,
+} as const;
+
+/**
+ * Create a custom verification check with the specified assertion.
+ *
+ * @param assertion - The verification assertion to apply
+ * @param severity - Check severity (default: 'warning')
+ * @param retryable - Whether failures can be retried (default: false)
+ * @returns A verification check object
+ *
+ * @example
+ * ```typescript
+ * const customCheck = createVerificationCheck(
+ *   { fieldExists: ['visa_type', 'processing_time'] },
+ *   'error',
+ *   true
+ * );
+ * ```
+ */
+export function createVerificationCheck(
+  assertion: VerificationAssertion,
+  severity: 'warning' | 'error' | 'critical' = 'warning',
+  retryable = false
+): VerificationCheck {
+  return {
+    type: 'content',
+    assertion,
+    severity,
+    retryable,
+  };
+}
+
+/**
+ * Compose multiple verification checks into a single array.
+ * Useful for building custom verification presets.
+ *
+ * @param checks - Verification checks to compose
+ * @returns Array of verification checks
+ *
+ * @example
+ * ```typescript
+ * const visaChecks = composeChecks(
+ *   VERIFICATION_CHECKS.hasFees,
+ *   VERIFICATION_CHECKS.hasTimeline,
+ *   VERIFICATION_CHECKS.hasRequiredDocuments,
+ *   VERIFICATION_CHECKS.excludeErrorPages,
+ *   VERIFICATION_CHECKS.excludePageNotFound
+ * );
+ * ```
+ */
+export function composeChecks(...checks: VerificationCheck[]): VerificationCheck[] {
+  return checks;
+}
+
+// =============================================================================
+// VERIFICATION PRESETS (INT-004)
+// =============================================================================
+
+/**
+ * Type definition for verification preset configuration.
+ * Used by RESEARCH_VERIFICATION_PRESETS and custom presets.
+ */
+export interface VerificationPreset {
+  /** Human-readable description of this preset */
   description: string;
+  /** Expected fields to check for (legacy, used by buildVerificationChecks) */
   expectedFields: string[];
+  /** Text patterns that should NOT appear in content (legacy, used by buildVerificationChecks) */
   excludePatterns: string[];
+  /** Minimum content length required */
   minContentLength: number;
+  /** Verification options to apply */
   verifyOptions: Partial<VerifyOptions>;
-}> = {
+  /**
+   * Pre-built verification checks to include (INT-004).
+   * These are applied in addition to checks built from expectedFields/excludePatterns.
+   * Use VERIFICATION_CHECKS constants or create custom checks.
+   */
+  checks?: VerificationCheck[];
+}
+
+export const RESEARCH_VERIFICATION_PRESETS: Record<ResearchTopic, VerificationPreset> = {
   government_portal: {
     description: 'Government websites and official portals',
     expectedFields: ['requirements', 'documents', 'process', 'contact'],
@@ -598,6 +972,16 @@ export const RESEARCH_VERIFICATION_PRESETS: Record<ResearchTopic, {
       enabled: true,
       mode: 'thorough',
     },
+    // INT-004: Pre-built checks for government portals
+    checks: [
+      VERIFICATION_CHECKS.hasRequiredDocuments,
+      VERIFICATION_CHECKS.hasEmailContact,
+      VERIFICATION_CHECKS.hasPhoneContact,
+      VERIFICATION_CHECKS.excludeErrorPages,
+      VERIFICATION_CHECKS.excludePageNotFound,
+      VERIFICATION_CHECKS.excludeAccessDenied,
+      VERIFICATION_CHECKS.excludeServiceUnavailable,
+    ],
   },
   legal_document: {
     description: 'Legal documents, regulations, and official texts',
@@ -608,6 +992,14 @@ export const RESEARCH_VERIFICATION_PRESETS: Record<ResearchTopic, {
       enabled: true,
       mode: 'thorough',
     },
+    // INT-004: Pre-built checks for legal documents
+    checks: [
+      VERIFICATION_CHECKS.hasLegalStructure,
+      VERIFICATION_CHECKS.hasEffectiveDate,
+      VERIFICATION_CHECKS.minLength1000,
+      VERIFICATION_CHECKS.excludeErrorPages,
+      VERIFICATION_CHECKS.excludePageNotFound,
+    ],
   },
   visa_immigration: {
     description: 'Visa requirements and immigration procedures',
@@ -618,6 +1010,17 @@ export const RESEARCH_VERIFICATION_PRESETS: Record<ResearchTopic, {
       enabled: true,
       mode: 'thorough',
     },
+    // INT-004: Pre-built checks for visa/immigration content
+    checks: [
+      VERIFICATION_CHECKS.hasFees,
+      VERIFICATION_CHECKS.hasTimeline,
+      VERIFICATION_CHECKS.hasRequiredDocuments,
+      VERIFICATION_CHECKS.hasIdentityRequirements,
+      VERIFICATION_CHECKS.minLength500,
+      VERIFICATION_CHECKS.excludeErrorPages,
+      VERIFICATION_CHECKS.excludePageNotFound,
+      VERIFICATION_CHECKS.excludeAccessDenied,
+    ],
   },
   tax_finance: {
     description: 'Tax information and financial regulations',
@@ -628,6 +1031,16 @@ export const RESEARCH_VERIFICATION_PRESETS: Record<ResearchTopic, {
       enabled: true,
       mode: 'thorough',
     },
+    // INT-004: Pre-built checks for tax/finance content
+    checks: [
+      VERIFICATION_CHECKS.hasTaxRates,
+      VERIFICATION_CHECKS.hasTaxDeadlines,
+      VERIFICATION_CHECKS.hasDeadline,
+      VERIFICATION_CHECKS.minLength500,
+      VERIFICATION_CHECKS.excludeErrorPages,
+      VERIFICATION_CHECKS.excludePageNotFound,
+      VERIFICATION_CHECKS.excludeSessionExpired,
+    ],
   },
   official_registry: {
     description: 'Official registries and databases',
@@ -638,6 +1051,12 @@ export const RESEARCH_VERIFICATION_PRESETS: Record<ResearchTopic, {
       enabled: true,
       mode: 'standard',
     },
+    // INT-004: Pre-built checks for registry content
+    checks: [
+      VERIFICATION_CHECKS.minLength200,
+      VERIFICATION_CHECKS.excludeErrorPages,
+      VERIFICATION_CHECKS.excludePageNotFound,
+    ],
   },
   general_research: {
     description: 'General research and information gathering',
@@ -648,6 +1067,12 @@ export const RESEARCH_VERIFICATION_PRESETS: Record<ResearchTopic, {
       enabled: true,
       mode: 'standard',
     },
+    // INT-004: Basic checks for general research
+    checks: [
+      VERIFICATION_CHECKS.minLength200,
+      VERIFICATION_CHECKS.excludeErrorPages,
+      VERIFICATION_CHECKS.excludePageNotFound,
+    ],
   },
 };
 
@@ -742,7 +1167,7 @@ export interface ResearchConfig extends LLMBrowserConfig {
    * Custom verification presets for topics not in the default list.
    * Merged with RESEARCH_VERIFICATION_PRESETS.
    */
-  customVerificationPresets?: Record<string, typeof RESEARCH_VERIFICATION_PRESETS[ResearchTopic]>;
+  customVerificationPresets?: Record<string, VerificationPreset>;
 }
 
 /**
@@ -861,7 +1286,7 @@ export class ResearchBrowserClient extends LLMBrowserClient {
 
   private researchConfig: Required<Omit<ResearchConfig, keyof LLMBrowserConfig>> & LLMBrowserConfig;
   private sessionProfiles: Record<string, string>;
-  private verificationPresets: Record<string, typeof RESEARCH_VERIFICATION_PRESETS[ResearchTopic]>;
+  private verificationPresets: Record<string, VerificationPreset>;
 
   constructor(config: ResearchConfig = {}) {
     super(config);
@@ -913,7 +1338,13 @@ export class ResearchBrowserClient extends LLMBrowserClient {
   }
 
   /**
-   * Build verification checks from research options
+   * Build verification checks from research options (INT-004)
+   *
+   * Combines checks from multiple sources in order:
+   * 1. Pre-built checks from the preset (VERIFICATION_CHECKS)
+   * 2. Field existence check from expectedFields
+   * 3. Exclude pattern checks from excludePatterns
+   * 4. Minimum content length check
    */
   private buildVerificationChecks(
     topic: ResearchTopic,
@@ -921,6 +1352,11 @@ export class ResearchBrowserClient extends LLMBrowserClient {
   ): VerificationCheck[] {
     const preset = this.verificationPresets[topic] || RESEARCH_VERIFICATION_PRESETS.general_research;
     const checks: VerificationCheck[] = [];
+
+    // INT-004: Add pre-built checks from preset first
+    if (preset.checks && preset.checks.length > 0) {
+      checks.push(...preset.checks);
+    }
 
     // Merge expected fields
     const expectedFields = [
@@ -950,26 +1386,40 @@ export class ResearchBrowserClient extends LLMBrowserClient {
     }
 
     // Add exclude pattern check (one per pattern since excludesText expects a string)
+    // Skip patterns already covered by preset checks to avoid duplicates
+    const presetExcludePatterns = new Set(
+      (preset.checks || [])
+        .filter(c => c.assertion.excludesText)
+        .map(c => c.assertion.excludesText?.toLowerCase())
+    );
+
     for (const pattern of excludePatterns) {
+      if (!presetExcludePatterns.has(pattern.toLowerCase())) {
+        checks.push({
+          type: 'content',
+          assertion: {
+            excludesText: pattern,
+          },
+          severity: 'critical',
+          retryable: true,
+        });
+      }
+    }
+
+    // Add minimum length check only if not already in preset checks
+    const hasMinLengthCheck = (preset.checks || []).some(
+      c => c.assertion.minLength !== undefined
+    );
+    if (!hasMinLengthCheck) {
       checks.push({
         type: 'content',
         assertion: {
-          excludesText: pattern,
+          minLength: minContentLength,
         },
-        severity: 'critical',
+        severity: 'error',
         retryable: true,
       });
     }
-
-    // Add minimum length check
-    checks.push({
-      type: 'content',
-      assertion: {
-        minLength: minContentLength,
-      },
-      severity: 'error',
-      retryable: true,
-    });
 
     return checks;
   }
