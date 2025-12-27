@@ -56,6 +56,8 @@ import { ApiAnalyzer } from './api-analyzer.js';
 import { SessionManager } from './session-manager.js';
 import { LearningEngine } from './learning-engine.js';
 import { ProceduralMemory } from './procedural-memory.js';
+import { WebSocketClient } from './websocket-client.js'; // FEAT-003
+import type { WebSocketReplayOptions, WebSocketReplayResult } from '../types/websocket-patterns.js'; // FEAT-003
 import { TieredFetcher, type TieredFetchResult, type FreshnessRequirement } from './tiered-fetcher.js';
 import { rateLimiter } from '../utils/rate-limiter.js';
 import { withRetry } from '../utils/retry.js';
@@ -391,7 +393,7 @@ export class SmartBrowser {
   ) {
     this.learningEngine = learningEngine ?? new LearningEngine();
     this.proceduralMemory = new ProceduralMemory();
-    this.tieredFetcher = new TieredFetcher(browserManager, contentExtractor);
+    this.tieredFetcher = new TieredFetcher(browserManager, contentExtractor, this.learningEngine); // FEAT-003
     this.debugRecorder = getDebugTraceRecorder();
     this.feedbackService = new FeedbackService();
     this.webhookService = new WebhookService();
@@ -2021,6 +2023,118 @@ export class SmartBrowser {
     });
 
     return results;
+  }
+
+  /**
+   * Replay WebSocket connection using learned pattern (FEAT-003)
+   *
+   * Connects directly to WebSocket without browser rendering for 10-20x speedup.
+   *
+   * @param options - WebSocket replay options including pattern, auth, and duration
+   * @returns WebSocket replay result with captured messages
+   *
+   * @example
+   * ```typescript
+   * // Get learned patterns for domain
+   * const patterns = learningEngine.getWebSocketPatterns('chat.example.com');
+   *
+   * // Replay the pattern
+   * const result = await browser.replayWebSocket({
+   *   pattern: patterns[0],
+   *   auth: { cookies: savedCookies },
+   *   duration: 5000,
+   *   captureMessages: true,
+   * });
+   *
+   * console.log(`Connected: ${result.connected}`);
+   * console.log(`Messages: ${result.messages.length}`);
+   * ```
+   */
+  async replayWebSocket(options: WebSocketReplayOptions): Promise<WebSocketReplayResult> {
+    logger.smartBrowser.debug('Replaying WebSocket connection', {
+      url: options.pattern.urlPattern,
+      protocol: options.pattern.protocol,
+      canReplay: options.pattern.canReplay,
+    });
+
+    // Check if pattern can be replayed
+    if (!options.pattern.canReplay) {
+      logger.smartBrowser.warn('Pattern cannot be replayed', {
+        reason: 'Pattern confidence too low or missing required data',
+        confidence: options.pattern.confidence,
+      });
+      return {
+        connected: false,
+        url: options.pattern.urlPattern,
+        protocol: options.pattern.protocol,
+        connectedAt: Date.now(),
+        closedAt: Date.now(),
+        duration: 0,
+        messages: [],
+        errors: [{
+          type: 'pattern_not_replayable',
+          message: 'Pattern cannot be replayed: confidence too low or missing data',
+          timestamp: Date.now(),
+        }],
+        cleanClose: false,
+      };
+    }
+
+    // Create WebSocket client and connect
+    const client = new WebSocketClient();
+    try {
+      const result = await client.connect(options);
+
+      logger.smartBrowser.debug('WebSocket replay completed', {
+        connected: result.connected,
+        duration: result.duration,
+        messageCount: result.messages.length,
+        cleanClose: result.cleanClose,
+      });
+
+      // Verify the pattern worked
+      if (result.connected) {
+        const domain = new URL(options.pattern.urlPattern).hostname;
+        this.learningEngine.verifyWebSocketPattern(domain, options.pattern.endpoint, options.pattern.protocol);
+      } else if (result.errors && result.errors.length > 0) {
+        // Record failure
+        const domain = new URL(options.pattern.urlPattern).hostname;
+        const errorMessages = result.errors.map(e => e.message).join('; ');
+        this.learningEngine.recordWebSocketPatternFailure(domain, options.pattern.endpoint, options.pattern.protocol, {
+          type: 'server_error',
+          errorMessage: `WebSocket connection failed: ${errorMessages}`,
+          recoveryAttempted: false,
+        });
+      }
+
+      return result;
+    } catch (error) {
+      logger.smartBrowser.error('WebSocket replay failed', { error });
+
+      // Record failure in learning engine
+      const domain = new URL(options.pattern.urlPattern).hostname;
+      this.learningEngine.recordWebSocketPatternFailure(domain, options.pattern.endpoint, options.pattern.protocol, {
+        type: 'unknown',
+        errorMessage: `WebSocket replay error: ${error instanceof Error ? error.message : String(error)}`,
+        recoveryAttempted: false,
+      });
+
+      return {
+        connected: false,
+        url: options.pattern.urlPattern,
+        protocol: options.pattern.protocol,
+        connectedAt: Date.now(),
+        closedAt: Date.now(),
+        duration: 0,
+        messages: [],
+        errors: [{
+          type: 'websocket_replay_exception',
+          message: error instanceof Error ? error.message : String(error),
+          timestamp: Date.now(),
+        }],
+        cleanClose: false,
+      };
+    }
   }
 
   /**
