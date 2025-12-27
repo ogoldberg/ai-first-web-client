@@ -93,10 +93,14 @@ import type {
   VerificationAssertion,
   VerificationResult,
   VerificationCheckResult,
+  SchemaValidationError,
+  JSONSchema,
 } from '../types/verification.js';
 import type { SmartBrowseResult } from './smart-browser.js';
 import type { ProceduralMemory } from './procedural-memory.js';
 import { logger } from '../utils/logger.js';
+import Ajv from 'ajv';
+import addFormats from 'ajv-formats';
 
 /**
  * Browser interface for state verification.
@@ -209,6 +213,22 @@ export class VerificationEngine {
 
   /** API caller instance for state verification via API calls */
   private apiCaller?: StateVerificationApiCaller;
+
+  /** AJV validator instance for JSON Schema validation (FEAT-001) */
+  private ajv: Ajv;
+
+  /**
+   * Initialize VerificationEngine with AJV validator for schema validation.
+   */
+  constructor() {
+    // Initialize AJV with draft-07 schema and common formats
+    this.ajv = new Ajv({
+      allErrors: true, // Collect all errors, not just the first
+      verbose: true, // Include schema and data in errors
+      strict: false, // Allow unknown keywords
+    });
+    addFormats(this.ajv); // Add format validation (email, url, date, etc.)
+  }
 
   /**
    * Connect ProceduralMemory for learned verifications.
@@ -419,6 +439,30 @@ export class VerificationEngine {
       }
     }
 
+    // 4. Schema validation (FEAT-001)
+    let schemaErrors: SchemaValidationError[] | undefined;
+    if (options.validateSchema && options.schema) {
+      schemaErrors = this.validateSchema(result, options.schema);
+
+      if (schemaErrors.length > 0) {
+        // Add a check result for schema validation failure
+        checkResults.push({
+          type: 'schema',
+          passed: false,
+          message: `Schema validation failed: ${schemaErrors.length} error(s)`,
+          severity: 'error',
+        });
+      } else {
+        // Add a check result for schema validation success
+        checkResults.push({
+          type: 'schema',
+          passed: true,
+          message: 'Schema validation passed',
+          severity: 'error',
+        });
+      }
+    }
+
     const passed = checkResults.every((c) => c.passed || c.severity === 'warning');
     const confidence = this.calculateConfidence(checkResults);
 
@@ -432,6 +476,7 @@ export class VerificationEngine {
         .filter((c) => !c.passed && c.severity === 'warning')
         .map((c) => c.message),
       confidence,
+      schemaErrors,
     };
   }
 
@@ -911,5 +956,69 @@ export class VerificationEngine {
     }
 
     return Math.max(0, Math.min(1, confidence));
+  }
+
+  /**
+   * Validate content against JSON Schema (FEAT-001).
+   *
+   * Validates `result.content.structuredData` if present, otherwise
+   * validates `result.content` itself. Returns an array of validation
+   * errors, or empty array if validation passed.
+   *
+   * @param result - The browse result to validate
+   * @param schema - The JSON Schema to validate against
+   * @returns Array of schema validation errors (empty if validation passed)
+   *
+   * @example
+   * ```typescript
+   * const schema = {
+   *   type: 'object',
+   *   properties: { price: { type: 'number' } },
+   *   required: ['price']
+   * };
+   *
+   * const errors = engine.validateSchema(result, schema);
+   * if (errors.length > 0) {
+   *   console.log('Validation failed:', errors);
+   * }
+   * ```
+   */
+  private validateSchema(result: SmartBrowseResult, schema: JSONSchema): SchemaValidationError[] {
+    // Determine what to validate: structuredData if present, otherwise content
+    const dataToValidate = result.content?.structuredData || result.content;
+
+    if (!dataToValidate) {
+      logger.verificationEngine.warn('Schema validation skipped: no content to validate');
+      return [{
+        path: '',
+        message: 'No content available for schema validation',
+        keyword: 'content',
+        params: {},
+      }];
+    }
+
+    // Compile and validate schema
+    const validate = this.ajv.compile(schema);
+    const valid = validate(dataToValidate);
+
+    if (valid) {
+      logger.verificationEngine.debug('Schema validation passed');
+      return [];
+    }
+
+    // Convert AJV errors to our SchemaValidationError format
+    const errors: SchemaValidationError[] = (validate.errors || []).map((error) => ({
+      path: error.instancePath || '/',
+      message: error.message || 'Schema validation failed',
+      keyword: error.keyword,
+      params: error.params,
+    }));
+
+    logger.verificationEngine.debug('Schema validation failed', {
+      errorCount: errors.length,
+      errors: errors.map((e) => `${e.path}: ${e.message}`),
+    });
+
+    return errors;
   }
 }
