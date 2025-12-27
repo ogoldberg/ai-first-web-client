@@ -22,6 +22,7 @@ import { docs } from './routes/docs.js';
 import { pricingCalculator } from './routes/pricing-calculator.js';
 import { skillPacks } from './routes/skill-packs.js';
 import discovery from './routes/discovery.js'; // FUZZ-001: API discovery
+import marketplace from './routes/marketplace.js'; // FEAT-005: Pattern marketplace
 import { requestLoggerMiddleware } from './middleware/request-logger.js';
 
 // Create the main Hono app
@@ -107,6 +108,7 @@ app.route('/admin', adminUI); // API-008: Admin dashboard UI
 app.route('/inspect', inspectionUI); // F-013: Human-in-the-loop inspection UI
 app.route('/v1/workflows', workflows); // COMP-009: Workflow recording
 app.route('/v1/skill-packs', skillPacks); // PACK-001: Skill pack distribution
+app.route('/v1/marketplace', marketplace); // FEAT-005: Pattern marketplace
 app.route('/v1/billing', billing); // API-007: Stripe billing integration
 app.route('/pricing', pricingCalculator); // API-016: Pricing calculator
 
@@ -139,6 +141,11 @@ app.get('/', (c) => {
       workflows: '/v1/workflows',
       recordWorkflow: '/v1/workflows/record/start',
       replayWorkflow: '/v1/workflows/:id/replay',
+      marketplace: '/v1/marketplace',
+      searchPatterns: '/v1/marketplace/patterns',
+      publishPattern: '/v1/marketplace/patterns',
+      myPatterns: '/v1/marketplace/my/patterns',
+      myInstallations: '/v1/marketplace/my/installations',
       billing: '/v1/billing',
       billingWebhook: '/v1/billing/webhook',
       pricingCalculator: '/pricing',

@@ -2,6 +2,9 @@
  * Core types for LLM Browser MCP Server
  */
 
+// Import types for use in this file
+import type { WebSocketPattern, WebSocketConnection } from './websocket-patterns.js';
+
 // Re-export API pattern types
 export * from './api-patterns.js';
 
@@ -19,6 +22,15 @@ export * from './provenance.js';
 
 // Re-export progress event types (DX-009)
 export * from './progress.js';
+
+// Re-export WebSocket pattern types (FEAT-003)
+export * from './websocket-patterns.js';
+
+// Re-export pattern health types (FEAT-002)
+export * from './pattern-health.js';
+
+// Re-export verification types (FEAT-001)
+export * from './verification.js';
 
 export interface NetworkRequest {
   url: string;
@@ -562,6 +574,9 @@ export interface EnhancedKnowledgeBaseEntry {
 
   // API patterns (enhanced)
   apiPatterns: EnhancedApiPattern[];
+
+  // WebSocket patterns (FEAT-003)
+  websocketPatterns?: WebSocketPattern[];
 
   // Content extraction
   selectorChains: SelectorChain[];
@@ -1606,6 +1621,7 @@ export interface TieredFetchResult {
   tierReason: string;
   networkRequests: NetworkRequest[];
   discoveredApis: ApiPattern[];
+  websocketConnections?: WebSocketConnection[]; // FEAT-003
   timing: {
     total: number;
     perTier: Record<RenderTier, number>;

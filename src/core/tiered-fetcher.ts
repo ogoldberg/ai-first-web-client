@@ -30,6 +30,7 @@ import { ContentIntelligence, type ContentResult, type ExtractionStrategy } from
 import { BrowserManager, type Page } from './browser-manager.js';
 import { ContentExtractor } from '../utils/content-extractor.js';
 import { ApiAnalyzer } from './api-analyzer.js';
+import { LearningEngine } from './learning-engine.js'; // FEAT-003
 import { rateLimiter } from '../utils/rate-limiter.js';
 import { TIMEOUTS } from '../utils/timeouts.js';
 import type { NetworkRequest, ApiPattern, TierAttempt, TierValidationDetails } from '../types/index.js';
@@ -144,6 +145,8 @@ export interface TieredFetchResult {
   networkRequests: NetworkRequest[];
   // Discovered APIs (Playwright only)
   discoveredApis: ApiPattern[];
+  // WebSocket connections captured (FEAT-003)
+  websocketConnections?: import('../types/websocket-patterns.js').WebSocketConnection[];
   // Page reference if Playwright was used (for further interactions)
   page?: Page;
   // Timing breakdown
@@ -213,14 +216,17 @@ export class TieredFetcher {
   private browserManager: BrowserManager;
   private contentExtractor: ContentExtractor;
   private apiAnalyzer: ApiAnalyzer; // CX-009: For tier-aware API learning
+  private learningEngine: LearningEngine; // FEAT-003: For WebSocket pattern checking
   private domainPreferences: Map<string, DomainPreference> = new Map();
 
   constructor(
     browserManager: BrowserManager,
-    contentExtractor: ContentExtractor
+    contentExtractor: ContentExtractor,
+    learningEngine: LearningEngine // FEAT-003
   ) {
     this.browserManager = browserManager;
     this.contentExtractor = contentExtractor;
+    this.learningEngine = learningEngine; // FEAT-003
     this.contentIntelligence = new ContentIntelligence();
     this.lightweightRenderer = new LightweightRenderer();
     this.apiAnalyzer = new ApiAnalyzer(); // CX-009
@@ -487,6 +493,21 @@ export class TieredFetcher {
     url: string,
     options: TieredFetchOptions
   ): Promise<Omit<TieredFetchResult, 'tier' | 'fellBack' | 'tiersAttempted' | 'tierAttempts' | 'tierReason' | 'timing' | 'detection'>> {
+    // FEAT-003: Check for learned WebSocket patterns
+    // Note: WebSocket replay is available via SmartBrowser.replayWebSocket() for real-time data
+    // Here we just log availability without affecting content extraction flow
+    const domain = new URL(url).hostname;
+    const wsPatterns = this.learningEngine.getWebSocketPatterns(domain);
+    if (wsPatterns.length > 0) {
+      const replayablePatterns = wsPatterns.filter(p => p.canReplay);
+      logger.tieredFetcher.debug('FEAT-003: WebSocket patterns available', {
+        domain,
+        totalPatterns: wsPatterns.length,
+        replayablePatterns: replayablePatterns.length,
+        hint: 'Use SmartBrowser.replayWebSocket() for real-time WebSocket data',
+      });
+    }
+
     const result = await this.contentIntelligence.extract(url, {
       timeout: options.tierTimeout,
       minContentLength: options.minContentLength,
@@ -587,6 +608,7 @@ export class TieredFetcher {
       timeout: options.tierTimeout || TIMEOUTS.TIER_ATTEMPT,
       captureNetwork: true,
       captureConsole: false,
+      captureWebSockets: true, // FEAT-003
     });
 
     // Wait for specific selector if requested
@@ -604,6 +626,7 @@ export class TieredFetcher {
       content,
       finalUrl,
       networkRequests: result.network,
+      websocketConnections: result.websockets, // FEAT-003
       discoveredApis: [], // API analysis happens at higher level
       page: result.page,
     };

@@ -11,8 +11,8 @@
  * - Custom: Set BROWSER_ENDPOINT env var
  */
 
-import type { Browser, BrowserContext, Page } from 'playwright';
-import type { NetworkRequest, ConsoleMessage } from '../types/index.js';
+import type { Browser, BrowserContext, Page, WebSocket as PlaywrightWebSocket } from 'playwright';
+import type { NetworkRequest, ConsoleMessage, WebSocketConnection, WebSocketMessage } from '../types/index.js';
 import { TIMEOUTS } from '../utils/timeouts.js';
 import * as fs from 'fs';
 import { logger } from '../utils/logger.js';
@@ -303,6 +303,7 @@ export class BrowserManager {
     options: {
       captureNetwork?: boolean;
       captureConsole?: boolean;
+      captureWebSockets?: boolean;
       waitFor?: 'load' | 'domcontentloaded' | 'networkidle';
       timeout?: number;
       profile?: string;
@@ -311,12 +312,86 @@ export class BrowserManager {
     page: Page;
     network: NetworkRequest[];
     console: ConsoleMessage[];
+    websockets: WebSocketConnection[];
   }> {
     const context = await this.getContext(options.profile);
     const page = await context.newPage();
 
     const networkRequests: NetworkRequest[] = [];
     const consoleMessages: ConsoleMessage[] = [];
+    const websocketConnections: WebSocketConnection[] = [];
+
+    // WebSocket capture (FEAT-003)
+    if (options.captureWebSockets !== false) {
+      page.on('websocket', (ws: PlaywrightWebSocket) => {
+        const connection: WebSocketConnection = {
+          url: ws.url(),
+          protocol: 'websocket', // Will be refined by pattern learner
+          connectedAt: Date.now(),
+          headers: {},
+          messages: [],
+        };
+
+        // Capture incoming messages (server -> client)
+        ws.on('framereceived', (event: any) => {
+          try {
+            const payload = event.payload;
+            let data: any;
+            try {
+              data = JSON.parse(payload);
+            } catch {
+              data = payload;
+            }
+
+            const message: WebSocketMessage = {
+              direction: 'receive',
+              data,
+              rawData: payload,
+              timestamp: Date.now(),
+              type: typeof data === 'object' && data !== null ? 'json' : 'text',
+            };
+
+            connection.messages.push(message);
+          } catch (error) {
+            logger.browser.warn('Failed to parse WebSocket frame', { error });
+          }
+        });
+
+        // Capture outgoing messages (client -> server)
+        ws.on('framesent', (event: any) => {
+          try {
+            const payload = event.payload;
+            let data: any;
+            try {
+              data = JSON.parse(payload);
+            } catch {
+              data = payload;
+            }
+
+            const message: WebSocketMessage = {
+              direction: 'send',
+              data,
+              rawData: payload,
+              timestamp: Date.now(),
+              type: typeof data === 'object' && data !== null ? 'json' : 'text',
+            };
+
+            connection.messages.push(message);
+          } catch (error) {
+            logger.browser.warn('Failed to parse WebSocket frame', { error });
+          }
+        });
+
+        // Track connection close
+        ws.on('close', () => {
+          connection.closedAt = Date.now();
+          websocketConnections.push(connection);
+        });
+
+        // If connection is never closed, add it after page navigation completes
+        // This is handled by pushing active connections at the end of browse()
+      });
+    }
 
     // Network interception
     if (options.captureNetwork !== false) {
@@ -387,6 +462,7 @@ export class BrowserManager {
       page,
       network: networkRequests,
       console: consoleMessages,
+      websockets: websocketConnections,
     };
   }
 

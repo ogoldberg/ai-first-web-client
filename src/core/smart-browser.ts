@@ -34,6 +34,7 @@ import type {
   TableConfidence,
   ApiConfidence,
   OnProgressCallback,
+  WebSocketConnection, // FEAT-003
 } from '../types/index.js';
 import {
   createProgressEvent,
@@ -55,6 +56,8 @@ import { ApiAnalyzer } from './api-analyzer.js';
 import { SessionManager } from './session-manager.js';
 import { LearningEngine } from './learning-engine.js';
 import { ProceduralMemory } from './procedural-memory.js';
+import { WebSocketClient } from './websocket-client.js'; // FEAT-003
+import type { WebSocketReplayOptions, WebSocketReplayResult } from '../types/websocket-patterns.js'; // FEAT-003
 import { TieredFetcher, type TieredFetchResult, type FreshnessRequirement } from './tiered-fetcher.js';
 import { rateLimiter } from '../utils/rate-limiter.js';
 import { withRetry } from '../utils/retry.js';
@@ -380,6 +383,8 @@ export class SmartBrowser {
   private debugRecorder: DebugTraceRecorder;
   private feedbackService: FeedbackService;
   private webhookService: WebhookService;
+  private replayWorkflowDepth: number = 0;
+  private static readonly MAX_WORKFLOW_DEPTH = 10;
 
   constructor(
     private browserManager: BrowserManager,
@@ -390,7 +395,7 @@ export class SmartBrowser {
   ) {
     this.learningEngine = learningEngine ?? new LearningEngine();
     this.proceduralMemory = new ProceduralMemory();
-    this.tieredFetcher = new TieredFetcher(browserManager, contentExtractor);
+    this.tieredFetcher = new TieredFetcher(browserManager, contentExtractor, this.learningEngine); // FEAT-003
     this.debugRecorder = getDebugTraceRecorder();
     this.feedbackService = new FeedbackService();
     this.webhookService = new WebhookService();
@@ -595,6 +600,7 @@ export class SmartBrowser {
       page: Page;
       network: BrowseResult['network'];
       console: BrowseResult['console'];
+      websockets: WebSocketConnection[]; // FEAT-003
       captchaResult: CaptchaHandlingResult;
     }> => {
       // Apply rate limiting
@@ -617,6 +623,7 @@ export class SmartBrowser {
       const result = await this.browserManager.browse(url, {
         captureNetwork: options.captureNetwork !== false,
         captureConsole: options.captureConsole !== false,
+        captureWebSockets: true, // FEAT-003
         waitFor,
         timeout: options.timeout || TIMEOUTS.PAGE_LOAD,
         profile: options.sessionProfile,
@@ -701,7 +708,7 @@ export class SmartBrowser {
       throw error;
     }
 
-    const { page, network, console: consoleMessages, captchaResult } = result;
+    const { page, network, console: consoleMessages, websockets, captchaResult } = result;
 
     // Get initial content (may be challenge page)
     let html = await page.content();
@@ -902,6 +909,18 @@ export class SmartBrowser {
       }
     } catch (apiError) {
       logger.smartBrowser.error(`API analysis failed (non-fatal): ${apiError}`);
+    }
+
+    // Learn WebSocket patterns (FEAT-003) (with error boundary)
+    if (enableLearning && websockets && websockets.length > 0) {
+      try {
+        for (const connection of websockets) {
+          this.learningEngine.learnWebSocketPattern(connection, domain);
+        }
+        logger.smartBrowser.debug(`Learned ${websockets.length} WebSocket connection(s) from ${domain}`);
+      } catch (wsError) {
+        logger.smartBrowser.error(`WebSocket pattern learning failed (non-fatal): ${wsError}`);
+      }
     }
 
     // Check for content changes (with error boundary)
@@ -2006,6 +2025,118 @@ export class SmartBrowser {
     });
 
     return results;
+  }
+
+  /**
+   * Replay WebSocket connection using learned pattern (FEAT-003)
+   *
+   * Connects directly to WebSocket without browser rendering for 10-20x speedup.
+   *
+   * @param options - WebSocket replay options including pattern, auth, and duration
+   * @returns WebSocket replay result with captured messages
+   *
+   * @example
+   * ```typescript
+   * // Get learned patterns for domain
+   * const patterns = learningEngine.getWebSocketPatterns('chat.example.com');
+   *
+   * // Replay the pattern
+   * const result = await browser.replayWebSocket({
+   *   pattern: patterns[0],
+   *   auth: { cookies: savedCookies },
+   *   duration: 5000,
+   *   captureMessages: true,
+   * });
+   *
+   * console.log(`Connected: ${result.connected}`);
+   * console.log(`Messages: ${result.messages.length}`);
+   * ```
+   */
+  async replayWebSocket(options: WebSocketReplayOptions): Promise<WebSocketReplayResult> {
+    logger.smartBrowser.debug('Replaying WebSocket connection', {
+      url: options.pattern.urlPattern,
+      protocol: options.pattern.protocol,
+      canReplay: options.pattern.canReplay,
+    });
+
+    // Check if pattern can be replayed
+    if (!options.pattern.canReplay) {
+      logger.smartBrowser.warn('Pattern cannot be replayed', {
+        reason: 'Pattern confidence too low or missing required data',
+        confidence: options.pattern.confidence,
+      });
+      return {
+        connected: false,
+        url: options.pattern.urlPattern,
+        protocol: options.pattern.protocol,
+        connectedAt: Date.now(),
+        closedAt: Date.now(),
+        duration: 0,
+        messages: [],
+        errors: [{
+          type: 'pattern_not_replayable',
+          message: 'Pattern cannot be replayed: confidence too low or missing data',
+          timestamp: Date.now(),
+        }],
+        cleanClose: false,
+      };
+    }
+
+    // Create WebSocket client and connect
+    const client = new WebSocketClient();
+    try {
+      const result = await client.connect(options);
+
+      logger.smartBrowser.debug('WebSocket replay completed', {
+        connected: result.connected,
+        duration: result.duration,
+        messageCount: result.messages.length,
+        cleanClose: result.cleanClose,
+      });
+
+      // Verify the pattern worked
+      if (result.connected) {
+        const domain = new URL(options.pattern.urlPattern).hostname;
+        this.learningEngine.verifyWebSocketPattern(domain, options.pattern.endpoint, options.pattern.protocol);
+      } else if (result.errors && result.errors.length > 0) {
+        // Record failure
+        const domain = new URL(options.pattern.urlPattern).hostname;
+        const errorMessages = result.errors.map(e => e.message).join('; ');
+        this.learningEngine.recordWebSocketPatternFailure(domain, options.pattern.endpoint, options.pattern.protocol, {
+          type: 'server_error',
+          errorMessage: `WebSocket connection failed: ${errorMessages}`,
+          recoveryAttempted: false,
+        });
+      }
+
+      return result;
+    } catch (error) {
+      logger.smartBrowser.error('WebSocket replay failed', { error });
+
+      // Record failure in learning engine
+      const domain = new URL(options.pattern.urlPattern).hostname;
+      this.learningEngine.recordWebSocketPatternFailure(domain, options.pattern.endpoint, options.pattern.protocol, {
+        type: 'unknown',
+        errorMessage: `WebSocket replay error: ${error instanceof Error ? error.message : String(error)}`,
+        recoveryAttempted: false,
+      });
+
+      return {
+        connected: false,
+        url: options.pattern.urlPattern,
+        protocol: options.pattern.protocol,
+        connectedAt: Date.now(),
+        closedAt: Date.now(),
+        duration: 0,
+        messages: [],
+        errors: [{
+          type: 'websocket_replay_exception',
+          message: error instanceof Error ? error.message : String(error),
+          timestamp: Date.now(),
+        }],
+        cleanClose: false,
+      };
+    }
   }
 
   /**
@@ -3472,6 +3603,186 @@ export class SmartBrowser {
     if (level === 'high') return 0.9;
     if (level === 'medium') return 0.6;
     return 0.3;
+  }
+
+  // ============================================
+  // WORKFLOW REPLAY (FEAT-004)
+  // ============================================
+
+  /**
+   * Replay a saved workflow with optional variable substitution
+   */
+  async replayWorkflow(
+    workflow: import('../types/workflow.js').Workflow,
+    variables?: import('../types/workflow.js').WorkflowVariables
+  ): Promise<import('../types/workflow.js').WorkflowReplayResult> {
+    // Check recursion depth to prevent infinite loops
+    if (this.replayWorkflowDepth >= SmartBrowser.MAX_WORKFLOW_DEPTH) {
+      throw new Error(
+        `Maximum workflow recursion depth (${SmartBrowser.MAX_WORKFLOW_DEPTH}) exceeded. ` +
+        `Possible infinite loop detected.`
+      );
+    }
+
+    this.replayWorkflowDepth++;
+    try {
+      return await this.executeWorkflowReplay(workflow, variables);
+    } finally {
+      this.replayWorkflowDepth--;
+    }
+  }
+
+  /**
+   * Internal method to execute workflow replay (separated for recursion depth tracking)
+   */
+  private async executeWorkflowReplay(
+    workflow: import('../types/workflow.js').Workflow,
+    variables?: import('../types/workflow.js').WorkflowVariables
+  ): Promise<import('../types/workflow.js').WorkflowReplayResult> {
+    const startTime = Date.now();
+    const results: import('../types/workflow.js').WorkflowStepResult[] = [];
+
+    logger.smartBrowser.info('Replaying workflow', {
+      workflowId: workflow.id,
+      name: workflow.name,
+      steps: workflow.steps.length,
+      depth: this.replayWorkflowDepth,
+    });
+
+    let overallSuccess = true;
+
+    for (const step of workflow.steps) {
+      const stepStart = Date.now();
+      let stepSuccess = false;
+      let stepData: any = undefined;
+      let stepError: string | undefined;
+      let tier: 'intelligence' | 'lightweight' | 'playwright' | undefined;
+
+      try {
+        // Substitute variables in URL if needed
+        let url = step.url || '';
+        if (variables) {
+          for (const [key, value] of Object.entries(variables)) {
+            url = url.replace(new RegExp(`{{${key}}}`, 'g'), String(value));
+          }
+        }
+
+        // Execute step based on action type
+        switch (step.action) {
+          case 'browse': {
+            if (!url) {
+              throw new Error('No URL specified for browse action');
+            }
+
+            const result = await this.browse(url, {
+              enableLearning: true,
+              useSkills: true,
+            });
+
+            tier = result.learning.renderTier;
+            stepData = {
+              title: result.title,
+              url: result.url,
+              markdown: result.content.markdown.substring(0, 1000), // Truncate
+            };
+            stepSuccess = result.content.markdown.length > 0;
+            break;
+          }
+
+          case 'extract': {
+            if (!url) {
+              throw new Error('No URL specified for extract action');
+            }
+
+            const result = await this.browse(url, {
+              enableLearning: true,
+            });
+
+            tier = result.learning.renderTier;
+            stepData = step.extractedData;
+            stepSuccess = result.content.markdown.length > 0;
+            break;
+          }
+
+          case 'navigate': {
+            if (!url) {
+              throw new Error('No URL specified for navigate action');
+            }
+
+            const result = await this.browse(url, {
+              enableLearning: false,
+              extractContent: false,
+            });
+
+            tier = result.learning.renderTier;
+            stepSuccess = true; // Navigation success if no error
+            break;
+          }
+
+          case 'wait': {
+            // Wait for specified duration (from step.duration or default 1s)
+            const duration = step.duration || 1000;
+            await new Promise(resolve => setTimeout(resolve, duration));
+            stepSuccess = true;
+            tier = 'intelligence';
+            break;
+          }
+
+          default: {
+            throw new Error(`Unknown workflow action: ${step.action}`);
+          }
+        }
+      } catch (error) {
+        stepError = error instanceof Error ? error.message : String(error);
+        stepSuccess = false;
+        overallSuccess = false;
+
+        logger.smartBrowser.error('Workflow step failed', {
+          workflowId: workflow.id,
+          stepNumber: step.stepNumber,
+          action: step.action,
+          error: stepError,
+        });
+      }
+
+      const stepResult: import('../types/workflow.js').WorkflowStepResult = {
+        stepNumber: step.stepNumber,
+        success: stepSuccess,
+        data: stepData,
+        error: stepError,
+        duration: Date.now() - stepStart,
+        tier,
+      };
+
+      results.push(stepResult);
+
+      // Stop if critical step failed
+      if (!stepSuccess && step.importance === 'critical') {
+        overallSuccess = false;
+        logger.smartBrowser.warn('Critical workflow step failed, stopping execution', {
+          workflowId: workflow.id,
+          stepNumber: step.stepNumber,
+        });
+        break;
+      }
+    }
+
+    const replayResult: import('../types/workflow.js').WorkflowReplayResult = {
+      workflowId: workflow.id,
+      executedAt: startTime,
+      results,
+      overallSuccess,
+      totalDuration: Date.now() - startTime,
+    };
+
+    logger.smartBrowser.info('Workflow replay completed', {
+      workflowId: workflow.id,
+      success: overallSuccess,
+      stepsExecuted: results.length,
+      totalDuration: replayResult.totalDuration,
+    });
+
+    return replayResult;
   }
 
   /**

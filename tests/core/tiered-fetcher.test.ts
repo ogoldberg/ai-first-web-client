@@ -4,6 +4,7 @@ import { BrowserManager } from '../../src/core/browser-manager.js';
 import { ContentExtractor } from '../../src/utils/content-extractor.js';
 import { ContentIntelligence, type ContentResult, type ExtractionStrategy } from '../../src/core/content-intelligence.js';
 import { LightweightRenderer, type LightweightRenderResult } from '../../src/core/lightweight-renderer.js';
+import { LearningEngine } from '../../src/core/learning-engine.js';
 import { rateLimiter } from '../../src/utils/rate-limiter.js';
 
 // Mock the modules
@@ -15,6 +16,7 @@ describe('TieredFetcher', () => {
   let fetcher: TieredFetcher;
   let mockBrowserManager: BrowserManager;
   let mockContentExtractor: ContentExtractor;
+  let mockLearningEngine: LearningEngine;
   let mockContentIntelligence: ContentIntelligence;
   let mockLightweightRenderer: LightweightRenderer;
 
@@ -89,8 +91,16 @@ describe('TieredFetcher', () => {
     // Mock rate limiter
     vi.mocked(rateLimiter.acquire).mockResolvedValue(undefined);
 
+    // Create mock learning engine (FEAT-003)
+    mockLearningEngine = {
+      getWebSocketPatterns: vi.fn().mockReturnValue([]),
+      recordWebSocketPattern: vi.fn(),
+      getApiPatterns: vi.fn().mockReturnValue([]),
+      recordApiPattern: vi.fn(),
+    } as unknown as LearningEngine;
+
     // Create fetcher
-    fetcher = new TieredFetcher(mockBrowserManager, mockContentExtractor);
+    fetcher = new TieredFetcher(mockBrowserManager, mockContentExtractor, mockLearningEngine);
 
     // Get references to mocked classes
     mockContentIntelligence = (fetcher as unknown as { contentIntelligence: ContentIntelligence }).contentIntelligence;
