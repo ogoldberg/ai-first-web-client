@@ -867,6 +867,40 @@ Browser: { success: true, ... }  // Learns this for future
 
 ---
 
+## P2: MoveAhead.ai Integration (New Initiative)
+
+**Goal:** Enable MoveAhead.ai (relocation assistant) to fully leverage Unbrowser's capabilities for exceptional research.
+
+**Context:** MoveAhead.ai already uses Unbrowser via MCP for government portal research, but only uses basic `smart_browse`. This initiative documents and enables full integration including workflow recording, verification, API discovery, and session management.
+
+**Documentation:** See [MOVEAHEAD_INTEGRATION_PLAN.md](MOVEAHEAD_INTEGRATION_PLAN.md) for full integration strategy.
+
+**Success Criteria:**
+- MoveAhead migrates from MCP to SDK for direct integration
+- Research workflows are recorded and replayable
+- API discovery used before browser fallback (10-50x speedup)
+- Session persistence enables cross-portal authentication
+- Procedural memory enables cross-country pattern transfer
+
+| ID | Task | Effort | Status | Notes |
+|----|------|--------|--------|-------|
+| INT-001 | Create SDK wrapper for research use case | M | Not Started | Specialized factory function with research presets (verification, pagination, session) |
+| INT-002 | Add research workflow templates | M | Not Started | Pre-built workflow templates for visa research, document extraction, fee tracking |
+| INT-003 | Enhance session persistence for multi-portal | S | Not Started | Extend session management to track SSO relationships (builds on GAP-009) |
+| INT-004 | Create government portal skill pack | M | Not Started | Exportable skill pack for EU government portals (Spain, Portugal, Germany) |
+| INT-005 | Add content verification presets | S | Not Started | Pre-configured verification checks for government content (requirements, fees, timeline fields) |
+| INT-006 | Add pagination learning for legal docs | S | Not Started | Optimize pagination discovery for BOE, EUR-Lex style legal document sites |
+| INT-007 | Create MoveAhead example integration | L | Not Started | Full example showing SDK usage for relocation research pipeline |
+
+**Dependencies:**
+- GAP-009 (Multi-Domain Login Reuse) - Critical for multi-portal auth
+- F-012 (Skill sharing) - Already complete, enables INT-004
+
+**Related:**
+- MoveAhead integration doc: `/Users/og/src/move-abroad-ai/docs/UNBROWSER_INTEGRATION.md`
+
+---
+
 ## Task Categories Explained
 
 ### Testing
