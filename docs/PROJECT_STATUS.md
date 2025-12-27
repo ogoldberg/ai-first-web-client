@@ -13,7 +13,7 @@
 Working on MoveAhead.ai integration tasks (INT initiative).
 
 **In Progress:**
-- (none)
+- INT-006 - Add research workflow templates (pre-built workflow templates for visa research, document extraction, fee tracking)
 
 **Completed:**
 - INT-005 - Add pagination learning for legal docs (8 legal document sites with PaginationPresetConfig)
