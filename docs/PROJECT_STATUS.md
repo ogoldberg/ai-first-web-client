@@ -13,7 +13,7 @@
 Working on MoveAhead.ai integration tasks (INT initiative).
 
 **In Progress:**
-- (none)
+- INT-003 - Integrate API discovery for gov portals (check for APIs before browser fallback - 10-50x speedup)
 
 **Completed:**
 - INT-002 - Enhance session persistence for multi-portal (extend session management to track SSO relationships)
