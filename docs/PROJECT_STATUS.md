@@ -13,7 +13,7 @@
 Working on MoveAhead.ai integration tasks (INT initiative).
 
 **In Progress:**
-- (none)
+- INT-008 - Add content change prediction (dynamic refresh schedules based on observed update patterns)
 
 **Completed:**
 - INT-007 - Create government portal skill pack (12 skills for ES, PT, DE: NIE, Digital Nomad Visa, Social Security, Tax Residency, NIF, D7 Visa, NHR, Anmeldung, Freelance Visa, Tax ID, Health Insurance)
