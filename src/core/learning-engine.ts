@@ -66,6 +66,11 @@ import type {
   HealthCheckOptions,
   HealthCheckResult,
 } from '../types/pattern-health.js';
+import { WebSocketPatternLearner } from './websocket-pattern-learner.js';
+import type {
+  WebSocketPattern,
+  WebSocketConnection,
+} from '../types/websocket-patterns.js';
 
 // Create a logger for learning engine operations
 const log = logger.create('LearningEngine');
@@ -141,6 +146,12 @@ export class LearningEngine {
    */
   private healthTracker: PatternHealthTracker;
 
+  /**
+   * WebSocket pattern learner (FEAT-003)
+   * Learns WebSocket patterns from captured connections
+   */
+  private wsPatternLearner: WebSocketPatternLearner;
+
   constructor(
     filePath: string = './enhanced-knowledge-base.json',
     decayConfig: ConfidenceDecayConfig = DEFAULT_DECAY_CONFIG,
@@ -159,6 +170,9 @@ export class LearningEngine {
 
     // Initialize pattern health tracker (FEAT-002)
     this.healthTracker = new PatternHealthTracker(healthConfig);
+
+    // Initialize WebSocket pattern learner (FEAT-003)
+    this.wsPatternLearner = new WebSocketPatternLearner();
   }
 
   async initialize(): Promise<void> {
@@ -2177,6 +2191,170 @@ export class LearningEngine {
    */
   importHealthData(data: Record<string, PatternHealth>): void {
     this.healthTracker.importHealthData(data);
+  }
+
+  // ============================================
+  // WEBSOCKET PATTERN METHODS (FEAT-003)
+  // ============================================
+
+  /**
+   * Learn WebSocket pattern from captured connection
+   */
+  learnWebSocketPattern(connection: WebSocketConnection, domain: string): void {
+    const pattern = this.wsPatternLearner.learnFromConnection(connection, domain);
+
+    if (!pattern) {
+      log.warn('Failed to learn WebSocket pattern', { domain });
+      return;
+    }
+
+    const entry = this.getOrCreateEntry(domain);
+
+    // Initialize websocketPatterns array if not exists
+    if (!entry.websocketPatterns) {
+      entry.websocketPatterns = [];
+    }
+
+    // Check if pattern already exists
+    const existingIndex = entry.websocketPatterns.findIndex(
+      p => p.endpoint === pattern.endpoint && p.protocol === pattern.protocol
+    );
+
+    if (existingIndex >= 0) {
+      // Update existing pattern
+      const existing = entry.websocketPatterns[existingIndex];
+      existing.lastVerified = pattern.lastVerified;
+      existing.verificationCount++;
+      existing.confidence = pattern.confidence;
+      existing.canReplay = pattern.canReplay;
+      existing.messagePatterns = pattern.messagePatterns;
+
+      log.info('Updated WebSocket pattern', {
+        domain,
+        endpoint: pattern.endpoint,
+        protocol: pattern.protocol,
+      });
+    } else {
+      // Add new pattern
+      entry.websocketPatterns.push(pattern);
+
+      log.info('Learned new WebSocket pattern', {
+        domain,
+        endpoint: pattern.endpoint,
+        protocol: pattern.protocol,
+        messagePatterns: pattern.messagePatterns.length,
+      });
+    }
+
+    entry.lastUpdated = Date.now();
+    this.save();
+  }
+
+  /**
+   * Get WebSocket patterns for a domain
+   */
+  getWebSocketPatterns(domain?: string): WebSocketPattern[] {
+    if (domain) {
+      const entry = this.entries.get(domain);
+      return entry?.websocketPatterns || [];
+    }
+
+    // Return all WebSocket patterns
+    const allPatterns: WebSocketPattern[] = [];
+    for (const entry of this.entries.values()) {
+      if (entry.websocketPatterns) {
+        allPatterns.push(...entry.websocketPatterns);
+      }
+    }
+    return allPatterns;
+  }
+
+  /**
+   * Verify WebSocket pattern (after successful replay)
+   */
+  verifyWebSocketPattern(domain: string, endpoint: string, protocol: string): void {
+    const entry = this.entries.get(domain);
+    if (!entry?.websocketPatterns) return;
+
+    const pattern = entry.websocketPatterns.find(
+      p => p.endpoint === endpoint && p.protocol === protocol
+    );
+
+    if (pattern) {
+      pattern.lastVerified = Date.now();
+      pattern.verificationCount++;
+
+      // Record health success
+      this.healthTracker.recordSuccess(
+        domain,
+        endpoint,
+        pattern.verificationCount,
+        pattern.failureCount
+      );
+
+      log.info('Verified WebSocket pattern', { domain, endpoint, protocol });
+      this.save();
+    }
+  }
+
+  /**
+   * Record WebSocket pattern failure
+   */
+  recordWebSocketPatternFailure(
+    domain: string,
+    endpoint: string,
+    protocol: string,
+    failure: Omit<FailureContext, 'timestamp'>
+  ): void {
+    const entry = this.entries.get(domain);
+    if (!entry?.websocketPatterns) return;
+
+    const pattern = entry.websocketPatterns.find(
+      p => p.endpoint === endpoint && p.protocol === protocol
+    );
+
+    if (pattern) {
+      pattern.failureCount++;
+      pattern.lastFailure = { ...failure, timestamp: Date.now() };
+
+      // Downgrade confidence after failures
+      const oldConfidence = pattern.confidence;
+      if (pattern.failureCount >= 3 && pattern.confidence === 'high') {
+        pattern.confidence = 'medium';
+        pattern.canReplay = false;
+      } else if (pattern.failureCount >= 5 && pattern.confidence === 'medium') {
+        pattern.confidence = 'low';
+        pattern.canReplay = false;
+      }
+
+      // Record health failure
+      const notification = this.healthTracker.recordFailure(
+        domain,
+        endpoint,
+        pattern.verificationCount,
+        pattern.failureCount,
+        failure.type
+      );
+
+      if (notification) {
+        log.warn('WebSocket pattern health changed', {
+          domain,
+          endpoint,
+          previousStatus: notification.previousStatus,
+          newStatus: notification.newStatus,
+        });
+      }
+
+      log.warn('WebSocket pattern failure recorded', {
+        domain,
+        endpoint,
+        protocol,
+        failureCount: pattern.failureCount,
+        confidence: pattern.confidence,
+      });
+
+      this.save();
+    }
   }
 
   // ============================================
