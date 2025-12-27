@@ -378,6 +378,7 @@ export class SmartBrowser {
   private proceduralMemory: ProceduralMemory;
   private tieredFetcher: TieredFetcher;
   private verificationEngine: import('./verification-engine.js').VerificationEngine | null = null;
+  private sessionSharingService: import('./session-sharing.js').SessionSharingService | null = null;
   private currentTrajectory: BrowsingTrajectory | null = null;
   private semanticInfrastructure: SemanticInfrastructure | null = null;
   private debugRecorder: DebugTraceRecorder;
@@ -399,7 +400,7 @@ export class SmartBrowser {
     this.debugRecorder = getDebugTraceRecorder();
     this.feedbackService = new FeedbackService();
     this.webhookService = new WebhookService();
-    // verificationEngine is loaded lazily in initialize() to avoid circular dependencies
+    // verificationEngine and sessionSharingService are loaded lazily in initialize() to avoid circular dependencies
   }
 
   async initialize(): Promise<void> {
@@ -413,6 +414,11 @@ export class SmartBrowser {
 
     // Connect VerificationEngine to ProceduralMemory for learned verifications (COMP-014)
     this.verificationEngine.setProceduralMemory(this.proceduralMemory);
+
+    // Initialize SessionSharingService for multi-domain login reuse (GAP-009)
+    const { SessionSharingService } = await import('./session-sharing.js');
+    this.sessionSharingService = new SessionSharingService(this.sessionManager);
+    logger.smartBrowser.info('Session sharing service enabled');
 
     // Auto-initialize semantic matching if dependencies available (LI-001)
     const semanticResult = await initializeSemanticInfrastructure();
@@ -436,6 +442,80 @@ export class SmartBrowser {
    */
   getTieredFetcher(): TieredFetcher {
     return this.tieredFetcher;
+  }
+
+  /**
+   * Get the session sharing service for SSO detection and cross-domain session sharing (GAP-009)
+   */
+  getSessionSharingService(): import('./session-sharing.js').SessionSharingService | null {
+    return this.sessionSharingService;
+  }
+
+  /**
+   * Detect SSO flow from a URL and learn domain relationships (GAP-009)
+   * Call this when navigating to capture OAuth/SAML/OIDC flows
+   */
+  detectSSOFlow(url: string, initiatingDomain?: string): import('./sso-flow-detector.js').SSOFlowInfo | null {
+    if (!this.sessionSharingService) {
+      logger.smartBrowser.debug('Session sharing not initialized, skipping SSO detection');
+      return null;
+    }
+    return this.sessionSharingService.processUrl(url, initiatingDomain);
+  }
+
+  /**
+   * Find and share a session from a related domain that uses the same identity provider (GAP-009)
+   * Returns true if a session was shared successfully
+   */
+  async shareSessionFromRelatedDomain(
+    targetDomain: string,
+    options?: { sessionProfile?: string; minConfidence?: number }
+  ): Promise<{ success: boolean; sourceDomain?: string; providerId?: string }> {
+    if (!this.sessionSharingService) {
+      return { success: false };
+    }
+
+    const result = await this.sessionSharingService.getOrShareSession(targetDomain, {
+      sessionProfile: options?.sessionProfile || 'default',
+      minConfidence: options?.minConfidence || 0.5,
+    });
+
+    if (result?.success) {
+      if (result.sourceDomain !== targetDomain) {
+        logger.smartBrowser.info('Shared session from related domain', {
+          source: result.sourceDomain,
+          target: targetDomain,
+          provider: result.providerId,
+        });
+      }
+      return {
+        success: true,
+        sourceDomain: result.sourceDomain,
+        providerId: result.providerId,
+      };
+    }
+
+    return { success: false };
+  }
+
+  /**
+   * Get domains that share the same identity provider with the given domain (GAP-009)
+   */
+  getRelatedDomains(domain: string, minConfidence?: number): string[] {
+    if (!this.sessionSharingService) {
+      return [];
+    }
+    return this.sessionSharingService.getRelatedDomains(domain, minConfidence);
+  }
+
+  /**
+   * Get domain groups organized by identity provider (GAP-009)
+   */
+  getDomainGroups(minConfidence?: number): import('./domain-correlator.js').DomainGroup[] {
+    if (!this.sessionSharingService) {
+      return [];
+    }
+    return this.sessionSharingService.getDomainGroups(minConfidence);
   }
 
   /**

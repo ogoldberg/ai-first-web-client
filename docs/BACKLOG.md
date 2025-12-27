@@ -427,7 +427,7 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 
 | ID | Task | Effort | Status | Notes |
 |----|------|--------|--------|-------|
-| GAP-009 | Multi-Domain Login Reuse | M | Complete | Detect SSO flows, reuse credentials across domains. Full implementation with SSOFlowDetector, DomainCorrelator, SessionSharingService. 14 tests. See [MULTI_DOMAIN_LOGIN_REUSE.md](MULTI_DOMAIN_LOGIN_REUSE.md) |
+| GAP-009 | Multi-Domain Login Reuse | M | Complete | Detect SSO flows, reuse credentials across domains. Full implementation with SSOFlowDetector, DomainCorrelator, SessionSharingService integrated into SmartBrowser and SDK. 47 tests. See [MULTI_DOMAIN_LOGIN_REUSE.md](MULTI_DOMAIN_LOGIN_REUSE.md) |
 | GAP-011 | Content Change Prediction | M | Complete | Learn update patterns (hourly, daily, weekly, etc.), predict next changes, optimize polling. ContentChangePredictor with 38 tests. See [GAP-011-IMPLEMENTATION-SUMMARY.md](GAP-011-IMPLEMENTATION-SUMMARY.md) |
 
 ### Phase 4: Protocol & Format Support
@@ -882,22 +882,39 @@ Browser: { success: true, ... }  // Learns this for future
 - Session persistence enables cross-portal authentication
 - Procedural memory enables cross-country pattern transfer
 
+### Phase 1: Foundation (Priority: Critical)
+
 | ID | Task | Effort | Status | Notes |
 |----|------|--------|--------|-------|
-| INT-001 | Create SDK wrapper for research use case | M | Not Started | Specialized factory function with research presets (verification, pagination, session) |
-| INT-002 | Add research workflow templates | M | Not Started | Pre-built workflow templates for visa research, document extraction, fee tracking |
-| INT-003 | Enhance session persistence for multi-portal | S | Not Started | Extend session management to track SSO relationships (builds on GAP-009) |
-| INT-004 | Create government portal skill pack | M | Not Started | Exportable skill pack for EU government portals (Spain, Portugal, Germany) |
-| INT-005 | Add content verification presets | S | Not Started | Pre-configured verification checks for government content (requirements, fees, timeline fields) |
-| INT-006 | Add pagination learning for legal docs | S | Not Started | Optimize pagination discovery for BOE, EUR-Lex style legal document sites |
-| INT-007 | Create MoveAhead example integration | L | Not Started | Full example showing SDK usage for relocation research pipeline |
+| INT-001 | Create SDK wrapper for research use case | M | Not Started | Specialized factory function with research presets (verification, pagination, session). See [MOVEAHEAD_INTEGRATION_PLAN.md](MOVEAHEAD_INTEGRATION_PLAN.md) |
+| INT-002 | Enhance session persistence for multi-portal | S | Not Started | Extend session management to track SSO relationships (builds on GAP-009) |
+| INT-003 | Integrate API discovery for gov portals | M | Not Started | Check for APIs before browser fallback - 10-50x speedup for sites with APIs |
+
+### Phase 2: Research Enhancement (Priority: High)
+
+| ID | Task | Effort | Status | Notes |
+|----|------|--------|--------|-------|
+| INT-004 | Add VerificationEngine presets | M | Not Started | Pre-configured verification checks for government content (requirements, fees, timeline fields) |
+| INT-005 | Add pagination learning for legal docs | S | Not Started | Optimize pagination discovery for BOE, EUR-Lex style legal document sites |
+| INT-006 | Add research workflow templates | M | Not Started | Pre-built workflow templates for visa research, document extraction, fee tracking |
+
+### Phase 3: Intelligence (Priority: Medium)
+
+| ID | Task | Effort | Status | Notes |
+|----|------|--------|--------|-------|
+| INT-007 | Create government portal skill pack | M | Not Started | Exportable skill pack for EU government portals (Spain, Portugal, Germany) |
+| INT-008 | Add content change prediction | S | Not Started | Dynamic refresh schedules based on observed update patterns |
+| INT-009 | Create MoveAhead example integration | L | Not Started | Full example showing SDK usage for relocation research pipeline |
 
 **Dependencies:**
-- GAP-009 (Multi-Domain Login Reuse) - Critical for multi-portal auth
-- F-012 (Skill sharing) - Already complete, enables INT-004
+- GAP-009 (Multi-Domain Login Reuse) - Complete, enables INT-002
+- F-012 (Skill sharing) - Complete, enables INT-007
+- COMP-014/015 (Verification Engine) - Complete, enables INT-004
+- COMP-007-010 (Workflow Recording) - Complete, enables INT-006
 
-**Related:**
-- MoveAhead integration doc: `/Users/og/src/move-abroad-ai/docs/UNBROWSER_INTEGRATION.md`
+**Documentation:**
+- Full integration strategy: [MOVEAHEAD_INTEGRATION_PLAN.md](MOVEAHEAD_INTEGRATION_PLAN.md)
+- MoveAhead implementation guide: `/Users/og/src/move-abroad-ai/docs/UNBROWSER_INTEGRATION.md`
 
 ---
 
