@@ -13,7 +13,7 @@
 Working on MoveAhead.ai integration tasks (INT initiative).
 
 **In Progress:**
-- (none)
+- INT-007 - Create government portal skill pack (exportable skill pack for EU government portals)
 
 **Completed:**
 - INT-006 - Add research workflow templates (5 templates: visaResearch, documentExtraction, feeTracking, crossCountryComparison, taxObligations)
