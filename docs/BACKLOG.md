@@ -888,7 +888,7 @@ Browser: { success: true, ... }  // Learns this for future
 |----|------|--------|--------|-------|
 | INT-001 | Create SDK wrapper for research use case | M | Complete | Specialized factory function with research presets (verification, pagination, session). See [MOVEAHEAD_INTEGRATION_PLAN.md](MOVEAHEAD_INTEGRATION_PLAN.md) |
 | INT-002 | Enhance session persistence for multi-portal | S | Complete | Extend session management to track SSO relationships (builds on GAP-009) |
-| INT-003 | Integrate API discovery for gov portals | M | Not Started | Check for APIs before browser fallback - 10-50x speedup for sites with APIs |
+| INT-003 | Integrate API discovery for gov portals | M | Complete | Check for APIs before browser fallback - 10-50x speedup for sites with APIs |
 
 ### Phase 2: Research Enhancement (Priority: High)
 
