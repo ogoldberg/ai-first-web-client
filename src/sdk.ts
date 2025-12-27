@@ -42,6 +42,7 @@ export type {
   NetworkRequest,
   ConsoleMessage,
   ApiPattern,
+  EnhancedApiPattern,
   BrowseResult,
   BrowseOptions,
   BrowsingAction,
@@ -54,6 +55,8 @@ export type {
   BrowseProgressEvent,
   OnProgressCallback,
 } from './types/index.js';
+
+import type { EnhancedApiPattern } from './types/index.js';
 
 // Re-export progress helpers (DX-009)
 export {
@@ -798,6 +801,12 @@ export interface ResearchResult extends SmartBrowseResult {
     sessionSharedFrom?: string;
     /** API used instead of browser (if discovered) */
     apiUsed?: boolean;
+    /** Whether browser rendering was bypassed via direct API call (INT-003) */
+    bypassedBrowser?: boolean;
+    /** API endpoint used if browser was bypassed (INT-003) */
+    apiEndpoint?: string;
+    /** Time saved by using API instead of browser in ms (INT-003) */
+    timeSavedMs?: number;
     /** Error message if the research operation failed */
     error?: string;
     /** Verification result summary */
@@ -997,6 +1006,29 @@ export class ResearchBrowserClient extends LLMBrowserClient {
     // Build verification checks
     const verificationChecks = this.buildVerificationChecks(topic, options);
 
+    // INT-003: Try API bypass before browser rendering
+    // This can provide 10-50x speedup for domains with discovered APIs
+    if (this.researchConfig.preferApiDiscovery) {
+      const apiResult = await this.tryApiBypass(url, domain, topic, options);
+      if (apiResult) {
+        // API bypass succeeded - return result without browser rendering
+        const verificationSummary = this.buildVerificationSummary(apiResult.result, topic, options);
+        return {
+          ...apiResult.result,
+          research: {
+            topic,
+            sessionProfile,
+            sessionSharedFrom,
+            apiUsed: true,
+            bypassedBrowser: true,
+            apiEndpoint: apiResult.apiEndpoint,
+            timeSavedMs: apiResult.estimatedTimeSavedMs,
+            verificationSummary,
+          },
+        };
+      }
+    }
+
     // Build browse options
     const browseOptions: SmartBrowseOptions = {
       ...options,
@@ -1051,9 +1083,289 @@ export class ResearchBrowserClient extends LLMBrowserClient {
         sessionProfile,
         sessionSharedFrom,
         apiUsed,
+        bypassedBrowser: false,
         verificationSummary,
       },
     };
+  }
+
+  /**
+   * Try to bypass browser rendering using discovered APIs (INT-003)
+   *
+   * This method checks if there are high-confidence APIs that can be called
+   * directly instead of rendering the page in a browser. This can provide
+   * 10-50x speedup for domains with discovered APIs.
+   *
+   * @param url - The URL to research
+   * @param domain - The domain extracted from the URL
+   * @param topic - The research topic for content extraction
+   * @param options - Research browse options
+   * @returns API bypass result if successful, null if should fall back to browser
+   */
+  private async tryApiBypass(
+    url: string,
+    domain: string,
+    topic: ResearchTopic,
+    options: ResearchBrowseOptions
+  ): Promise<{
+    result: SmartBrowseResult;
+    apiEndpoint: string;
+    estimatedTimeSavedMs: number;
+  } | null> {
+    try {
+      // Get high-confidence APIs that can bypass browser rendering
+      const learningEngine = this.getLearningEngine();
+      const bypassableApis = learningEngine.getBypassablePatterns(domain);
+
+      if (bypassableApis.length === 0) {
+        return null; // No APIs available, fall back to browser
+      }
+
+      const startTime = Date.now();
+
+      // Try each API in order of verification count (most reliable first)
+      const sortedApis = [...bypassableApis].sort(
+        (a, b) => b.verificationCount - a.verificationCount
+      );
+
+      for (const api of sortedApis) {
+        try {
+          // Make direct API call
+          const response = await fetch(api.endpoint, {
+            method: api.method,
+            headers: {
+              'Accept': 'application/json',
+              ...api.authHeaders,
+            },
+          });
+
+          if (!response.ok) {
+            // API call failed, try next one
+            continue;
+          }
+
+          const contentType = response.headers.get('content-type') || '';
+          const isJson = contentType.includes('application/json');
+
+          let content: string;
+          let structuredData: Record<string, unknown> | undefined;
+
+          if (isJson) {
+            const jsonData = await response.json();
+            structuredData = jsonData;
+            content = this.extractContentFromApiResponse(jsonData, topic);
+          } else {
+            content = await response.text();
+          }
+
+          // Validate content meets minimum requirements
+          const preset = this.verificationPresets[topic] || RESEARCH_VERIFICATION_PRESETS.general_research;
+          const minLength = options.minContentLength ?? preset.minContentLength;
+
+          if (content.length < minLength) {
+            // Content too short, try next API or fall back to browser
+            continue;
+          }
+
+          const endTime = Date.now();
+          const apiDuration = endTime - startTime;
+
+          // Estimate time saved (browser rendering typically takes 2-5 seconds)
+          const estimatedBrowserTime = 3000; // Conservative estimate
+          const timeSaved = Math.max(0, estimatedBrowserTime - apiDuration);
+
+          // Build SmartBrowseResult from API response
+          const result: SmartBrowseResult = {
+            url,
+            title: this.extractTitleFromContent(content, structuredData),
+            content: {
+              html: isJson ? `<pre>${JSON.stringify(structuredData, null, 2)}</pre>` : content,
+              markdown: content,
+              text: content,
+            },
+            network: [],
+            console: [],
+            discoveredApis: [api],
+            metadata: {
+              loadTime: apiDuration,
+              timestamp: Date.now(),
+              finalUrl: api.endpoint,
+            },
+            learning: {
+              selectorsUsed: [],
+              selectorsSucceeded: [],
+              selectorsFailed: [],
+              confidenceLevel: 'high',
+            },
+          };
+
+          return {
+            result,
+            apiEndpoint: api.endpoint,
+            estimatedTimeSavedMs: timeSaved,
+          };
+        } catch (error) {
+          // Log for debugging and continue to next API
+          console.warn(`[ResearchBrowserClient] API call failed for ${api.endpoint}:`, error);
+          continue;
+        }
+      }
+
+      // All APIs failed, fall back to browser
+      return null;
+    } catch (error) {
+      // Error getting APIs, fall back to browser
+      console.warn(`[ResearchBrowserClient] Error in API bypass:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Extract readable content from API JSON response (INT-003)
+   */
+  private extractContentFromApiResponse(
+    data: unknown,
+    topic: ResearchTopic
+  ): string {
+    if (typeof data === 'string') {
+      return data;
+    }
+
+    if (Array.isArray(data)) {
+      // For arrays, extract content from each item
+      return data.map((item, i) => this.extractContentFromApiResponse(item, topic)).join('\n\n');
+    }
+
+    if (typeof data === 'object' && data !== null) {
+      const obj = data as Record<string, unknown>;
+
+      // Get preset fields to prioritize
+      const preset = this.verificationPresets[topic] || RESEARCH_VERIFICATION_PRESETS.general_research;
+      const priorityFields = new Set(preset.expectedFields.map(f => f.toLowerCase()));
+
+      // Build content from object fields
+      const lines: string[] = [];
+
+      // First, extract priority fields
+      for (const field of preset.expectedFields) {
+        const value = this.getNestedValue(obj, field);
+        if (value !== undefined) {
+          lines.push(`## ${field}\n${this.formatValue(value)}`);
+        }
+      }
+
+      // Then extract other relevant fields
+      for (const [key, value] of Object.entries(obj)) {
+        if (!priorityFields.has(key.toLowerCase()) && this.isRelevantField(key, value)) {
+          lines.push(`## ${key}\n${this.formatValue(value)}`);
+        }
+      }
+
+      return lines.join('\n\n') || JSON.stringify(data, null, 2);
+    }
+
+    return String(data);
+  }
+
+  /**
+   * Get nested value from object using dot notation or exact match
+   */
+  private getNestedValue(obj: Record<string, unknown>, path: string): unknown {
+    // Try exact match first
+    if (path in obj) {
+      return obj[path];
+    }
+
+    // Try case-insensitive match
+    const lowerPath = path.toLowerCase();
+    for (const [key, value] of Object.entries(obj)) {
+      if (key.toLowerCase() === lowerPath) {
+        return value;
+      }
+    }
+
+    // Try nested path
+    const parts = path.split('.');
+    let current: unknown = obj;
+    for (const part of parts) {
+      if (current === null || typeof current !== 'object') {
+        return undefined;
+      }
+      current = (current as Record<string, unknown>)[part];
+    }
+    return current;
+  }
+
+  /**
+   * Format a value for display
+   */
+  private formatValue(value: unknown): string {
+    if (typeof value === 'string') {
+      return value;
+    }
+    if (Array.isArray(value)) {
+      return value.map(v => `- ${this.formatValue(v)}`).join('\n');
+    }
+    if (typeof value === 'object' && value !== null) {
+      return JSON.stringify(value, null, 2);
+    }
+    return String(value);
+  }
+
+  /**
+   * Check if a field is relevant for content extraction
+   */
+  private isRelevantField(key: string, value: unknown): boolean {
+    // Skip internal/metadata fields
+    const skipFields = new Set(['id', '_id', 'created_at', 'updated_at', 'metadata', 'version']);
+    if (skipFields.has(key.toLowerCase())) {
+      return false;
+    }
+
+    // Skip empty values
+    if (value === null || value === undefined || value === '') {
+      return false;
+    }
+
+    // Skip very short string values (likely IDs or codes)
+    if (typeof value === 'string' && value.length < 10) {
+      return false;
+    }
+
+    return true;
+  }
+
+  /**
+   * Extract title from content or structured data
+   */
+  private extractTitleFromContent(
+    content: string,
+    structuredData?: Record<string, unknown>
+  ): string {
+    // Try to get title from structured data
+    if (structuredData) {
+      const titleFields = ['title', 'name', 'headline', 'subject'];
+      for (const field of titleFields) {
+        const value = structuredData[field];
+        if (typeof value === 'string' && value.length > 0) {
+          return value;
+        }
+      }
+    }
+
+    // Extract from markdown heading
+    const headingMatch = content.match(/^#\s+(.+)$/m);
+    if (headingMatch) {
+      return headingMatch[1];
+    }
+
+    // Use first line
+    const firstLine = content.split('\n')[0];
+    if (firstLine && firstLine.length < 100) {
+      return firstLine;
+    }
+
+    return 'API Response';
   }
 
   /**
