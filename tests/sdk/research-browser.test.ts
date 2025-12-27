@@ -143,13 +143,13 @@ describe('Research Browser SDK', () => {
         expect(client.getSessionProfileForDomain('custom.gov')).toBe('custom-profile');
       });
 
-      it('should not override existing profiles with custom ones', () => {
+      it('should override default session profiles with custom ones', () => {
         const client = new ResearchBrowserClient({
           customSessionProfiles: {
             'agenciatributaria.es': 'custom-spain-tax',
           },
         });
-        // Custom should override
+        // Custom should override the default
         expect(client.getSessionProfileForDomain('agenciatributaria.es')).toBe('custom-spain-tax');
       });
     });

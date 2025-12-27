@@ -798,6 +798,8 @@ export interface ResearchResult extends SmartBrowseResult {
     sessionSharedFrom?: string;
     /** API used instead of browser (if discovered) */
     apiUsed?: boolean;
+    /** Error message if the research operation failed */
+    error?: string;
     /** Verification result summary */
     verificationSummary: {
       passed: boolean;
@@ -879,9 +881,9 @@ export class ResearchBrowserClient extends LLMBrowserClient {
       return this.sessionProfiles[domain];
     }
 
-    // Check partial matches
+    // Check partial matches (subdomain matching)
     for (const [pattern, profile] of Object.entries(this.sessionProfiles)) {
-      if (domain.includes(pattern) || pattern.includes(domain)) {
+      if (domain === pattern || domain.endsWith(`.${pattern}`)) {
         return profile;
       }
     }
@@ -986,8 +988,9 @@ export class ResearchBrowserClient extends LLMBrowserClient {
         if (shareResult.success && shareResult.sourceDomain !== domain) {
           sessionSharedFrom = shareResult.sourceDomain;
         }
-      } catch {
-        // SSO sharing failed, continue without it
+      } catch (error) {
+        // SSO sharing failed, continue without it. Log for debugging.
+        console.warn(`[ResearchBrowserClient] SSO session sharing failed for domain ${domain}:`, error);
       }
     }
 
@@ -1034,8 +1037,9 @@ export class ResearchBrowserClient extends LLMBrowserClient {
         // Sessions are typically saved automatically during browsing
         // This is mainly for explicit user-requested saves
         // The actual save happens during the browse operation if a Playwright context was used
-      } catch {
-        // Session save failed, continue without it
+      } catch (error) {
+        // Session save failed, continue without it. Log for debugging.
+        console.warn(`[ResearchBrowserClient] Failed to save session for profile ${sessionProfile}:`, error);
       }
     }
 
@@ -1132,6 +1136,7 @@ export class ResearchBrowserClient extends LLMBrowserClient {
         results.push(result);
       } catch (error) {
         // Create error result with required SmartBrowseResult fields
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         results.push({
           url,
           title: '',
@@ -1152,12 +1157,12 @@ export class ResearchBrowserClient extends LLMBrowserClient {
           },
           research: {
             topic: options.topic ?? this.researchConfig.defaultTopic,
+            error: errorMessage,
             verificationSummary: {
               passed: false,
               confidence: 0,
               checkedFields: [],
               missingFields: [],
-              excludedPatternFound: error instanceof Error ? error.message : 'Unknown error',
             },
           },
         });
