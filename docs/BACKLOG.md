@@ -477,6 +477,54 @@ See [COMPETITIVE_ANALYSIS.md](COMPETITIVE_ANALYSIS.md) for context on why these 
 
 ---
 
+## P1.5: Competitive Feature Enhancements (New Initiative)
+
+**Goal:** Incorporate valuable features from competitors (Firecrawl, Browse AI, mitmproxy, Apify, ScraperAPI) while maintaining our core "browser minimizer" philosophy.
+
+**Context:** Analysis of competitive tools identified 6 features that enhance Unbrowser's value proposition without scope creep. These features extend existing capabilities and align with progressive optimization.
+
+### High Priority (Extend Core Capabilities)
+
+| ID | Task | Effort | Status | Notes |
+|----|------|--------|--------|-------|
+| FEAT-001 | Schema validation for API discovery | M | Not Started | Extend VerificationEngine with JSON schema validation. Define expected response schema, get typed validation errors. Natural extension of API-015. |
+| FEAT-002 | Change monitoring for learned patterns | M | Not Started | Detect when learned API patterns break. Track pattern health, notify on failures, suggest re-learning. Builds on ProceduralMemory versioning. |
+| FEAT-003 | WebSocket API support | L | Not Started | Discover and replay WebSocket/Socket.IO/SSE real-time APIs. Detect WS endpoints, learn message patterns, direct replay. Completes API discovery. |
+
+### Medium Priority (Advanced Features)
+
+| ID | Task | Effort | Status | Notes |
+|----|------|--------|--------|-------|
+| FEAT-004 | Scheduled workflow runs with webhooks | L | Not Started | Schedule recorded workflows (cron), POST results to webhooks. Natural extension of COMP-009 (workflow recording). Makes workflows production-ready. |
+| FEAT-005 | Community pattern marketplace | XL | Not Started | User-published patterns, discovery/install, rating system, categories. Amplifies collective learning. Requires moderation, API endpoints, UI. |
+| FEAT-006 | Geographic proxy routing | M | Not Started | Smart geo routing based on site requirements. Auto-detect region restrictions, select optimal proxy location. Extends CLOUD-003 (proxy management). |
+
+**Success Criteria:**
+- Schema validation integrated with browse verification options
+- Pattern health monitoring with automated alerts
+- WebSocket APIs discovered and replayed like REST APIs
+- Workflows schedulable with webhook delivery
+- Public pattern marketplace with 50+ shared patterns
+- Geo-aware proxy routing reduces blocking by 30%+
+
+**Dependencies:**
+- FEAT-001 depends on API-015 (Enhanced Verification) - Complete
+- FEAT-002 depends on ProceduralMemory + LearningEngine - Complete
+- FEAT-003 depends on API discovery infrastructure - Complete
+- FEAT-004 depends on COMP-009 (Workflow Recording) - Complete
+- FEAT-005 depends on SDK-010 (npm publish), API-002 (auth) - Complete
+- FEAT-006 depends on CLOUD-003 (proxy management) - Complete
+
+**Benefits:**
+- **Schema validation**: Type-safe API responses, better LLM integration
+- **Change monitoring**: Proactive pattern maintenance, higher reliability
+- **WebSocket support**: Modern real-time API coverage
+- **Scheduled workflows**: Production automation use cases
+- **Pattern marketplace**: Network effects, faster adoption, community growth
+- **Geo routing**: Lower blocking rates, better performance
+
+---
+
 ## P2: Medium Priority (Plan For)
 
 ### Debugging & Observability

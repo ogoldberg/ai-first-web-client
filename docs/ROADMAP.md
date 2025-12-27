@@ -170,9 +170,9 @@
 
 ---
 
-## Phase 3: Enhanced Intelligence (6 weeks)
+## Phase 3: Enhanced Intelligence (8 weeks)
 
-**Goal**: Make the learning system more powerful
+**Goal**: Make the learning system more powerful and add competitive feature parity
 
 ### Sprint 3.1: Smarter Content Intelligence (2 weeks)
 
@@ -201,11 +201,21 @@
 | Pattern import/export | Medium | 2 days | Not Started |
 | Pattern quality scoring | Low | 2 days | Not Started |
 
+### Sprint 3.4: Competitive Feature Extensions (2 weeks)
+
+| Task | Priority | Effort | Status | Backlog ID |
+|------|----------|--------|--------|------------|
+| Schema validation for API discovery | High | 3 days | Not Started | FEAT-001 |
+| Change monitoring for learned patterns | High | 3 days | Not Started | FEAT-002 |
+| WebSocket API support | High | 4 days | Not Started | FEAT-003 |
+
+**Sprint Goal**: Extend core capabilities with features identified from competitive analysis (Firecrawl schema validation, Browse AI change monitoring, mitmproxy WebSocket support)
+
 ---
 
-## Phase 4: Advanced Features (8 weeks)
+## Phase 4: Advanced Features (10 weeks)
 
-**Goal**: Add power-user capabilities
+**Goal**: Add power-user capabilities and workflow automation
 
 ### Sprint 4.1: Batch & Parallel (2 weeks)
 
@@ -216,7 +226,18 @@
 | Queue management | Medium | 2 days | Not Started |
 | Progress reporting | Medium | 2 days | Not Started |
 
-### Sprint 4.2: Change Detection (2 weeks)
+### Sprint 4.2: Workflow Automation (2 weeks)
+
+| Task | Priority | Effort | Status | Backlog ID |
+|------|----------|--------|--------|------------|
+| Scheduled workflow runs (cron) | High | 3 days | Not Started | FEAT-004 |
+| Webhook delivery system | High | 3 days | Not Started | FEAT-004 |
+| Workflow parameter templates | Medium | 2 days | Not Started | FEAT-004 |
+| Execution monitoring & alerts | Medium | 2 days | Not Started | FEAT-004 |
+
+**Sprint Goal**: Make recorded workflows production-ready with scheduling and webhook integration (from Apify/Browse AI)
+
+### Sprint 4.3: Change Detection (2 weeks)
 
 | Task | Priority | Effort | Status |
 |------|----------|--------|--------|
@@ -225,7 +246,7 @@
 | Refresh scheduling | Medium | 2 days | Not Started |
 | Diff generation | Medium | 2 days | Not Started |
 
-### Sprint 4.3: Visual Debugging (2 weeks)
+### Sprint 4.4: Visual Debugging (2 weeks)
 
 | Task | Priority | Effort | Status |
 |------|----------|--------|--------|
@@ -234,7 +255,7 @@
 | Trace visualization | Medium | 3 days | Not Started |
 | Debug mode toggle | Low | 1 day | Not Started |
 
-### Sprint 4.4: Action Recording (2 weeks)
+### Sprint 4.5: Action Recording (2 weeks)
 
 | Task | Priority | Effort | Status |
 |------|----------|--------|--------|
@@ -245,17 +266,42 @@
 
 ---
 
-## Phase 5: Enterprise Features (12 weeks)
+## Phase 5: Enterprise Features (14 weeks)
 
-**Goal**: Support production deployments
+**Goal**: Support production deployments and enable community growth
 
-### Areas to Address
+### Sprint 5.1: Advanced Proxy Management (2 weeks)
 
-1. **Multi-tenant support** - Isolated learning per user/org
+| Task | Priority | Effort | Status | Backlog ID |
+|------|----------|--------|--------|------------|
+| Geographic proxy routing | High | 3 days | Not Started | FEAT-006 |
+| Auto-detect region restrictions | High | 2 days | Not Started | FEAT-006 |
+| Proxy performance analytics | Medium | 2 days | Not Started | FEAT-006 |
+| Cost optimization routing | Medium | 2 days | Not Started | FEAT-006 |
+
+**Sprint Goal**: Intelligent geo-aware proxy routing to reduce blocking and improve performance (from ScraperAPI)
+
+### Sprint 5.2: Community Pattern Marketplace (3 weeks)
+
+| Task | Priority | Effort | Status | Backlog ID |
+|------|----------|--------|--------|------------|
+| Pattern publishing API | High | 4 days | Not Started | FEAT-005 |
+| Pattern discovery & search | High | 3 days | Not Started | FEAT-005 |
+| Rating and review system | Medium | 3 days | Not Started | FEAT-005 |
+| Category & tagging system | Medium | 2 days | Not Started | FEAT-005 |
+| Moderation workflow | Medium | 3 days | Not Started | FEAT-005 |
+
+**Sprint Goal**: Enable community-driven pattern sharing for network effects (from Apify marketplace concept)
+
+### Sprint 5.3: Additional Enterprise Features (9 weeks)
+
+#### Areas to Address
+
+1. **Multi-tenant support** - Isolated learning per user/org (Partially Complete via CX-008)
 2. **OAuth flows** - Complex authentication patterns
-3. **Proxy support** - Residential, rotating proxies
-4. **Webhook notifications** - Real-time updates
-5. **API access** - Programmatic control beyond MCP
+3. **Proxy support** - Residential, rotating proxies (Partially Complete via CLOUD-003, CLOUD-006)
+4. **Webhook notifications** - Real-time updates (Partially Complete via FEAT-004)
+5. **API access** - Programmatic control beyond MCP (Complete via SDK & API packages)
 6. **Compliance** - robots.txt respect, rate limiting
 
 ---
@@ -294,9 +340,10 @@
 |-----------|--------|------------------|
 | **v0.5.0** | +2 weeks | Integration tests, error handling, logging |
 | **v0.6.0** | +4 weeks | Session reliability, metrics, observability |
-| **v0.7.0** | +8 weeks | Enhanced intelligence, skill composition |
-| **v0.8.0** | +12 weeks | Batch operations, change detection |
-| **v1.0.0** | +16 weeks | Production-ready, visual debugging, action recording |
+| **v0.7.0** | +10 weeks | Enhanced intelligence, skill composition, schema validation, WebSocket support |
+| **v0.8.0** | +16 weeks | Batch operations, workflow automation with webhooks, change detection |
+| **v0.9.0** | +22 weeks | Visual debugging, action recording, geo proxy routing |
+| **v1.0.0** | +28 weeks | Community marketplace, full enterprise feature set |
 
 ---
 
