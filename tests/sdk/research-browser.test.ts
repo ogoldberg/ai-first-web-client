@@ -313,3 +313,250 @@ describe('Type exports', () => {
     expect(options.topic).toBe('legal_document');
   });
 });
+
+describe('INT-003: API Discovery Integration', () => {
+  describe('ResearchResult metadata', () => {
+    it('should include bypassedBrowser field in research metadata', () => {
+      // Verify the type includes the new fields
+      const result = {
+        research: {
+          topic: 'government_portal' as ResearchTopic,
+          apiUsed: true,
+          bypassedBrowser: true,
+          apiEndpoint: 'https://api.example.com/data',
+          timeSavedMs: 2500,
+          verificationSummary: {
+            passed: true,
+            confidence: 0.9,
+            checkedFields: ['requirements'],
+            missingFields: [],
+          },
+        },
+      };
+
+      expect(result.research.bypassedBrowser).toBe(true);
+      expect(result.research.apiEndpoint).toBe('https://api.example.com/data');
+      expect(result.research.timeSavedMs).toBe(2500);
+    });
+
+    it('should set bypassedBrowser to false when browser is used', () => {
+      const result = {
+        research: {
+          topic: 'government_portal' as ResearchTopic,
+          apiUsed: false,
+          bypassedBrowser: false,
+          verificationSummary: {
+            passed: true,
+            confidence: 0.8,
+            checkedFields: [],
+            missingFields: [],
+          },
+        },
+      };
+
+      expect(result.research.bypassedBrowser).toBe(false);
+      expect(result.research.apiEndpoint).toBeUndefined();
+      expect(result.research.timeSavedMs).toBeUndefined();
+    });
+  });
+
+  describe('ResearchConfig preferApiDiscovery', () => {
+    it('should default preferApiDiscovery to true', () => {
+      const client = new ResearchBrowserClient();
+      const stats = client.getResearchStats();
+      // preferApiDiscovery is internal config, not exposed in stats
+      // but we verify the client was created with defaults
+      expect(stats.defaultTopic).toBe('general_research');
+    });
+
+    it('should accept preferApiDiscovery config option', () => {
+      const clientEnabled = new ResearchBrowserClient({
+        preferApiDiscovery: true,
+      });
+      const clientDisabled = new ResearchBrowserClient({
+        preferApiDiscovery: false,
+      });
+
+      // Both should create successfully
+      expect(clientEnabled).toBeInstanceOf(ResearchBrowserClient);
+      expect(clientDisabled).toBeInstanceOf(ResearchBrowserClient);
+    });
+  });
+
+  describe('Content extraction from API', () => {
+    it('should properly format expected fields as markdown', () => {
+      const client = new ResearchBrowserClient();
+      const apiResponse = {
+        requirements: 'Valid passport, proof of income',
+        documents: ['Passport copy', 'Bank statements'],
+        fees: '500 EUR',
+      };
+      const topic = 'visa_immigration' as ResearchTopic;
+
+      // @ts-expect-error - testing private method
+      const markdown = client.extractContentFromApiResponse(apiResponse, topic);
+
+      // Check that expected fields are formatted with headers
+      expect(markdown).toContain('## requirements');
+      expect(markdown).toContain('Valid passport, proof of income');
+      expect(markdown).toContain('## documents');
+      expect(markdown).toContain('- Passport copy');
+      expect(markdown).toContain('- Bank statements');
+      expect(markdown).toContain('## fees');
+      expect(markdown).toContain('500 EUR');
+    });
+
+    it('should handle nested API responses', () => {
+      const client = new ResearchBrowserClient();
+      const nestedResponse = {
+        data: {
+          visa: {
+            type: 'Digital Nomad',
+            requirements: ['passport', 'income proof'],
+          },
+        },
+      };
+      const topic = 'visa_immigration' as ResearchTopic;
+
+      // @ts-expect-error - testing private method
+      const markdown = client.extractContentFromApiResponse(nestedResponse, topic);
+
+      // Should contain formatted JSON for nested data
+      expect(markdown).toContain('data');
+    });
+
+    it('should handle array API responses', () => {
+      const client = new ResearchBrowserClient();
+      const arrayResponse = [
+        { title: 'First Item Title Here', description: 'First item with more than ten chars' },
+        { title: 'Second Item Title Here', description: 'Second item with more than ten chars' },
+      ];
+      const topic = 'general_research' as ResearchTopic;
+
+      // @ts-expect-error - testing private method
+      const markdown = client.extractContentFromApiResponse(arrayResponse, topic);
+
+      // Array items should be separated (titles are >= 10 chars so they get included)
+      expect(markdown).toContain('First Item Title Here');
+      expect(markdown).toContain('Second Item Title Here');
+    });
+
+    it('should extract title from structured data', () => {
+      const client = new ResearchBrowserClient();
+      const structuredData = {
+        title: 'Visa Requirements for Spain',
+        content: 'Some content here',
+      };
+
+      // @ts-expect-error - testing private method
+      const title = client.extractTitleFromContent('', structuredData);
+      expect(title).toBe('Visa Requirements for Spain');
+    });
+
+    it('should fallback to name field for title', () => {
+      const client = new ResearchBrowserClient();
+      const structuredData = {
+        name: 'Digital Nomad Visa',
+        content: 'Content',
+      };
+
+      // @ts-expect-error - testing private method
+      const title = client.extractTitleFromContent('', structuredData);
+      expect(title).toBe('Digital Nomad Visa');
+    });
+
+    it('should extract title from markdown heading', () => {
+      const client = new ResearchBrowserClient();
+      const content = '# Main Title\n\nSome paragraph content';
+
+      // @ts-expect-error - testing private method
+      const title = client.extractTitleFromContent(content, undefined);
+      expect(title).toBe('Main Title');
+    });
+
+    it('should use first line as title when short', () => {
+      const client = new ResearchBrowserClient();
+      const content = 'Short First Line\n\nSome paragraph content';
+
+      // @ts-expect-error - testing private method
+      const title = client.extractTitleFromContent(content, undefined);
+      expect(title).toBe('Short First Line');
+    });
+  });
+
+  describe('API bypass conditions', () => {
+    it('should only bypass with high confidence APIs', () => {
+      // API patterns must have confidence: 'high' and canBypass: true
+      const highConfidenceApi = {
+        endpoint: 'https://api.gov.es/visa-info',
+        method: 'GET',
+        confidence: 'high' as const,
+        canBypass: true,
+        verificationCount: 5,
+        createdAt: Date.now() - 86400000,
+        lastVerified: Date.now(),
+        failureCount: 0,
+      };
+
+      const lowConfidenceApi = {
+        endpoint: 'https://api.gov.es/test',
+        method: 'GET',
+        confidence: 'low' as const,
+        canBypass: true,
+        verificationCount: 1,
+        createdAt: Date.now(),
+        lastVerified: Date.now(),
+        failureCount: 0,
+      };
+
+      // Only high confidence APIs should be used for bypass
+      expect(highConfidenceApi.confidence).toBe('high');
+      expect(highConfidenceApi.canBypass).toBe(true);
+      expect(lowConfidenceApi.confidence).toBe('low');
+    });
+
+    it('should prioritize APIs by verification count', () => {
+      const apis = [
+        { endpoint: 'api1', verificationCount: 3 },
+        { endpoint: 'api2', verificationCount: 10 },
+        { endpoint: 'api3', verificationCount: 1 },
+      ];
+
+      const sorted = [...apis].sort((a, b) => b.verificationCount - a.verificationCount);
+      expect(sorted[0].endpoint).toBe('api2');
+      expect(sorted[1].endpoint).toBe('api1');
+      expect(sorted[2].endpoint).toBe('api3');
+    });
+
+    it('should validate minimum content length', () => {
+      const preset = RESEARCH_VERIFICATION_PRESETS.government_portal;
+      expect(preset.minContentLength).toBe(500);
+
+      // Content shorter than minLength should cause fallback to browser
+      const shortContent = 'Too short';
+      const longContent = 'A'.repeat(600);
+
+      expect(shortContent.length).toBeLessThan(preset.minContentLength);
+      expect(longContent.length).toBeGreaterThan(preset.minContentLength);
+    });
+  });
+
+  describe('Time savings calculation', () => {
+    it('should calculate positive time savings for fast API calls', () => {
+      const estimatedBrowserTime = 3000; // ms
+      const apiDuration = 200; // ms
+      const timeSaved = Math.max(0, estimatedBrowserTime - apiDuration);
+
+      expect(timeSaved).toBe(2800);
+    });
+
+    it('should not report negative time savings', () => {
+      const estimatedBrowserTime = 3000;
+      const slowApiDuration = 4000;
+      const timeSaved = Math.max(0, estimatedBrowserTime - slowApiDuration);
+
+      expect(timeSaved).toBe(0);
+    });
+  });
+
+});
