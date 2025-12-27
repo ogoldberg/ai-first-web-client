@@ -480,12 +480,14 @@ export class SmartBrowser {
       minConfidence: options?.minConfidence || 0.5,
     });
 
-    if (result && result.success && result.sourceDomain !== targetDomain) {
-      logger.smartBrowser.info('Shared session from related domain', {
-        source: result.sourceDomain,
-        target: targetDomain,
-        provider: result.providerId,
-      });
+    if (result?.success) {
+      if (result.sourceDomain !== targetDomain) {
+        logger.smartBrowser.info('Shared session from related domain', {
+          source: result.sourceDomain,
+          target: targetDomain,
+          provider: result.providerId,
+        });
+      }
       return {
         success: true,
         sourceDomain: result.sourceDomain,
