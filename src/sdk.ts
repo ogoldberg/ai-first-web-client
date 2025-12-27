@@ -595,6 +595,31 @@ export type {
   WorkflowFinding,
 } from './core/workflow-templates.js';
 
+// Re-export government skill pack (INT-007)
+export {
+  GOVERNMENT_SKILL_PACK,
+  SPAIN_SKILLS,
+  PORTUGAL_SKILLS,
+  GERMANY_SKILLS,
+  getSkillsForCountry,
+  getSkillById,
+  getSkillsByCategory,
+  getSkillsForDomain,
+  searchSkills,
+  listGovernmentSkills,
+  skillToPattern,
+  exportSkillPack,
+  importSkillPack,
+  getSkillPackSummary,
+} from './core/government-skill-pack.js';
+
+export type {
+  GovernmentSkill,
+  GovernmentSkillStep,
+  GovernmentServiceCategory,
+  GovernmentSkillPack,
+} from './core/government-skill-pack.js';
+
 /**
  * Research topic categories with associated verification presets
  */
