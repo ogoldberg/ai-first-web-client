@@ -427,7 +427,7 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 
 | ID | Task | Effort | Status | Notes |
 |----|------|--------|--------|-------|
-| GAP-009 | Multi-Domain Login Reuse | M | Not Started | Detect SSO flows, reuse credentials across domains |
+| GAP-009 | Multi-Domain Login Reuse | M | Complete | Detect SSO flows, reuse credentials across domains. Full implementation with SSOFlowDetector, DomainCorrelator, SessionSharingService. 14 tests. See [MULTI_DOMAIN_LOGIN_REUSE.md](MULTI_DOMAIN_LOGIN_REUSE.md) |
 | GAP-011 | Content Change Prediction | M | Not Started | Learn update patterns (e.g., "updates every 6 hours"), optimize polling |
 
 ### Phase 4: Protocol & Format Support
