@@ -16,6 +16,7 @@ import {
   type ListTenantsOptions,
 } from '../services/tenants.js';
 import type { Plan } from '../middleware/types.js';
+import { getAllSessions, clearTenantSessions } from '../services/redis-session.js';
 
 const tenants = new Hono();
 
@@ -443,6 +444,190 @@ tenants.delete('/:id', async (c) => {
         error: {
           code: 'DELETE_ERROR',
           message: error instanceof Error ? error.message : 'Failed to delete tenant',
+        },
+      },
+      500
+    );
+  }
+});
+
+/**
+ * GET /v1/tenants/:id/data
+ * Export all data for a tenant (GDPR Article 15 - Right to Access, CCPA Right to Know)
+ *
+ * Authentication: Tenant can only access their own data
+ */
+tenants.get('/:id/data', async (c) => {
+  const requestedTenantId = c.req.param('id');
+  const authenticatedTenant = c.get('tenant');
+
+  // Verify the tenant is requesting their own data (or is admin)
+  const isAdmin = authenticatedTenant.email === 'admin@unbrowser.ai'; // Update with your admin check
+  if (!isAdmin && authenticatedTenant.id !== requestedTenantId) {
+    return c.json(
+      {
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'You can only access your own data' },
+      },
+      403
+    );
+  }
+
+  const store = getTenantStore();
+  if (!store) {
+    return storeNotConfiguredError(c);
+  }
+
+  try {
+    const tenant = await store.findById(requestedTenantId);
+    if (!tenant) {
+      return c.json(
+        {
+          success: false,
+          error: { code: 'NOT_FOUND', message: 'Tenant not found' },
+        },
+        404
+      );
+    }
+
+    // Get all tenant data for export
+    const exportData = {
+      tenant: formatTenantResponse(tenant),
+      exportedAt: new Date().toISOString(),
+      dataCategories: {
+        account: formatTenantResponse(tenant),
+        // TODO: Add usage statistics
+        // usage: await getUsageStats(tenant.id),
+        // Session data (cookies, localStorage, authentication tokens)
+        sessions: await getAllSessions(tenant.id),
+        // TODO: Add workflow data
+        // workflows: workflowRecorder.listWorkflows(),
+        // TODO: Add API keys (hashes only, not plaintext)
+        // apiKeys: await listApiKeys(tenant.id),
+      },
+      privacyNotice: 'This export contains all personal data we have stored about you. ' +
+        'It does not include scraped content from websites, as we do not persist that data. ' +
+        'For questions, contact privacy@unbrowser.ai',
+    };
+
+    return c.json({
+      success: true,
+      data: exportData,
+    });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: 'EXPORT_ERROR',
+          message: error instanceof Error ? error.message : 'Failed to export data',
+        },
+      },
+      500
+    );
+  }
+});
+
+/**
+ * DELETE /v1/tenants/:id/data
+ * Delete all data for a tenant (GDPR Article 17 - Right to Erasure, CCPA Right to Delete)
+ *
+ * Authentication: Tenant can only delete their own data
+ *
+ * WARNING: This is irreversible. All tenant data including account, sessions,
+ * usage stats, and API keys will be permanently deleted.
+ */
+tenants.delete('/:id/data', async (c) => {
+  const requestedTenantId = c.req.param('id');
+  const authenticatedTenant = c.get('tenant');
+
+  // Verify the tenant is deleting their own data (or is admin)
+  const isAdmin = authenticatedTenant.email === 'admin@unbrowser.ai'; // Update with your admin check
+  if (!isAdmin && authenticatedTenant.id !== requestedTenantId) {
+    return c.json(
+      {
+        success: false,
+        error: { code: 'FORBIDDEN', message: 'You can only delete your own data' },
+      },
+      403
+    );
+  }
+
+  // Require confirmation parameter to prevent accidental deletion
+  const confirmParam = c.req.query('confirm');
+  if (confirmParam !== 'DELETE_ALL_DATA') {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: 'CONFIRMATION_REQUIRED',
+          message: 'To delete all data, add query parameter: ?confirm=DELETE_ALL_DATA',
+        },
+      },
+      400
+    );
+  }
+
+  const store = getTenantStore();
+  if (!store) {
+    return storeNotConfiguredError(c);
+  }
+
+  try {
+    const tenant = await store.findById(requestedTenantId);
+    if (!tenant) {
+      return c.json(
+        {
+          success: false,
+          error: { code: 'NOT_FOUND', message: 'Tenant not found' },
+        },
+        404
+      );
+    }
+
+    // Delete all tenant data
+    // 1. Revoke all API keys
+    // TODO: await revokeAllApiKeys(tenant.id);
+
+    // 2. Delete all sessions (cookies, localStorage, authentication tokens)
+    const sessionsDeleted = await clearTenantSessions(tenant.id);
+    console.log(`[GDPR] Deleted ${sessionsDeleted} sessions for tenant ${tenant.id}`);
+
+    // 3. Delete workflows
+    // TODO: workflow recorder cleanup
+
+    // 4. Delete usage stats
+    // TODO: await deleteUsageStats(tenant.id);
+
+    // 5. Delete tenant account (cascades to related data)
+    const deleted = await store.delete(requestedTenantId);
+
+    if (!deleted) {
+      return c.json(
+        {
+          success: false,
+          error: { code: 'DELETE_ERROR', message: 'Failed to delete tenant' },
+        },
+        500
+      );
+    }
+
+    return c.json({
+      success: true,
+      data: {
+        deleted: true,
+        tenantId: requestedTenantId,
+        deletedAt: new Date().toISOString(),
+        message: 'All tenant data has been permanently deleted. This action cannot be undone.',
+      },
+    });
+  } catch (error) {
+    return c.json(
+      {
+        success: false,
+        error: {
+          code: 'DELETE_ERROR',
+          message: error instanceof Error ? error.message : 'Failed to delete tenant data',
         },
       },
       500

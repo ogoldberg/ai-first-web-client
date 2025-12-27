@@ -56,6 +56,9 @@ export class WorkflowRecorder {
 
   /**
    * Record a step from a browse result
+   *
+   * IMPORTANT: Stores only metadata, not actual content, to comply with
+   * copyright and privacy regulations. Full content is re-fetched on replay.
    */
   async recordStep(recordingId: string, browseResult: SmartBrowseResult): Promise<void> {
     const recording = this.activeSessions.get(recordingId);
@@ -77,10 +80,19 @@ export class WorkflowRecorder {
       duration: browseResult.metadata?.loadTime,
       success: true,
       selectors: browseResult.learning?.selectorsUsed,
+      // Store only metadata, not actual content (compliance requirement)
       extractedData: {
         title: browseResult.title,
-        content: browseResult.content,
-        tables: browseResult.tables,
+        // Content metadata (not actual content - compliance)
+        contentLength: browseResult.content?.markdown?.length || 0,
+        contentType: 'markdown',
+        hasContent: (browseResult.content?.markdown?.length || 0) > 0,
+        // Table schemas (structure, not data - compliance)
+        tableSchemas: browseResult.tables?.map(t => ({
+          headers: t.headers,
+          rowCount: t.data?.length || 0,
+          caption: t.caption,
+        })),
       },
       patternsUsed: browseResult.learning?.skillApplied ? [browseResult.learning.skillApplied] : undefined,
     };
@@ -92,6 +104,7 @@ export class WorkflowRecorder {
       stepNumber: step.stepNumber,
       url: browseResult.url,
       tier: step.tier,
+      contentLength: step.extractedData.contentLength,
     });
   }
 
