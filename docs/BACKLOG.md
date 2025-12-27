@@ -497,7 +497,7 @@ See [COMPETITIVE_ANALYSIS.md](COMPETITIVE_ANALYSIS.md) for context on why these 
 |----|------|--------|--------|-------|
 | FEAT-004 | Scheduled workflow runs with webhooks | L | ✅ Complete (2025-12-27) | Schedule recorded workflows (cron), POST results to webhooks. Natural extension of COMP-009 (workflow recording). Makes workflows production-ready. Full implementation with cron scheduling, variable substitution, HMAC webhooks. See docs/FEAT-004-IMPLEMENTATION-SUMMARY.md |
 | FEAT-005 | Community pattern marketplace | XL | Not Started | User-published patterns, discovery/install, rating system, categories. Amplifies collective learning. Requires moderation, API endpoints, UI. |
-| FEAT-006 | Geographic proxy routing | M | Not Started | Smart geo routing based on site requirements. Auto-detect region restrictions, select optimal proxy location. Extends CLOUD-003 (proxy management). |
+| FEAT-006 | Geographic proxy routing | M | ✅ Complete (2025-12-27) | Smart geo routing based on site requirements. Auto-detect region restrictions, select optimal proxy location. Extends CLOUD-003 (proxy management). Full implementation with learning, TLD hints, restriction detection. 24 tests passing. See docs/FEAT-006-IMPLEMENTATION-SUMMARY.md |
 
 **Success Criteria:**
 - Schema validation integrated with browse verification options
