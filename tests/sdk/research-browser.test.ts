@@ -385,22 +385,29 @@ describe('INT-003: API Discovery Integration', () => {
 
   describe('Content extraction from API', () => {
     it('should properly format expected fields as markdown', () => {
-      // Test the internal content extraction logic conceptually
-      // The actual method is private, so we test through behavior
+      const client = new ResearchBrowserClient();
       const apiResponse = {
         requirements: 'Valid passport, proof of income',
         documents: ['Passport copy', 'Bank statements'],
         fees: '500 EUR',
       };
+      const topic = 'visa_immigration' as ResearchTopic;
 
-      // When this data is processed, it should produce markdown with headers
-      const expectedFields = ['requirements', 'documents', 'fees'];
-      for (const field of expectedFields) {
-        expect(apiResponse[field as keyof typeof apiResponse]).toBeDefined();
-      }
+      // @ts-expect-error - testing private method
+      const markdown = client.extractContentFromApiResponse(apiResponse, topic);
+
+      // Check that expected fields are formatted with headers
+      expect(markdown).toContain('## requirements');
+      expect(markdown).toContain('Valid passport, proof of income');
+      expect(markdown).toContain('## documents');
+      expect(markdown).toContain('- Passport copy');
+      expect(markdown).toContain('- Bank statements');
+      expect(markdown).toContain('## fees');
+      expect(markdown).toContain('500 EUR');
     });
 
     it('should handle nested API responses', () => {
+      const client = new ResearchBrowserClient();
       const nestedResponse = {
         data: {
           visa: {
@@ -409,18 +416,71 @@ describe('INT-003: API Discovery Integration', () => {
           },
         },
       };
+      const topic = 'visa_immigration' as ResearchTopic;
 
-      expect(nestedResponse.data.visa.requirements).toHaveLength(2);
+      // @ts-expect-error - testing private method
+      const markdown = client.extractContentFromApiResponse(nestedResponse, topic);
+
+      // Should contain formatted JSON for nested data
+      expect(markdown).toContain('data');
     });
 
     it('should handle array API responses', () => {
+      const client = new ResearchBrowserClient();
       const arrayResponse = [
-        { title: 'Item 1', description: 'First item' },
-        { title: 'Item 2', description: 'Second item' },
+        { title: 'First Item Title Here', description: 'First item with more than ten chars' },
+        { title: 'Second Item Title Here', description: 'Second item with more than ten chars' },
       ];
+      const topic = 'general_research' as ResearchTopic;
 
-      expect(arrayResponse).toHaveLength(2);
-      expect(arrayResponse[0].title).toBe('Item 1');
+      // @ts-expect-error - testing private method
+      const markdown = client.extractContentFromApiResponse(arrayResponse, topic);
+
+      // Array items should be separated (titles are >= 10 chars so they get included)
+      expect(markdown).toContain('First Item Title Here');
+      expect(markdown).toContain('Second Item Title Here');
+    });
+
+    it('should extract title from structured data', () => {
+      const client = new ResearchBrowserClient();
+      const structuredData = {
+        title: 'Visa Requirements for Spain',
+        content: 'Some content here',
+      };
+
+      // @ts-expect-error - testing private method
+      const title = client.extractTitleFromContent('', structuredData);
+      expect(title).toBe('Visa Requirements for Spain');
+    });
+
+    it('should fallback to name field for title', () => {
+      const client = new ResearchBrowserClient();
+      const structuredData = {
+        name: 'Digital Nomad Visa',
+        content: 'Content',
+      };
+
+      // @ts-expect-error - testing private method
+      const title = client.extractTitleFromContent('', structuredData);
+      expect(title).toBe('Digital Nomad Visa');
+    });
+
+    it('should extract title from markdown heading', () => {
+      const client = new ResearchBrowserClient();
+      const content = '# Main Title\n\nSome paragraph content';
+
+      // @ts-expect-error - testing private method
+      const title = client.extractTitleFromContent(content, undefined);
+      expect(title).toBe('Main Title');
+    });
+
+    it('should use first line as title when short', () => {
+      const client = new ResearchBrowserClient();
+      const content = 'Short First Line\n\nSome paragraph content';
+
+      // @ts-expect-error - testing private method
+      const title = client.extractTitleFromContent(content, undefined);
+      expect(title).toBe('Short First Line');
     });
   });
 
@@ -499,31 +559,4 @@ describe('INT-003: API Discovery Integration', () => {
     });
   });
 
-  describe('Title extraction', () => {
-    it('should extract title from structured data', () => {
-      const structuredData = {
-        title: 'Visa Requirements for Spain',
-        content: 'Some content here',
-      };
-
-      expect(structuredData.title).toBe('Visa Requirements for Spain');
-    });
-
-    it('should fallback to name field', () => {
-      const structuredData = {
-        name: 'Digital Nomad Visa',
-        content: 'Content',
-      };
-
-      expect(structuredData.name).toBe('Digital Nomad Visa');
-    });
-
-    it('should extract from markdown heading', () => {
-      const content = '# Main Title\n\nSome paragraph content';
-      const headingMatch = content.match(/^#\s+(.+)$/m);
-
-      expect(headingMatch).not.toBeNull();
-      expect(headingMatch![1]).toBe('Main Title');
-    });
-  });
 });

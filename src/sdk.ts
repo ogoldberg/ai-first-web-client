@@ -847,6 +847,18 @@ export interface ResearchResult extends SmartBrowseResult {
  * ```
  */
 export class ResearchBrowserClient extends LLMBrowserClient {
+  // Static constants for API bypass and content extraction (INT-003)
+  /** Conservative estimate for browser render time in ms */
+  private static readonly ESTIMATED_BROWSER_RENDER_TIME_MS = 3000;
+  /** Fields to skip during content extraction (internal/metadata fields) */
+  private static readonly IRRELEVANT_FIELDS = new Set(['id', '_id', 'created_at', 'updated_at', 'metadata', 'version']);
+  /** Minimum length for a string to be considered relevant content */
+  private static readonly MIN_RELEVANT_STRING_LENGTH = 10;
+  /** Fields to check for title extraction, in priority order */
+  private static readonly CANDIDATE_TITLE_FIELDS = ['title', 'name', 'headline', 'subject'];
+  /** Maximum length of first line to use as title */
+  private static readonly MAX_TITLE_LENGTH_FROM_FIRST_LINE = 100;
+
   private researchConfig: Required<Omit<ResearchConfig, keyof LLMBrowserConfig>> & LLMBrowserConfig;
   private sessionProfiles: Record<string, string>;
   private verificationPresets: Record<string, typeof RESEARCH_VERIFICATION_PRESETS[ResearchTopic]>;
@@ -1171,7 +1183,7 @@ export class ResearchBrowserClient extends LLMBrowserClient {
           const apiDuration = endTime - startTime;
 
           // Estimate time saved (browser rendering typically takes 2-5 seconds)
-          const estimatedBrowserTime = 3000; // Conservative estimate
+          const estimatedBrowserTime = ResearchBrowserClient.ESTIMATED_BROWSER_RENDER_TIME_MS;
           const timeSaved = Math.max(0, estimatedBrowserTime - apiDuration);
 
           // Build SmartBrowseResult from API response
@@ -1317,8 +1329,7 @@ export class ResearchBrowserClient extends LLMBrowserClient {
    */
   private isRelevantField(key: string, value: unknown): boolean {
     // Skip internal/metadata fields
-    const skipFields = new Set(['id', '_id', 'created_at', 'updated_at', 'metadata', 'version']);
-    if (skipFields.has(key.toLowerCase())) {
+    if (ResearchBrowserClient.IRRELEVANT_FIELDS.has(key.toLowerCase())) {
       return false;
     }
 
@@ -1328,7 +1339,7 @@ export class ResearchBrowserClient extends LLMBrowserClient {
     }
 
     // Skip very short string values (likely IDs or codes)
-    if (typeof value === 'string' && value.length < 10) {
+    if (typeof value === 'string' && value.length < ResearchBrowserClient.MIN_RELEVANT_STRING_LENGTH) {
       return false;
     }
 
@@ -1344,8 +1355,7 @@ export class ResearchBrowserClient extends LLMBrowserClient {
   ): string {
     // Try to get title from structured data
     if (structuredData) {
-      const titleFields = ['title', 'name', 'headline', 'subject'];
-      for (const field of titleFields) {
+      for (const field of ResearchBrowserClient.CANDIDATE_TITLE_FIELDS) {
         const value = structuredData[field];
         if (typeof value === 'string' && value.length > 0) {
           return value;
@@ -1361,7 +1371,7 @@ export class ResearchBrowserClient extends LLMBrowserClient {
 
     // Use first line
     const firstLine = content.split('\n')[0];
-    if (firstLine && firstLine.length < 100) {
+    if (firstLine && firstLine.length < ResearchBrowserClient.MAX_TITLE_LENGTH_FROM_FIRST_LINE) {
       return firstLine;
     }
 
