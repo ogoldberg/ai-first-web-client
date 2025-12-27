@@ -13,9 +13,10 @@
 Working on MoveAhead.ai integration tasks (INT initiative).
 
 **In Progress:**
-- INT-006 - Add research workflow templates (pre-built workflow templates for visa research, document extraction, fee tracking)
+- (none)
 
 **Completed:**
+- INT-006 - Add research workflow templates (5 templates: visaResearch, documentExtraction, feeTracking, crossCountryComparison, taxObligations)
 - INT-005 - Add pagination learning for legal docs (8 legal document sites with PaginationPresetConfig)
 - INT-004 - Add VerificationEngine presets (19 pre-built VERIFICATION_CHECKS for government content validation)
 - INT-003 - Integrate API discovery for gov portals (check for APIs before browser fallback - 10-50x speedup)

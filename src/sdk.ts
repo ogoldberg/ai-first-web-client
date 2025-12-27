@@ -567,6 +567,34 @@ export function createContentFetcher(): {
 
 import type { VerifyOptions, VerificationCheck, VerificationAssertion } from './types/verification.js';
 
+// Re-export workflow template types and templates (INT-006)
+export {
+  WORKFLOW_TEMPLATES,
+  COUNTRY_PORTALS,
+  VISA_TYPE_PATHS,
+  VISA_RESEARCH_TEMPLATE,
+  DOCUMENT_EXTRACTION_TEMPLATE,
+  FEE_TRACKING_TEMPLATE,
+  CROSS_COUNTRY_COMPARISON_TEMPLATE,
+  TAX_OBLIGATIONS_TEMPLATE,
+  resolveUrlTemplate,
+  prepareVariables,
+  validateVariables,
+  extractFindings,
+  buildWorkflowSummary,
+  listTemplates,
+  getTemplate,
+} from './core/workflow-templates.js';
+
+export type {
+  WorkflowTemplate,
+  WorkflowTemplateStep,
+  WorkflowTemplateResult,
+  WorkflowTemplateStepResult,
+  WorkflowTemplateSummary,
+  WorkflowFinding,
+} from './core/workflow-templates.js';
+
 /**
  * Research topic categories with associated verification presets
  */
@@ -1961,6 +1989,183 @@ export class ResearchBrowserClient extends LLMBrowserClient {
       ssoEnabled: this.researchConfig.enableSSOSharing,
       defaultTopic: this.researchConfig.defaultTopic,
     };
+  }
+
+  // =============================================================================
+  // WORKFLOW TEMPLATES (INT-006)
+  // =============================================================================
+
+  /**
+   * Execute a workflow template with the given variables
+   *
+   * Workflow templates provide pre-built research patterns for common use cases:
+   * - Visa research across countries
+   * - Document extraction from legal databases
+   * - Fee tracking for immigration/tax procedures
+   *
+   * @param template - The workflow template to execute
+   * @param variables - Variables to substitute in the template
+   * @returns Workflow execution result with findings and summary
+   *
+   * @example
+   * ```typescript
+   * import { createResearchBrowser, WORKFLOW_TEMPLATES } from 'llm-browser/sdk';
+   *
+   * const browser = await createResearchBrowser();
+   *
+   * // Execute visa research workflow
+   * const result = await browser.executeTemplate(WORKFLOW_TEMPLATES.visaResearch, {
+   *   country: 'ES',
+   *   visaType: 'digital_nomad',
+   * });
+   *
+   * console.log(`Success: ${result.success}`);
+   * console.log(`Findings: ${result.summary.findings.length}`);
+   * ```
+   */
+  async executeTemplate(
+    template: import('./core/workflow-templates.js').WorkflowTemplate,
+    variables: Record<string, string | number>
+  ): Promise<import('./core/workflow-templates.js').WorkflowTemplateResult> {
+    const { validateVariables, prepareVariables, resolveUrlTemplate, buildWorkflowSummary } = await import('./core/workflow-templates.js');
+
+    // Validate required variables
+    const validation = validateVariables(template, variables);
+    if (!validation.valid) {
+      throw new Error(`Missing required variables: ${validation.missing.join(', ')}`);
+    }
+
+    // Prepare variables with URL expansions
+    const preparedVars = prepareVariables(template, variables);
+
+    const startedAt = Date.now();
+    const stepResults: import('./core/workflow-templates.js').WorkflowTemplateStepResult[] = [];
+
+    // Execute steps
+    for (const step of template.steps) {
+      const stepStart = Date.now();
+
+      try {
+        // Resolve URL template
+        const url = resolveUrlTemplate(step.urlTemplate, preparedVars);
+
+        // Skip step if URL couldn't be resolved (still has {{placeholders}})
+        if (url.includes('{{')) {
+          if (step.critical && !template.continueOnFailure) {
+            throw new Error(`Could not resolve URL for critical step ${step.id}: ${url}`);
+          }
+          stepResults.push({
+            stepId: step.id,
+            stepName: step.name,
+            url,
+            success: false,
+            error: `URL template could not be fully resolved: ${url}`,
+            duration: Date.now() - stepStart,
+          });
+          continue;
+        }
+
+        // Apply delay if specified
+        if (step.delayMs && step.delayMs > 0) {
+          await new Promise(resolve => setTimeout(resolve, step.delayMs));
+        }
+
+        // Execute research
+        const result = await this.research(url, {
+          topic: step.topic || template.defaultTopic || 'general_research',
+          expectedFields: step.expectedFields,
+          verify: step.additionalChecks ? {
+            enabled: true,
+            mode: 'thorough',
+            checks: step.additionalChecks,
+          } : undefined,
+          ...step.options,
+        });
+
+        // Check if step succeeded
+        const success = result.research?.verificationSummary?.passed !== false;
+
+        stepResults.push({
+          stepId: step.id,
+          stepName: step.name,
+          url,
+          success,
+          result,
+          duration: Date.now() - stepStart,
+        });
+
+        // Stop on critical step failure if not continuing on failure
+        if (!success && step.critical && !template.continueOnFailure) {
+          break;
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
+        stepResults.push({
+          stepId: step.id,
+          stepName: step.name,
+          url: resolveUrlTemplate(step.urlTemplate, preparedVars),
+          success: false,
+          error: errorMessage,
+          duration: Date.now() - stepStart,
+        });
+
+        // Stop on critical step failure if not continuing on failure
+        if (step.critical && !template.continueOnFailure) {
+          break;
+        }
+      }
+    }
+
+    const completedAt = Date.now();
+
+    // Determine overall success (all critical steps passed)
+    const criticalSteps = template.steps.filter(s => s.critical);
+    const criticalResults = stepResults.filter(r =>
+      criticalSteps.some(s => s.id === r.stepId)
+    );
+    const allCriticalPassed = criticalResults.every(r => r.success);
+
+    return {
+      templateId: template.id,
+      templateName: template.name,
+      variables: preparedVars,
+      steps: stepResults,
+      success: allCriticalPassed,
+      totalDuration: completedAt - startedAt,
+      startedAt,
+      completedAt,
+      summary: buildWorkflowSummary(stepResults),
+    };
+  }
+
+  /**
+   * List available workflow templates
+   *
+   * @returns Array of template metadata
+   */
+  listWorkflowTemplates(): Array<{
+    id: string;
+    name: string;
+    description: string;
+    tags: string[];
+    requiredVariables: string[];
+  }> {
+    // Import dynamically to avoid circular dependency issues
+    const { listTemplates } = require('./core/workflow-templates.js');
+    return listTemplates();
+  }
+
+  /**
+   * Get a workflow template by ID
+   *
+   * @param id - Template ID
+   * @returns Template or undefined if not found
+   */
+  getWorkflowTemplate(id: string): import('./core/workflow-templates.js').WorkflowTemplate | undefined {
+    // Import dynamically to avoid circular dependency issues
+    const { getTemplate } = require('./core/workflow-templates.js');
+    return getTemplate(id);
   }
 }
 
