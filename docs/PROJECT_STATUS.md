@@ -8,9 +8,12 @@
 
 ---
 
-## Recent: Progressive Optimization (2025-12-27)
+## Recent: MoveAhead Integration (2025-12-27)
 
-Continuing work on Progressive Optimization Gaps (P2 initiative).
+Working on MoveAhead.ai integration tasks (INT initiative).
+
+**In Progress:**
+- INT-001 - Create SDK wrapper for research use case (specialized factory function with research presets)
 
 **Completed:**
 - GAP-009 - Multi-Domain Login Reuse (SSO flow detection, cross-domain session sharing)
