@@ -458,6 +458,32 @@ describe('Field Translation Coverage', () => {
     }
   });
 
+  it('should have translations for 40+ languages including global regions', () => {
+    // Comprehensive language coverage verification
+    const languageGroups = {
+      westernEuropean: ['en', 'es', 'pt', 'de', 'fr', 'it', 'nl'],
+      nordic: ['sv', 'no', 'da', 'fi'],
+      easternEuropean: ['pl', 'cs', 'sk', 'hu', 'ro', 'bg', 'hr', 'sl', 'sr', 'uk', 'ru'],
+      baltic: ['lt', 'lv', 'et'],
+      asian: ['zh', 'ja', 'ko', 'vi', 'th', 'id', 'ms', 'tl'],
+      middleEastern: ['ar', 'he', 'tr', 'fa'],
+      southAsian: ['hi', 'bn', 'ta'],
+      other: ['el'],
+    };
+
+    const coreCategories: FieldCategory[] = ['title', 'description', 'requirements'];
+
+    for (const [region, languages] of Object.entries(languageGroups)) {
+      for (const lang of languages) {
+        for (const category of coreCategories) {
+          const variants = FIELD_TRANSLATIONS[category]?.[lang];
+          expect(variants, `Missing ${category} for ${lang} (${region})`).toBeDefined();
+          expect(variants?.length, `Empty ${category} for ${lang} (${region})`).toBeGreaterThan(0);
+        }
+      }
+    }
+  });
+
   it('should have government-specific field translations', () => {
     // These are critical for MoveAhead integration
     const govCategories: FieldCategory[] = ['requirements', 'documents', 'fees', 'timeline', 'application', 'deadline'];
@@ -475,5 +501,137 @@ describe('Field Translation Coverage', () => {
       // Must have German (for Germany, Austria, Switzerland)
       expect(FIELD_TRANSLATIONS[category].de).toBeDefined();
     }
+  });
+});
+
+describe('Script-based Language Detection', () => {
+  it('should detect Chinese from CJK characters', () => {
+    // Note: Script detection requires minimum 10 non-Latin chars and 5% of content
+    const html = `<html><body>
+      这是一些中文内容。政府要求和文件。签证申请需要准备以下材料：护照、照片、申请表和相关证明文件。
+      办理时间大约需要两周。请确保所有文件齐全完整。联系方式和办公地址请查阅官方网站。
+    </body></html>`;
+    const result = detectPageLanguage(html);
+    expect(result.language).toBe('zh');
+    expect(result.source).toBe('content-analysis');
+    expect(result.confidence).toBeGreaterThan(0.5);
+  });
+
+  it('should detect Japanese from hiragana/katakana', () => {
+    const html = `<html><body>
+      これは日本語のテキストです。ひらがなとカタカナを使用しています。
+      申請には以下の書類が必要です。パスポート、写真、申請書などを準備してください。
+      処理には約二週間かかります。すべての書類を揃えてからお申し込みください。
+    </body></html>`;
+    const result = detectPageLanguage(html);
+    expect(result.language).toBe('ja');
+    expect(result.source).toBe('content-analysis');
+  });
+
+  it('should detect Korean from Hangul', () => {
+    const html = `<html><body>
+      한국어 텍스트입니다. 요구 사항과 문서에 대한 정보입니다.
+      비자 신청을 위해 다음 서류가 필요합니다. 여권, 사진, 신청서 및 관련 증명 서류를 준비하세요.
+      처리 시간은 약 2주 정도 소요됩니다. 모든 서류가 완비되었는지 확인하세요.
+    </body></html>`;
+    const result = detectPageLanguage(html);
+    expect(result.language).toBe('ko');
+    expect(result.source).toBe('content-analysis');
+  });
+
+  it('should detect Arabic from Arabic script', () => {
+    const html = `<html><body>
+      هذا نص باللغة العربية. متطلبات ووثائق رسمية للتقديم.
+      تحتاج إلى جواز السفر والصور الشخصية واستمارة الطلب والوثائق الداعمة.
+      يستغرق معالجة الطلب حوالي أسبوعين. يرجى التأكد من اكتمال جميع المستندات.
+    </body></html>`;
+    const result = detectPageLanguage(html);
+    expect(result.language).toBe('ar');
+    expect(result.source).toBe('content-analysis');
+  });
+
+  it('should detect Hebrew from Hebrew script', () => {
+    const html = `<html><body>
+      זהו טקסט בעברית. דרישות ומסמכים רשמיים להגשת בקשה.
+      יש צורך בדרכון, תמונות, טופס בקשה ומסמכים תומכים.
+      זמן הטיפול הוא כשבועיים. אנא ודא שכל המסמכים מלאים ומדויקים.
+    </body></html>`;
+    const result = detectPageLanguage(html);
+    expect(result.language).toBe('he');
+    expect(result.source).toBe('content-analysis');
+  });
+
+  it('should detect Thai from Thai script', () => {
+    const html = `<html><body>
+      นี่คือข้อความภาษาไทย ข้อกำหนดและเอกสารที่ต้องใช้ในการสมัคร
+      คุณต้องเตรียมหนังสือเดินทาง รูปถ่าย แบบฟอร์มใบสมัคร และเอกสารประกอบ
+      ระยะเวลาดำเนินการประมาณสองสัปดาห์ โปรดตรวจสอบว่าเอกสารทั้งหมดครบถ้วน
+    </body></html>`;
+    const result = detectPageLanguage(html);
+    expect(result.language).toBe('th');
+    expect(result.source).toBe('content-analysis');
+  });
+
+  it('should detect Russian from Cyrillic script', () => {
+    const html = `<html><body>
+      Это русский текст. Требования и документы для подачи заявления на визу.
+      Вам понадобятся паспорт, фотографии, анкета-заявление и подтверждающие документы.
+      Срок рассмотрения заявки составляет около двух недель. Убедитесь что все документы полные.
+    </body></html>`;
+    const result = detectPageLanguage(html);
+    expect(result.language).toBe('ru');
+    expect(result.source).toBe('content-analysis');
+  });
+
+  it('should detect Greek from Greek script', () => {
+    const html = `<html><body>
+      Αυτό είναι ελληνικό κείμενο. Απαιτήσεις και έγγραφα για την υποβολή αίτησης.
+      Χρειάζεστε διαβατήριο, φωτογραφίες, αίτηση και υποστηρικτικά έγγραφα.
+      Ο χρόνος επεξεργασίας είναι περίπου δύο εβδομάδες. Βεβαιωθείτε ότι όλα είναι πλήρη.
+    </body></html>`;
+    const result = detectPageLanguage(html);
+    expect(result.language).toBe('el');
+    expect(result.source).toBe('content-analysis');
+  });
+
+  it('should detect Hindi from Devanagari script', () => {
+    const html = `<html><body>
+      यह हिंदी में पाठ है। आवश्यकताएं और दस्तावेज़ जो आवेदन के लिए आवश्यक हैं।
+      आपको पासपोर्ट, फोटो, आवेदन पत्र और सहायक दस्तावेज़ों की आवश्यकता होगी।
+      प्रसंस्करण का समय लगभग दो सप्ताह है। कृपया सुनिश्चित करें कि सभी दस्तावेज़ पूर्ण हैं।
+    </body></html>`;
+    const result = detectPageLanguage(html);
+    expect(result.language).toBe('hi');
+    expect(result.source).toBe('content-analysis');
+  });
+});
+
+describe('Stopword-based Language Detection', () => {
+  it('should detect Swedish from content', () => {
+    const html = '<html><body>Kraven for ansokan ar foljande: dokument och information som behovs for att ansoka.</body></html>';
+    const result = detectPageLanguage(html);
+    expect(result.language).toBe('sv');
+    expect(result.source).toBe('content-analysis');
+  });
+
+  it('should detect Polish from content', () => {
+    const html = '<html><body>Wymagania dla wniosku sa nastepujace: dokumenty i informacje ktore sa potrzebne do zlozenia.</body></html>';
+    const result = detectPageLanguage(html);
+    expect(result.language).toBe('pl');
+    expect(result.source).toBe('content-analysis');
+  });
+
+  it('should detect Turkish from content', () => {
+    const html = '<html><body>Basvuru icin gereksinimler sunlardir: belgeler ve bilgi. Bu bir Turkce metin ornegi.</body></html>';
+    const result = detectPageLanguage(html);
+    expect(result.language).toBe('tr');
+    expect(result.source).toBe('content-analysis');
+  });
+
+  it('should detect Indonesian from content', () => {
+    const html = '<html><body>Persyaratan untuk permohonan adalah sebagai berikut: dokumen dan informasi yang diperlukan.</body></html>';
+    const result = detectPageLanguage(html);
+    expect(result.language).toBe('id');
+    expect(result.source).toBe('content-analysis');
   });
 });
