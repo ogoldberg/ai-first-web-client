@@ -6,6 +6,17 @@
  */
 
 import type { ContentMapping } from '../types/api-patterns.js';
+import {
+  detectPageLanguage as detectLanguage,
+  getFieldVariants,
+  extractFieldByCategory,
+  type LanguageDetectionResult,
+  type FieldCategory,
+} from './language-aware-extraction.js';
+
+// Re-export language detection for convenience
+export { detectLanguage as detectPageLanguage };
+export type { LanguageDetectionResult, FieldCategory };
 
 /**
  * Get a value from an object using dot notation path
@@ -217,4 +228,116 @@ export function getConfidenceLevel(confidence: number): 'high' | 'medium' | 'low
     return 'medium';
   }
   return 'low';
+}
+
+// ============================================
+// LANGUAGE-AWARE EXTRACTION (INT-011)
+// ============================================
+
+/**
+ * Extract text content from structured data with language awareness
+ *
+ * Tries field names in the detected language first, then falls back to English.
+ * This enables extraction from multilingual content like government portals.
+ *
+ * @param data - The data object to extract from
+ * @param language - The detected page language (ISO 639-1 code)
+ * @returns Extracted text content
+ */
+export function extractTextFromStructuredLanguageAware(
+  data: unknown,
+  language: string
+): string {
+  if (typeof data === 'string') {
+    return data;
+  }
+
+  if (typeof data !== 'object' || data === null) {
+    return '';
+  }
+
+  // Try to extract body/content using language-aware field detection
+  const body = extractFieldByCategory(data, 'body', language);
+  if (typeof body === 'string' && body.length > 20) {
+    return body;
+  }
+
+  const description = extractFieldByCategory(data, 'description', language);
+  if (typeof description === 'string' && description.length > 20) {
+    return description;
+  }
+
+  const summary = extractFieldByCategory(data, 'summary', language);
+  if (typeof summary === 'string' && summary.length > 20) {
+    return summary;
+  }
+
+  // Fall back to standard extraction
+  return extractTextFromStructured(data);
+}
+
+/**
+ * Extract content from API response using contentMapping with language awareness
+ *
+ * First tries the mapping as-is, then tries language-specific field variants
+ *
+ * @param data - The data object to extract from
+ * @param mapping - The content mapping
+ * @param language - The detected page language
+ * @param turndownFn - Optional HTML to markdown converter
+ * @returns Extracted title, text, and markdown
+ */
+export function extractContentFromMappingLanguageAware(
+  data: unknown,
+  mapping: ContentMapping,
+  language: string,
+  turndownFn?: (html: string) => string
+): { title: string; text: string; markdown: string } {
+  // First try the standard mapping
+  const standardResult = extractContentFromMapping(data, mapping, turndownFn);
+
+  // If we got good results, return them
+  if (standardResult.title !== 'Untitled' && standardResult.text.length > 20) {
+    return standardResult;
+  }
+
+  // If not English, try language-aware extraction
+  if (language !== 'en') {
+    const obj = data as Record<string, unknown>;
+
+    // Try to find title in language-specific fields
+    const titleVariants = getFieldVariants('title', language);
+    let title = standardResult.title;
+    for (const variant of titleVariants) {
+      const value = getValueAtPath(obj, variant);
+      if (typeof value === 'string' && value.length > 0) {
+        title = isHtmlContent(value) ? htmlToPlainText(value) : value;
+        break;
+      }
+    }
+
+    // Try to find body in language-specific fields
+    const bodyVariants = getFieldVariants('body', language);
+    const descVariants = getFieldVariants('description', language);
+    let mainContent = '';
+
+    for (const variant of [...bodyVariants, ...descVariants]) {
+      const value = getValueAtPath(obj, variant);
+      if (typeof value === 'string' && value.length > 20) {
+        mainContent = value;
+        break;
+      }
+    }
+
+    if (mainContent) {
+      if (isHtmlContent(mainContent)) {
+        const text = htmlToPlainText(mainContent);
+        const markdown = turndownFn ? turndownFn(mainContent) : text;
+        return { title, text, markdown };
+      }
+      return { title, text: mainContent, markdown: mainContent };
+    }
+  }
+
+  return standardResult;
 }
