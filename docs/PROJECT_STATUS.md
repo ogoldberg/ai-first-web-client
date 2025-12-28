@@ -12,6 +12,9 @@
 
 Working on MoveAhead.ai integration tasks (INT initiative).
 
+**In Progress:**
+- INT-009 - Create MoveAhead example integration (full example showing API usage for relocation research pipeline)
+
 **Completed:**
 - INT-008 - Add content change prediction (DynamicRefreshScheduler with 9 content type presets, 10 domain patterns, intelligent refresh scheduling replacing fixed 90-day staleness)
 - INT-007 - Create government portal skill pack (12 skills for ES, PT, DE: NIE, Digital Nomad Visa, Social Security, Tax Residency, NIF, D7 Visa, NHR, Anmeldung, Freelance Visa, Tax ID, Health Insurance)
