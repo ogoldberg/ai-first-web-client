@@ -80,6 +80,8 @@ import {
   extractContentFromMapping as extractContentFromMappingUtil,
   PATTERN_CONFIDENCE,
   getConfidenceLevel,
+  detectPageLanguage,
+  extractContentFromMappingLanguageAware,
 } from './content-extraction-utils.js';
 
 // Create a require function for ESM compatibility
@@ -140,6 +142,10 @@ export interface ContentResult {
     strategiesAttempted: ExtractionStrategy[];
     timing: number;
     confidence: 'high' | 'medium' | 'low';
+    /** Detected page language (INT-011) */
+    language?: string;
+    /** Confidence in language detection (INT-011) */
+    languageConfidence?: number;
   };
 
   // Any errors encountered (non-fatal)
