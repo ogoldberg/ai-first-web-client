@@ -916,6 +916,29 @@ Browser: { success: true, ... }  // Learns this for future
 - Full integration strategy: [MOVEAHEAD_INTEGRATION_PLAN.md](MOVEAHEAD_INTEGRATION_PLAN.md)
 - MoveAhead implementation guide: `/Users/og/src/move-abroad-ai/docs/UNBROWSER_INTEGRATION.md`
 
+### Phase 4: Advanced Integration (Priority: Medium-Low)
+
+These features are designed for MoveAhead but extensible to other government/regulatory research use cases.
+
+| ID | Task | Effort | Status | Notes |
+|----|------|--------|--------|-------|
+| INT-010 | Guided authentication workflow | L | Not Started | User callback for interactive login (MFA, email verification). Step-by-step auth guidance with screenshots. Session capture after successful auth. Extensible to any authenticated portal. |
+| INT-011 | Language-aware extraction | M | Not Started | Auto-detect page language. Language-specific content parsing. Multi-language field mapping (e.g., "Requisitos" = "Requirements"). Extensible to any international content. |
+| INT-012 | Structured government data extractor | L | Not Started | Schema for common gov data: fees, requirements, timelines, documents. Auto-extract structured data from unstructured pages. Validation against expected fields. Extensible to any government/regulatory content. |
+| INT-013 | Appointment availability detection | M | Not Started | Detect "cita previa" and similar appointment systems. Check for available slots. Monitor for openings. Extensible to any scheduling/booking systems. |
+| INT-014 | Field-level change tracking | M | Not Started | Track specific field changes (fee increased, deadline moved). Structured diff output (before/after). Severity classification (breaking vs minor). Extensible to any content monitoring. |
+| INT-015 | Cross-source verification | M | Not Started | Compare same topic across multiple sources. Detect contradictions. Confidence scoring based on agreement. Extensible to any fact-checking use case. |
+| INT-016 | Auto portal discovery | L | Not Started | Given a country code, discover official gov portals. Map portal structure. Identify relevant sections. Extensible to any domain discovery. |
+| INT-017 | Form/PDF field extraction | L | Not Started | Extract form fields from PDFs. Parse application forms. Map required documents. Extensible to any form processing. |
+
+**Potential Users Beyond MoveAhead:**
+- Immigration/visa services and consultants
+- Regulatory compliance (financial, healthcare, environmental)
+- Government contract research
+- Legal research and due diligence
+- International business expansion
+- Tax advisory services
+
 ---
 
 ## Task Categories Explained
