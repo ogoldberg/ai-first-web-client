@@ -769,6 +769,67 @@ export {
   type AvailabilityDetectionOptions,
 } from './core/appointment-availability-detector.js';
 
+// =============================================================================
+// FIELD-LEVEL CHANGE TRACKING (INT-014)
+// =============================================================================
+
+/**
+ * Field-level change tracker for government content monitoring.
+ * Tracks specific field changes with severity classification and
+ * structured before/after diffs.
+ *
+ * @example
+ * ```typescript
+ * import {
+ *   trackFieldChanges,
+ *   hasBreakingChanges,
+ *   getBreakingChanges
+ * } from 'llm-browser/sdk';
+ *
+ * // Track changes between two data snapshots
+ * const result = trackFieldChanges(oldData, newData, {
+ *   url: 'https://gov.example.com/visa',
+ *   language: 'es',
+ * });
+ *
+ * // Check for breaking changes
+ * if (result.breakingChanges.length > 0) {
+ *   console.log('Breaking changes detected:');
+ *   for (const change of result.breakingChanges) {
+ *     console.log(`  - ${change.description}`);
+ *     console.log(`    Impact: ${change.impact}`);
+ *   }
+ * }
+ *
+ * // Quick check for breaking changes
+ * if (hasBreakingChanges(oldData, newData)) {
+ *   console.log('Action required!');
+ * }
+ *
+ * // Get all breaking changes
+ * const breaking = getBreakingChanges(oldData, newData);
+ * for (const change of breaking) {
+ *   console.log(`${change.fieldName}: ${change.oldValueFormatted} -> ${change.newValueFormatted}`);
+ * }
+ * ```
+ */
+export {
+  FieldLevelChangeTracker,
+  createFieldLevelChangeTracker,
+  getFieldLevelChangeTracker,
+  trackFieldChanges,
+  getBreakingChanges,
+  hasBreakingChanges,
+  type ChangeSeverity,
+  type FieldCategory,
+  type ChangeType,
+  type FieldChange,
+  type ChangeTrackingResult,
+  type TrackingOptions,
+  type ChangeHistoryRecord,
+  type FieldLevelChangeTrackerConfig,
+} from './core/field-level-change-tracker.js';
+
 /**
  * Research topic categories with associated verification presets
  */
