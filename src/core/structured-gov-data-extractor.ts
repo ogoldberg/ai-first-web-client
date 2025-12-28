@@ -287,75 +287,524 @@ export interface ValidationWarning {
 // ============================================
 
 /**
- * Fee-related keywords by language
+ * Fee-related keywords by language (40+ languages globally)
  */
 const FEE_KEYWORDS: Record<string, string[]> = {
-  en: ['fee', 'cost', 'price', 'payment', 'charge', 'rate', 'amount'],
-  es: ['tasa', 'precio', 'coste', 'pago', 'importe', 'cantidad', 'tarifa'],
-  pt: ['taxa', 'custo', 'pagamento', 'valor', 'quantia', 'tarifa'],
-  de: ['gebuhr', 'kosten', 'preis', 'zahlung', 'betrag', 'gebuehren'],
-  fr: ['frais', 'cout', 'prix', 'paiement', 'montant', 'tarif'],
-  it: ['tassa', 'costo', 'prezzo', 'pagamento', 'importo', 'tariffa'],
-  nl: ['kosten', 'prijs', 'betaling', 'bedrag', 'tarief'],
+  // Western European
+  en: ['fee', 'cost', 'price', 'payment', 'charge', 'rate', 'amount', 'dues'],
+  es: ['tasa', 'precio', 'coste', 'pago', 'importe', 'cantidad', 'tarifa', 'arancel'],
+  pt: ['taxa', 'custo', 'pagamento', 'valor', 'quantia', 'tarifa', 'emolumento'],
+  de: ['gebuhr', 'kosten', 'preis', 'zahlung', 'betrag', 'gebuehren', 'entgelt'],
+  fr: ['frais', 'cout', 'prix', 'paiement', 'montant', 'tarif', 'redevance'],
+  it: ['tassa', 'costo', 'prezzo', 'pagamento', 'importo', 'tariffa', 'diritti'],
+  nl: ['kosten', 'prijs', 'betaling', 'bedrag', 'tarief', 'heffing', 'leges'],
+
+  // Nordic
+  sv: ['avgift', 'kostnad', 'pris', 'betalning', 'taxa', 'summa'],
+  no: ['avgift', 'kostnad', 'pris', 'betaling', 'gebyr', 'sum'],
+  da: ['gebyr', 'omkostning', 'pris', 'betaling', 'afgift', 'belob'],
+  fi: ['maksu', 'hinta', 'kustannus', 'palkkio', 'taksa', 'summa'],
+  is: ['gjald', 'kostnadur', 'verd', 'greidsla', 'upphad'],
+
+  // Eastern European
+  pl: ['oplata', 'koszt', 'cena', 'platnosc', 'stawka', 'kwota', 'naleznosc'],
+  cs: ['poplatek', 'cena', 'naklady', 'platba', 'castka', 'sazba'],
+  sk: ['poplatok', 'cena', 'naklady', 'platba', 'suma', 'sadzba'],
+  hu: ['dij', 'koltseg', 'ar', 'fizetes', 'osszeg', 'illetek'],
+  ro: ['taxa', 'cost', 'pret', 'plata', 'suma', 'tarif', 'timbru'],
+  bg: ['taksa', 'tsena', 'razkhod', 'plashtane', 'suma'],
+  hr: ['pristojba', 'cijena', 'trosak', 'placanje', 'iznos', 'naknada'],
+  sl: ['pristojbina', 'cena', 'strosek', 'placilo', 'znesek', 'taksa'],
+  sr: ['taksa', 'cena', 'trosak', 'placanje', 'iznos', 'naknada'],
+  uk: ['oplata', 'vartist', 'tsina', 'platizh', 'suma', 'zbir'],
+  ru: ['oplata', 'stoimost', 'tsena', 'platezh', 'summa', 'sbor', 'poshlina'],
+  be: ['aplata', 'kosht', 'tsana', 'platezh', 'suma'],
+
+  // Baltic
+  lt: ['mokestis', 'kaina', 'islaidos', 'mokejimas', 'suma', 'rinkliava'],
+  lv: ['maksa', 'cena', 'izmaksas', 'maksajums', 'summa', 'nodeva'],
+  et: ['tasu', 'hind', 'kulu', 'makse', 'summa', 'loiv'],
+
+  // Greek & Cypriot
+  el: ['telos', 'kostous', 'timi', 'pliroma', 'poso', 'eisfora'],
+
+  // Turkish
+  tr: ['ucret', 'maliyet', 'fiyat', 'odeme', 'tutar', 'harci', 'bedel'],
+
+  // Middle Eastern
+  ar: ['rusoom', 'taklufa', 'siar', 'dafa', 'mablagh', 'ajr'],
+  he: ['agra', 'mehir', 'tashlum', 'schum', 'takanon'],
+  fa: ['haq', 'hazine', 'gharamat', 'pardakht', 'mablagh'],
+
+  // South Asian
+  hi: ['shulk', 'keemat', 'bhugtan', 'rashi', 'daam', 'fees'],
+  bn: ['fees', 'dam', 'khorca', 'porisodhon', 'taka'],
+  ta: ['kathanam', 'vilai', 'seluttu', 'thogai'],
+  ur: ['fees', 'qeemat', 'ada', 'raqam'],
+  mr: ['shulk', 'kimmat', 'bharna', 'rakam'],
+
+  // Southeast Asian
+  vi: ['phi', 'gia', 'thanh toan', 'le phi', 'tien'],
+  th: ['kha', 'raka', 'kha thamiam', 'ngoen'],
+  id: ['biaya', 'tarif', 'harga', 'pembayaran', 'ongkos', 'retribusi'],
+  ms: ['bayaran', 'kos', 'harga', 'fi', 'caj', 'kadar'],
+  tl: ['bayad', 'halaga', 'singil', 'gastos', 'presyo'],
+
+  // East Asian
+  zh: ['feiyong', 'jiage', 'fukuan', 'shoufei', 'jine'],
+  ja: ['ryokin', 'hiyo', 'kakaku', 'shiharai', 'tesuryo'],
+  ko: ['yogeum', 'biyong', 'gagyeok', 'napbu', 'suryo'],
+
+  // African
+  sw: ['ada', 'gharama', 'bei', 'malipo', 'kiasi'],
+  am: ['kifya', 'waga', 'kfiya', 'mesrat'],
+  zu: ['imali', 'intengo', 'ukukhokha', 'inani'],
+
+  // Other
+  ga: ['tailli', 'costas', 'praghas', 'iocaiocht', 'suim'],
+  cy: ['ffi', 'cost', 'pris', 'taliad', 'swm'],
+  mt: ['hlas', 'spieza', 'prezz', 'hlas', 'ammont'],
+  sq: ['tarife', 'kosto', 'cmim', 'pagese', 'shume'],
+  mk: ['taksa', 'cena', 'trosok', 'plakjanje', 'iznos'],
+  ka: ['sapasuri', 'pasi', 'gadakhda', 'tanxa'],
+  hy: ['vacharq', 'arzhek', 'vcharm', 'gumar'],
+  az: ['odenis', 'qiymet', 'haqi', 'mebleg'],
+  kk: ['tolem', 'baqa', 'tolem', 'soma'],
+  uz: ['tolov', 'narx', 'tolov', 'summa'],
 };
 
 /**
- * Document-related keywords by language
+ * Document-related keywords by language (40+ languages globally)
  */
 const DOCUMENT_KEYWORDS: Record<string, string[]> = {
-  en: ['document', 'certificate', 'proof', 'form', 'passport', 'id', 'license'],
-  es: ['documento', 'certificado', 'justificante', 'formulario', 'pasaporte', 'dni', 'licencia'],
-  pt: ['documento', 'certificado', 'comprovante', 'formulario', 'passaporte', 'licenca'],
-  de: ['dokument', 'bescheinigung', 'nachweis', 'formular', 'reisepass', 'ausweis'],
-  fr: ['document', 'certificat', 'justificatif', 'formulaire', 'passeport', 'permis'],
-  it: ['documento', 'certificato', 'prova', 'modulo', 'passaporto', 'licenza'],
-  nl: ['document', 'certificaat', 'bewijs', 'formulier', 'paspoort', 'vergunning'],
+  // Western European
+  en: ['document', 'certificate', 'proof', 'form', 'passport', 'id', 'license', 'permit', 'card'],
+  es: ['documento', 'certificado', 'justificante', 'formulario', 'pasaporte', 'dni', 'licencia', 'permiso', 'tarjeta'],
+  pt: ['documento', 'certificado', 'comprovante', 'formulario', 'passaporte', 'licenca', 'cartao', 'atestado'],
+  de: ['dokument', 'bescheinigung', 'nachweis', 'formular', 'reisepass', 'ausweis', 'erlaubnis', 'urkunde'],
+  fr: ['document', 'certificat', 'justificatif', 'formulaire', 'passeport', 'permis', 'carte', 'attestation'],
+  it: ['documento', 'certificato', 'prova', 'modulo', 'passaporto', 'licenza', 'permesso', 'tessera'],
+  nl: ['document', 'certificaat', 'bewijs', 'formulier', 'paspoort', 'vergunning', 'kaart', 'rijbewijs'],
+
+  // Nordic
+  sv: ['dokument', 'intyg', 'bevis', 'blankett', 'pass', 'kort', 'tillstand', 'legitimation'],
+  no: ['dokument', 'attest', 'bevis', 'skjema', 'pass', 'kort', 'tillatelse', 'legitimasjon'],
+  da: ['dokument', 'attest', 'bevis', 'formular', 'pas', 'kort', 'tilladelse', 'legitimation'],
+  fi: ['asiakirja', 'todistus', 'lomake', 'passi', 'kortti', 'lupa', 'henkilokortti'],
+  is: ['skjal', 'vottord', 'eydublad', 'vegabref', 'kort', 'leyfi'],
+
+  // Eastern European
+  pl: ['dokument', 'zaswiadczenie', 'dowod', 'formularz', 'paszport', 'pozwolenie', 'karta', 'akt'],
+  cs: ['dokument', 'osvedceni', 'potvrzeni', 'formular', 'pas', 'prukaz', 'povoleni', 'karta'],
+  sk: ['dokument', 'osvedcenie', 'potvrdenie', 'formular', 'pas', 'preukaz', 'povolenie', 'karta'],
+  hu: ['dokumentum', 'igazolas', 'bizonyitvany', 'urlap', 'utlevel', 'engedely', 'kartya', 'szemelyi'],
+  ro: ['document', 'certificat', 'dovada', 'formular', 'pasaport', 'permis', 'carte', 'buletin'],
+  bg: ['dokument', 'udostoverenie', 'formulyar', 'pasport', 'razreshenie', 'karta', 'lichna karta'],
+  hr: ['dokument', 'potvrda', 'obrazac', 'putovnica', 'dozvola', 'kartica', 'osobna iskaznica'],
+  sl: ['dokument', 'potrdilo', 'obrazec', 'potni list', 'dovoljenje', 'kartica', 'osebna izkaznica'],
+  sr: ['dokument', 'uverenje', 'obrazac', 'pasos', 'dozvola', 'kartica', 'licna karta'],
+  uk: ['dokument', 'dovidka', 'forma', 'pasport', 'dozvil', 'kartka', 'posvidchennya'],
+  ru: ['dokument', 'spravka', 'svidetelstvo', 'forma', 'blanк', 'pasport', 'razresheniye', 'udostovereniye'],
+  be: ['dakument', 'davedka', 'forma', 'paspart', 'dazvol', 'kartka'],
+
+  // Baltic
+  lt: ['dokumentas', 'pazymejimas', 'liudijimas', 'forma', 'pasas', 'leidimas', 'kortele'],
+  lv: ['dokuments', 'aplieciba', 'izziņa', 'veidlapa', 'pase', 'atlauja', 'karte'],
+  et: ['dokument', 'toend', 'tunnistus', 'vorm', 'pass', 'luba', 'kaart', 'isikutunnistus'],
+
+  // Greek & Cypriot
+  el: ['engrafo', 'pistopoiitiko', 'vivliario', 'diabatirio', 'adeia', 'karta', 'taytotita'],
+
+  // Turkish
+  tr: ['belge', 'sertifika', 'form', 'pasaport', 'kimlik', 'izin', 'kart', 'ehliyet'],
+
+  // Middle Eastern
+  ar: ['wathiqa', 'shahada', 'istimara', 'jawaz', 'tasrih', 'bitaqa', 'rukhsa'],
+  he: ['mishmach', 'teuda', 'tofes', 'darkon', 'ishur', 'kartis', 'rishion'],
+  fa: ['sanad', 'gavahiname', 'form', 'gozarname', 'mojavez', 'kart', 'shenasname'],
+
+  // South Asian
+  hi: ['dastavez', 'praman patra', 'form', 'passport', 'anumati', 'card', 'pehchan patra'],
+  bn: ['document', 'proman potro', 'form', 'passport', 'onumoti', 'card'],
+  ta: ['aathaaram', 'saandru', 'padivarum', 'passport', 'anumathi', 'card'],
+  ur: ['dastavez', 'certificate', 'form', 'passport', 'ijazat', 'card', 'shanakht'],
+  mr: ['kagadpatra', 'praman patra', 'form', 'passport', 'parvana', 'card'],
+
+  // Southeast Asian
+  vi: ['giay to', 'chung chi', 'mau don', 'ho chieu', 'giay phep', 'the', 'cmnd'],
+  th: ['ekkasan', 'bai rap rong', 'baeb form', 'nangsue doen thang', 'bai anuyat', 'bat'],
+  id: ['dokumen', 'sertifikat', 'formulir', 'paspor', 'izin', 'kartu', 'ktp', 'surat'],
+  ms: ['dokumen', 'sijil', 'borang', 'pasport', 'permit', 'kad', 'lesen'],
+  tl: ['dokumento', 'sertipiko', 'porma', 'pasaporte', 'pahintulot', 'kard', 'lisensya'],
+
+  // East Asian
+  zh: ['wenjian', 'zhengming', 'biaoge', 'huzhao', 'xukezheng', 'ka', 'shenfenzheng'],
+  ja: ['shorui', 'shomeisho', 'yoshiki', 'pasupoto', 'kyoka', 'kaado', 'menkyo'],
+  ko: ['seoryu', 'jeungmyeong', 'yangshik', 'yeokwon', 'heoga', 'kadeu', 'myeonheo'],
+
+  // African
+  sw: ['hati', 'cheti', 'fomu', 'pasipoti', 'kibali', 'kadi', 'kitambulisho'],
+  am: ['senedi', 'mistir', 'form', 'passport', 'fitad', 'kardi'],
+  zu: ['uxhwebo', 'isitifiketi', 'ifomu', 'iphasipoti', 'imvume', 'ikhadi'],
+
+  // Other
+  ga: ['doicimead', 'deimhniu', 'foirm', 'pas', 'cead', 'carta'],
+  cy: ['dogfen', 'tystysgrif', 'ffurflen', 'pasbort', 'trwydded', 'cerdyn'],
+  mt: ['dokument', 'certifikat', 'formola', 'passaport', 'permess', 'karta'],
+  sq: ['dokument', 'certifikate', 'formular', 'pasaporte', 'leje', 'karte'],
+  mk: ['dokument', 'uverenie', 'obrazec', 'pasos', 'dozvola', 'karticka', 'licna karta'],
+  ka: ['dokumenti', 'mowmoba', 'forma', 'pasporti', 'nebartkva', 'barati'],
+  hy: ['pastat', 'vkayakan', 'dzev', 'andznagir', 'toghardagir', 'qart'],
+  az: ['senend', 'seriyifikat', 'forma', 'pasport', 'icaze', 'vesiqe', 'kart'],
+  kk: ['kuzhat', 'kualik', 'nysan', 'kusik', 'ruksat', 'karta'],
+  uz: ['hujjat', 'guvohnoma', 'shakl', 'pasport', 'ruxsatnoma', 'karta'],
 };
 
 /**
- * Timeline-related keywords by language
+ * Timeline-related keywords by language (40+ languages globally)
  */
 const TIMELINE_KEYWORDS: Record<string, string[]> = {
-  en: ['day', 'week', 'month', 'working day', 'business day', 'processing time'],
-  es: ['dia', 'semana', 'mes', 'dia habil', 'plazo', 'tiempo de tramitacion'],
-  pt: ['dia', 'semana', 'mes', 'dia util', 'prazo', 'tempo de processamento'],
-  de: ['tag', 'woche', 'monat', 'werktag', 'arbeitstag', 'bearbeitungszeit'],
-  fr: ['jour', 'semaine', 'mois', 'jour ouvrable', 'delai', 'temps de traitement'],
-  it: ['giorno', 'settimana', 'mese', 'giorno lavorativo', 'termine', 'tempo di elaborazione'],
-  nl: ['dag', 'week', 'maand', 'werkdag', 'termijn', 'verwerkingstijd'],
+  // Western European
+  en: ['day', 'week', 'month', 'working day', 'business day', 'processing time', 'duration', 'deadline'],
+  es: ['dia', 'semana', 'mes', 'dia habil', 'plazo', 'tiempo de tramitacion', 'duracion', 'fecha limite'],
+  pt: ['dia', 'semana', 'mes', 'dia util', 'prazo', 'tempo de processamento', 'duracao', 'data limite'],
+  de: ['tag', 'woche', 'monat', 'werktag', 'arbeitstag', 'bearbeitungszeit', 'frist', 'dauer'],
+  fr: ['jour', 'semaine', 'mois', 'jour ouvrable', 'delai', 'temps de traitement', 'duree', 'echeance'],
+  it: ['giorno', 'settimana', 'mese', 'giorno lavorativo', 'termine', 'tempo di elaborazione', 'durata', 'scadenza'],
+  nl: ['dag', 'week', 'maand', 'werkdag', 'termijn', 'verwerkingstijd', 'duur', 'deadline'],
+
+  // Nordic
+  sv: ['dag', 'vecka', 'manad', 'arbetsdag', 'handlaggningstid', 'tidsfrist', 'varaktighet'],
+  no: ['dag', 'uke', 'maned', 'virkedag', 'behandlingstid', 'frist', 'varighet'],
+  da: ['dag', 'uge', 'maned', 'arbejdsdag', 'behandlingstid', 'frist', 'varighed'],
+  fi: ['paiva', 'viikko', 'kuukausi', 'arkipaiva', 'kasittelyaika', 'maara aika', 'kesto'],
+  is: ['dagur', 'vika', 'manudur', 'virkidagur', 'afgreidslu tid', 'frestur'],
+
+  // Eastern European
+  pl: ['dzien', 'tydzien', 'miesiac', 'dzien roboczy', 'czas przetwarzania', 'termin', 'okres'],
+  cs: ['den', 'tyden', 'mesic', 'pracovni den', 'doba zpracovani', 'lhuta', 'termin'],
+  sk: ['den', 'tyzden', 'mesiac', 'pracovny den', 'cas spracovania', 'lehota', 'termin'],
+  hu: ['nap', 'het', 'honap', 'munkanap', 'feldolgozasi ido', 'hatarido', 'idotartam'],
+  ro: ['zi', 'saptamana', 'luna', 'zi lucratoare', 'timp de procesare', 'termen', 'durata'],
+  bg: ['den', 'sedmitsa', 'mesets', 'raboten den', 'vreme za obrabotka', 'srok'],
+  hr: ['dan', 'tjedan', 'mjesec', 'radni dan', 'vrijeme obrade', 'rok', 'trajanje'],
+  sl: ['dan', 'teden', 'mesec', 'delovni dan', 'cas obdelave', 'rok', 'trajanje'],
+  sr: ['dan', 'nedelja', 'mesec', 'radni dan', 'vreme obrade', 'rok', 'trajanje'],
+  uk: ['den', 'tyzhden', 'misyats', 'robochiy den', 'chas obrobky', 'termin', 'strok'],
+  ru: ['den', 'nedelya', 'mesyats', 'rabochiy den', 'vremya obrabotki', 'srok', 'period'],
+  be: ['dzen', 'tydzen', 'mesyats', 'pracouny dzen', 'termin', 'strok'],
+
+  // Baltic
+  lt: ['diena', 'savaite', 'menuo', 'darbo diena', 'apdorojimo laikas', 'terminas', 'trukme'],
+  lv: ['diena', 'nedela', 'menesis', 'darba diena', 'apstrades laiks', 'termins', 'ilgums'],
+  et: ['paev', 'nadal', 'kuu', 'toopaev', 'menetlusaeg', 'tahtaeg', 'kestus'],
+
+  // Greek & Cypriot
+  el: ['mera', 'evdomada', 'minas', 'ergasimi mera', 'chronos epexergasias', 'prothesmia'],
+
+  // Turkish
+  tr: ['gun', 'hafta', 'ay', 'is gunu', 'islem suresi', 'sure', 'vade'],
+
+  // Middle Eastern
+  ar: ['yawm', 'usbu', 'shahr', 'yawm amal', 'waqt almualaja', 'muda', 'ajal'],
+  he: ['yom', 'shavua', 'chodesh', 'yom avoda', 'zman tipul', 'moed acharon'],
+  fa: ['ruz', 'hafte', 'mah', 'ruz kari', 'zaman pardazesh', 'mohlet'],
+
+  // South Asian
+  hi: ['din', 'hafta', 'mahina', 'karyavasar', 'sansadhan samay', 'avadhis', 'samay seema'],
+  bn: ['din', 'soptaho', 'mas', 'kormo dibos', 'prkriya somoy', 'somoy seema'],
+  ta: ['naal', 'varam', 'matham', 'velai naal', 'seyal paduthum neram', 'kaalakettu'],
+  ur: ['din', 'hafta', 'mahina', 'kaam ka din', 'karwai ka waqt', 'mayyad'],
+  mr: ['divas', 'aathavada', 'mahina', 'karyakari divas', 'prakriya vel', 'muddat'],
+
+  // Southeast Asian
+  vi: ['ngay', 'tuan', 'thang', 'ngay lam viec', 'thoi gian xu ly', 'thoi han', 'ky han'],
+  th: ['wan', 'sapda', 'duean', 'wan thamngaan', 'rawang welaa', 'kaamnot'],
+  id: ['hari', 'minggu', 'bulan', 'hari kerja', 'waktu pemrosesan', 'batas waktu', 'durasi'],
+  ms: ['hari', 'minggu', 'bulan', 'hari bekerja', 'masa pemprosesan', 'tarikh akhir', 'tempoh'],
+  tl: ['araw', 'linggo', 'buwan', 'araw ng trabaho', 'oras ng pagproseso', 'huling araw'],
+
+  // East Asian
+  zh: ['tian', 'zhou', 'yue', 'gongzuori', 'chuli shijian', 'qixian', 'shiqi'],
+  ja: ['nichi', 'shuu', 'getsu', 'eigyobi', 'shori jikan', 'kigen', 'kikan'],
+  ko: ['il', 'ju', 'wol', 'yeongeobil', 'cheori sigan', 'gihan', 'gigan'],
+
+  // African
+  sw: ['siku', 'wiki', 'mwezi', 'siku ya kazi', 'muda wa usindikaji', 'ukomo wa muda'],
+  am: ['ken', 'samont', 'wer', 'yesra ken', 'yemiserat gize', 'yegize geben'],
+  zu: ['usuku', 'iviki', 'inyanga', 'usuku lomsebenzi', 'isikhathi sokusebenza'],
+
+  // Other
+  ga: ['la', 'seachtain', 'mi', 'la oibre', 'am proiseala', 'spriocdhat'],
+  cy: ['diwrnod', 'wythnos', 'mis', 'diwrnod gwaith', 'amser prosesu', 'dyddiad cau'],
+  mt: ['jum', 'gimgha', 'xahar', 'jum tax-xoghol', 'hin tal-ipprocessar', 'skadenza'],
+  sq: ['dite', 'jave', 'muaj', 'dite pune', 'kohe perpunimi', 'afat', 'kohezgjatje'],
+  mk: ['den', 'nedela', 'mesec', 'raboten den', 'vreme za obrabotka', 'rok'],
+  ka: ['dghe', 'kvira', 'tve', 'samusao dghe', 'damusha vebis dro', 'vada'],
+  hy: ['or', 'shabat', 'amis', 'ashxatanqayin or', 'mshakman jamanak', 'zhamket'],
+  az: ['gun', 'hefte', 'ay', 'is gunu', 'emali muddet', 'son muddet'],
+  kk: ['kun', 'apta', 'ay', 'zhuma kuny', 'ondeu uaqyt', 'merzim'],
+  uz: ['kun', 'hafta', 'oy', 'ish kuni', 'qayta ishlash vaqti', 'muddat'],
 };
 
 /**
- * Requirement indicators by language
+ * Requirement indicators by language (40+ languages globally)
  */
 const REQUIREMENT_INDICATORS: Record<string, { required: string[]; optional: string[] }> = {
+  // Western European
   en: {
-    required: ['must', 'required', 'mandatory', 'necessary', 'need', 'shall'],
-    optional: ['may', 'optional', 'if applicable', 'recommended', 'can'],
+    required: ['must', 'required', 'mandatory', 'necessary', 'need', 'shall', 'essential', 'compulsory'],
+    optional: ['may', 'optional', 'if applicable', 'recommended', 'can', 'preferred', 'suggested'],
   },
   es: {
-    required: ['debe', 'requerido', 'obligatorio', 'necesario', 'exigido'],
-    optional: ['puede', 'opcional', 'si aplica', 'recomendado', 'voluntario'],
+    required: ['debe', 'requerido', 'obligatorio', 'necesario', 'exigido', 'imprescindible'],
+    optional: ['puede', 'opcional', 'si aplica', 'recomendado', 'voluntario', 'sugerido'],
   },
   pt: {
-    required: ['deve', 'obrigatorio', 'necessario', 'exigido', 'requerido'],
-    optional: ['pode', 'opcional', 'se aplicavel', 'recomendado', 'facultativo'],
+    required: ['deve', 'obrigatorio', 'necessario', 'exigido', 'requerido', 'indispensavel'],
+    optional: ['pode', 'opcional', 'se aplicavel', 'recomendado', 'facultativo', 'sugerido'],
   },
   de: {
-    required: ['muss', 'erforderlich', 'pflicht', 'notwendig', 'obligatorisch'],
-    optional: ['kann', 'optional', 'freiwillig', 'empfohlen', 'wahlweise'],
+    required: ['muss', 'erforderlich', 'pflicht', 'notwendig', 'obligatorisch', 'zwingend'],
+    optional: ['kann', 'optional', 'freiwillig', 'empfohlen', 'wahlweise', 'falls zutreffend'],
   },
   fr: {
-    required: ['doit', 'requis', 'obligatoire', 'necessaire', 'exige'],
-    optional: ['peut', 'optionnel', 'facultatif', 'recommande', 'volontaire'],
+    required: ['doit', 'requis', 'obligatoire', 'necessaire', 'exige', 'indispensable'],
+    optional: ['peut', 'optionnel', 'facultatif', 'recommande', 'volontaire', 'si applicable'],
   },
   it: {
-    required: ['deve', 'richiesto', 'obbligatorio', 'necessario', 'obbligatoriale'],
-    optional: ['puo', 'facoltativo', 'opzionale', 'raccomandato', 'volontario'],
+    required: ['deve', 'richiesto', 'obbligatorio', 'necessario', 'indispensabile'],
+    optional: ['puo', 'facoltativo', 'opzionale', 'raccomandato', 'volontario', 'consigliato'],
   },
   nl: {
-    required: ['moet', 'vereist', 'verplicht', 'noodzakelijk', 'nodig'],
+    required: ['moet', 'vereist', 'verplicht', 'noodzakelijk', 'nodig', 'essentieel'],
     optional: ['kan', 'optioneel', 'vrijwillig', 'aanbevolen', 'indien van toepassing'],
+  },
+
+  // Nordic
+  sv: {
+    required: ['maste', 'kravs', 'obligatorisk', 'nodvandig', 'pabjuden'],
+    optional: ['kan', 'valfri', 'frivillig', 'rekommenderad', 'om tillampligt'],
+  },
+  no: {
+    required: ['ma', 'kreves', 'obligatorisk', 'nodvendig', 'pakrevd'],
+    optional: ['kan', 'valgfri', 'frivillig', 'anbefalt', 'hvis aktuelt'],
+  },
+  da: {
+    required: ['skal', 'kraeves', 'obligatorisk', 'nodvendig', 'pakraevet'],
+    optional: ['kan', 'valgfri', 'frivillig', 'anbefalet', 'hvis relevant'],
+  },
+  fi: {
+    required: ['pitaa', 'vaaditaan', 'pakollinen', 'valttamaton', 'tarvitaan'],
+    optional: ['voi', 'valinnainen', 'vapaaehtoinen', 'suositeltava', 'jos sovellettavissa'],
+  },
+  is: {
+    required: ['verdur', 'krafa', 'skyldubundinn', 'naudsynlegur'],
+    optional: ['ma', 'valfrjalst', 'ralagt', 'ef vid a'],
+  },
+
+  // Eastern European
+  pl: {
+    required: ['musi', 'wymagane', 'obowiazkowy', 'konieczny', 'niezbedny'],
+    optional: ['moze', 'opcjonalny', 'dobrowolny', 'zalecany', 'jesli dotyczy'],
+  },
+  cs: {
+    required: ['musi', 'pozadovano', 'povinny', 'nutny', 'nezbytny'],
+    optional: ['muze', 'volitelny', 'dobrovolny', 'doporuceny', 'pokud se vztahuje'],
+  },
+  sk: {
+    required: ['musi', 'pozadovane', 'povinny', 'nutny', 'nevyhnutny'],
+    optional: ['moze', 'volitelny', 'dobrovolny', 'odporucany', 'ak sa vztahuje'],
+  },
+  hu: {
+    required: ['kell', 'szukseges', 'kotelezo', 'elengedhetetlen', 'megkovetelt'],
+    optional: ['lehet', 'valaszthato', 'onkentes', 'ajanlott', 'ha alkalmazhato'],
+  },
+  ro: {
+    required: ['trebuie', 'obligatoriu', 'necesar', 'cerut', 'indispensabil'],
+    optional: ['poate', 'optional', 'voluntar', 'recomandat', 'daca este cazul'],
+  },
+  bg: {
+    required: ['tryabva', 'zadulzhitelno', 'neobhodimo', 'iziskvano'],
+    optional: ['mozhe', 'po izbor', 'dobrovolno', 'preporuchano'],
+  },
+  hr: {
+    required: ['mora', 'obavezno', 'potrebno', 'neophodno', 'zahtijevano'],
+    optional: ['moze', 'neobavezno', 'dobrovoljno', 'preporuceno', 'ako je primjenjivo'],
+  },
+  sl: {
+    required: ['mora', 'obvezno', 'potrebno', 'nujno', 'zahtevano'],
+    optional: ['lahko', 'neobvezno', 'prostovoljno', 'priporoceno', 'ce je ustrezno'],
+  },
+  sr: {
+    required: ['mora', 'obavezno', 'neophodno', 'potrebno', 'zahtevano'],
+    optional: ['moze', 'opciono', 'dobrovoljno', 'preporuceno', 'ako je primenljivo'],
+  },
+  uk: {
+    required: ['povynen', 'obovyazkovo', 'neobkhidno', 'vymagayetsya'],
+    optional: ['mozhe', 'neobyazkovo', 'dobrovil\'no', 'rekomendovano'],
+  },
+  ru: {
+    required: ['dolzhen', 'obyazatelno', 'neobhodimo', 'trebuetsya'],
+    optional: ['mozhet', 'neobyzatelno', 'dobrovolno', 'rekomendovano'],
+  },
+  be: {
+    required: ['pavinen', 'abyazkovа', 'neabkhodna', 'patrabuyetsа'],
+    optional: ['mozhа', 'neabavyazkova', 'dabravol\'na', 'rekamendavana'],
+  },
+
+  // Baltic
+  lt: {
+    required: ['turi', 'privaloma', 'butina', 'reikalinga'],
+    optional: ['gali', 'neprivaloma', 'savanoriska', 'rekomenduojama'],
+  },
+  lv: {
+    required: ['jabut', 'obligats', 'nepieciesams', 'prasits'],
+    optional: ['var', 'neobligats', 'brivpratigs', 'ieteicams'],
+  },
+  et: {
+    required: ['peab', 'noutak', 'kohustuslik', 'vajalik'],
+    optional: ['voib', 'valikuline', 'vabatahtlik', 'soovitatav'],
+  },
+
+  // Greek
+  el: {
+    required: ['prepei', 'apaiteitai', 'ypochreotikos', 'anagkaios'],
+    optional: ['mporei', 'proairetikos', 'ethelontikos', 'synistomenos'],
+  },
+
+  // Turkish
+  tr: {
+    required: ['gerekli', 'zorunlu', 'sart', 'mecburi', 'lazim'],
+    optional: ['olabilir', 'istege bagli', 'gonullu', 'tavsiye edilen'],
+  },
+
+  // Middle Eastern
+  ar: {
+    required: ['yajib', 'matlub', 'ilzami', 'daruri', 'lazim'],
+    optional: ['yumkin', 'ikhtiyari', 'tatawui', 'muqtarah'],
+  },
+  he: {
+    required: ['hayav', 'darush', 'hova', 'mehuyav', 'nahuts'],
+    optional: ['yakhol', 'rishut', 'hitnadvut', 'mumlats'],
+  },
+  fa: {
+    required: ['bayad', 'lazem', 'elzami', 'zaroori'],
+    optional: ['mitavanad', 'ekhtiyari', 'pishnahadi', 'tavsieh shode'],
+  },
+
+  // South Asian
+  hi: {
+    required: ['chahiye', 'avashyak', 'anivarya', 'jaruri', 'zaruri'],
+    optional: ['sakta', 'vaikalpik', 'svaichchik', 'anushansit'],
+  },
+  bn: {
+    required: ['chai', 'proyojon', 'baddhotamulok', 'dorkar'],
+    optional: ['pare', 'boikalpik', 'swecchay', 'poramorsho'],
+  },
+  ta: {
+    required: ['vendum', 'thevaiyaana', 'kattaayam'],
+    optional: ['seyyalam', 'virumbiyin', 'parihandhanappadum'],
+  },
+  ur: {
+    required: ['chahiye', 'lazmi', 'zaruri', 'wajib'],
+    optional: ['sakta', 'ikhtiari', 'marzi', 'tajweez'],
+  },
+  mr: {
+    required: ['pahije', 'avashyak', 'bandhankarak', 'garajecha'],
+    optional: ['shakto', 'vaikalpik', 'svaichchik', 'shipharis'],
+  },
+
+  // Southeast Asian
+  vi: {
+    required: ['phai', 'bat buoc', 'can thiet', 'yeu cau'],
+    optional: ['co the', 'khong bat buoc', 'tu nguyen', 'khuyen nghi'],
+  },
+  th: {
+    required: ['tong', 'champen', 'bangkhap', 'chamloen'],
+    optional: ['samaat', 'mai bangkhap', 'samak chai', 'naenam'],
+  },
+  id: {
+    required: ['harus', 'wajib', 'diperlukan', 'dibutuhkan'],
+    optional: ['dapat', 'opsional', 'sukarela', 'disarankan', 'jika berlaku'],
+  },
+  ms: {
+    required: ['mesti', 'wajib', 'diperlukan', 'perlu'],
+    optional: ['boleh', 'pilihan', 'sukarela', 'disyorkan', 'jika berkenaan'],
+  },
+  tl: {
+    required: ['dapat', 'kailangan', 'kinakailangan', 'obligado'],
+    optional: ['maaari', 'opsyonal', 'boluntaryo', 'inirerekomenda'],
+  },
+
+  // East Asian
+  zh: {
+    required: ['bixu', 'yaoqiu', 'qiangzhi', 'biyao'],
+    optional: ['keyi', 'kexuan', 'ziyuan', 'jianyi'],
+  },
+  ja: {
+    required: ['hitsuyou', 'gimu', 'hissu', 'youkyuu'],
+    optional: ['kanousei', 'ninni', 'suisen', 'osusume'],
+  },
+  ko: {
+    required: ['pilyoham', 'pilsu', 'uimu', 'yogu'],
+    optional: ['hal su', 'seontaek', 'jayul', 'gwongo'],
+  },
+
+  // African
+  sw: {
+    required: ['lazima', 'inahitajika', 'ya lazima', 'sharti'],
+    optional: ['inaweza', 'si lazima', 'hiari', 'inapendekezwa'],
+  },
+  am: {
+    required: ['alegbet', 'yastselegal', 'gebari', 'asfelagi'],
+    optional: ['yichalal', 'mircha', 'befelagot', 'yemitaseb'],
+  },
+  zu: {
+    required: ['kufanele', 'kudingeka', 'kuphoqelekile'],
+    optional: ['kungenzeka', 'okukhethwa', 'ngokuzithandela', 'okunconyiwe'],
+  },
+
+  // Other
+  ga: {
+    required: ['caithfidh', 'riachtanach', 'eigeantach', 'gearrtha'],
+    optional: ['is feidir', 'roghnach', 'deonach', 'molta'],
+  },
+  cy: {
+    required: ['rhaid', 'gofynnol', 'angenrheidiol', 'gorfodol'],
+    optional: ['gall', 'dewisol', 'gwirfoddol', 'argymhellir'],
+  },
+  mt: {
+    required: ['ghandu', 'mehtieg', 'obbligatorju', 'necessarju'],
+    optional: ['jista', 'mhux obbligatorju', 'volontarju', 'rrakkomandat'],
+  },
+  sq: {
+    required: ['duhet', 'e detyrushme', 'e nevojshme', 'e kerkuar'],
+    optional: ['mund', 'opsionale', 'vullnetare', 'e rekomanduar'],
+  },
+  mk: {
+    required: ['mora', 'zadolzhitelno', 'potrebno', 'neophodno'],
+    optional: ['moze', 'opcionalno', 'dobrovolno', 'preporachano'],
+  },
+  ka: {
+    required: ['unda', 'savaldebulo', 'auzlebeli', 'motkhovnili'],
+    optional: ['sheudzlia', 'nebayoflobitiа', 'nebayrnebit', 'rekomendebuli'],
+  },
+  hy: {
+    required: ['piti', 'pahanjvum', 'partadir', 'anhrzhesht'],
+    optional: ['karogh', 'yntranveli', 'kamavorakan', 'khorhrdatrvac'],
+  },
+  az: {
+    required: ['lazimdir', 'teleb olunur', 'mecburidir', 'zeruridir'],
+    optional: ['ola biler', 'isteye bagli', 'konullu', 'tovsiye olunur'],
+  },
+  kk: {
+    required: ['kerek', 'miндеттi', 'қажеттi', 'talap etiledi'],
+    optional: ['mumkin', 'таңдау boiynsha', 'erikti', 'usuniladi'],
+  },
+  uz: {
+    required: ['kerak', 'majburiy', 'zarur', 'talab qilinadi'],
+    optional: ['mumkin', 'ixtiyoriy', 'ko\'ngilli', 'tavsiya etiladi'],
   },
 };
 
@@ -872,15 +1321,102 @@ export class StructuredGovDataExtractor {
   private extractForms(text: string, language: string): FormInfo[] {
     const forms: FormInfo[] = [];
 
-    // Form patterns for different countries
+    // Form patterns for different countries (global coverage)
     const formPatterns = [
+      // Western Europe
       // Spain: Modelo 790, formulario 030
-      /(?:model[oa]?|formulario?)\s*(\d+)/gi,
-      // Germany: Formular, Antrag
-      /(?:formular|antrag)\s*[:\s]*([A-Z0-9-]+)/gi,
-      // Portugal: Modelo, Formulario
-      /(?:modelo|formulario)\s*(\d+[A-Z]?)/gi,
-      // Generic: Form followed by number/code
+      /(?:model[oa]?|formulario?)\s*(\d+[A-Z]?)/gi,
+      // Germany: Formular, Antrag, Vordruck
+      /(?:formular|antrag|vordruck)\s*[:\s]*([A-Z0-9-]+)/gi,
+      // France: Cerfa, Formulaire
+      /(?:cerfa|formulaire)\s*[:\s]*n?[o°]?\s*(\d+[\*]?\d*)/gi,
+      // Italy: Modulo, Modello
+      /(?:modul[oi]|modello)\s*[:\s]*([A-Z0-9-]+)/gi,
+      // Netherlands: Formulier
+      /(?:formulier)\s*[:\s]*([A-Z0-9-]+)/gi,
+
+      // Nordic
+      // Sweden: Blankett
+      /(?:blankett)\s*[:\s]*([A-Z0-9-]+)/gi,
+      // Norway/Denmark: Skjema
+      /(?:skjema|skema)\s*[:\s]*([A-Z0-9-]+)/gi,
+      // Finland: Lomake
+      /(?:lomake)\s*[:\s]*([A-Z0-9-]+)/gi,
+
+      // Eastern Europe
+      // Poland: Formularz, Wniosek
+      /(?:formularz|wniosek)\s*[:\s]*([A-Z0-9-]+)/gi,
+      // Czech/Slovak: Formulár, Žádost
+      /(?:formular|zadost|ziadost)\s*[:\s]*([A-Z0-9-]+)/gi,
+      // Hungary: Űrlap, Nyomtatvány
+      /(?:urlap|nyomtatvany)\s*[:\s]*([A-Z0-9-]+)/gi,
+      // Romania: Formular, Cerere
+      /(?:cerere)\s*[:\s]*([A-Z0-9-]+)/gi,
+      // Russia/Ukraine: Форма, Заявка (transliterated)
+      /(?:forma|zayavka|zayava|blanк)\s*[:\s]*([A-Z0-9-]+)/gi,
+
+      // Baltic
+      // Lithuania: Forma, Prašymas
+      /(?:prasymas)\s*[:\s]*([A-Z0-9-]+)/gi,
+      // Latvia: Veidlapa, Iesniegums
+      /(?:veidlapa|iesniegums)\s*[:\s]*([A-Z0-9-]+)/gi,
+      // Estonia: Vorm, Avaldus
+      /(?:vorm|avaldus)\s*[:\s]*([A-Z0-9-]+)/gi,
+
+      // Greek
+      /(?:entypo|aitisi)\s*[:\s]*([A-Z0-9-]+)/gi,
+
+      // Turkish
+      /(?:form|basvuru|dilekce)\s*[:\s]*([A-Z0-9-]+)/gi,
+
+      // Middle East
+      // Arabic (transliterated): Istimara, Namodhaj
+      /(?:istimara|namodhaj|form)\s*[:\s]*([A-Z0-9-]+)/gi,
+      // Hebrew (transliterated): Tofes
+      /(?:tofes|tavnit)\s*[:\s]*([A-Z0-9-]+)/gi,
+
+      // South Asia
+      // India: Form (English commonly used)
+      /(?:form|aavedan|prarthana)\s*[:\s]*([A-Z0-9-]+)/gi,
+
+      // Southeast Asia
+      // Indonesia: Formulir
+      /(?:formulir|surat)\s*[:\s]*([A-Z0-9-]+)/gi,
+      // Malaysia: Borang
+      /(?:borang)\s*[:\s]*([A-Z0-9-]+)/gi,
+      // Vietnam: Mẫu đơn (transliterated)
+      /(?:mau don|mau)\s*[:\s]*([A-Z0-9-]+)/gi,
+      // Philippines: Porma
+      /(?:porma)\s*[:\s]*([A-Z0-9-]+)/gi,
+
+      // East Asia
+      // China (transliterated): Biaoge
+      /(?:biaoge)\s*[:\s]*([A-Z0-9-]+)/gi,
+      // Japan (transliterated): Yoshiki
+      /(?:yoshiki)\s*[:\s]*([A-Z0-9-]+)/gi,
+      // Korea (transliterated): Yangshik
+      /(?:yangshik)\s*[:\s]*([A-Z0-9-]+)/gi,
+
+      // Africa
+      // Swahili: Fomu
+      /(?:fomu)\s*[:\s]*([A-Z0-9-]+)/gi,
+
+      // Other
+      // Irish: Foirm
+      /(?:foirm)\s*[:\s]*([A-Z0-9-]+)/gi,
+      // Welsh: Ffurflen
+      /(?:ffurflen)\s*[:\s]*([A-Z0-9-]+)/gi,
+      // Maltese: Formola
+      /(?:formola)\s*[:\s]*([A-Z0-9-]+)/gi,
+      // Albanian: Formular
+      /(?:kerkese)\s*[:\s]*([A-Z0-9-]+)/gi,
+
+      // USA/UK/Canada/Australia: Common patterns
+      /(?:form)\s+([A-Z]{1,2}[\s-]?\d+[A-Z]?)/gi, // Form I-94, Form W-2
+      /(?:schedule)\s+([A-Z0-9]+)/gi, // Schedule K-1
+      /(?:application)\s+(?:form\s+)?([A-Z0-9-]+)/gi,
+
+      // Generic fallback: Form followed by number/code
       /form\s+([A-Z0-9-]+)/gi,
     ];
 
@@ -998,15 +1534,89 @@ export class StructuredGovDataExtractor {
     lowerText: string,
     language: string
   ): AppointmentInfo | undefined {
-    // Appointment keywords by language
+    // Appointment keywords by language (40+ languages globally)
     const appointmentKeywords: Record<string, string[]> = {
-      en: ['appointment', 'booking', 'schedule', 'reserve'],
-      es: ['cita', 'cita previa', 'reserva', 'turno'],
-      pt: ['agendamento', 'marcacao', 'reserva'],
-      de: ['termin', 'terminvereinbarung', 'buchung'],
-      fr: ['rendez-vous', 'rdv', 'reservation'],
-      it: ['appuntamento', 'prenotazione'],
-      nl: ['afspraak', 'reservering'],
+      // Western European
+      en: ['appointment', 'booking', 'schedule', 'reserve', 'book online'],
+      es: ['cita', 'cita previa', 'reserva', 'turno', 'pedir cita'],
+      pt: ['agendamento', 'marcacao', 'reserva', 'marcar atendimento'],
+      de: ['termin', 'terminvereinbarung', 'buchung', 'termin buchen', 'termin vereinbaren'],
+      fr: ['rendez-vous', 'rdv', 'reservation', 'prendre rendez-vous'],
+      it: ['appuntamento', 'prenotazione', 'prenota', 'fissare appuntamento'],
+      nl: ['afspraak', 'reservering', 'afspraak maken', 'boeking'],
+
+      // Nordic
+      sv: ['bokning', 'boka tid', 'tidsbokning', 'besokstid'],
+      no: ['timebestilling', 'bestill time', 'avtale'],
+      da: ['tidsbestilling', 'book tid', 'aftale'],
+      fi: ['ajanvaraus', 'varaa aika', 'tapaaminen'],
+      is: ['tidapontun', 'boka tid'],
+
+      // Eastern European
+      pl: ['wizyta', 'rezerwacja', 'umow wizyte', 'zarezerwuj termin'],
+      cs: ['objednat', 'rezervace', 'termin', 'schuze'],
+      sk: ['objednat sa', 'rezervacia', 'termin', 'stretnutie'],
+      hu: ['idopont foglalas', 'idopont', 'foglalj idopontot'],
+      ro: ['programare', 'rezervare', 'face programare'],
+      bg: ['zapis', 'rezervatsiya', 'sreshta', 'zapishete se'],
+      hr: ['rezervacija', 'dogovor', 'termin', 'naruci se'],
+      sl: ['rezervacija', 'termin', 'narocilo'],
+      sr: ['zakazivanje', 'termin', 'rezervacija'],
+      uk: ['zapys', 'bronuvannya', 'pryznachennya', 'zabroniuvaty'],
+      ru: ['zapis', 'bronirovanie', 'nazhnachit vstrechu', 'zapisatsya'],
+      be: ['zapіs', 'branіravanne', 'sustreach'],
+
+      // Baltic
+      lt: ['registracija', 'rezervacija', 'susitarimas', 'uzsiregistruoti'],
+      lv: ['pieraksts', 'rezervacija', 'pierakstities', 'laika rezervesana'],
+      et: ['broneerimine', 'ajabroneering', 'registreerumine'],
+
+      // Greek
+      el: ['rantevou', 'kratisi', 'prografteite'],
+
+      // Turkish
+      tr: ['randevu', 'rezervasyon', 'randevu al', 'online randevu'],
+
+      // Middle Eastern
+      ar: ['mawid', 'hajz', 'hajz mawid', 'tasjil mawid'],
+      he: ['tor', 'hzmanat tor', 'kviat pgisha', 'zimun'],
+      fa: ['nobat', 'rezerv', 'vaght gereftna'],
+
+      // South Asian
+      hi: ['appointment', 'booking', 'samay nirdharit', 'slot book'],
+      bn: ['appointment', 'somoy dharikaran', 'booking'],
+      ta: ['neramneram', 'booking', 'appointment'],
+      ur: ['mulaqat', 'booking', 'waqt miqrar'],
+      mr: ['bhet', 'booking', 'vel aarakhit'],
+
+      // Southeast Asian
+      vi: ['dat hen', 'dat lich', 'hen', 'cuoc hen'],
+      th: ['nat phop', 'chong', 'booking'],
+      id: ['janji temu', 'reservasi', 'booking', 'buat janji'],
+      ms: ['temujanji', 'tempahan', 'buat temujanji'],
+      tl: ['appointment', 'booking', 'iskedyul'],
+
+      // East Asian
+      zh: ['yuyue', 'yuding', 'booking'],
+      ja: ['yoyaku', 'booking', 'apoint'],
+      ko: ['yeyak', 'booking', 'appointment'],
+
+      // African
+      sw: ['miadi', 'uhifadhi', 'panga miadi'],
+      am: ['qetero', 'booking', 'appointment'],
+      zu: ['ukubhuka', 'isivumelwano'],
+
+      // Other
+      ga: ['coinne', 'cuir in airithe'],
+      cy: ['apwyntiad', 'archebu'],
+      mt: ['appuntament', 'booking'],
+      sq: ['takim', 'rezervim', 'prenotim'],
+      mk: ['termin', 'rezervacija', 'zakazuvanje'],
+      ka: ['chaweris', 'rezervatsia', 'shekhvedris danisnva'],
+      hy: ['zhanaamapet', 'amragrum'],
+      az: ['gorusme', 'rezervasiya', 'randevu'],
+      kk: ['kezdesu', 'brondarj', 'uakyt tagyayndau'],
+      uz: ['uchrashuv', 'bronlash', 'uchrashuv belgilash'],
     };
 
     const keywords = appointmentKeywords[language] || appointmentKeywords.en;
@@ -1028,8 +1638,8 @@ export class StructuredGovDataExtractor {
       keywords.some(ak => appointmentContext.includes(ak))
     );
 
-    // Look for booking URL
-    const urlPattern = /https?:\/\/[^\s<>"{}|\\^`[\]]*(?:cita|termin|appointment|booking|agenda)[^\s<>"{}|\\^`[\]]*/gi;
+    // Look for booking URL (global patterns)
+    const urlPattern = /https?:\/\/[^\s<>"{}|\\^`[\]]*(?:cita|termin|appointment|booking|agenda|rendez-vous|rdv|prenotazione|afspraak|yuyue|yoyaku|randevu|mawid|rezerv|ajanvaraus|tidsbokning)[^\s<>"{}|\\^`[\]]*/gi;
     const urlMatch = urlPattern.exec(text);
     if (urlMatch) {
       appointment.bookingUrl = urlMatch[0];

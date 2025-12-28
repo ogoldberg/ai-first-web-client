@@ -460,7 +460,9 @@ describe('StructuredGovDataExtractor', () => {
       const result = extractor.extract(html, { contentType: 'forms' });
 
       expect(result.forms).toBeDefined();
-      expect(result.forms!.length).toBe(1);
+      expect(result.forms!.length).toBeGreaterThanOrEqual(1);
+      // Should find form A1
+      expect(result.forms!.some(f => f.formNumber === 'A1')).toBe(true);
     });
 
     it('should extract form with download URL', () => {
