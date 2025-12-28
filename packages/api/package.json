@@ -21,7 +21,7 @@
     "@hono/zod-validator": "^0.7.6",
     "@prisma/client": "^6.19.1",
     "hono": "^4.4.0",
-    "llm-browser": "file:../../",
+    "llm-browser": "file:../..",
     "stripe": "^20.1.0",
     "swagger-ui-dist": "^5.31.0"
   },

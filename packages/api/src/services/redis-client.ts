@@ -81,7 +81,9 @@ export function isRedisConfigured(): boolean {
 async function createRedisClient(config: RedisConfig): Promise<Redis | null> {
   try {
     // Dynamic import of ioredis
-    const { default: Redis } = await import('ioredis');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const ioredis = await import('ioredis') as any;
+    const RedisClient = ioredis.default || ioredis;
 
     const options: RedisOptions = {
       lazyConnect: true,
@@ -94,15 +96,15 @@ async function createRedisClient(config: RedisConfig): Promise<Redis | null> {
     let client: Redis;
 
     if (config.url) {
-      client = new Redis(config.url, options);
+      client = new RedisClient(config.url, options) as Redis;
     } else {
-      client = new Redis({
+      client = new RedisClient({
         ...options,
         host: config.host,
         port: config.port,
         password: config.password,
         db: config.db,
-      });
+      }) as Redis;
     }
 
     // Set up event handlers

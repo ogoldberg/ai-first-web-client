@@ -64,7 +64,7 @@ dashboard.get('/overview', async (c) => {
   }
 
   // Get proxy stats if available
-  let proxyStats = null;
+  let proxyStats: { hasProxies: boolean; poolStats: ReturnType<ReturnType<typeof getProxyManager>['getPoolStats']> } | null = null;
   if (hasProxiesConfigured()) {
     try {
       const proxyManager = getProxyManager();

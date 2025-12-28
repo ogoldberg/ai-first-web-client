@@ -198,6 +198,14 @@ export class LLMBrowserClient {
   }
 
   /**
+   * Preview what would happen when browsing a URL without executing
+   */
+  async previewBrowse(url: string, options: SmartBrowseOptions = {}): Promise<import('./types/plan-preview.js').BrowsePreviewResponse> {
+    await this.ensureInitialized();
+    return this.smartBrowser.previewBrowse(url, options);
+  }
+
+  /**
    * Fetch content using tiered rendering (fast path)
    *
    * Tries intelligence tier first (framework extraction, APIs),

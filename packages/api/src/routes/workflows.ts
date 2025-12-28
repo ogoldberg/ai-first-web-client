@@ -69,7 +69,7 @@ const stopRecordingValidator = zValidator(
 const replayWorkflowValidator = zValidator(
   'json',
   z.object({
-    variables: z.record(z.union([z.string(), z.number(), z.boolean()])).optional(),
+    variables: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
   })
 );
 
@@ -257,7 +257,7 @@ workflows.post('/:id/replay', requirePermission('browse'), replayWorkflowValidat
 
     const result = await proceduralMemory.replayWorkflow(
       workflowId,
-      body.variables,
+      body.variables as Record<string, string | number | boolean> | undefined,
       browserClient
     );
 

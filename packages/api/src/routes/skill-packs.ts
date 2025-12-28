@@ -17,7 +17,7 @@ import type {
   SkillImportOptions,
   SkillImportResult,
   SkillVertical,
-} from '../../../src/types/index.js';
+} from '../../../../src/types/index.js';
 
 const app = new Hono();
 

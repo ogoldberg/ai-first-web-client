@@ -29,7 +29,7 @@
 import { Hono } from 'hono';
 import { zValidator } from '@hono/zod-validator';
 import { z } from 'zod';
-import { authMiddleware, requirePermission, optionalAuthMiddleware } from '../middleware/auth.js';
+import { authMiddleware, requirePermission } from '../middleware/auth.js';
 import { rateLimitMiddleware } from '../middleware/rate-limit.js';
 import { getMarketplaceService } from '../../../../src/services/pattern-marketplace.js';
 
@@ -424,7 +424,10 @@ marketplace.post('/patterns/:id/rate', requirePermission('browse'), ratePatternV
 
   try {
     const service = getMarketplaceService();
-    const rating = await service.ratePattern(patternId, tenant.id, body);
+    const rating = await service.ratePattern(patternId, tenant.id, {
+      ...body,
+      rating: body.rating as 1 | 2 | 3 | 4 | 5,
+    });
 
     return c.json(
       {

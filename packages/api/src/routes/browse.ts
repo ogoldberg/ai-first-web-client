@@ -73,6 +73,17 @@ interface FormatOptions {
 
 const browse = new Hono();
 
+/**
+ * Normalize verify options from API request to full VerifyOptions
+ */
+function normalizeVerifyOptions(verify?: { enabled?: boolean; mode?: 'basic' | 'standard' | 'thorough' }): { enabled: boolean; mode: 'basic' | 'standard' | 'thorough' } | undefined {
+  if (!verify) return undefined;
+  return {
+    enabled: verify.enabled ?? true,
+    mode: verify.mode ?? 'basic',
+  };
+}
+
 // Workflow recorder singleton (COMP-009)
 // In production, this would be injected via dependency injection
 let workflowRecorder: WorkflowRecorder | null = null;
@@ -306,7 +317,7 @@ browse.post('/browse', requirePermission('browse'), browseValidator, async (c) =
           scrollToLoad: body.options?.scrollToLoad,
           maxLatencyMs: body.options?.maxLatencyMs,
           maxCostTier: body.options?.maxCostTier,
-          verify: body.options?.verify,
+          verify: normalizeVerifyOptions(body.options?.verify),
           debug: body.options?.debug,
         });
 
@@ -373,7 +384,7 @@ browse.post('/browse', requirePermission('browse'), browseValidator, async (c) =
       scrollToLoad: body.options?.scrollToLoad,
       maxLatencyMs: body.options?.maxLatencyMs,
       maxCostTier: body.options?.maxCostTier,
-      verify: body.options?.verify,
+      verify: normalizeVerifyOptions(body.options?.verify),
       debug: body.options?.debug,
       // TODO: Pass proxy config to browser client when implemented
       // proxy: proxyInfo?.proxy.getPlaywrightProxy(),
@@ -570,7 +581,7 @@ browse.post(
               scrollToLoad: body.options?.scrollToLoad,
               maxLatencyMs: body.options?.maxLatencyMs,
               maxCostTier: body.options?.maxCostTier,
-              verify: body.options?.verify,
+              verify: normalizeVerifyOptions(body.options?.verify),
             });
 
             // Record usage for the tier used
