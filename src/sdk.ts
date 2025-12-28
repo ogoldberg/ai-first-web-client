@@ -711,6 +711,64 @@ export {
   type ValidationWarning,
 } from './core/structured-gov-data-extractor.js';
 
+// =============================================================================
+// APPOINTMENT AVAILABILITY DETECTION (INT-013)
+// =============================================================================
+
+/**
+ * Appointment availability detector for government and service portals.
+ * Detects booking systems, extracts available time slots, and provides
+ * monitoring suggestions for slot openings.
+ *
+ * @example
+ * ```typescript
+ * import {
+ *   detectAppointmentAvailability,
+ *   hasAppointmentSystem,
+ *   getAvailabilityStatus
+ * } from 'llm-browser/sdk';
+ *
+ * // Check if page has appointment system
+ * if (hasAppointmentSystem(html, 'es')) {
+ *   const result = detectAppointmentAvailability(html, {
+ *     language: 'es',
+ *     url: 'https://sede.gob.es/cita-previa'
+ *   });
+ *
+ *   console.log(`Detected: ${result.detected}`);
+ *   console.log(`Availability: ${result.availability}`);
+ *   console.log(`Systems: ${result.systems.map(s => s.name).join(', ')}`);
+ *   console.log(`Slots: ${result.slots.length}`);
+ *
+ *   // Get monitoring suggestions
+ *   for (const suggestion of result.monitoringSuggestions) {
+ *     console.log(`Check every ${suggestion.checkIntervalMinutes} minutes`);
+ *     console.log(`Reason: ${suggestion.reason}`);
+ *   }
+ * }
+ *
+ * // Quick availability check
+ * const status = getAvailabilityStatus(html, 'es');
+ * if (status === 'unavailable') {
+ *   console.log('No slots available - set up monitoring');
+ * }
+ * ```
+ */
+export {
+  AppointmentAvailabilityDetector,
+  createAvailabilityDetector,
+  detectAppointmentAvailability,
+  hasAppointmentSystem,
+  getAvailabilityStatus,
+  type AppointmentSystemType,
+  type SlotAvailability,
+  type TimeSlot,
+  type BookingSystem,
+  type AppointmentAvailabilityResult,
+  type MonitoringSuggestion,
+  type AvailabilityDetectionOptions,
+} from './core/appointment-availability-detector.js';
+
 /**
  * Research topic categories with associated verification presets
  */
