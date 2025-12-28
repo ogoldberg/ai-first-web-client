@@ -1,6 +1,6 @@
 # Unbrowser - Project Status
 
-**Last Updated:** 2025-12-27
+**Last Updated:** 2025-12-28
 **Version:** 0.5.0
 **Current Phase:** Production Readiness (Phase 2)
 **Total Code:** ~20,000 lines TypeScript
@@ -8,9 +8,12 @@
 
 ---
 
-## Recent: MoveAhead Integration (2025-12-27)
+## Recent: MoveAhead Integration (2025-12-28)
 
 Working on MoveAhead.ai integration tasks (INT initiative).
+
+**In Progress:**
+- INT-011 - Language-aware extraction (auto-detect page language, multi-language field mapping)
 
 **Completed:**
 - INT-009 - Create MoveAhead example integration (full example showing HTTP API usage for relocation research pipeline, demos for workflows, skill packs, API discovery)

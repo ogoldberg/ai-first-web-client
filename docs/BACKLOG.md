@@ -923,7 +923,7 @@ These features are designed for MoveAhead but extensible to other government/reg
 | ID | Task | Effort | Status | Notes |
 |----|------|--------|--------|-------|
 | INT-010 | Guided authentication workflow | L | Not Started | User callback for interactive login (MFA, email verification). Step-by-step auth guidance with screenshots. Session capture after successful auth. Extensible to any authenticated portal. |
-| INT-011 | Language-aware extraction | M | Not Started | Auto-detect page language. Language-specific content parsing. Multi-language field mapping (e.g., "Requisitos" = "Requirements"). Extensible to any international content. |
+| INT-011 | Language-aware extraction | M | In Progress | Auto-detect page language. Language-specific content parsing. Multi-language field mapping (e.g., "Requisitos" = "Requirements"). Extensible to any international content. |
 | INT-012 | Structured government data extractor | L | Not Started | Schema for common gov data: fees, requirements, timelines, documents. Auto-extract structured data from unstructured pages. Validation against expected fields. Extensible to any government/regulatory content. |
 | INT-013 | Appointment availability detection | M | Not Started | Detect "cita previa" and similar appointment systems. Check for available slots. Monitor for openings. Extensible to any scheduling/booking systems. |
 | INT-014 | Field-level change tracking | M | Not Started | Track specific field changes (fee increased, deadline moved). Structured diff output (before/after). Severity classification (breaking vs minor). Extensible to any content monitoring. |
