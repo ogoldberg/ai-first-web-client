@@ -685,6 +685,32 @@ export type {
 } from './types/content-change.js';
 export { DEFAULT_CHANGE_PREDICTION_CONFIG } from './types/content-change.js';
 
+// =============================================================================
+// STRUCTURED GOVERNMENT DATA EXTRACTION (INT-012)
+// =============================================================================
+
+export {
+  StructuredGovDataExtractor,
+  createGovDataExtractor,
+  extractGovData,
+  validateGovData,
+  type GovContentType,
+  type MonetaryValue,
+  type TimelineValue,
+  type DocumentRequirement,
+  type EligibilityRequirement,
+  type FeeEntry,
+  type ProcessingStep,
+  type ContactInfo,
+  type AppointmentInfo,
+  type FormInfo,
+  type StructuredGovData,
+  type ExtractionOptions,
+  type ValidationResult,
+  type ValidationError,
+  type ValidationWarning,
+} from './core/structured-gov-data-extractor.js';
+
 /**
  * Research topic categories with associated verification presets
  */
