@@ -490,8 +490,9 @@ export class FieldLevelChangeTracker {
         };
       }
       this.initialized = true;
-    } catch {
-      // Continue without persistence
+    } catch (error) {
+      // Continue without persistence, but log the error for debugging
+      logger.server.warn('Failed to initialize persistent store for FieldLevelChangeTracker. Continuing without persistence.', { error });
       this.initialized = true;
     }
   }
@@ -572,7 +573,9 @@ export class FieldLevelChangeTracker {
 
     // Store in history if URL provided
     if (options.url && changes.length > 0) {
-      this.addToHistory(options.url, result);
+      this.addToHistory(options.url, result).catch(err => {
+        logger.server.error('Failed to add change to history', { error: err, url: options.url });
+      });
     }
 
     return result;
@@ -666,6 +669,8 @@ export class FieldLevelChangeTracker {
           changes,
           language,
           customMappings,
+          ignoreFields,
+          onlyFields,
           trackArrayOrder
         );
       } else if (!this.valuesEqual(oldValue, newValue)) {
@@ -697,44 +702,93 @@ export class FieldLevelChangeTracker {
     changes: FieldChange[],
     language: string,
     customMappings: Record<string, FieldCategory>,
+    ignoreFields: string[],
+    onlyFields: string[] | undefined,
     trackArrayOrder: boolean
   ): void {
-    // For simple values, compare sets
-    if (oldArray.every(v => typeof v !== 'object') && newArray.every(v => typeof v !== 'object')) {
-      const oldSet = new Set(oldArray.map(v => JSON.stringify(v)));
-      const newSet = new Set(newArray.map(v => JSON.stringify(v)));
-
-      // Items removed
-      for (const item of oldArray) {
-        const key_ = JSON.stringify(item);
-        if (!newSet.has(key_)) {
-          const category = this.detectCategory(key, item, language, customMappings);
-          changes.push(this.createChange(
-            `${path}[${oldArray.indexOf(item)}]`,
-            `${key} item`,
-            category,
-            'removed',
-            item,
-            undefined,
-            language
-          ));
+    // For simple values, compare based on trackArrayOrder flag
+    if (oldArray.every(v => !this.isObject(v)) && newArray.every(v => !this.isObject(v))) {
+      if (trackArrayOrder) {
+        // Order-sensitive: compare index by index
+        const maxLen = Math.max(oldArray.length, newArray.length);
+        for (let i = 0; i < maxLen; i++) {
+          const itemPath = `${path}[${i}]`;
+          if (i >= oldArray.length) {
+            // Added
+            const category = this.detectCategory(key, newArray[i], language, customMappings);
+            changes.push(this.createChange(
+              itemPath,
+              `${key}[${i}]`,
+              category,
+              'added',
+              undefined,
+              newArray[i],
+              language
+            ));
+          } else if (i >= newArray.length) {
+            // Removed
+            const category = this.detectCategory(key, oldArray[i], language, customMappings);
+            changes.push(this.createChange(
+              itemPath,
+              `${key}[${i}]`,
+              category,
+              'removed',
+              oldArray[i],
+              undefined,
+              language
+            ));
+          } else if (!this.valuesEqual(oldArray[i], newArray[i])) {
+            // Modified
+            const category = this.detectCategory(key, newArray[i], language, customMappings);
+            const changeType = this.detectChangeType(oldArray[i], newArray[i]);
+            changes.push(this.createChange(
+              itemPath,
+              `${key}[${i}]`,
+              category,
+              changeType,
+              oldArray[i],
+              newArray[i],
+              language
+            ));
+          }
         }
-      }
+      } else {
+        // Order-insensitive: compare sets
+        const oldSet = new Set(oldArray.map(v => JSON.stringify(v)));
+        const newSet = new Set(newArray.map(v => JSON.stringify(v)));
 
-      // Items added
-      for (const item of newArray) {
-        const key_ = JSON.stringify(item);
-        if (!oldSet.has(key_)) {
-          const category = this.detectCategory(key, item, language, customMappings);
-          changes.push(this.createChange(
-            `${path}[${newArray.indexOf(item)}]`,
-            `${key} item`,
-            category,
-            'added',
-            undefined,
-            item,
-            language
-          ));
+        // Items removed
+        for (const item of oldArray) {
+          const key_ = JSON.stringify(item);
+          if (!newSet.has(key_)) {
+            const category = this.detectCategory(key, item, language, customMappings);
+            changes.push(this.createChange(
+              `${path}[${oldArray.indexOf(item)}]`,
+              `${key} item`,
+              category,
+              'removed',
+              item,
+              undefined,
+              language
+            ));
+          }
+        }
+
+        // Items added
+        for (const item of newArray) {
+          const key_ = JSON.stringify(item);
+          if (!oldSet.has(key_)) {
+            const category = this.detectCategory(key, item, language, customMappings);
+            changes.push(this.createChange(
+              `${path}[${newArray.indexOf(item)}]`,
+              `${key} item`,
+              category,
+              'added',
+              undefined,
+              item,
+              language
+            ));
+          }
         }
       }
     } else {
@@ -767,7 +821,7 @@ export class FieldLevelChangeTracker {
             language
           ));
         } else if (this.isObject(oldArray[i]) && this.isObject(newArray[i])) {
-          // Recurse
+          // Recurse with ignoreFields and onlyFields propagated
           this.compareObjects(
             oldArray[i] as Record<string, unknown>,
             newArray[i] as Record<string, unknown>,
@@ -775,8 +829,8 @@ export class FieldLevelChangeTracker {
             changes,
             language,
             customMappings,
-            [],
-            undefined,
+            ignoreFields,
+            onlyFields,
             trackArrayOrder
           );
         } else if (!this.valuesEqual(oldArray[i], newArray[i])) {
@@ -917,23 +971,23 @@ export class FieldLevelChangeTracker {
    * Extract days from a duration string
    */
   private extractDays(text: string): number | null {
-    // Day patterns
+    // Day patterns - match() returns null if no match, so we can use it directly
     const dayPattern = /(\d+)\s*(?:days?|dias?|tage?|jours?|giorni?)/i;
-    const dayMatch = dayPattern.test(text) ? text.match(dayPattern) : null;
+    const dayMatch = text.match(dayPattern);
     if (dayMatch) {
       return parseInt(dayMatch[1], 10);
     }
 
     // Week patterns
     const weekPattern = /(\d+)\s*(?:weeks?|semanas?|wochen?|semaines?)/i;
-    const weekMatch = weekPattern.test(text) ? text.match(weekPattern) : null;
+    const weekMatch = text.match(weekPattern);
     if (weekMatch) {
       return parseInt(weekMatch[1], 10) * 7;
     }
 
     // Month patterns
     const monthPattern = /(\d+)\s*(?:months?|meses?|monate?|mois)/i;
-    const monthMatch = monthPattern.test(text) ? text.match(monthPattern) : null;
+    const monthMatch = text.match(monthPattern);
     if (monthMatch) {
       return parseInt(monthMatch[1], 10) * 30;
     }
@@ -1109,14 +1163,35 @@ export class FieldLevelChangeTracker {
   }
 
   /**
-   * Check if two values are equal
+   * Check if two values are equal using deep comparison
+   * (key order insensitive for objects)
    */
   private valuesEqual(a: unknown, b: unknown): boolean {
     if (a === b) return true;
     if (typeof a !== typeof b) return false;
-    if (typeof a === 'object' && a !== null && b !== null) {
-      return JSON.stringify(a) === JSON.stringify(b);
+    if (a === null || b === null) return a === b;
+
+    if (typeof a === 'object' && typeof b === 'object') {
+      // Handle arrays
+      if (Array.isArray(a) && Array.isArray(b)) {
+        if (a.length !== b.length) return false;
+        return a.every((val, idx) => this.valuesEqual(val, b[idx]));
+      }
+
+      // One is array, one is not
+      if (Array.isArray(a) !== Array.isArray(b)) return false;
+
+      // Handle objects (key order insensitive)
+      const objA = a as Record<string, unknown>;
+      const objB = b as Record<string, unknown>;
+      const keysA = Object.keys(objA);
+      const keysB = Object.keys(objB);
+
+      if (keysA.length !== keysB.length) return false;
+
+      return keysA.every(key => key in objB && this.valuesEqual(objA[key], objB[key]));
     }
+
     return false;
   }
 
@@ -1129,7 +1204,7 @@ export class FieldLevelChangeTracker {
     }
 
     const record: ChangeHistoryRecord = {
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+      id: crypto.randomUUID(),
       url,
       timestamp: result.timestamp,
       summary: result.summary,
@@ -1305,13 +1380,14 @@ export function getFieldLevelChangeTracker(
 
 /**
  * Track changes between two data snapshots (convenience function)
+ * Uses the global singleton instance for persistence and history.
  */
 export function trackFieldChanges(
   oldData: Record<string, unknown>,
   newData: Record<string, unknown>,
   options?: TrackingOptions
 ): ChangeTrackingResult {
-  const tracker = new FieldLevelChangeTracker();
+  const tracker = getFieldLevelChangeTracker();
   return tracker.trackChanges(oldData, newData, options);
 }
 
