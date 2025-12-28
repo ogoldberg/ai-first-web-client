@@ -935,6 +935,117 @@ describe('AppointmentAvailabilityDetector', () => {
   });
 
   // ============================================
+  // NATIVE SCRIPT TESTS (Non-Latin Scripts)
+  // ============================================
+
+  describe('Native Script Detection', () => {
+    it('should detect appointments in Chinese using native characters', () => {
+      const html = '<html lang="zh"><body><p>\u5728\u7ebf\u9884\u7ea6</p></body></html>';
+      const result = detector.detect(html);
+
+      expect(result.detected).toBe(true);
+      expect(result.language).toBe('zh');
+    });
+
+    it('should detect appointments in Japanese using native characters', () => {
+      const html = '<html lang="ja"><body><p>\u4e88\u7d04</p></body></html>';
+      const result = detector.detect(html);
+
+      expect(result.detected).toBe(true);
+      expect(result.language).toBe('ja');
+    });
+
+    it('should detect appointments in Korean using Hangul', () => {
+      const html = '<html lang="ko"><body><p>\uc608\uc57d</p></body></html>';
+      const result = detector.detect(html);
+
+      expect(result.detected).toBe(true);
+      expect(result.language).toBe('ko');
+    });
+
+    it('should detect appointments in Russian using Cyrillic', () => {
+      const html = '<html lang="ru"><body><p>\u0437\u0430\u043f\u0438\u0441\u044c</p></body></html>';
+      const result = detector.detect(html);
+
+      expect(result.detected).toBe(true);
+      expect(result.language).toBe('ru');
+    });
+
+    it('should detect appointments in Arabic using Arabic script', () => {
+      const html = '<html lang="ar"><body><p>\u062d\u062c\u0632 \u0645\u0648\u0639\u062f</p></body></html>';
+      const result = detector.detect(html);
+
+      expect(result.detected).toBe(true);
+      expect(result.language).toBe('ar');
+    });
+
+    it('should detect appointments in Hebrew using Hebrew script', () => {
+      const html = '<html lang="he"><body><p>\u05ea\u05d5\u05e8</p></body></html>';
+      const result = detector.detect(html);
+
+      expect(result.detected).toBe(true);
+      expect(result.language).toBe('he');
+    });
+
+    it('should detect appointments in Greek using Greek script', () => {
+      const html = '<html lang="el"><body><p>\u03c1\u03b1\u03bd\u03c4\u03b5\u03b2\u03bf\u03cd</p></body></html>';
+      const result = detector.detect(html);
+
+      expect(result.detected).toBe(true);
+      expect(result.language).toBe('el');
+    });
+
+    it('should detect appointments in Thai using Thai script', () => {
+      const html = '<html lang="th"><body><p>\u0e19\u0e31\u0e14\u0e1e\u0e1a</p></body></html>';
+      const result = detector.detect(html);
+
+      expect(result.detected).toBe(true);
+      expect(result.language).toBe('th');
+    });
+
+    it('should detect appointments in Hindi using Devanagari', () => {
+      const html = '<html lang="hi"><body><p>\u092c\u0941\u0915\u093f\u0902\u0917</p></body></html>';
+      const result = detector.detect(html);
+
+      expect(result.detected).toBe(true);
+      expect(result.language).toBe('hi');
+    });
+
+    it('should detect unavailable in Chinese using native characters', () => {
+      const html = `<html lang="zh"><body>
+        <h1>\u9884\u7ea6</h1>
+        <p>\u6ca1\u6709</p>
+      </body></html>`;
+      const result = detector.detect(html);
+
+      expect(result.detected).toBe(true);
+      expect(result.availability).toBe('unavailable');
+    });
+
+    it('should detect unavailable in Russian using Cyrillic', () => {
+      const html = `<html lang="ru"><body>
+        <h1>\u0417\u0430\u043f\u0438\u0441\u044c</h1>
+        <p>\u043d\u0435\u0442 \u043c\u0435\u0441\u0442</p>
+      </body></html>`;
+      const result = detector.detect(html);
+
+      expect(result.detected).toBe(true);
+      expect(result.availability).toBe('unavailable');
+    });
+
+    it('should detect available in Japanese using native characters', () => {
+      const html = `<html lang="ja"><body>
+        <h1>\u4e88\u7d04</h1>
+        <p>\u7a7a\u304d\u6642\u9593</p>
+      </body></html>`;
+      const result = detector.detect(html);
+
+      expect(result.detected).toBe(true);
+      expect(result.availability).toBe('available');
+    });
+  });
+
+  // ============================================
   // EDGE CASES
   // ============================================
 

@@ -165,6 +165,7 @@ export interface AvailabilityDetectionOptions {
 
 /**
  * Appointment system keywords by language (40+ languages)
+ * Includes both native script and transliterated versions for comprehensive matching
  */
 const APPOINTMENT_KEYWORDS: Record<string, string[]> = {
   // Western European
@@ -189,52 +190,90 @@ const APPOINTMENT_KEYWORDS: Record<string, string[]> = {
   sk: ['objednat sa', 'rezervacia', 'termin', 'stretnutie', 'volne terminy'],
   hu: ['idopont foglalas', 'idopont', 'foglalj idopontot', 'szabad idopontok'],
   ro: ['programare', 'rezervare', 'face programare', 'locuri disponibile'],
-  bg: ['zapis', 'rezervatsiya', 'sreshta', 'zapishete se', 'svobodni chasa'],
+  bg: ['zapis', 'rezervatsiya', 'sreshta', 'zapishete se', 'svobodni chasa',
+    // Native Cyrillic
+    '\u0437\u0430\u043f\u0438\u0441', '\u0440\u0435\u0437\u0435\u0440\u0432\u0430\u0446\u0438\u044f', '\u0441\u0440\u0435\u0449\u0430'],
   hr: ['rezervacija', 'dogovor', 'termin', 'naruci se', 'slobodni termini'],
   sl: ['rezervacija', 'termin', 'narocilo', 'prosti termini'],
-  sr: ['zakazivanje', 'termin', 'rezervacija', 'slobodni termini'],
-  uk: ['zapys', 'bronuvannya', 'pryznachennya', 'zabroniuvaty', 'vilni chasy'],
-  ru: ['zapis', 'bronirovanie', 'nazhnachit vstrechu', 'zapisatsya', 'svobodnye sloty'],
-  be: ['zapis', 'braniravanne', 'sustreach', 'volnyya terminy'],
+  sr: ['zakazivanje', 'termin', 'rezervacija', 'slobodni termini',
+    // Native Cyrillic
+    '\u0437\u0430\u043a\u0430\u0437\u0438\u0432\u0430\u045a\u0435', '\u0442\u0435\u0440\u043c\u0438\u043d', '\u0440\u0435\u0437\u0435\u0440\u0432\u0430\u0446\u0438\u0458\u0430'],
+  uk: ['zapys', 'bronuvannya', 'pryznachennya', 'zabroniuvaty', 'vilni chasy',
+    // Native Cyrillic
+    '\u0437\u0430\u043f\u0438\u0441', '\u0431\u0440\u043e\u043d\u044e\u0432\u0430\u043d\u043d\u044f', '\u043f\u0440\u0438\u0437\u043d\u0430\u0447\u0435\u043d\u043d\u044f', '\u0432\u0456\u043b\u044c\u043d\u0456 \u0447\u0430\u0441\u0438'],
+  ru: ['zapis', 'bronirovanie', 'nazhnachit vstrechu', 'zapisatsya', 'svobodnye sloty',
+    // Native Cyrillic
+    '\u0437\u0430\u043f\u0438\u0441\u044c', '\u0431\u0440\u043e\u043d\u0438\u0440\u043e\u0432\u0430\u043d\u0438\u0435', '\u0437\u0430\u043f\u0438\u0441\u0430\u0442\u044c\u0441\u044f', '\u0441\u0432\u043e\u0431\u043e\u0434\u043d\u044b\u0435 \u0441\u043b\u043e\u0442\u044b'],
+  be: ['zapis', 'braniravanne', 'sustreach', 'volnyya terminy',
+    // Native Cyrillic
+    '\u0437\u0430\u043f\u0456\u0441', '\u0431\u0440\u0430\u043d\u0456\u0440\u0430\u0432\u0430\u043d\u043d\u0435'],
 
   // Baltic
   lt: ['registracija', 'rezervacija', 'susitarimas', 'uzsiregistruoti', 'laisvi laikai'],
   lv: ['pieraksts', 'rezervacija', 'pierakstities', 'laika rezervesana', 'briva laiki'],
   et: ['broneerimine', 'ajabroneering', 'registreerumine', 'vabad ajad'],
 
-  // Greek
-  el: ['rantevou', 'kratisi', 'prografteite', 'eleftheres ores'],
+  // Greek (native + transliterated)
+  el: ['rantevou', 'kratisi', 'prografteite', 'eleftheres ores',
+    // Native Greek
+    '\u03c1\u03b1\u03bd\u03c4\u03b5\u03b2\u03bf\u03cd', '\u03ba\u03c1\u03ac\u03c4\u03b7\u03c3\u03b7', '\u03b5\u03bb\u03b5\u03cd\u03b8\u03b5\u03c1\u03b5\u03c2 \u03ce\u03c1\u03b5\u03c2'],
 
   // Turkish
   tr: ['randevu', 'rezervasyon', 'randevu al', 'online randevu', 'musait saatler'],
 
-  // Middle Eastern
-  ar: ['mawid', 'hajz', 'hajz mawid', 'tasjil mawid', 'awqat mutaha'],
-  he: ['tor', 'hzmanat tor', 'kviat pgisha', 'zimun', 'torim pnuyim'],
-  fa: ['nobat', 'rezerv', 'vaght gereftna', 'zamanhay azad'],
+  // Middle Eastern (native + transliterated)
+  ar: ['mawid', 'hajz', 'hajz mawid', 'tasjil mawid', 'awqat mutaha',
+    // Native Arabic
+    '\u0645\u0648\u0639\u062f', '\u062d\u062c\u0632', '\u062d\u062c\u0632 \u0645\u0648\u0639\u062f', '\u0623\u0648\u0642\u0627\u062a \u0645\u062a\u0627\u062d\u0629'],
+  he: ['tor', 'hzmanat tor', 'kviat pgisha', 'zimun', 'torim pnuyim',
+    // Native Hebrew
+    '\u05ea\u05d5\u05e8', '\u05d4\u05d6\u05de\u05e0\u05ea \u05ea\u05d5\u05e8', '\u05ea\u05d5\u05e8\u05d9\u05dd \u05e4\u05e0\u05d5\u05d9\u05d9\u05dd'],
+  fa: ['nobat', 'rezerv', 'vaght gereftna', 'zamanhay azad',
+    // Native Persian/Farsi
+    '\u0646\u0648\u0628\u062a', '\u0631\u0632\u0631\u0648', '\u0648\u0642\u062a \u06af\u0631\u0641\u062a\u0646'],
 
-  // South Asian
-  hi: ['appointment', 'booking', 'samay nirdharit', 'slot book', 'upalabdh slot'],
-  bn: ['appointment', 'somoy dharikaran', 'booking', 'khali slot'],
-  ta: ['neramneram', 'booking', 'appointment', 'kaala irukkirathu'],
-  ur: ['mulaqat', 'booking', 'waqt miqrar', 'dastiyab waqt'],
-  mr: ['bhet', 'booking', 'vel aarakhit', 'upalabdha vel'],
+  // South Asian (native + transliterated)
+  hi: ['appointment', 'booking', 'samay nirdharit', 'slot book', 'upalabdh slot',
+    // Native Devanagari
+    '\u0905\u092a\u0949\u0907\u0902\u091f\u092e\u0947\u0902\u091f', '\u092c\u0941\u0915\u093f\u0902\u0917', '\u0938\u092e\u092f \u0928\u093f\u0930\u094d\u0927\u093e\u0930\u093f\u0924'],
+  bn: ['appointment', 'somoy dharikaran', 'booking', 'khali slot',
+    // Native Bengali
+    '\u0985\u09cd\u09af\u09be\u09aa\u09df\u09c7\u09a8\u09cd\u099f\u09ae\u09c7\u09a8\u09cd\u099f', '\u09b8\u09ae\u09df \u09a7\u09be\u09b0\u09bf\u0995\u09b0\u09a3'],
+  ta: ['neramneram', 'booking', 'appointment', 'kaala irukkirathu',
+    // Native Tamil
+    '\u0ba8\u0bc7\u0bb0\u0bae\u0bcd', '\u0baa\u0bc1\u0b95\u0bcd\u0b95\u0bbf\u0b99\u0bcd'],
+  ur: ['mulaqat', 'booking', 'waqt miqrar', 'dastiyab waqt',
+    // Native Urdu (Arabic script)
+    '\u0645\u0644\u0627\u0642\u0627\u062a', '\u0628\u06a9\u0646\u06af', '\u0648\u0642\u062a'],
+  mr: ['bhet', 'booking', 'vel aarakhit', 'upalabdha vel',
+    // Native Marathi (Devanagari)
+    '\u092d\u0947\u091f', '\u092c\u0941\u0915\u093f\u0902\u0917', '\u0935\u0947\u0933 \u0906\u0930\u0916\u093f\u0924'],
 
   // Southeast Asian
   vi: ['dat hen', 'dat lich', 'hen', 'cuoc hen', 'lich trong'],
-  th: ['nat phop', 'chong', 'booking', 'welaa waang'],
+  th: ['nat phop', 'chong', 'booking', 'welaa waang',
+    // Native Thai
+    '\u0e19\u0e31\u0e14\u0e1e\u0e1a', '\u0e08\u0e2d\u0e07', '\u0e40\u0e27\u0e25\u0e32\u0e27\u0e48\u0e32\u0e07'],
   id: ['janji temu', 'reservasi', 'booking', 'buat janji', 'slot tersedia'],
   ms: ['temujanji', 'tempahan', 'buat temujanji', 'slot kosong'],
   tl: ['appointment', 'booking', 'iskedyul', 'bakanteng slot'],
 
-  // East Asian
-  zh: ['yuyue', 'yuding', 'booking', 'kongxian shijian'],
-  ja: ['yoyaku', 'booking', 'apoint', 'akijikan'],
-  ko: ['yeyak', 'booking', 'appointment', 'bieoneun sigancheung'],
+  // East Asian (native + transliterated)
+  zh: ['yuyue', 'yuding', 'booking', 'kongxian shijian',
+    // Native Chinese characters
+    '\u9884\u7ea6', '\u9884\u5b9a', '\u7a7a\u95f2\u65f6\u95f4', '\u5728\u7ebf\u9884\u7ea6'],
+  ja: ['yoyaku', 'booking', 'apoint', 'akijikan',
+    // Native Japanese (hiragana/katakana/kanji)
+    '\u4e88\u7d04', '\u30d6\u30c3\u30ad\u30f3\u30b0', '\u7a7a\u304d\u6642\u9593', '\u30a2\u30dd\u30a4\u30f3\u30c8'],
+  ko: ['yeyak', 'booking', 'appointment', 'bieoneun sigancheung',
+    // Native Korean (Hangul)
+    '\u4e88\u7d04', '\ubd80\ud0b9', '\uc608\uc57d', '\ube48 \uc2dc\uac04'],
 
   // African
   sw: ['miadi', 'uhifadhi', 'panga miadi', 'nafasi zilizo wazi'],
-  am: ['qetero', 'booking', 'appointment', 'neqa gize'],
+  am: ['qetero', 'booking', 'appointment', 'neqa gize',
+    // Native Amharic (Ethiopic script)
+    '\u1240\u1320\u122e', '\u1260\u1235\u1270\u129b'],
   zu: ['ukubhuka', 'isivumelwano', 'isikhala esivulekile'],
 
   // Other
@@ -242,18 +281,27 @@ const APPOINTMENT_KEYWORDS: Record<string, string[]> = {
   cy: ['apwyntiad', 'archebu', 'slotiau ar gael'],
   mt: ['appuntament', 'booking', 'hin disponibbli'],
   sq: ['takim', 'rezervim', 'prenotim', 'ore te lira'],
-  mk: ['termin', 'rezervacija', 'zakazuvanje', 'slobodni termini'],
-  ka: ['chaweris', 'rezervatsia', 'shekhvedris danisnva', 'tavisufali droebi'],
-  hy: ['zhanaamapet', 'amragrum', 'azat zhamanak'],
+  mk: ['termin', 'rezervacija', 'zakazuvanje', 'slobodni termini',
+    // Native Cyrillic
+    '\u0442\u0435\u0440\u043c\u0438\u043d', '\u0440\u0435\u0437\u0435\u0440\u0432\u0430\u0446\u0438\u0458\u0430'],
+  ka: ['chaweris', 'rezervatsia', 'shekhvedris danisnva', 'tavisufali droebi',
+    // Native Georgian
+    '\u10e8\u10d4\u10ee\u10d5\u10d4\u10d3\u10e0\u10d0', '\u10e0\u10d4\u10d6\u10d4\u10e0\u10d5\u10d0\u10ea\u10d8\u10d0'],
+  hy: ['zhanaamapet', 'amragrum', 'azat zhamanak',
+    // Native Armenian
+    '\u056a\u0561\u0574\u0561\u0576\u0561\u056f', '\u0561\u0574\u0580\u0561\u0563\u0580\u0578\u0582\u0574'],
   az: ['gorusme', 'rezervasiya', 'randevu', 'bos vaxtlar'],
-  kk: ['kezdesu', 'brondarj', 'uakyt tagyayndau', 'bos uakyt'],
+  kk: ['kezdesu', 'brondarj', 'uakyt tagyayndau', 'bos uakyt',
+    // Native Kazakh (Cyrillic)
+    '\u043a\u0435\u0437\u0434\u0435\u0441\u0443', '\u0431\u0440\u043e\u043d\u0434\u0430\u0443'],
   uz: ['uchrashuv', 'bronlash', 'uchrashuv belgilash', 'bosh vaqtlar'],
 };
 
 /**
- * Availability status keywords by language
+ * Availability status keywords by language (expanded for global support)
  */
 const AVAILABILITY_KEYWORDS: Record<string, { available: string[]; unavailable: string[]; limited: string[] }> = {
+  // Western European
   en: {
     available: ['available', 'open', 'free', 'slots available', 'book now'],
     unavailable: ['unavailable', 'no slots', 'fully booked', 'sold out', 'no availability', 'waitlist'],
@@ -288,6 +336,156 @@ const AVAILABILITY_KEYWORDS: Record<string, { available: string[]; unavailable: 
     available: ['beschikbaar', 'vrij', 'open plekken', 'nu boeken'],
     unavailable: ['niet beschikbaar', 'geen plekken', 'volgeboekt', 'wachtlijst'],
     limited: ['beperkt', 'weinig plekken', 'bijna vol', 'laatste plekken'],
+  },
+
+  // Nordic
+  sv: {
+    available: ['tillganglig', 'ledig', 'lediga tider', 'boka nu'],
+    unavailable: ['ej tillganglig', 'inga lediga', 'fullbokat', 'vantlista'],
+    limited: ['begransat', 'fa platser', 'nara fullt', 'sista platserna'],
+  },
+  no: {
+    available: ['tilgjengelig', 'ledig', 'ledige timer', 'bestill na'],
+    unavailable: ['ikke tilgjengelig', 'ingen ledige', 'fullt booket', 'venteliste'],
+    limited: ['begrenset', 'fa plasser', 'nesten fullt', 'siste plasser'],
+  },
+  da: {
+    available: ['tilgaengelig', 'ledig', 'ledige tider', 'book nu'],
+    unavailable: ['ikke tilgaengelig', 'ingen ledige', 'fuldt booket', 'venteliste'],
+    limited: ['begraenset', 'fa pladser', 'naesten fuldt', 'sidste pladser'],
+  },
+  fi: {
+    available: ['saatavilla', 'vapaa', 'vapaita aikoja', 'varaa nyt'],
+    unavailable: ['ei saatavilla', 'ei vapaita', 'tayteen varattu', 'jonotus'],
+    limited: ['rajoitettu', 'vahan paikkoja', 'lahes taysi', 'viimeiset paikat'],
+  },
+
+  // Eastern European
+  pl: {
+    available: ['dostepny', 'wolny', 'wolne terminy', 'zarezerwuj teraz'],
+    unavailable: ['niedostepny', 'brak terminow', 'zarezerwowane', 'lista oczekujacych'],
+    limited: ['ograniczony', 'malo miejsc', 'prawie pelny', 'ostatnie miejsca'],
+  },
+  cs: {
+    available: ['dostupny', 'volny', 'volne terminy', 'rezervujte nyni'],
+    unavailable: ['nedostupny', 'zadne terminy', 'obsazeno', 'poradnik'],
+    limited: ['omezeny', 'malo mist', 'temer plny', 'posledni mista'],
+  },
+  hu: {
+    available: ['elerheto', 'szabad', 'szabad idopontok', 'foglaljon most'],
+    unavailable: ['nem elerheto', 'nincs szabad', 'betelt', 'varolista'],
+    limited: ['korlatozott', 'kevesen', 'majdnem tele', 'utolso helyek'],
+  },
+  ro: {
+    available: ['disponibil', 'liber', 'locuri disponibile', 'rezerva acum'],
+    unavailable: ['indisponibil', 'niciun loc', 'complet', 'lista de asteptare'],
+    limited: ['limitat', 'putine locuri', 'aproape plin', 'ultimele locuri'],
+  },
+  ru: {
+    available: ['dostupno', 'svobodno', 'svobodnye sloty', 'zabronirovat seychas',
+      '\u0434\u043e\u0441\u0442\u0443\u043f\u043d\u043e', '\u0441\u0432\u043e\u0431\u043e\u0434\u043d\u043e'],
+    unavailable: ['nedostupno', 'net mest', 'vse zanyato', 'list ozhidaniya',
+      '\u043d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u043d\u043e', '\u043d\u0435\u0442 \u043c\u0435\u0441\u0442'],
+    limited: ['ogranicheno', 'malo mest', 'pochti polno', 'poslednie mesta',
+      '\u043e\u0433\u0440\u0430\u043d\u0438\u0447\u0435\u043d\u043e', '\u043c\u0430\u043b\u043e \u043c\u0435\u0441\u0442'],
+  },
+  uk: {
+    available: ['dostupno', 'vilno', 'vilni chasy', 'zabronyuvaty zaraz',
+      '\u0434\u043e\u0441\u0442\u0443\u043f\u043d\u043e', '\u0432\u0456\u043b\u044c\u043d\u043e'],
+    unavailable: ['nedostupno', 'nemaye mists', 'zaynyato', 'cherha',
+      '\u043d\u0435\u0434\u043e\u0441\u0442\u0443\u043f\u043d\u043e', '\u043d\u0435\u043c\u0430\u0454 \u043c\u0456\u0441\u0446\u044c'],
+    limited: ['obmezheno', 'malo mists', 'mayzhe povne', 'ostanni mistsya',
+      '\u043e\u0431\u043c\u0435\u0436\u0435\u043d\u043e', '\u043c\u0430\u043b\u043e \u043c\u0456\u0441\u0446\u044c'],
+  },
+
+  // Greek
+  el: {
+    available: ['diathesimo', 'eleuthero', 'diathesimes ores', 'kratiste tora',
+      '\u03b4\u03b9\u03b1\u03b8\u03ad\u03c3\u03b9\u03bc\u03bf', '\u03b5\u03bb\u03b5\u03cd\u03b8\u03b5\u03c1\u03bf'],
+    unavailable: ['mi diathesimo', 'den yparxoun', 'gemato', 'lista anamonis',
+      '\u03bc\u03b7 \u03b4\u03b9\u03b1\u03b8\u03ad\u03c3\u03b9\u03bc\u03bf', '\u03b3\u03b5\u03bc\u03ac\u03c4\u03bf'],
+    limited: ['periorismeno', 'liga', 'sxedon gemato', 'teleytaies theseis',
+      '\u03c0\u03b5\u03c1\u03b9\u03bf\u03c1\u03b9\u03c3\u03bc\u03ad\u03bd\u03bf'],
+  },
+
+  // Turkish
+  tr: {
+    available: ['musait', 'bos', 'musait saatler', 'simdi rezerve et'],
+    unavailable: ['musait degil', 'yer yok', 'dolu', 'bekleme listesi'],
+    limited: ['sinirli', 'az yer', 'neredeyse dolu', 'son yerler'],
+  },
+
+  // Middle Eastern
+  ar: {
+    available: ['mutah', 'maftuh', 'awqat mutaha', 'ihiez alan',
+      '\u0645\u062a\u0627\u062d', '\u0645\u0641\u062a\u0648\u062d'],
+    unavailable: ['ghayr mutah', 'la yujad', 'mamtali', 'qaimat alintizar',
+      '\u063a\u064a\u0631 \u0645\u062a\u0627\u062d', '\u0644\u0627 \u064a\u0648\u062c\u062f'],
+    limited: ['mahdud', 'qalil', 'taqriban mamtali', 'akhar almaqaid',
+      '\u0645\u062d\u062f\u0648\u062f', '\u0642\u0644\u064a\u0644'],
+  },
+  he: {
+    available: ['panui', 'ptuah', 'torim pnuyim', 'hizmen achshav',
+      '\u05e4\u05e0\u05d5\u05d9', '\u05e4\u05ea\u05d5\u05d7'],
+    unavailable: ['lo panui', 'ayn torim', 'male', 'reshimat hamtana',
+      '\u05dc\u05d0 \u05e4\u05e0\u05d5\u05d9', '\u05de\u05dc\u05d0'],
+    limited: ['mugbal', 'meat', 'kimaat male', 'mekomot acharonim',
+      '\u05de\u05d5\u05d2\u05d1\u05dc', '\u05de\u05e2\u05d8'],
+  },
+
+  // East Asian
+  zh: {
+    available: ['keyong', 'kong', 'you kongwei', 'liji yuyue',
+      '\u53ef\u7528', '\u7a7a', '\u6709\u7a7a\u4f4d', '\u7acb\u5373\u9884\u7ea6'],
+    unavailable: ['bu keyong', 'mei you', 'yi man', 'denghou mingdan',
+      '\u4e0d\u53ef\u7528', '\u6ca1\u6709', '\u5df2\u6ee1', '\u7b49\u5019\u540d\u5355'],
+    limited: ['youxian', 'shao', 'jieji man', 'zuihou jige',
+      '\u6709\u9650', '\u5c11', '\u63a5\u8fd1\u6ee1', '\u6700\u540e\u51e0\u4e2a'],
+  },
+  ja: {
+    available: ['riyo kano', 'aki', 'akijikan', 'ima yoyaku',
+      '\u5229\u7528\u53ef\u80fd', '\u7a7a\u304d', '\u7a7a\u304d\u6642\u9593', '\u4eca\u4e88\u7d04'],
+    unavailable: ['riyo fuka', 'akiga nai', 'manseki', 'machiri',
+      '\u5229\u7528\u4e0d\u53ef', '\u7a7a\u304d\u304c\u306a\u3044', '\u6e80\u5e2d', '\u5f85\u3061\u30ea\u30b9\u30c8'],
+    limited: ['gentei', 'nokori wazuka', 'hotondo man', 'saigo no seki',
+      '\u9650\u5b9a', '\u6b8b\u308a\u308f\u305a\u304b', '\u307b\u307c\u6e80', '\u6700\u5f8c\u306e\u5e2d'],
+  },
+  ko: {
+    available: ['iyong ganeung', 'bieosseum', 'bin sigan', 'jigeum yeyak',
+      '\uc774\uc6a9 \uac00\ub2a5', '\ube44\uc5c8\uc74c', '\ube48 \uc2dc\uac04', '\uc9c0\uae08 \uc608\uc57d'],
+    unavailable: ['iyong bulganeung', 'bin geos eopseum', 'maejin', 'daegija myeongdan',
+      '\uc774\uc6a9 \ubd88\uac00\ub2a5', '\ube48 \uac83 \uc5c6\uc74c', '\ub9e4\uc9c4', '\ub300\uae30\uc790 \uba85\ub2e8'],
+    limited: ['jehan', 'jeogeun', 'geoeui da cham', 'majimak jari',
+      '\uc81c\ud55c', '\uc801\uc740', '\uac70\uc758 \ub2e4 \ucc30', '\ub9c8\uc9c0\ub9c9 \uc790\ub9ac'],
+  },
+
+  // Thai
+  th: {
+    available: ['waang', 'mi thi waang', 'chong dai', 'chong thi ni',
+      '\u0e27\u0e48\u0e32\u0e07', '\u0e21\u0e35\u0e17\u0e35\u0e48\u0e27\u0e48\u0e32\u0e07', '\u0e08\u0e2d\u0e07\u0e44\u0e14\u0e49'],
+    unavailable: ['mai waang', 'mai mi thi', 'tem', 'khiu ro',
+      '\u0e44\u0e21\u0e48\u0e27\u0e48\u0e32\u0e07', '\u0e44\u0e21\u0e48\u0e21\u0e35\u0e17\u0e35\u0e48', '\u0e40\u0e15\u0e47\u0e21', '\u0e04\u0e34\u0e27\u0e23\u0e2d'],
+    limited: ['chamkat', 'noi', 'kueap tem', 'thi sudt thai',
+      '\u0e08\u0e33\u0e01\u0e31\u0e14', '\u0e19\u0e49\u0e2d\u0e22', '\u0e40\u0e01\u0e37\u0e2d\u0e1a\u0e40\u0e15\u0e47\u0e21'],
+  },
+
+  // Indonesian/Malay
+  id: {
+    available: ['tersedia', 'kosong', 'slot tersedia', 'pesan sekarang'],
+    unavailable: ['tidak tersedia', 'tidak ada slot', 'penuh', 'daftar tunggu'],
+    limited: ['terbatas', 'sedikit', 'hampir penuh', 'slot terakhir'],
+  },
+  ms: {
+    available: ['tersedia', 'kosong', 'slot tersedia', 'tempah sekarang'],
+    unavailable: ['tidak tersedia', 'tiada slot', 'penuh', 'senarai menunggu'],
+    limited: ['terhad', 'sedikit', 'hampir penuh', 'slot terakhir'],
+  },
+
+  // Vietnamese
+  vi: {
+    available: ['con trong', 'co san', 'lich trong', 'dat ngay'],
+    unavailable: ['khong co', 'het cho', 'day', 'danh sach cho'],
+    limited: ['han che', 'it', 'gan day', 'cho cuoi cung'],
   },
 };
 
@@ -642,6 +840,8 @@ export class AppointmentAvailabilityDetector {
       // Look for date patterns
       let dateMatch: string | undefined;
       for (const pattern of DATE_PATTERNS) {
+        // Reset regex state before each execution (global regexes maintain lastIndex)
+        pattern.lastIndex = 0;
         const match = pattern.exec(trimmedLine);
         if (match) {
           dateMatch = match[1];
@@ -652,6 +852,8 @@ export class AppointmentAvailabilityDetector {
       // Look for time patterns
       let timeMatch: string | undefined;
       for (const pattern of TIME_PATTERNS) {
+        // Reset regex state before each execution
+        pattern.lastIndex = 0;
         const match = pattern.exec(trimmedLine);
         if (match) {
           timeMatch = match[1];
@@ -670,21 +872,109 @@ export class AppointmentAvailabilityDetector {
           confidence: dateMatch && timeMatch ? 0.9 : dateMatch ? 0.7 : 0.5,
         };
 
-        if (dateMatch) slot.date = dateMatch;
+        if (dateMatch) slot.date = this.normalizeDateString(dateMatch);
         if (timeMatch) slot.time = timeMatch;
-        if (dateMatch && timeMatch) slot.datetime = `${dateMatch} ${timeMatch}`;
+        if (dateMatch && timeMatch) slot.datetime = `${slot.date} ${timeMatch}`;
 
         slots.push(slot);
       }
     }
 
-    // Sort by date/time if possible
+    // Sort by normalized date for proper chronological order
     slots.sort((a, b) => {
-      if (a.date && b.date) return a.date.localeCompare(b.date);
+      if (a.date && b.date) {
+        // Both dates are now in YYYY-MM-DD format (or original if couldn't normalize)
+        return a.date.localeCompare(b.date);
+      }
       return 0;
     });
 
     return slots;
+  }
+
+  /**
+   * Normalize date string to YYYY-MM-DD format for proper sorting
+   */
+  private normalizeDateString(dateStr: string): string {
+    // Already ISO format (YYYY-MM-DD)
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      return dateStr;
+    }
+
+    // European format: DD/MM/YYYY or DD.MM.YYYY or DD-MM-YYYY
+    const euroMatch = /^(\d{1,2})[\/\.-](\d{1,2})[\/\.-](\d{2,4})$/.exec(dateStr);
+    if (euroMatch) {
+      const day = euroMatch[1].padStart(2, '0');
+      const month = euroMatch[2].padStart(2, '0');
+      let year = euroMatch[3];
+      if (year.length === 2) {
+        year = (parseInt(year) > 50 ? '19' : '20') + year;
+      }
+      return `${year}-${month}-${day}`;
+    }
+
+    // Written dates: January 15, 2024 or 15 January 2024
+    const monthNames: Record<string, string> = {
+      jan: '01', january: '01', enero: '01', janeiro: '01', januar: '01', janvier: '01', gennaio: '01',
+      feb: '02', february: '02', febrero: '02', fevereiro: '02', februar: '02', fevrier: '02', febbraio: '02',
+      mar: '03', march: '03', marzo: '03', marco: '03', marz: '03', mars: '03',
+      apr: '04', april: '04', abril: '04', avril: '04', aprile: '04',
+      may: '05', mayo: '05', maio: '05', mai: '05', maggio: '05',
+      jun: '06', june: '06', junio: '06', junho: '06', juni: '06', juin: '06', giugno: '06',
+      jul: '07', july: '07', julio: '07', julho: '07', juli: '07', juillet: '07', luglio: '07',
+      aug: '08', august: '08', agosto: '08', aout: '08',
+      sep: '09', sept: '09', september: '09', septiembre: '09', setembro: '09', septembre: '09', settembre: '09',
+      oct: '10', october: '10', octubre: '10', outubro: '10', oktober: '10', octobre: '10', ottobre: '10',
+      nov: '11', november: '11', noviembre: '11', novembro: '11', novembre: '11',
+      dec: '12', december: '12', diciembre: '12', dezembro: '12', dezember: '12', decembre: '12', dicembre: '12',
+    };
+
+    // Try "Month DD, YYYY" format
+    const monthFirstMatch = /^([a-z]+)\s+(\d{1,2}),?\s+(\d{4})$/i.exec(dateStr.trim());
+    if (monthFirstMatch) {
+      const monthName = monthFirstMatch[1].toLowerCase();
+      const month = monthNames[monthName];
+      if (month) {
+        const day = monthFirstMatch[2].padStart(2, '0');
+        return `${monthFirstMatch[3]}-${month}-${day}`;
+      }
+    }
+
+    // Try "DD Month YYYY" format
+    const dayFirstMatch = /^(\d{1,2})\s+([a-z]+)\s+(\d{4})$/i.exec(dateStr.trim());
+    if (dayFirstMatch) {
+      const monthName = dayFirstMatch[2].toLowerCase();
+      const month = monthNames[monthName];
+      if (month) {
+        const day = dayFirstMatch[1].padStart(2, '0');
+        return `${dayFirstMatch[3]}-${month}-${day}`;
+      }
+    }
+
+    // Spanish: "DD de Month de YYYY"
+    const spanishMatch = /^(\d{1,2})\s+de\s+([a-z]+)\s+(?:de\s+)?(\d{4})$/i.exec(dateStr.trim());
+    if (spanishMatch) {
+      const monthName = spanishMatch[2].toLowerCase();
+      const month = monthNames[monthName];
+      if (month) {
+        const day = spanishMatch[1].padStart(2, '0');
+        return `${spanishMatch[3]}-${month}-${day}`;
+      }
+    }
+
+    // German: "DD. Month YYYY"
+    const germanMatch = /^(\d{1,2})\.\s*([a-z]+)\s+(\d{4})$/i.exec(dateStr.trim());
+    if (germanMatch) {
+      const monthName = germanMatch[2].toLowerCase();
+      const month = monthNames[monthName];
+      if (month) {
+        const day = germanMatch[1].padStart(2, '0');
+        return `${germanMatch[3]}-${month}-${day}`;
+      }
+    }
+
+    // If no normalization possible, return original
+    return dateStr;
   }
 
   /**
