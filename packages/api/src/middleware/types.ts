@@ -18,6 +18,37 @@ export interface Tenant {
   createdAt: Date;
   updatedAt: Date;
   lastActiveAt: Date | null;
+
+  // Authentication fields
+  passwordHash: string | null;
+  emailVerifiedAt: Date | null;
+  verificationToken: string | null;
+  verificationTokenExpiresAt: Date | null;
+  passwordResetToken: string | null;
+  passwordResetTokenExpiresAt: Date | null;
+}
+
+export interface OAuthAccount {
+  id: string;
+  tenantId: string;
+  provider: 'google' | 'github';
+  providerAccountId: string;
+  accessToken: string | null;
+  refreshToken: string | null;
+  tokenExpiresAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface UserSession {
+  id: string;
+  tenantId: string;
+  sessionToken: string;
+  userAgent: string | null;
+  ipAddress: string | null;
+  createdAt: Date;
+  expiresAt: Date;
+  lastActivityAt: Date;
 }
 
 export interface ApiKey {

@@ -3,6 +3,11 @@
  *
  * Hono-based REST API for the Unbrowser cloud service.
  * Provides intelligent browsing capabilities via HTTP endpoints.
+ *
+ * Domain Routing:
+ * - unbrowser.ai / www.unbrowser.ai -> Marketing site (landing, pricing, auth, dashboard)
+ * - api.unbrowser.ai -> API endpoints only
+ * - localhost:3001 -> Both (for development)
  */
 
 import { Hono } from 'hono';
@@ -24,6 +29,33 @@ import { skillPacks } from './routes/skill-packs.js';
 import discovery from './routes/discovery.js'; // FUZZ-001: API discovery
 import marketplace from './routes/marketplace.js'; // FEAT-005: Pattern marketplace
 import { requestLoggerMiddleware } from './middleware/request-logger.js';
+// Self-service dashboard and marketing pages
+import { auth } from './routes/auth.js';
+import { dashboardUI } from './routes/dashboard-ui.js';
+import { landing } from './routes/landing.js';
+import { pricingPage } from './routes/pricing-page.js';
+import { llmDocs } from './routes/llm-docs.js';
+
+// Server mode - set via UNBROWSER_MODE environment variable
+// - 'marketing': Only serve marketing pages (unbrowser.ai)
+// - 'api': Only serve API endpoints (api.unbrowser.ai)
+// - 'all' or unset: Serve everything (development/localhost)
+const SERVER_MODE = process.env.UNBROWSER_MODE || 'all';
+
+// Helper to check if we're in marketing-only mode
+function isMarketingMode(): boolean {
+  return SERVER_MODE === 'marketing';
+}
+
+// Helper to check if we're in API-only mode
+function isApiMode(): boolean {
+  return SERVER_MODE === 'api';
+}
+
+// Helper to check if we're serving all routes (development)
+function isAllMode(): boolean {
+  return SERVER_MODE === 'all' || !SERVER_MODE;
+}
 
 // Create the main Hono app
 const app = new Hono();
@@ -36,11 +68,11 @@ app.use(
     // Content Security Policy - restrict resource loading
     contentSecurityPolicy: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'"], // unsafe-inline needed for Swagger UI
-      styleSrc: ["'self'", "'unsafe-inline'"], // unsafe-inline needed for Swagger UI
+      scriptSrc: ["'self'", "'unsafe-inline'", 'https://unpkg.com'], // unpkg for Swagger UI
+      styleSrc: ["'self'", "'unsafe-inline'", 'https://unpkg.com', 'https://fonts.googleapis.com'], // unpkg for Swagger UI, Google Fonts
       imgSrc: ["'self'", 'data:', 'https:'],
       connectSrc: ["'self'"],
-      fontSrc: ["'self'"],
+      fontSrc: ["'self'", 'https://fonts.gstatic.com'],
       objectSrc: ["'none'"],
       mediaSrc: ["'none'"],
       frameSrc: ["'none'"],
@@ -97,61 +129,170 @@ app.use(
   })
 );
 
-// Mount routes
+// =============================================================================
+// SHARED ROUTES (available in all modes)
+// =============================================================================
 app.route('/health', health);
-app.route('/docs', docs); // API-011: Interactive API documentation
-app.route('/v1', browse);
-app.route('/v1/discover', discovery); // FUZZ-001: API fuzzing discovery
-app.route('/v1/admin', admin);
-app.route('/v1/admin/dashboard', dashboard); // API-008: Admin dashboard API
-app.route('/admin', adminUI); // API-008: Admin dashboard UI
-app.route('/inspect', inspectionUI); // F-013: Human-in-the-loop inspection UI
-app.route('/v1/workflows', workflows); // COMP-009: Workflow recording
-app.route('/v1/skill-packs', skillPacks); // PACK-001: Skill pack distribution
-app.route('/v1/marketplace', marketplace); // FEAT-005: Pattern marketplace
-app.route('/v1/billing', billing); // API-007: Stripe billing integration
-app.route('/pricing', pricingCalculator); // API-016: Pricing calculator
 
-// Root endpoint
-app.get('/', (c) => {
-  return c.json({
-    name: 'Unbrowser API',
-    version: '0.1.0',
-    docs: '/docs',
-    endpoints: {
+// =============================================================================
+// API ROUTES (api.unbrowser.ai - UNBROWSER_MODE=api)
+// =============================================================================
+
+// Middleware to redirect API routes to api.unbrowser.ai when in marketing mode
+const apiOnlyMiddleware = async (c: any, next: any) => {
+  if (isMarketingMode()) {
+    // Redirect to API domain
+    const url = new URL(c.req.url);
+    url.host = 'api.unbrowser.ai';
+    url.protocol = 'https:';
+    url.port = '';
+    return c.redirect(url.toString(), 301);
+  }
+  return next();
+};
+
+// Only mount API routes if not in marketing-only mode
+if (!isMarketingMode()) {
+  // API documentation
+  app.route('/docs', docs); // API-011: Interactive API documentation
+
+  // Core API endpoints
+  app.route('/v1', browse);
+  app.route('/v1/discover', discovery); // FUZZ-001: API fuzzing discovery
+  app.route('/v1/admin', admin);
+  app.route('/v1/admin/dashboard', dashboard); // API-008: Admin dashboard API
+  app.route('/v1/workflows', workflows); // COMP-009: Workflow recording
+  app.route('/v1/skill-packs', skillPacks); // PACK-001: Skill pack distribution
+  app.route('/v1/marketplace', marketplace); // FEAT-005: Pattern marketplace
+  app.route('/v1/billing', billing); // API-007: Stripe billing integration
+
+  // Admin UI
+  app.route('/admin', adminUI); // API-008: Admin dashboard UI
+
+  // Inspection UI
+  app.route('/inspect', inspectionUI); // F-013: Human-in-the-loop inspection UI
+
+  // LLM documentation
+  app.route('', llmDocs); // LLM documentation at /llm.txt, /llm.md
+} else {
+  // In marketing mode, redirect API routes to api.unbrowser.ai
+  app.use('/docs/*', apiOnlyMiddleware);
+  app.use('/docs', apiOnlyMiddleware);
+  app.use('/v1/*', apiOnlyMiddleware);
+  app.use('/admin/*', apiOnlyMiddleware);
+  app.use('/admin', apiOnlyMiddleware);
+  app.use('/inspect/*', apiOnlyMiddleware);
+  app.use('/inspect', apiOnlyMiddleware);
+  app.use('/llm.txt', apiOnlyMiddleware);
+  app.use('/llm.md', apiOnlyMiddleware);
+}
+
+// =============================================================================
+// MARKETING ROUTES (unbrowser.ai - UNBROWSER_MODE=marketing)
+// =============================================================================
+
+// Middleware to redirect marketing routes to unbrowser.ai when in API mode
+const marketingOnlyMiddleware = async (c: any, next: any) => {
+  if (isApiMode()) {
+    // Redirect to marketing domain
+    const url = new URL(c.req.url);
+    url.host = 'unbrowser.ai';
+    url.protocol = 'https:';
+    url.port = '';
+    return c.redirect(url.toString(), 301);
+  }
+  return next();
+};
+
+// Only mount marketing routes if not in API-only mode
+if (!isApiMode()) {
+  // Authentication pages
+  app.route('/auth', auth); // User authentication (signup, login, OAuth)
+
+  // User dashboard
+  app.route('/dashboard', dashboardUI); // User dashboard (API keys, usage, settings)
+
+  // Pricing pages
+  app.route('/pricing', pricingPage); // Marketing pricing page
+  app.route('/pricing/calculator', pricingCalculator); // API-016: Interactive pricing calculator
+} else {
+  // In API mode, redirect marketing routes to unbrowser.ai
+  app.use('/auth/*', marketingOnlyMiddleware);
+  app.use('/auth', marketingOnlyMiddleware);
+  app.use('/dashboard/*', marketingOnlyMiddleware);
+  app.use('/dashboard', marketingOnlyMiddleware);
+  app.use('/pricing/*', marketingOnlyMiddleware);
+  app.use('/pricing', marketingOnlyMiddleware);
+}
+
+// =============================================================================
+// ROOT ENDPOINT - Mode-aware routing
+// =============================================================================
+
+app.get('/', async (c, next) => {
+  const accept = c.req.header('Accept') || '';
+
+  // API mode - always serve JSON
+  if (isApiMode()) {
+    return c.json({
+      name: 'Unbrowser API',
+      version: '0.1.0',
       docs: '/docs',
-      openapi: '/docs/openapi.json',
-      gettingStarted: '/docs/getting-started',
-      health: '/health',
-      browse: '/v1/browse',
-      batch: '/v1/batch',
-      fetch: '/v1/fetch',
-      intelligence: '/v1/domains/:domain/intelligence',
-      usage: '/v1/usage',
-      skillPacks: '/v1/skill-packs',
-      exportSkillPack: '/v1/skill-packs/export',
-      importSkillPack: '/v1/skill-packs/import',
-      skillPackLibrary: '/v1/skill-packs/library',
-      installSkillPack: '/v1/skill-packs/install',
-      skillPackStats: '/v1/skill-packs/stats',
-      adminLogs: '/v1/admin/logs',
-      adminDashboard: '/admin',
-      adminDashboardAPI: '/v1/admin/dashboard',
-      inspectionUI: '/inspect',
-      workflows: '/v1/workflows',
-      recordWorkflow: '/v1/workflows/record/start',
-      replayWorkflow: '/v1/workflows/:id/replay',
-      marketplace: '/v1/marketplace',
-      searchPatterns: '/v1/marketplace/patterns',
-      publishPattern: '/v1/marketplace/patterns',
-      myPatterns: '/v1/marketplace/my/patterns',
-      myInstallations: '/v1/marketplace/my/installations',
-      billing: '/v1/billing',
-      billingWebhook: '/v1/billing/webhook',
-      pricingCalculator: '/pricing',
-    },
-  });
+      endpoints: {
+        docs: '/docs',
+        openapi: '/docs/openapi.json',
+        gettingStarted: '/docs/getting-started',
+        health: '/health',
+        browse: '/v1/browse',
+        batch: '/v1/batch',
+        fetch: '/v1/fetch',
+        intelligence: '/v1/domains/:domain/intelligence',
+        usage: '/v1/usage',
+        skillPacks: '/v1/skill-packs',
+        workflows: '/v1/workflows',
+        marketplace: '/v1/marketplace',
+        billing: '/v1/billing',
+        llmDocs: '/llm.txt',
+      },
+    });
+  }
+
+  // Marketing mode - always serve landing page
+  if (isMarketingMode()) {
+    return next(); // Fall through to landing page
+  }
+
+  // All mode (development) - content negotiation
+  if (accept.includes('application/json') && !accept.includes('text/html')) {
+    return c.json({
+      name: 'Unbrowser API',
+      version: '0.1.0',
+      mode: SERVER_MODE,
+      docs: '/docs',
+      marketing: {
+        landing: '/',
+        pricing: '/pricing',
+        auth: '/auth/login',
+        dashboard: '/dashboard',
+      },
+      api: {
+        browse: '/v1/browse',
+        batch: '/v1/batch',
+        fetch: '/v1/fetch',
+        docs: '/docs',
+        llmDocs: '/llm.txt',
+      },
+    });
+  }
+
+  // Serve landing page HTML for browsers
+  return next();
 });
+
+// Mount landing page (only in marketing or all mode)
+if (!isApiMode()) {
+  app.route('', landing);
+}
 
 // 404 handler
 app.notFound((c) => {

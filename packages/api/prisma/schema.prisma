@@ -31,9 +31,19 @@ model Tenant {
   sharePatterns Boolean @default(true) // Contribute patterns to shared pool
   consumeShared Boolean @default(true) // Use patterns from shared pool
 
-  apiKeys      ApiKey[]
-  usageRecords UsageRecord[]
-  requestLogs  RequestLog[]
+  // Authentication fields
+  passwordHash                  String?
+  emailVerifiedAt               DateTime?
+  verificationToken             String?   @unique
+  verificationTokenExpiresAt    DateTime?
+  passwordResetToken            String?   @unique
+  passwordResetTokenExpiresAt   DateTime?
+
+  apiKeys       ApiKey[]
+  usageRecords  UsageRecord[]
+  requestLogs   RequestLog[]
+  oauthAccounts OAuthAccount[]
+  userSessions  UserSession[]
 
   @@map("tenants")
 }
@@ -313,4 +323,43 @@ model StoreMetadata {
   value String
 
   @@map("store_metadata")
+}
+
+// =============================================================================
+// AUTHENTICATION (OAuth & Sessions for Dashboard)
+// =============================================================================
+
+model OAuthAccount {
+  id                String    @id @default(cuid())
+  tenantId          String
+  provider          String    // 'google' | 'github'
+  providerAccountId String    // The user's ID from the OAuth provider
+  accessToken       String?   // Encrypted, for API access if needed
+  refreshToken      String?   // Encrypted
+  tokenExpiresAt    DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([tenantId])
+  @@map("oauth_accounts")
+}
+
+model UserSession {
+  id             String   @id @default(cuid())
+  tenantId       String
+  sessionToken   String   @unique // Stored hashed in cookie
+  userAgent      String?
+  ipAddress      String?
+  createdAt      DateTime @default(now())
+  expiresAt      DateTime
+  lastActivityAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId])
+  @@index([expiresAt])
+  @@map("user_sessions")
 }

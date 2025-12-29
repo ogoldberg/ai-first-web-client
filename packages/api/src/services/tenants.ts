@@ -14,12 +14,29 @@ import { generateApiKey, getApiKeyStore } from '../middleware/auth.js';
  * Allows for different backends (Prisma, in-memory, etc.)
  */
 export interface TenantStore {
+  // Core CRUD operations
   create(data: CreateTenantInput): Promise<Tenant>;
   findById(id: string): Promise<Tenant | null>;
   findByEmail(email: string): Promise<Tenant | null>;
   update(id: string, data: UpdateTenantInput): Promise<Tenant | null>;
   delete(id: string): Promise<boolean>;
   list(options?: ListTenantsOptions): Promise<{ tenants: Tenant[]; total: number }>;
+
+  // Authentication methods
+  findByVerificationToken(token: string): Promise<Tenant | null>;
+  findByPasswordResetToken(token: string): Promise<Tenant | null>;
+  setPasswordHash(id: string, passwordHash: string): Promise<void>;
+  setVerificationToken(id: string, token: string | null, expiresAt: Date | null): Promise<void>;
+  setPasswordResetToken(id: string, token: string | null, expiresAt: Date | null): Promise<void>;
+  setEmailVerified(id: string): Promise<void>;
+
+  // OAuth methods
+  findByOAuthAccount(provider: string, providerAccountId: string): Promise<Tenant | null>;
+  createOAuthAccount(
+    tenantId: string,
+    provider: string,
+    providerAccountId: string
+  ): Promise<void>;
 }
 
 export interface CreateTenantInput {
@@ -29,6 +46,10 @@ export interface CreateTenantInput {
   dailyLimit?: number;
   monthlyLimit?: number | null;
   sharePatterns?: boolean;
+  // Auth fields
+  passwordHash?: string;
+  verificationToken?: string;
+  verificationTokenExpiresAt?: Date;
 }
 
 export interface UpdateTenantInput {
@@ -84,6 +105,9 @@ function generateTenantId(): string {
 export class InMemoryTenantStore implements TenantStore {
   private tenants = new Map<string, Tenant>();
   private emailIndex = new Map<string, string>(); // email -> id
+  private verificationTokenIndex = new Map<string, string>(); // token -> id
+  private passwordResetTokenIndex = new Map<string, string>(); // token -> id
+  private oauthAccounts = new Map<string, { tenantId: string; provider: string; providerAccountId: string }>(); // "provider:accountId" -> data
 
   async create(data: CreateTenantInput): Promise<Tenant> {
     // Check for duplicate email
@@ -105,10 +129,22 @@ export class InMemoryTenantStore implements TenantStore {
       createdAt: new Date(),
       updatedAt: new Date(),
       lastActiveAt: null,
+      // Auth fields
+      passwordHash: data.passwordHash ?? null,
+      emailVerifiedAt: null,
+      verificationToken: data.verificationToken ?? null,
+      verificationTokenExpiresAt: data.verificationTokenExpiresAt ?? null,
+      passwordResetToken: null,
+      passwordResetTokenExpiresAt: null,
     };
 
     this.tenants.set(tenant.id, tenant);
     this.emailIndex.set(tenant.email, tenant.id);
+
+    // Index verification token if present
+    if (tenant.verificationToken) {
+      this.verificationTokenIndex.set(tenant.verificationToken, tenant.id);
+    }
 
     return tenant;
   }
@@ -190,6 +226,142 @@ export class InMemoryTenantStore implements TenantStore {
   clear(): void {
     this.tenants.clear();
     this.emailIndex.clear();
+    this.verificationTokenIndex.clear();
+    this.passwordResetTokenIndex.clear();
+    this.oauthAccounts.clear();
+  }
+
+  // ==========================================================================
+  // Authentication Methods
+  // ==========================================================================
+
+  async findByVerificationToken(token: string): Promise<Tenant | null> {
+    const id = this.verificationTokenIndex.get(token);
+    if (!id) return null;
+    const tenant = this.tenants.get(id);
+    if (!tenant) return null;
+    // Check if token is expired
+    if (tenant.verificationTokenExpiresAt && tenant.verificationTokenExpiresAt < new Date()) {
+      return null;
+    }
+    return tenant;
+  }
+
+  async findByPasswordResetToken(token: string): Promise<Tenant | null> {
+    const id = this.passwordResetTokenIndex.get(token);
+    if (!id) return null;
+    const tenant = this.tenants.get(id);
+    if (!tenant) return null;
+    // Check if token is expired
+    if (tenant.passwordResetTokenExpiresAt && tenant.passwordResetTokenExpiresAt < new Date()) {
+      return null;
+    }
+    return tenant;
+  }
+
+  async setPasswordHash(id: string, passwordHash: string): Promise<void> {
+    const tenant = this.tenants.get(id);
+    if (!tenant) {
+      throw new Error('Tenant not found');
+    }
+    tenant.passwordHash = passwordHash;
+    tenant.updatedAt = new Date();
+    this.tenants.set(id, tenant);
+  }
+
+  async setVerificationToken(id: string, token: string | null, expiresAt: Date | null): Promise<void> {
+    const tenant = this.tenants.get(id);
+    if (!tenant) {
+      throw new Error('Tenant not found');
+    }
+
+    // Remove old token from index if present
+    if (tenant.verificationToken) {
+      this.verificationTokenIndex.delete(tenant.verificationToken);
+    }
+
+    tenant.verificationToken = token;
+    tenant.verificationTokenExpiresAt = expiresAt;
+    tenant.updatedAt = new Date();
+    this.tenants.set(id, tenant);
+
+    // Add new token to index if present
+    if (token) {
+      this.verificationTokenIndex.set(token, id);
+    }
+  }
+
+  async setPasswordResetToken(id: string, token: string | null, expiresAt: Date | null): Promise<void> {
+    const tenant = this.tenants.get(id);
+    if (!tenant) {
+      throw new Error('Tenant not found');
+    }
+
+    // Remove old token from index if present
+    if (tenant.passwordResetToken) {
+      this.passwordResetTokenIndex.delete(tenant.passwordResetToken);
+    }
+
+    tenant.passwordResetToken = token;
+    tenant.passwordResetTokenExpiresAt = expiresAt;
+    tenant.updatedAt = new Date();
+    this.tenants.set(id, tenant);
+
+    // Add new token to index if present
+    if (token) {
+      this.passwordResetTokenIndex.set(token, id);
+    }
+  }
+
+  async setEmailVerified(id: string): Promise<void> {
+    const tenant = this.tenants.get(id);
+    if (!tenant) {
+      throw new Error('Tenant not found');
+    }
+
+    // Clear verification token
+    if (tenant.verificationToken) {
+      this.verificationTokenIndex.delete(tenant.verificationToken);
+    }
+
+    tenant.emailVerifiedAt = new Date();
+    tenant.verificationToken = null;
+    tenant.verificationTokenExpiresAt = null;
+    tenant.updatedAt = new Date();
+    this.tenants.set(id, tenant);
+  }
+
+  // ==========================================================================
+  // OAuth Methods
+  // ==========================================================================
+
+  async findByOAuthAccount(provider: string, providerAccountId: string): Promise<Tenant | null> {
+    const key = `${provider}:${providerAccountId}`;
+    const account = this.oauthAccounts.get(key);
+    if (!account) return null;
+    return this.tenants.get(account.tenantId) || null;
+  }
+
+  async createOAuthAccount(
+    tenantId: string,
+    provider: string,
+    providerAccountId: string
+  ): Promise<void> {
+    const tenant = this.tenants.get(tenantId);
+    if (!tenant) {
+      throw new Error('Tenant not found');
+    }
+
+    const key = `${provider}:${providerAccountId}`;
+    if (this.oauthAccounts.has(key)) {
+      throw new Error('OAuth account already linked');
+    }
+
+    this.oauthAccounts.set(key, {
+      tenantId,
+      provider,
+      providerAccountId,
+    });
   }
 }
 
