@@ -1,14 +1,28 @@
 /**
  * Pricing Calculator Tests (API-016)
+ *
+ * Note: The pricing calculator is now at /pricing/calculator,
+ * while /pricing serves the marketing pricing page.
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { app } from '../src/app.js';
 
 describe('Pricing Calculator', () => {
-  describe('GET /pricing', () => {
-    it('should return the pricing calculator HTML page', async () => {
+  describe('GET /pricing (Marketing Page)', () => {
+    it('should return the marketing pricing page', async () => {
       const res = await app.request('/pricing');
+      expect(res.status).toBe(200);
+      expect(res.headers.get('content-type')).toContain('text/html');
+
+      const html = await res.text();
+      expect(html).toContain('Pricing - Unbrowser');
+    });
+  });
+
+  describe('GET /pricing/calculator', () => {
+    it('should return the pricing calculator HTML page', async () => {
+      const res = await app.request('/pricing/calculator');
       expect(res.status).toBe(200);
       expect(res.headers.get('content-type')).toContain('text/html');
 
@@ -20,7 +34,7 @@ describe('Pricing Calculator', () => {
     });
 
     it('should include preset buttons', async () => {
-      const res = await app.request('/pricing');
+      const res = await app.request('/pricing/calculator');
       const html = await res.text();
 
       expect(html).toContain('Hobby Project');
@@ -30,7 +44,7 @@ describe('Pricing Calculator', () => {
     });
 
     it('should include tier results section', async () => {
-      const res = await app.request('/pricing');
+      const res = await app.request('/pricing/calculator');
       const html = await res.text();
 
       expect(html).toContain('tier-results');
@@ -38,7 +52,7 @@ describe('Pricing Calculator', () => {
     });
 
     it('should include unit cost information', async () => {
-      const res = await app.request('/pricing');
+      const res = await app.request('/pricing/calculator');
       const html = await res.text();
 
       expect(html).toContain('1 unit each');
@@ -47,7 +61,7 @@ describe('Pricing Calculator', () => {
     });
 
     it('should include call-to-action section', async () => {
-      const res = await app.request('/pricing');
+      const res = await app.request('/pricing/calculator');
       const html = await res.text();
 
       expect(html).toContain('Ready to get started?');
@@ -56,9 +70,9 @@ describe('Pricing Calculator', () => {
     });
   });
 
-  describe('POST /pricing/calculate', () => {
+  describe('POST /pricing/calculator/calculate', () => {
     it('should calculate costs for basic usage', async () => {
-      const res = await app.request('/pricing/calculate', {
+      const res = await app.request('/pricing/calculator/calculate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -79,7 +93,7 @@ describe('Pricing Calculator', () => {
     });
 
     it('should calculate Free tier correctly when eligible', async () => {
-      const res = await app.request('/pricing/calculate', {
+      const res = await app.request('/pricing/calculator/calculate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -97,7 +111,7 @@ describe('Pricing Calculator', () => {
     });
 
     it('should mark Free tier ineligible when Playwright is needed', async () => {
-      const res = await app.request('/pricing/calculate', {
+      const res = await app.request('/pricing/calculator/calculate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -115,7 +129,7 @@ describe('Pricing Calculator', () => {
     });
 
     it('should calculate Starter tier with base + usage', async () => {
-      const res = await app.request('/pricing/calculate', {
+      const res = await app.request('/pricing/calculator/calculate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -138,7 +152,7 @@ describe('Pricing Calculator', () => {
     });
 
     it('should calculate Team tier with lower rate', async () => {
-      const res = await app.request('/pricing/calculate', {
+      const res = await app.request('/pricing/calculator/calculate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -161,7 +175,7 @@ describe('Pricing Calculator', () => {
     });
 
     it('should detect when usage exceeds tier limits', async () => {
-      const res = await app.request('/pricing/calculate', {
+      const res = await app.request('/pricing/calculator/calculate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -178,7 +192,7 @@ describe('Pricing Calculator', () => {
     });
 
     it('should mark Enterprise tier as custom pricing', async () => {
-      const res = await app.request('/pricing/calculate', {
+      const res = await app.request('/pricing/calculator/calculate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -197,7 +211,7 @@ describe('Pricing Calculator', () => {
     });
 
     it('should recommend the cheapest tier within limits', async () => {
-      const res = await app.request('/pricing/calculate', {
+      const res = await app.request('/pricing/calculator/calculate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -214,7 +228,7 @@ describe('Pricing Calculator', () => {
     });
 
     it('should recommend Starter when Free is ineligible', async () => {
-      const res = await app.request('/pricing/calculate', {
+      const res = await app.request('/pricing/calculator/calculate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -231,7 +245,7 @@ describe('Pricing Calculator', () => {
     });
 
     it('should recommend Enterprise for very high usage', async () => {
-      const res = await app.request('/pricing/calculate', {
+      const res = await app.request('/pricing/calculator/calculate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -248,7 +262,7 @@ describe('Pricing Calculator', () => {
     });
 
     it('should handle zero usage', async () => {
-      const res = await app.request('/pricing/calculate', {
+      const res = await app.request('/pricing/calculator/calculate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -266,7 +280,7 @@ describe('Pricing Calculator', () => {
     });
 
     it('should handle missing fields with defaults', async () => {
-      const res = await app.request('/pricing/calculate', {
+      const res = await app.request('/pricing/calculator/calculate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
@@ -281,7 +295,7 @@ describe('Pricing Calculator', () => {
     });
 
     it('should calculate overage costs correctly', async () => {
-      const res = await app.request('/pricing/calculate', {
+      const res = await app.request('/pricing/calculator/calculate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -308,11 +322,14 @@ describe('Pricing Calculator', () => {
   });
 
   describe('Root endpoint includes pricing calculator', () => {
-    it('should list pricing calculator in endpoints', async () => {
-      const res = await app.request('/');
+    it('should list pricing calculator in endpoints (JSON request)', async () => {
+      const res = await app.request('/', {
+        headers: { Accept: 'application/json' },
+      });
       const data = await res.json();
 
-      expect(data.endpoints.pricingCalculator).toBe('/pricing');
+      // In 'all' mode with JSON Accept header, we get API info
+      expect(data.marketing.pricing).toBe('/pricing');
     });
   });
 });

@@ -212,9 +212,9 @@ if (!isApiMode()) {
   // User dashboard
   app.route('/dashboard', dashboardUI); // User dashboard (API keys, usage, settings)
 
-  // Pricing pages
-  app.route('/pricing', pricingPage); // Marketing pricing page
+  // Pricing pages - calculator must be before pricing page to take precedence
   app.route('/pricing/calculator', pricingCalculator); // API-016: Interactive pricing calculator
+  app.route('/pricing', pricingPage); // Marketing pricing page
 } else {
   // In API mode, redirect marketing routes to unbrowser.ai
   app.use('/auth/*', marketingOnlyMiddleware);

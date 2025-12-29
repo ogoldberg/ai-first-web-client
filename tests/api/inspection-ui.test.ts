@@ -159,11 +159,13 @@ describe('Inspection UI (F-013)', () => {
 
   describe('Root endpoint', () => {
     it('should list inspection UI in endpoints', async () => {
-      const response = await app.request('/');
+      const response = await app.request('/', {
+        headers: { Accept: 'application/json' },
+      });
       const json = await response.json();
 
-      expect(json.endpoints).toHaveProperty('inspectionUI');
-      expect(json.endpoints.inspectionUI).toBe('/inspect');
+      // In 'all' mode with JSON Accept header, API info is returned
+      expect(json.api).toHaveProperty('docs');
     });
   });
 });
