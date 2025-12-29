@@ -7,11 +7,22 @@
 import { serve } from '@hono/node-server';
 import { app } from './app.js';
 
+// Catch unhandled errors
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
 const port = parseInt(process.env.PORT || '3001', 10);
 const mode = process.env.UNBROWSER_MODE || 'all';
 
 console.log(`Starting Unbrowser API server on port ${port}...`);
 console.log(`Server mode: ${mode}`);
+console.log(`Node version: ${process.version}`);
+console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 
 serve({
   fetch: app.fetch,
