@@ -31,7 +31,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "prisma generate --schema packages/api/prisma/schema.prisma && tsc",
+    "build": "prisma generate --schema packages/api/prisma/schema.prisma && tsc && npm run build -w packages/api",
     "build:packages": "npm run build -w packages/core && npm run build -w packages/mcp",
     "dev": "tsc --watch",
     "start": "node packages/api/dist/packages/api/src/index.js",

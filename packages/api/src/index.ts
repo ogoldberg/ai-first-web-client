@@ -8,8 +8,10 @@ import { serve } from '@hono/node-server';
 import { app } from './app.js';
 
 const port = parseInt(process.env.PORT || '3001', 10);
+const mode = process.env.UNBROWSER_MODE || 'all';
 
 console.log(`Starting Unbrowser API server on port ${port}...`);
+console.log(`Server mode: ${mode}`);
 
 serve({
   fetch: app.fetch,
