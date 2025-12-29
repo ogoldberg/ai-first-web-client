@@ -10,8 +10,14 @@ import { html } from 'hono/html';
 import { randomBytes } from 'crypto';
 import { HTTPException } from 'hono/http-exception';
 import { getTenantStore, type CreateTenantInput } from '../services/tenants.js';
-import { hashPassword, verifyPassword, validatePasswordStrength } from '../services/password.js';
+// Password service is dynamically imported to avoid loading argon2 at startup
+// which can fail in environments without native build tools
 import { sendVerificationEmail, sendPasswordResetEmail, sendWelcomeEmail } from '../services/email.js';
+
+// Lazy load password functions to avoid argon2 native module issues at startup
+async function getPasswordService() {
+  return import('../services/password.js');
+}
 import {
   createSession,
   destroySession,
@@ -561,6 +567,7 @@ auth.post('/signup', signupRateLimit, async (c) => {
     return c.redirect(`/auth/signup?error=${encodeURIComponent('Invalid email address')}&email=${encodeURIComponent(email)}`);
   }
 
+  const { validatePasswordStrength, hashPassword } = await getPasswordService();
   const passwordValidation = validatePasswordStrength(password);
   if (!passwordValidation.valid) {
     return c.redirect(`/auth/signup?error=${encodeURIComponent(passwordValidation.errors.join('. '))}&email=${encodeURIComponent(email)}`);
@@ -723,6 +730,7 @@ auth.post('/login', loginRateLimit, async (c) => {
     return c.redirect(`/auth/login?error=${encodeURIComponent(loginFailedMessage)}&redirect=${encodeURIComponent(redirect)}`);
   }
 
+  const { verifyPassword } = await getPasswordService();
   const isValid = await verifyPassword(tenant.passwordHash, password);
   if (!isValid) {
     return c.redirect(`/auth/login?error=${encodeURIComponent(loginFailedMessage)}&redirect=${encodeURIComponent(redirect)}`);
@@ -1041,6 +1049,7 @@ auth.post('/reset-password', async (c) => {
     return c.redirect(`/auth/reset-password?token=${token}&error=` + encodeURIComponent('Passwords do not match'));
   }
 
+  const { validatePasswordStrength, hashPassword } = await getPasswordService();
   const passwordValidation = validatePasswordStrength(password);
   if (!passwordValidation.valid) {
     return c.redirect(`/auth/reset-password?token=${token}&error=` + encodeURIComponent(passwordValidation.errors.join('. ')));
