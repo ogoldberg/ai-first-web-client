@@ -1,27 +1,51 @@
 /**
  * Password Service
  *
- * Secure password hashing using Argon2id (winner of the Password Hashing Competition).
+ * Secure password hashing using Node.js built-in crypto.scrypt.
+ * This avoids native module dependencies that can cause issues in some environments.
  * Provides password strength validation and secure comparison.
  */
 
-import argon2 from 'argon2';
+import { scrypt, randomBytes, timingSafeEqual, ScryptOptions } from 'crypto';
+
+// Scrypt parameters (N=2^14, r=8, p=1 is recommended for interactive logins)
+const SCRYPT_KEYLEN = 64;
+const SCRYPT_OPTIONS: ScryptOptions = {
+  N: 16384, // Cost parameter (2^14)
+  r: 8, // Block size
+  p: 1, // Parallelization
+};
 
 /**
- * Hash a password using Argon2id
+ * Promisified scrypt with options
+ */
+function scryptAsync(
+  password: string,
+  salt: Buffer,
+  keylen: number,
+  options: ScryptOptions
+): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    scrypt(password, salt, keylen, options, (err, derivedKey) => {
+      if (err) {
+        reject(err);
+      } else {
+        resolve(derivedKey);
+      }
+    });
+  });
+}
+
+/**
+ * Hash a password using scrypt
  *
- * Configuration follows OWASP recommendations:
- * - Memory: 64MB (65536 KiB)
- * - Time: 3 iterations
- * - Parallelism: 4 threads
+ * Returns a string in format: salt:hash (both hex-encoded)
  */
 export async function hashPassword(password: string): Promise<string> {
-  return argon2.hash(password, {
-    type: argon2.argon2id,
-    memoryCost: 65536, // 64MB
-    timeCost: 3,
-    parallelism: 4,
-  });
+  const salt = randomBytes(32);
+  const hash = await scryptAsync(password, salt, SCRYPT_KEYLEN, SCRYPT_OPTIONS);
+
+  return `${salt.toString('hex')}:${hash.toString('hex')}`;
 }
 
 /**
@@ -29,9 +53,19 @@ export async function hashPassword(password: string): Promise<string> {
  *
  * Uses timing-safe comparison to prevent timing attacks.
  */
-export async function verifyPassword(hash: string, password: string): Promise<boolean> {
+export async function verifyPassword(storedHash: string, password: string): Promise<boolean> {
   try {
-    return await argon2.verify(hash, password);
+    const [saltHex, hashHex] = storedHash.split(':');
+    if (!saltHex || !hashHex) {
+      return false;
+    }
+
+    const salt = Buffer.from(saltHex, 'hex');
+    const storedHashBuffer = Buffer.from(hashHex, 'hex');
+
+    const hash = await scryptAsync(password, salt, SCRYPT_KEYLEN, SCRYPT_OPTIONS);
+
+    return timingSafeEqual(storedHashBuffer, hash);
   } catch {
     // Invalid hash format or other error
     return false;
@@ -118,13 +152,20 @@ export function validatePasswordStrength(password: string): PasswordValidationRe
 /**
  * Check if a password needs rehashing
  *
- * Returns true if the hash was created with older/weaker parameters
- * and should be rehashed on next successful login.
+ * For scrypt, we check if the hash format is valid.
+ * Future: could add version checking for parameter upgrades.
  */
 export function needsRehash(hash: string): boolean {
-  return argon2.needsRehash(hash, {
-    memoryCost: 65536,
-    timeCost: 3,
-    parallelism: 4,
-  });
+  // Check if hash is in our expected format
+  const [saltHex, hashHex] = hash.split(':');
+  if (!saltHex || !hashHex) {
+    return true; // Invalid format, needs rehash
+  }
+
+  // Check expected lengths (32 bytes salt = 64 hex chars, 64 bytes hash = 128 hex chars)
+  if (saltHex.length !== 64 || hashHex.length !== 128) {
+    return true;
+  }
+
+  return false;
 }
