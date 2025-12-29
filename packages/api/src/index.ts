@@ -14,6 +14,7 @@ console.log(`Starting Unbrowser API server on port ${port}...`);
 serve({
   fetch: app.fetch,
   port,
+  hostname: '0.0.0.0', // Bind to all interfaces for Railway/Docker
 });
 
 console.log(`Unbrowser API server running at http://localhost:${port}`);
