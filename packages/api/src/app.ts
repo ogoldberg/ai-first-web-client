@@ -8,6 +8,9 @@
  * - unbrowser.ai / www.unbrowser.ai -> Marketing site (landing, pricing, auth, dashboard)
  * - api.unbrowser.ai -> API endpoints only
  * - localhost:3001 -> Both (for development)
+ *
+ * IMPORTANT: API routes that depend on llm-browser are dynamically imported
+ * to avoid loading native modules in marketing-only mode.
  */
 
 import { Hono } from 'hono';
@@ -15,21 +18,13 @@ import { cors } from 'hono/cors';
 import { prettyJSON } from 'hono/pretty-json';
 import { secureHeaders } from 'hono/secure-headers';
 import { HTTPException } from 'hono/http-exception';
-import { health } from './routes/health.js';
-import { browse } from './routes/browse.js';
-import { admin } from './routes/admin.js';
-import { dashboard } from './routes/dashboard.js';
-import { adminUI } from './routes/admin-ui.js';
-import { inspectionUI } from './routes/inspection-ui.js';
-import workflows from './routes/workflows.js';
-import { billing } from './routes/billing.js';
-import { docs } from './routes/docs.js';
-import { pricingCalculator } from './routes/pricing-calculator.js';
-import { skillPacks } from './routes/skill-packs.js';
-import discovery from './routes/discovery.js'; // FUZZ-001: API discovery
-import marketplace from './routes/marketplace.js'; // FEAT-005: Pattern marketplace
 import { requestLoggerMiddleware } from './middleware/request-logger.js';
-// Self-service dashboard and marketing pages
+
+// Shared routes (no llm-browser dependency)
+import { health } from './routes/health.js';
+import { pricingCalculator } from './routes/pricing-calculator.js';
+
+// Marketing routes (no llm-browser dependency)
 import { auth } from './routes/auth.js';
 import { dashboardUI } from './routes/dashboard-ui.js';
 import { landing } from './routes/landing.js';
@@ -151,31 +146,8 @@ const apiOnlyMiddleware = async (c: any, next: any) => {
   return next();
 };
 
-// Only mount API routes if not in marketing-only mode
-if (!isMarketingMode()) {
-  // API documentation
-  app.route('/docs', docs); // API-011: Interactive API documentation
-
-  // Core API endpoints
-  app.route('/v1', browse);
-  app.route('/v1/discover', discovery); // FUZZ-001: API fuzzing discovery
-  app.route('/v1/admin', admin);
-  app.route('/v1/admin/dashboard', dashboard); // API-008: Admin dashboard API
-  app.route('/v1/workflows', workflows); // COMP-009: Workflow recording
-  app.route('/v1/skill-packs', skillPacks); // PACK-001: Skill pack distribution
-  app.route('/v1/marketplace', marketplace); // FEAT-005: Pattern marketplace
-  app.route('/v1/billing', billing); // API-007: Stripe billing integration
-
-  // Admin UI
-  app.route('/admin', adminUI); // API-008: Admin dashboard UI
-
-  // Inspection UI
-  app.route('/inspect', inspectionUI); // F-013: Human-in-the-loop inspection UI
-
-  // LLM documentation
-  app.route('', llmDocs); // LLM documentation at /llm.txt, /llm.md
-} else {
-  // In marketing mode, redirect API routes to api.unbrowser.ai
+// In marketing mode, redirect API routes to api.unbrowser.ai
+if (isMarketingMode()) {
   app.use('/docs/*', apiOnlyMiddleware);
   app.use('/docs', apiOnlyMiddleware);
   app.use('/v1/*', apiOnlyMiddleware);
@@ -352,4 +324,82 @@ app.onError((err, c) => {
   );
 });
 
-export { app };
+/**
+ * Initialize API routes (only when not in marketing mode)
+ * This function dynamically imports routes that depend on llm-browser
+ * to avoid loading native modules when they're not needed.
+ */
+async function initializeApiRoutes(): Promise<void> {
+  if (isMarketingMode()) {
+    console.log('Marketing mode: Skipping API route initialization');
+    return;
+  }
+
+  console.log('Initializing API routes...');
+
+  // Dynamic imports to avoid loading llm-browser in marketing mode
+  const [
+    docsModule,
+    browseModule,
+    discoveryModule,
+    adminModule,
+    dashboardModule,
+    workflowsModule,
+    skillPacksModule,
+    marketplaceModule,
+    billingModule,
+    adminUIModule,
+    inspectionUIModule,
+  ] = await Promise.all([
+    import('./routes/docs.js'),
+    import('./routes/browse.js'),
+    import('./routes/discovery.js'),
+    import('./routes/admin.js'),
+    import('./routes/dashboard.js'),
+    import('./routes/workflows.js'),
+    import('./routes/skill-packs.js'),
+    import('./routes/marketplace.js'),
+    import('./routes/billing.js'),
+    import('./routes/admin-ui.js'),
+    import('./routes/inspection-ui.js'),
+  ]);
+
+  // Extract exports (some use named, some use default)
+  const docs = docsModule.docs;
+  const browse = browseModule.browse;
+  const discovery = discoveryModule.default;
+  const admin = adminModule.admin;
+  const dashboard = dashboardModule.dashboard;
+  const workflows = workflowsModule.default;
+  const skillPacks = skillPacksModule.skillPacks;
+  const marketplace = marketplaceModule.default;
+  const billing = billingModule.billing;
+  const adminUI = adminUIModule.adminUI;
+  const inspectionUI = inspectionUIModule.inspectionUI;
+
+  // API documentation
+  app.route('/docs', docs); // API-011: Interactive API documentation
+
+  // Core API endpoints
+  app.route('/v1', browse);
+  app.route('/v1/discover', discovery); // FUZZ-001: API fuzzing discovery
+  app.route('/v1/admin', admin);
+  app.route('/v1/admin/dashboard', dashboard); // API-008: Admin dashboard API
+  app.route('/v1/workflows', workflows); // COMP-009: Workflow recording
+  app.route('/v1/skill-packs', skillPacks); // PACK-001: Skill pack distribution
+  app.route('/v1/marketplace', marketplace); // FEAT-005: Pattern marketplace
+  app.route('/v1/billing', billing); // API-007: Stripe billing integration
+
+  // Admin UI
+  app.route('/admin', adminUI); // API-008: Admin dashboard UI
+
+  // Inspection UI
+  app.route('/inspect', inspectionUI); // F-013: Human-in-the-loop inspection UI
+
+  // LLM documentation (also available in marketing mode via redirect)
+  app.route('', llmDocs); // LLM documentation at /llm.txt, /llm.md
+
+  console.log('API routes initialized');
+}
+
+export { app, initializeApiRoutes };
