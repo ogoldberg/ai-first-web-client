@@ -23,6 +23,7 @@
     "argon2": "^0.41.1",
     "hono": "^4.4.0",
     "llm-browser": "file:../..",
+    "prisma": "^6.19.1",
     "resend": "^4.0.0",
     "stripe": "^20.1.0",
     "swagger-ui-dist": "^5.31.0"
@@ -34,7 +35,6 @@
     "@types/autocannon": "^7.12.7",
     "@types/node": "^22.19.3",
     "autocannon": "^8.0.0",
-    "prisma": "^6.19.1",
     "tsx": "^4.19.0",
     "typescript": "^5.9.3",
     "vitest": "^1.6.0"
