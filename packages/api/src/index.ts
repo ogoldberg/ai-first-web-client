@@ -7,6 +7,10 @@
 
 import { serve } from '@hono/node-server';
 import { app, initializeApiRoutes } from './app.js';
+import { setApiKeyStore } from './middleware/auth.js';
+import { setTenantStore } from './services/tenants.js';
+import { setSessionStore } from './services/session.js';
+import { PrismaApiKeyStore, PrismaTenantStore, PrismaSessionStore } from './services/prisma-store.js';
 
 // Catch unhandled errors
 process.on('uncaughtException', (err) => {
@@ -25,6 +29,15 @@ async function main() {
   console.log(`Server mode: ${mode}`);
   console.log(`Node version: ${process.version}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+
+  // Initialize stores (required for API authentication)
+  if (mode !== 'marketing') {
+    console.log('Initializing Prisma stores...');
+    setApiKeyStore(new PrismaApiKeyStore());
+    setTenantStore(new PrismaTenantStore());
+    setSessionStore(new PrismaSessionStore());
+    console.log('Prisma stores initialized');
+  }
 
   // Initialize API routes (skipped in marketing mode)
   await initializeApiRoutes();
