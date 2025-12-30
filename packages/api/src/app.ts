@@ -337,69 +337,74 @@ async function initializeApiRoutes(): Promise<void> {
 
   console.log('Initializing API routes...');
 
-  // Dynamic imports to avoid loading llm-browser in marketing mode
-  const [
-    docsModule,
-    browseModule,
-    discoveryModule,
-    adminModule,
-    dashboardModule,
-    workflowsModule,
-    skillPacksModule,
-    marketplaceModule,
-    billingModule,
-    adminUIModule,
-    inspectionUIModule,
-  ] = await Promise.all([
-    import('./routes/docs.js'),
-    import('./routes/browse.js'),
-    import('./routes/discovery.js'),
-    import('./routes/admin.js'),
-    import('./routes/dashboard.js'),
-    import('./routes/workflows.js'),
-    import('./routes/skill-packs.js'),
-    import('./routes/marketplace.js'),
-    import('./routes/billing.js'),
-    import('./routes/admin-ui.js'),
-    import('./routes/inspection-ui.js'),
-  ]);
+  try {
+    // Dynamic imports to avoid loading llm-browser in marketing mode
+    const [
+      docsModule,
+      browseModule,
+      discoveryModule,
+      adminModule,
+      dashboardModule,
+      workflowsModule,
+      skillPacksModule,
+      marketplaceModule,
+      billingModule,
+      adminUIModule,
+      inspectionUIModule,
+    ] = await Promise.all([
+      import('./routes/docs.js'),
+      import('./routes/browse.js'),
+      import('./routes/discovery.js'),
+      import('./routes/admin.js'),
+      import('./routes/dashboard.js'),
+      import('./routes/workflows.js'),
+      import('./routes/skill-packs.js'),
+      import('./routes/marketplace.js'),
+      import('./routes/billing.js'),
+      import('./routes/admin-ui.js'),
+      import('./routes/inspection-ui.js'),
+    ]);
 
-  // Extract exports (some use named, some use default)
-  const docs = docsModule.docs;
-  const browse = browseModule.browse;
-  const discovery = discoveryModule.default;
-  const admin = adminModule.admin;
-  const dashboard = dashboardModule.dashboard;
-  const workflows = workflowsModule.default;
-  const skillPacks = skillPacksModule.skillPacks;
-  const marketplace = marketplaceModule.default;
-  const billing = billingModule.billing;
-  const adminUI = adminUIModule.adminUI;
-  const inspectionUI = inspectionUIModule.inspectionUI;
+    // Extract exports (some use named, some use default)
+    const docs = docsModule.docs;
+    const browse = browseModule.browse;
+    const discovery = discoveryModule.default;
+    const admin = adminModule.admin;
+    const dashboard = dashboardModule.dashboard;
+    const workflows = workflowsModule.default;
+    const skillPacks = skillPacksModule.skillPacks;
+    const marketplace = marketplaceModule.default;
+    const billing = billingModule.billing;
+    const adminUI = adminUIModule.adminUI;
+    const inspectionUI = inspectionUIModule.inspectionUI;
 
-  // API documentation
-  app.route('/docs', docs); // API-011: Interactive API documentation
+    // API documentation
+    app.route('/docs', docs); // API-011: Interactive API documentation
 
-  // Core API endpoints
-  app.route('/v1', browse);
-  app.route('/v1/discover', discovery); // FUZZ-001: API fuzzing discovery
-  app.route('/v1/admin', admin);
-  app.route('/v1/admin/dashboard', dashboard); // API-008: Admin dashboard API
-  app.route('/v1/workflows', workflows); // COMP-009: Workflow recording
-  app.route('/v1/skill-packs', skillPacks); // PACK-001: Skill pack distribution
-  app.route('/v1/marketplace', marketplace); // FEAT-005: Pattern marketplace
-  app.route('/v1/billing', billing); // API-007: Stripe billing integration
+    // Core API endpoints
+    app.route('/v1', browse);
+    app.route('/v1/discover', discovery); // FUZZ-001: API fuzzing discovery
+    app.route('/v1/admin', admin);
+    app.route('/v1/admin/dashboard', dashboard); // API-008: Admin dashboard API
+    app.route('/v1/workflows', workflows); // COMP-009: Workflow recording
+    app.route('/v1/skill-packs', skillPacks); // PACK-001: Skill pack distribution
+    app.route('/v1/marketplace', marketplace); // FEAT-005: Pattern marketplace
+    app.route('/v1/billing', billing); // API-007: Stripe billing integration
 
-  // Admin UI
-  app.route('/admin', adminUI); // API-008: Admin dashboard UI
+    // Admin UI
+    app.route('/admin', adminUI); // API-008: Admin dashboard UI
 
-  // Inspection UI
-  app.route('/inspect', inspectionUI); // F-013: Human-in-the-loop inspection UI
+    // Inspection UI
+    app.route('/inspect', inspectionUI); // F-013: Human-in-the-loop inspection UI
 
-  // LLM documentation (also available in marketing mode via redirect)
-  app.route('', llmDocs); // LLM documentation at /llm.txt, /llm.md
+    // LLM documentation (also available in marketing mode via redirect)
+    app.route('', llmDocs); // LLM documentation at /llm.txt, /llm.md
 
-  console.log('API routes initialized');
+    console.log('API routes initialized');
+  } catch (error) {
+    console.error('Failed to initialize API routes:', error);
+    console.error('API routes will not be available. This is expected in marketing-only mode.');
+  }
 }
 
 export { app, initializeApiRoutes };
