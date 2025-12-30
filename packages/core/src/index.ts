@@ -1,68 +1,163 @@
 /**
  * @unbrowser/core
  *
- * Official SDK for the Unbrowser cloud API.
+ * Official SDK for the Unbrowser cloud API - intelligent web browsing for AI agents.
  *
- * This package provides a thin HTTP client wrapper for interacting with
- * the Unbrowser cloud service at api.unbrowser.ai.
+ * ## Overview
  *
- * @example
+ * Unbrowser is an intelligent web browsing API that learns from patterns,
+ * discovers APIs automatically, and progressively optimizes to bypass
+ * browser rendering entirely.
+ *
+ * ## Quick Start
+ *
  * ```typescript
  * import { createUnbrowser } from '@unbrowser/core';
  *
  * const client = createUnbrowser({
- *   apiKey: process.env.UNBROWSER_API_KEY,
+ *   apiKey: process.env.UNBROWSER_API_KEY
  * });
  *
+ * // Browse a URL
  * const result = await client.browse('https://example.com');
  * console.log(result.content.markdown);
  * ```
  *
- * @see https://unbrowser.ai for documentation
+ * ## Self-Discovery (LLM-Friendly)
+ *
+ * This SDK is designed for AI agents. Use these methods to discover capabilities:
+ *
+ * ```typescript
+ * // Get SDK overview
+ * const caps = client.describe();
+ *
+ * // Get info about a specific method
+ * const info = client.getMethodInfo('browse');
+ *
+ * // Search for methods
+ * const results = client.searchMethods('extract content');
+ *
+ * // Generate llms.txt
+ * const llmsTxt = client.generateLlmsTxt();
+ * ```
+ *
+ * ## Key Features
+ *
+ * - **Tiered Rendering**: Intelligence (~50ms) -> Lightweight (~200ms) -> Playwright (~2-5s)
+ * - **API Discovery**: Automatically discovers and caches API patterns
+ * - **Workflow Recording**: Record and replay browsing workflows
+ * - **Skill Packs**: Export and import portable skill collections
+ * - **Self-Describing**: Built for LLM discovery with introspection methods
+ *
+ * @see https://docs.unbrowser.ai for full documentation
+ * @see https://unbrowser.ai for product information
+ *
+ * @packageDocumentation
+ * @module @unbrowser/core
  */
 
+/**
+ * SDK version
+ */
 export const VERSION = '0.1.0-alpha.1';
 
-// Export everything from http-client
+// ============================================
+// Client
+// ============================================
+
+export { UnbrowserClient, createUnbrowser } from './client.js';
+
+// ============================================
+// Errors
+// ============================================
+
 export {
-  // Factory function
-  createUnbrowser,
-
-  // Client class
-  UnbrowserClient,
-
-  // Error class
   UnbrowserError,
+  isUnbrowserError,
+  isRetryableError,
+  rateLimitError,
+  timeoutError,
+  ERROR_RECOVERY,
+  type ErrorCode,
+  type ErrorRecovery,
+} from './errors.js';
 
-  // Types
-  type UnbrowserConfig,
-  type BrowseOptions,
-  type BrowseResult,
-  type BatchResult,
-  type SessionData,
-  type Cookie,
-  type DomainIntelligence,
-  type ProgressEvent,
-  type ProgressCallback,
+// ============================================
+// Types
+// ============================================
 
-  // Plan Preview Types
-  type BrowsePreview,
-  type ExecutionPlan,
-  type ExecutionStep,
-  type TimeEstimate,
-  type ConfidenceLevel,
-  type ConfidenceFactors,
+export type {
+  // Configuration
+  UnbrowserConfig,
 
-  // Skill Pack Types (PACK-001)
-  type SkillVertical,
-  type SkillTier,
-  type BrowsingSkill,
-  type AntiPattern,
-  type SkillWorkflow,
-  type SkillPackMetadata,
-  type SkillPack,
-  type SkillExportOptions,
-  type SkillConflictResolution,
-  type SkillImportOptions,
-  type SkillImportResult,
-} from './http-client.js';
+  // Browse options and results
+  BrowseOptions,
+  BrowseResult,
+  ContentResult,
+  ExtractedTable,
+  DiscoveredApi,
+  BrowseMetadata,
+  VerificationOptions,
+  VerificationResult,
+  DebugOptions,
+
+  // Session
+  SessionData,
+  Cookie,
+
+  // Batch
+  BatchResult,
+
+  // Domain intelligence
+  DomainIntelligence,
+
+  // Preview
+  BrowsePreview,
+  ExecutionPlan,
+  ExecutionStep,
+  TimeEstimate,
+  ConfidenceLevel,
+  ConfidenceFactors,
+
+  // Progress
+  ProgressEvent,
+  ProgressCallback,
+
+  // API Discovery
+  FuzzDiscoveryOptions,
+  FuzzDiscoveryResult,
+
+  // Skill Packs
+  SkillVertical,
+  SkillTier,
+  BrowsingSkill,
+  AntiPattern,
+  SkillWorkflow,
+  SkillPackMetadata,
+  SkillPack,
+  SkillExportOptions,
+  SkillConflictResolution,
+  SkillImportOptions,
+  SkillImportResult,
+
+  // Usage
+  UsageStats,
+  HealthStatus,
+} from './types.js';
+
+// ============================================
+// Introspection (LLM-Friendly)
+// ============================================
+
+export {
+  getCapabilities,
+  getMethodInfo,
+  listMethods,
+  searchMethods,
+  getExampleFor,
+  generateLlmsTxt,
+  METHOD_CATALOG,
+  type SDKCapabilities,
+  type MethodInfo,
+  type ParameterInfo,
+} from './introspection.js';

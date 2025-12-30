@@ -5,8 +5,9 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest';
-import { app } from '../src/app.js';
+import { app, initializeApiRoutes } from '../src/app.js';
 import { setApiKeyStore, hashApiKey } from '../src/middleware/auth.js';
+import { setBrowserClient } from '../src/services/browser.js';
 import type { ApiKey, Tenant, Plan } from '../src/middleware/types.js';
 
 // Test tenant and API key
@@ -41,14 +42,57 @@ const testApiKeyRecord: ApiKey & { tenant: Tenant } = {
 // Store for test keys
 const testKeys = new Map<string, ApiKey & { tenant: Tenant }>();
 
-// Set up API key store once for all tests
-beforeAll(() => {
+// Mock browser client for security tests
+const mockBrowserClient = {
+  browse: async () => ({
+    url: 'https://example.com',
+    finalUrl: 'https://example.com',
+    title: 'Example',
+    content: { markdown: '# Example', text: 'Example', html: '<h1>Example</h1>' },
+    tier: 'intelligence',
+    tiersAttempted: ['intelligence'],
+    tables: [],
+    links: [],
+    discoveredApis: [],
+    learning: { patternsApplied: false },
+    fieldConfidence: { aggregated: { score: 0.9 } },
+  }),
+  fetch: async () => ({
+    url: 'https://example.com',
+    finalUrl: 'https://example.com',
+    content: { markdown: '# Example', text: 'Example', title: 'Example' },
+    tier: 'intelligence',
+    tiersAttempted: ['intelligence'],
+  }),
+  getDomainIntelligence: async () => ({
+    knownPatterns: 0,
+    selectorChains: 0,
+    validators: 0,
+    paginationPatterns: 0,
+    recentFailures: 0,
+    successRate: 0,
+    domainGroup: null,
+    recommendedWaitStrategy: 'networkidle',
+    shouldUseSession: false,
+  }),
+  initialize: async () => {},
+  cleanup: async () => {},
+} as any;
+
+// Set up API key store and initialize routes once for all tests
+beforeAll(async () => {
   testKeys.set(testApiKeyRecord.keyHash, testApiKeyRecord);
   setApiKeyStore({
     async findByHash(keyHash: string) {
       return testKeys.get(keyHash) || null;
     },
   });
+
+  // Set up mock browser client before initializing routes
+  setBrowserClient(mockBrowserClient);
+
+  // Initialize API routes (required for /v1/* routes to be available)
+  await initializeApiRoutes();
 });
 
 afterAll(() => {
