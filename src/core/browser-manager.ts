@@ -188,7 +188,10 @@ export class BrowserManager {
 
         try {
           const connectionOptions = this.provider.getConnectionOptions();
-          this.browser = await pw.chromium.connect(endpoint, connectionOptions);
+          // Use connectOverCDP for Chrome DevTools Protocol connections
+          // This is required for Browserless.io and other CDP-based browser services
+          // chromium.connect() is for Playwright's own browser server protocol
+          this.browser = await pw.chromium.connectOverCDP(endpoint, connectionOptions);
           logger.browser.info('Connected to remote browser successfully', {
             provider: this.provider.name,
           });
