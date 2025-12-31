@@ -1,5 +1,5 @@
 {
-  "name": "llm-browser",
+  "name": "unbrowser",
   "version": "0.5.0",
   "description": "Web browser for AI agents. Learns from every interaction, discovers APIs, and progressively optimizes - 10x faster on repeated access.",
   "type": "module",
@@ -23,7 +23,7 @@
     }
   },
   "bin": {
-    "llm-browser": "dist/index.js"
+    "unbrowser": "dist/index.js"
   },
   "files": [
     "dist",
@@ -65,15 +65,15 @@
     "retrieval-augmented-generation",
     "semantic-embeddings"
   ],
-  "author": "",
+  "author": "Rabbit Found <npm@rabbitfound.com>",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/anthropics/llm-browser.git"
+    "url": "git+https://github.com/rabbit-found/unbrowser.git"
   },
-  "homepage": "https://github.com/anthropics/llm-browser#readme",
+  "homepage": "https://unbrowser.ai",
   "bugs": {
-    "url": "https://github.com/anthropics/llm-browser/issues"
+    "url": "https://github.com/rabbit-found/unbrowser/issues"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^0.6.0",

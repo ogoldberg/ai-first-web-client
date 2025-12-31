@@ -348,6 +348,7 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 | CLOUD-005 | Implement Redis caching layer | M | Complete | redis-client.ts, redis-usage.ts, redis-session.ts with graceful fallback (PR #140) |
 | CLOUD-006 | Add external proxy integration | M | Complete | brightdata-provider.ts with session-based IP rotation, multi-country support (PR #141) |
 | CLOUD-007 | Implement usage billing export | M | Complete | Usage exported via Stripe Billing Meter Events API. Included in API-007 |
+| CLOUD-008 | Unify discovery caches for multi-instance | L | Not Started | 6+ discovery modules use in-memory Maps that don't survive restarts or share across instances. Create unified cache layer with: (1) Redis/DB backing for persistence, (2) tenant isolation via cache key prefixes, (3) LRU eviction with configurable max size, (4) failed domain tracking with exponential backoff cooldown. Affected: openapi-discovery, robots-sitemap-discovery, api-documentation-discovery, asyncapi-discovery, alt-spec-discovery, backend-framework-fingerprinting |
 
 **Benefits:**
 - Primary monetization path

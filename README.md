@@ -1,4 +1,4 @@
-# llm-browser
+# unbrowser
 
 > **This is NOT an AI-enhanced browser for humans.**
 > This is a web browser where **the user is an LLM**.
@@ -7,7 +7,7 @@ A browser that AI agents control directly via MCP. It learns from every interact
 
 ## What This Actually Does
 
-When an LLM browses with `llm-browser`:
+When an LLM browses with `unbrowser`:
 
 1. **First visit**: Uses tiered rendering (fastest method that works)
 2. **Learning**: Discovers APIs, learns selectors, builds reusable skills
@@ -28,16 +28,16 @@ Next visit:   LLM -> smart_browse -> API call (~200ms)   -> Same content, much f
 ## Installation
 
 ```bash
-npm install llm-browser
+npm install unbrowser
 ```
 
 **If cloning from source**: Run `npm run build` before using. The package exports point to compiled code in `dist/` which isn't checked into git:
 
 ```bash
-git clone https://github.com/anthropics/llm-browser
-cd llm-browser
+git clone https://github.com/rabbit-found/unbrowser
+cd unbrowser
 npm install
-npm run build  # Required! Compiles src/ → dist/
+npm run build  # Required! Compiles src/ -> dist/
 ```
 
 ### Optional Dependencies
@@ -64,7 +64,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
   "mcpServers": {
     "unbrowser": {
       "command": "npx",
-      "args": ["llm-browser"]
+      "args": ["unbrowser"]
     }
   }
 }
@@ -76,7 +76,7 @@ Or if installed globally:
 {
   "mcpServers": {
     "unbrowser": {
-      "command": "llm-browser"
+      "command": "unbrowser"
     }
   }
 }
@@ -87,7 +87,7 @@ Then restart Claude Desktop. The browser tools will be available.
 ## Programmatic Usage
 
 ```typescript
-import { createLLMBrowser } from 'llm-browser/sdk';
+import { createLLMBrowser } from 'unbrowser/sdk';
 
 const browser = await createLLMBrowser();
 
@@ -150,7 +150,7 @@ const result = await browser.browse('https://example.com', {
 
 **API Fuzzing Discovery** - Proactively discover API endpoints:
 ```typescript
-import { ApiDiscoveryOrchestrator } from 'llm-browser/discovery';
+import { ApiDiscoveryOrchestrator } from 'unbrowser/discovery';
 
 const orchestrator = new ApiDiscoveryOrchestrator(learningEngine);
 const result = await orchestrator.discoverViaFuzzing('https://api.example.com', {
@@ -171,7 +171,7 @@ const result = await orchestrator.discoverViaFuzzing('https://api.example.com', 
 
 ## MCP Tools
 
-The LLM Browser exposes **5 core tools** by default, designed to minimize cognitive load:
+The Unbrowser exposes **5 core tools** by default, designed to minimize cognitive load:
 
 ### Core Tools
 
@@ -216,12 +216,12 @@ Parameters:
 
 Additional tools are available for debugging and administration:
 
-- **Debug tools** (set `LLM_BROWSER_DEBUG_MODE=1`):
+- **Debug tools** (set `UNBROWSER_DEBUG_MODE=1`):
   - `capture_screenshot` - Visual debugging
   - `export_har` - Network traffic analysis
   - `debug_traces` - Failure analysis and replay
 
-- **Admin tools** (set `LLM_BROWSER_ADMIN_MODE=1`):
+- **Admin tools** (set `UNBROWSER_ADMIN_MODE=1`):
   - Performance metrics, usage analytics, tier management
   - Deprecated tools for backward compatibility
 
@@ -245,7 +245,7 @@ The browser stores learned patterns in the current directory:
 
 ## Comparison with Alternatives
 
-| Feature | Jina/Firecrawl | Puppeteer | llm-browser |
+| Feature | Jina/Firecrawl | Puppeteer | unbrowser |
 |---------|---------------|-----------|-------------|
 | Clean content extraction | Yes | No | Yes |
 | API discovery | No | No | Yes |
@@ -281,8 +281,8 @@ Be honest about what this can and can't do:
 ## Development
 
 ```bash
-git clone https://github.com/anthropics/llm-browser
-cd llm-browser
+git clone https://github.com/rabbit-found/unbrowser
+cd unbrowser
 npm install
 npm run build
 npm test

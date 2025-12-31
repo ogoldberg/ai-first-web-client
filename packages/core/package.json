@@ -33,15 +33,15 @@
     "mcp",
     "claude"
   ],
-  "author": "",
+  "author": "Rabbit Found <npm@rabbitfound.com>",
   "license": "MIT",
   "homepage": "https://unbrowser.ai",
   "bugs": {
-    "url": "https://github.com/ogoldberg/ai-first-web-client/issues"
+    "url": "https://github.com/rabbit-found/unbrowser/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ogoldberg/ai-first-web-client.git",
+    "url": "git+https://github.com/rabbit-found/unbrowser.git",
     "directory": "packages/core"
   },
   "devDependencies": {

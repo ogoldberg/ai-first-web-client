@@ -28,11 +28,15 @@
     "claude",
     "anthropic"
   ],
-  "author": "",
+  "author": "Rabbit Found <npm@rabbitfound.com>",
   "license": "MIT",
+  "homepage": "https://unbrowser.ai",
+  "bugs": {
+    "url": "https://github.com/rabbit-found/unbrowser/issues"
+  },
   "repository": {
     "type": "git",
-    "url": "https://github.com/ogoldberg/ai-first-web-client",
+    "url": "git+https://github.com/rabbit-found/unbrowser.git",
     "directory": "packages/mcp"
   },
   "dependencies": {
