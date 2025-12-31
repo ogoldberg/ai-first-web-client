@@ -838,6 +838,76 @@ export {
   type FieldLevelChangeTrackerConfig,
 } from './core/field-level-change-tracker.js';
 
+// =============================================================================
+// CROSS-SOURCE VERIFICATION (INT-015)
+// =============================================================================
+
+/**
+ * Cross-source verifier for comparing data across multiple sources.
+ * Detects contradictions and provides confidence-scored verified facts.
+ *
+ * @example
+ * ```typescript
+ * import {
+ *   verifySources,
+ *   hasContradictions,
+ *   getHighConfidenceFacts
+ * } from 'llm-browser/sdk';
+ *
+ * // Define sources to verify
+ * const sources = [
+ *   { url: 'https://gov.example.com/visa', data: { fee: 100 } },
+ *   { url: 'https://embassy.example.com/visa', data: { fee: 100 } },
+ *   { url: 'https://blog.example.com/visa', data: { fee: 150 } },
+ * ];
+ *
+ * // Verify data from multiple sources
+ * const result = verifySources(sources);
+ *
+ * // Check for contradictions
+ * if (result.hasContradictions) {
+ *   for (const c of result.contradictions) {
+ *     console.log(`${c.field}: ${c.explanation}`);
+ *     console.log(`Recommended: ${c.recommendedValue}`);
+ *   }
+ * }
+ *
+ * // Get verified facts
+ * for (const fact of result.verifiedFacts) {
+ *   console.log(`${fact.field}: ${fact.value}`);
+ *   console.log(`  Agreement: ${fact.agreementLevel}`);
+ *   console.log(`  Confidence: ${fact.confidence}`);
+ * }
+ *
+ * // Quick checks
+ * if (hasContradictions(sources)) {
+ *   console.log('Sources disagree - verify manually');
+ * }
+ *
+ * // Get only high-confidence facts
+ * const reliable = getHighConfidenceFacts(sources);
+ * ```
+ */
+export {
+  CrossSourceVerifier,
+  createCrossSourceVerifier,
+  getCrossSourceVerifier,
+  verifySources,
+  hasContradictions,
+  getContradictions,
+  getHighConfidenceFacts,
+  type SourceCredibility,
+  type AgreementLevel,
+  type ConfidenceLevel,
+  type VerificationSource,
+  type Contradiction,
+  type VerifiedFact,
+  type VerificationResult,
+  type VerificationOptions,
+  type VerificationHistoryRecord,
+  type CrossSourceVerifierConfig,
+} from './core/cross-source-verifier.js';
+
 /**
  * Research topic categories with associated verification presets
  */
