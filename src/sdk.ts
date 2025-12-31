@@ -854,12 +854,15 @@ export {
  *   getHighConfidenceFacts
  * } from 'llm-browser/sdk';
  *
- * // Verify data from multiple sources
- * const result = verifySources([
+ * // Define sources to verify
+ * const sources = [
  *   { url: 'https://gov.example.com/visa', data: { fee: 100 } },
  *   { url: 'https://embassy.example.com/visa', data: { fee: 100 } },
  *   { url: 'https://blog.example.com/visa', data: { fee: 150 } },
- * ]);
+ * ];
+ *
+ * // Verify data from multiple sources
+ * const result = verifySources(sources);
  *
  * // Check for contradictions
  * if (result.hasContradictions) {

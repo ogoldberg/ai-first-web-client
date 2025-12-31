@@ -407,7 +407,8 @@ export class CrossSourceVerifier {
     const overallConfidence = this.calculateOverallConfidence(
       verifiedFacts,
       contradictions,
-      sourcesWithCredibility
+      sourcesWithCredibility,
+      options
     );
 
     // Generate summary
@@ -521,8 +522,30 @@ export class CrossSourceVerifier {
       const path = prefix ? `${prefix}.${key}` : key;
       const value = obj[key];
 
-      if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
-        this.collectFieldsFromObject(value as Record<string, unknown>, path, fieldSet);
+      if (value !== null && typeof value === 'object') {
+        if (Array.isArray(value)) {
+          // For arrays of objects, explore with indexed paths (e.g., people.0.name)
+          // For arrays of primitives, treat the array as a single field value
+          const hasObjectElements = value.some(
+            item => item !== null && typeof item === 'object' && !Array.isArray(item)
+          );
+
+          if (hasObjectElements) {
+            for (let i = 0; i < value.length; i++) {
+              const item = value[i];
+              const indexedPath = `${path}.${i}`;
+              if (item !== null && typeof item === 'object' && !Array.isArray(item)) {
+                this.collectFieldsFromObject(item as Record<string, unknown>, indexedPath, fieldSet);
+              } else {
+                fieldSet.add(indexedPath);
+              }
+            }
+          }
+          // Always add the array itself as a field for whole-array comparison
+          fieldSet.add(path);
+        } else {
+          this.collectFieldsFromObject(value as Record<string, unknown>, path, fieldSet);
+        }
       } else {
         fieldSet.add(path);
       }
@@ -583,11 +606,12 @@ export class CrossSourceVerifier {
       ...entry,
     }));
 
-    // Sort by number of sources (descending), then by credibility
+    // Sort by credibility first (official sources preferred), then by number of sources
+    // This ensures that official/authoritative sources are recommended even with fewer sources
     entries.sort((a, b) => {
-      const countDiff = b.sources.length - a.sources.length;
-      if (countDiff !== 0) return countDiff;
-      return this.credibilityScore(b.credibility) - this.credibilityScore(a.credibility);
+      const credDiff = this.credibilityScore(b.credibility) - this.credibilityScore(a.credibility);
+      if (credDiff !== 0) return credDiff;
+      return b.sources.length - a.sources.length;
     });
 
     const topEntry = entries[0];
@@ -643,7 +667,14 @@ export class CrossSourceVerifier {
       if (current === null || current === undefined || typeof current !== 'object') {
         return undefined;
       }
-      current = (current as Record<string, unknown>)[part];
+      // Handle both object properties and array indices
+      if (Array.isArray(current)) {
+        const index = parseInt(part, 10);
+        if (isNaN(index)) return undefined;
+        current = current[index];
+      } else {
+        current = (current as Record<string, unknown>)[part];
+      }
     }
 
     return current;
@@ -881,7 +912,8 @@ export class CrossSourceVerifier {
   private calculateOverallConfidence(
     facts: VerifiedFact[],
     contradictions: Contradiction[],
-    sources: VerificationSource[]
+    sources: VerificationSource[],
+    options: VerificationOptions = {}
   ): ConfidenceLevel {
     if (facts.length === 0) return 'uncertain';
 
@@ -889,14 +921,15 @@ export class CrossSourceVerifier {
     const criticalContradictions = contradictions.filter(c => c.severity === 'critical');
     if (criticalContradictions.length > 0) return 'low';
 
-    // Calculate confidence score
+    // Calculate confidence score with optional field weights
     let score = 0;
     let total = 0;
 
     for (const fact of facts) {
       const weight = this.getConfidenceWeight(fact.confidence);
-      score += weight;
-      total += 1;
+      const fieldWeight = options.fieldWeights?.[fact.field] ?? 1;
+      score += weight * fieldWeight;
+      total += fieldWeight;
     }
 
     // Bonus for official sources
@@ -995,7 +1028,7 @@ export class CrossSourceVerifier {
     topic?: string
   ): Promise<void> {
     const record: VerificationHistoryRecord = {
-      id: crypto.randomUUID(),
+      id: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`,
       topic,
       timestamp: result.timestamp,
       sourceCount: result.sourceCount,

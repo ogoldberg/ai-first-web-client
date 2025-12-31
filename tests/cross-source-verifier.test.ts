@@ -126,14 +126,12 @@ describe('CrossSourceVerifier', () => {
 
       const result = verifier.verify(sources);
 
-      // Even though 120 has more sources, official source should be preferred
-      if (result.hasContradictions) {
-        const feeContradiction = result.contradictions.find(c => c.field === 'fee');
-        if (feeContradiction) {
-          // Check that the official value is considered
-          expect(feeContradiction.values.some(v => v.value === 100)).toBe(true);
-        }
-      }
+      // Even though 120 has more sources (2), official source (100) should be preferred
+      expect(result.hasContradictions).toBe(true);
+      const feeContradiction = result.contradictions.find(c => c.field === 'fee');
+      expect(feeContradiction).toBeDefined();
+      // The recommended value should be from the official source
+      expect(feeContradiction!.recommendedValue).toBe(100);
     });
 
     it('should allow custom credibility assignment', () => {
