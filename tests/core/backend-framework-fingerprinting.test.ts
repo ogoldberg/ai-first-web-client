@@ -773,15 +773,15 @@ describe('discoverBackendFramework', () => {
 // ============================================
 
 describe('caching', () => {
-  beforeEach(() => {
-    clearFingerprintCache();
+  beforeEach(async () => {
+    await clearFingerprintCache();
   });
 
-  afterEach(() => {
-    clearFingerprintCache();
+  afterEach(async () => {
+    await clearFingerprintCache();
   });
 
-  it('should cache fingerprint results', () => {
+  it('should cache fingerprint results', async () => {
     const result: BackendFrameworkDiscoveryResult = {
       found: true,
       result: {
@@ -794,8 +794,8 @@ describe('caching', () => {
       patterns: [],
     };
 
-    cacheFingerprint('example.com', result);
-    const cached = getCachedFingerprint('example.com');
+    await cacheFingerprint('example.com', result);
+    const cached = await getCachedFingerprint('example.com');
 
     expect(cached).not.toBeNull();
     expect(cached?.found).toBe(true);
@@ -803,39 +803,39 @@ describe('caching', () => {
     expect(cached?.cachedAt).toBeDefined();
   });
 
-  it('should return null for uncached domain', () => {
-    const cached = getCachedFingerprint('uncached.com');
+  it('should return null for uncached domain', async () => {
+    const cached = await getCachedFingerprint('uncached.com');
     expect(cached).toBeNull();
   });
 
-  it('should clear specific domain cache', () => {
+  it('should clear specific domain cache', async () => {
     const result: BackendFrameworkDiscoveryResult = {
       found: true,
       patterns: [],
     };
 
-    cacheFingerprint('example1.com', result);
-    cacheFingerprint('example2.com', result);
+    await cacheFingerprint('example1.com', result);
+    await cacheFingerprint('example2.com', result);
 
-    clearFingerprintCache('example1.com');
+    await clearFingerprintCache('example1.com');
 
-    expect(getCachedFingerprint('example1.com')).toBeNull();
-    expect(getCachedFingerprint('example2.com')).not.toBeNull();
+    expect(await getCachedFingerprint('example1.com')).toBeNull();
+    expect(await getCachedFingerprint('example2.com')).not.toBeNull();
   });
 
-  it('should clear all cache', () => {
+  it('should clear all cache', async () => {
     const result: BackendFrameworkDiscoveryResult = {
       found: true,
       patterns: [],
     };
 
-    cacheFingerprint('example1.com', result);
-    cacheFingerprint('example2.com', result);
+    await cacheFingerprint('example1.com', result);
+    await cacheFingerprint('example2.com', result);
 
-    clearFingerprintCache();
+    await clearFingerprintCache();
 
-    expect(getCachedFingerprint('example1.com')).toBeNull();
-    expect(getCachedFingerprint('example2.com')).toBeNull();
+    expect(await getCachedFingerprint('example1.com')).toBeNull();
+    expect(await getCachedFingerprint('example2.com')).toBeNull();
   });
 
   it('should use cached result in discoverBackendFrameworkCached', async () => {

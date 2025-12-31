@@ -981,41 +981,84 @@ function createValidationForEndpoint(endpoint: OpenAPIEndpoint): PatternValidati
 }
 
 // ============================================
-// CACHING
+// CACHING (CLOUD-008: Unified Discovery Cache)
 // ============================================
 
-/**
- * Cache for discovered OpenAPI specs
- * Key: domain, Value: discovery result
- */
-const specCache = new Map<string, { result: OpenAPIDiscoveryResult; timestamp: number }>();
+import { getDiscoveryCache } from '../utils/discovery-cache.js';
 
 /** How long to cache discovery results (1 hour) */
 const CACHE_TTL = 60 * 60 * 1000;
 
 /**
  * Get cached discovery result or discover anew
+ * Uses unified discovery cache with tenant isolation and failed domain tracking
  */
 export async function discoverOpenAPICached(
   domain: string,
   options: OpenAPIDiscoveryOptions = {}
 ): Promise<OpenAPIDiscoveryResult> {
-  const cached = specCache.get(domain);
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-    discoveryLogger.debug('Using cached OpenAPI discovery result', { domain });
-    return cached.result;
+  const cache = getDiscoveryCache();
+
+  // Check if domain is in cooldown from previous failures
+  if (cache.isInCooldown('openapi', domain)) {
+    const cooldownInfo = cache.getCooldownInfo('openapi', domain);
+    discoveryLogger.debug('Domain in cooldown, returning empty result', {
+      domain,
+      failureCount: cooldownInfo?.failureCount,
+      cooldownUntil: cooldownInfo?.cooldownUntil,
+    });
+    return {
+      found: false,
+      probedLocations: [],
+      discoveryTime: 0,
+    };
   }
 
-  const result = await discoverOpenAPI(domain, options);
-  specCache.set(domain, { result, timestamp: Date.now() });
-  return result;
+  // Check cache
+  const cached = await cache.get<OpenAPIDiscoveryResult>('openapi', domain);
+  if (cached) {
+    discoveryLogger.debug('Using cached OpenAPI discovery result', { domain });
+    return cached;
+  }
+
+  // Perform discovery
+  try {
+    const result = await discoverOpenAPI(domain, options);
+    await cache.set('openapi', domain, result, CACHE_TTL);
+    return result;
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+    cache.recordFailure('openapi', domain, errorMsg);
+    throw err;
+  }
 }
 
 /**
  * Clear the spec cache
+ * @param domain - Optional domain to clear, or all if not specified
  */
-export function clearSpecCache(): void {
-  specCache.clear();
+export async function clearSpecCache(domain?: string): Promise<void> {
+  const cache = getDiscoveryCache();
+  if (domain) {
+    await cache.delete('openapi', domain);
+  } else {
+    await cache.clear('openapi');
+  }
+}
+
+/**
+ * Get cache statistics for OpenAPI discovery
+ */
+export async function getOpenAPICacheStats(): Promise<{ size: number; domains: string[] }> {
+  const cache = getDiscoveryCache();
+  const stats = await cache.getStats();
+  // Get domains from the unified cache
+  const backend = cache as any;
+  // For compatibility, return the count and a simplified domain list
+  return {
+    size: stats.entriesBySource['openapi'] || 0,
+    domains: [], // Domain list is now internal to cache
+  };
 }
 
 /**

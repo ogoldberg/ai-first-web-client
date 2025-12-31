@@ -583,55 +583,47 @@ export const API_CONVENTIONS: Record<BackendFramework, FrameworkApiPattern[]> = 
 // CACHE
 // ============================================
 
-interface CacheEntry {
-  result: BackendFrameworkDiscoveryResult;
-  expiresAt: number;
-}
+// ============================================
+// CACHING (CLOUD-008: Unified Discovery Cache)
+// ============================================
 
-const frameworkCache = new Map<string, CacheEntry>();
+import { getDiscoveryCache } from '../utils/discovery-cache.js';
 
 /**
  * Get cached fingerprint result
+ * Uses unified discovery cache with tenant isolation
  */
-export function getCachedFingerprint(domain: string): BackendFrameworkDiscoveryResult | null {
-  const entry = frameworkCache.get(domain);
-  if (!entry) {
-    return null;
-  }
-
-  if (Date.now() > entry.expiresAt) {
-    frameworkCache.delete(domain);
-    return null;
-  }
-
-  return entry.result;
+export async function getCachedFingerprint(domain: string): Promise<BackendFrameworkDiscoveryResult | null> {
+  const cache = getDiscoveryCache();
+  return await cache.get<BackendFrameworkDiscoveryResult>('backend-framework', domain);
 }
 
 /**
  * Cache a fingerprint result
+ * Uses unified discovery cache
  */
-export function cacheFingerprint(
+export async function cacheFingerprint(
   domain: string,
   result: BackendFrameworkDiscoveryResult,
   ttlMs: number = FRAMEWORK_CACHE_TTL_MS
-): void {
-  frameworkCache.set(domain, {
-    result: {
-      ...result,
-      cachedAt: Date.now(),
-    },
-    expiresAt: Date.now() + ttlMs,
-  });
+): Promise<void> {
+  const cache = getDiscoveryCache();
+  const resultWithTimestamp = {
+    ...result,
+    cachedAt: Date.now(),
+  };
+  await cache.set('backend-framework', domain, resultWithTimestamp, ttlMs);
 }
 
 /**
  * Clear fingerprint cache
  */
-export function clearFingerprintCache(domain?: string): void {
+export async function clearFingerprintCache(domain?: string): Promise<void> {
+  const cache = getDiscoveryCache();
   if (domain) {
-    frameworkCache.delete(domain);
+    await cache.delete('backend-framework', domain);
   } else {
-    frameworkCache.clear();
+    await cache.clear('backend-framework');
   }
 }
 
@@ -1034,27 +1026,49 @@ export async function discoverBackendFramework(
 
 /**
  * Discover backend framework with caching
+ * Uses unified discovery cache with failed domain tracking
  */
 export async function discoverBackendFrameworkCached(
   domain: string,
   options: FingerprintOptions = {}
 ): Promise<BackendFrameworkDiscoveryResult> {
+  const cache = getDiscoveryCache();
+
+  // Check if domain is in cooldown from previous failures
+  if (cache.isInCooldown('backend-framework', domain)) {
+    const cooldownInfo = cache.getCooldownInfo('backend-framework', domain);
+    fingerprintLogger.debug('Domain in cooldown, returning empty result', {
+      domain,
+      failureCount: cooldownInfo?.failureCount,
+    });
+    return {
+      found: false,
+      patterns: [],
+    };
+  }
+
   // Check cache first
-  const cached = getCachedFingerprint(domain);
+  const cached = await getCachedFingerprint(domain);
   if (cached) {
     fingerprintLogger.debug('Cache hit for framework fingerprint', { domain });
     return cached;
   }
 
   // Perform discovery
-  const result = await discoverBackendFramework(domain, options);
+  try {
+    const result = await discoverBackendFramework(domain, options);
 
-  // Cache if found
-  if (result.found) {
-    cacheFingerprint(domain, result);
+    // Cache if found
+    if (result.found) {
+      await cacheFingerprint(domain, result);
+    }
+
+    return result;
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+    cache.recordFailure('backend-framework', domain, errorMsg);
+    throw err;
   }
-
-  return result;
 }
 
 // ============================================

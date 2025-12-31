@@ -235,64 +235,51 @@ export const SOURCE_PRIORITY: Record<DiscoverySource, number> = {
 };
 
 // ============================================
-// CACHE
+// CACHE (CLOUD-008: Unified Discovery Cache)
 // ============================================
 
-interface CacheEntry {
-  result: AggregatedDiscoveryResult;
-  expiresAt: number;
-}
-
-/** In-memory cache for discovery results */
-const discoveryCache = new Map<string, CacheEntry>();
+import { getDiscoveryCache, type DiscoveryCacheStats } from '../utils/discovery-cache.js';
 
 /**
  * Get cached discovery result if valid
+ * Note: The orchestrator caches aggregated results, while individual modules cache their own results
  */
-export function getCachedDiscovery(domain: string): AggregatedDiscoveryResult | null {
-  const entry = discoveryCache.get(domain);
-  if (!entry) {
-    return null;
+export async function getCachedDiscovery(domain: string): Promise<AggregatedDiscoveryResult | null> {
+  const cache = getDiscoveryCache();
+  const result = await cache.get<AggregatedDiscoveryResult>('docs-page', domain);
+  if (result) {
+    discoveryLogger.debug('Cache hit', { domain, cachedAt: result.cachedAt });
   }
-
-  if (Date.now() > entry.expiresAt) {
-    discoveryCache.delete(domain);
-    discoveryLogger.debug('Cache expired', { domain });
-    return null;
-  }
-
-  discoveryLogger.debug('Cache hit', { domain, cachedAt: entry.result.cachedAt });
-  return entry.result;
+  return result;
 }
 
 /**
  * Cache a discovery result
  */
-export function cacheDiscovery(
+export async function cacheDiscovery(
   domain: string,
   result: AggregatedDiscoveryResult,
   ttlMs: number = DEFAULT_CACHE_TTL_MS
-): void {
-  const entry: CacheEntry = {
-    result: {
-      ...result,
-      cachedAt: Date.now(),
-    },
-    expiresAt: Date.now() + ttlMs,
+): Promise<void> {
+  const cache = getDiscoveryCache();
+  const resultWithTimestamp = {
+    ...result,
+    cachedAt: Date.now(),
   };
-  discoveryCache.set(domain, entry);
+  await cache.set('docs-page', domain, resultWithTimestamp, ttlMs);
   discoveryLogger.debug('Cached discovery result', { domain, expiresIn: ttlMs });
 }
 
 /**
  * Clear cache for a specific domain or all domains
  */
-export function clearDiscoveryCache(domain?: string): void {
+export async function clearDiscoveryCache(domain?: string): Promise<void> {
+  const cache = getDiscoveryCache();
   if (domain) {
-    discoveryCache.delete(domain);
+    await cache.delete('docs-page', domain);
     discoveryLogger.debug('Cleared cache for domain', { domain });
   } else {
-    discoveryCache.clear();
+    await cache.clear('docs-page');
     discoveryLogger.debug('Cleared all discovery cache');
   }
 }
@@ -300,11 +287,21 @@ export function clearDiscoveryCache(domain?: string): void {
 /**
  * Get cache statistics
  */
-export function getDiscoveryCacheStats(): { size: number; domains: string[] } {
+export async function getDiscoveryCacheStats(): Promise<{ size: number; domains: string[] }> {
+  const cache = getDiscoveryCache();
+  const stats = await cache.getStats();
   return {
-    size: discoveryCache.size,
-    domains: [...discoveryCache.keys()],
+    size: stats.entriesBySource['docs-page'] || 0,
+    domains: [], // Domain list is now internal to cache
   };
+}
+
+/**
+ * Get unified cache statistics across all discovery sources
+ */
+export async function getUnifiedCacheStats(): Promise<DiscoveryCacheStats> {
+  const cache = getDiscoveryCache();
+  return await cache.getStats();
 }
 
 // ============================================
@@ -1084,7 +1081,7 @@ export async function discoverApiDocumentation(
 
   // Check cache first (unless forceRefresh)
   if (!options.forceRefresh) {
-    const cached = getCachedDiscovery(domain);
+    const cached = await getCachedDiscovery(domain);
     if (cached) {
       return cached;
     }
@@ -1232,7 +1229,7 @@ export async function discoverApiDocumentation(
 
   // Cache the result
   if (aggregated.found) {
-    cacheDiscovery(domain, aggregated);
+    await cacheDiscovery(domain, aggregated);
   }
 
   return aggregated;

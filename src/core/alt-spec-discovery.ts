@@ -1042,48 +1042,79 @@ function createExtractorsForEndpoint(endpoint: AltSpecEndpoint): LearnedApiPatte
 }
 
 // ============================================
-// CACHING
+// CACHING (CLOUD-008: Unified Discovery Cache)
 // ============================================
 
-/**
- * Cache for discovered alt specs
- */
-const specCache = new Map<string, { result: AltSpecDiscoveryResult; timestamp: number }>();
+import { getDiscoveryCache } from '../utils/discovery-cache.js';
 
 /** How long to cache discovery results (1 hour) */
 const CACHE_TTL = 60 * 60 * 1000;
 
 /**
  * Get cached discovery result or discover anew
+ * Uses unified discovery cache with tenant isolation and failed domain tracking
  */
 export async function discoverAltSpecsCached(
   domain: string,
   options: AltSpecDiscoveryOptions = {}
 ): Promise<AltSpecDiscoveryResult> {
-  const cached = specCache.get(domain);
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-    altSpecLogger.debug('Using cached alt spec discovery result', { domain });
-    return cached.result;
+  const cache = getDiscoveryCache();
+
+  // Check if domain is in cooldown from previous failures
+  if (cache.isInCooldown('alt-spec', domain)) {
+    const cooldownInfo = cache.getCooldownInfo('alt-spec', domain);
+    altSpecLogger.debug('Domain in cooldown, returning empty result', {
+      domain,
+      failureCount: cooldownInfo?.failureCount,
+    });
+    return {
+      found: false,
+      format: undefined,
+      probedLocations: [],
+      discoveryTime: 0,
+    };
   }
 
-  const result = await discoverAltSpecs(domain, options);
-  specCache.set(domain, { result, timestamp: Date.now() });
-  return result;
+  // Check cache
+  const cached = await cache.get<AltSpecDiscoveryResult>('alt-spec', domain);
+  if (cached) {
+    altSpecLogger.debug('Using cached alt spec discovery result', { domain });
+    return cached;
+  }
+
+  // Perform discovery
+  try {
+    const result = await discoverAltSpecs(domain, options);
+    await cache.set('alt-spec', domain, result, CACHE_TTL);
+    return result;
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+    cache.recordFailure('alt-spec', domain, errorMsg);
+    throw err;
+  }
 }
 
 /**
  * Clear the spec cache
+ * @param domain - Optional domain to clear, or all if not specified
  */
-export function clearAltSpecCache(): void {
-  specCache.clear();
+export async function clearAltSpecCache(domain?: string): Promise<void> {
+  const cache = getDiscoveryCache();
+  if (domain) {
+    await cache.delete('alt-spec', domain);
+  } else {
+    await cache.clear('alt-spec');
+  }
 }
 
 /**
  * Get cache statistics
  */
-export function getAltSpecCacheStats(): { size: number; domains: string[] } {
+export async function getAltSpecCacheStats(): Promise<{ size: number; domains: string[] }> {
+  const cache = getDiscoveryCache();
+  const stats = await cache.getStats();
   return {
-    size: specCache.size,
-    domains: [...specCache.keys()],
+    size: stats.entriesBySource['alt-spec'] || 0,
+    domains: [], // Domain list is now internal to cache
   };
 }

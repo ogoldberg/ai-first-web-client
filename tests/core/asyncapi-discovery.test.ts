@@ -848,21 +848,22 @@ describe('Server URL Resolution', () => {
 // ============================================
 
 describe('AsyncAPI Cache', () => {
-  beforeEach(() => {
-    clearAsyncAPICache();
+  beforeEach(async () => {
+    await clearAsyncAPICache();
   });
 
-  afterEach(() => {
-    clearAsyncAPICache();
+  afterEach(async () => {
+    await clearAsyncAPICache();
   });
 
-  it('should clear cache when clearAsyncAPICache is called', () => {
-    expect(() => clearAsyncAPICache()).not.toThrow();
-    expect(getAsyncAPICacheStats().size).toBe(0);
+  it('should clear cache when clearAsyncAPICache is called', async () => {
+    await expect(clearAsyncAPICache()).resolves.not.toThrow();
+    const stats = await getAsyncAPICacheStats();
+    expect(stats.size).toBe(0);
   });
 
-  it('should return cache statistics', () => {
-    const stats = getAsyncAPICacheStats();
+  it('should return cache statistics', async () => {
+    const stats = await getAsyncAPICacheStats();
     expect(stats).toHaveProperty('size');
     expect(stats).toHaveProperty('domains');
     expect(Array.isArray(stats.domains)).toBe(true);

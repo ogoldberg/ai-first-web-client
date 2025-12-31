@@ -618,67 +618,86 @@ interface CacheEntry {
 /** Default cache TTL: 1 hour */
 export const DEFAULT_CACHE_TTL_MS = 60 * 60 * 1000;
 
-/** In-memory cache for discovery results */
-const discoveryCache = new Map<string, CacheEntry>();
+// ============================================
+// CACHING (CLOUD-008: Unified Discovery Cache)
+// ============================================
+
+import { getDiscoveryCache } from '../utils/discovery-cache.js';
 
 /**
  * Get cached discovery result if valid
+ * Uses unified discovery cache with tenant isolation
  */
-export function getCachedRobotsSitemap(domain: string): RobotsSitemapDiscoveryResult | null {
-  const entry = discoveryCache.get(domain);
-  if (!entry) {
-    return null;
-  }
-
-  if (Date.now() > entry.expiresAt) {
-    discoveryCache.delete(domain);
-    return null;
-  }
-
-  return entry.result;
+export async function getCachedRobotsSitemap(domain: string): Promise<RobotsSitemapDiscoveryResult | null> {
+  const cache = getDiscoveryCache();
+  return await cache.get<RobotsSitemapDiscoveryResult>('robots-sitemap', domain);
 }
 
 /**
  * Cache a discovery result
+ * Uses unified discovery cache
  */
-export function cacheRobotsSitemap(
+export async function cacheRobotsSitemap(
   domain: string,
   result: RobotsSitemapDiscoveryResult,
   ttlMs: number = DEFAULT_CACHE_TTL_MS
-): void {
-  discoveryCache.set(domain, {
-    result,
-    expiresAt: Date.now() + ttlMs,
-  });
+): Promise<void> {
+  const cache = getDiscoveryCache();
+  await cache.set('robots-sitemap', domain, result, ttlMs);
 }
 
 /**
  * Clear cache for a specific domain or all domains
  */
-export function clearRobotsSitemapCache(domain?: string): void {
+export async function clearRobotsSitemapCache(domain?: string): Promise<void> {
+  const cache = getDiscoveryCache();
   if (domain) {
-    discoveryCache.delete(domain);
+    await cache.delete('robots-sitemap', domain);
   } else {
-    discoveryCache.clear();
+    await cache.clear('robots-sitemap');
   }
 }
 
 /**
  * Discover with caching
+ * Uses unified discovery cache with failed domain tracking
  */
 export async function discoverRobotsSitemapCached(
   domain: string,
   options: RobotsSitemapDiscoveryOptions = {}
 ): Promise<RobotsSitemapDiscoveryResult> {
-  const cached = getCachedRobotsSitemap(domain);
+  const cache = getDiscoveryCache();
+
+  // Check if domain is in cooldown from previous failures
+  if (cache.isInCooldown('robots-sitemap', domain)) {
+    const cooldownInfo = cache.getCooldownInfo('robots-sitemap', domain);
+    robotsLogger.debug('Domain in cooldown, returning empty result', {
+      domain,
+      failureCount: cooldownInfo?.failureCount,
+    });
+    return {
+      found: false,
+      hints: [],
+      probedLocations: [],
+      discoveryTime: 0,
+    };
+  }
+
+  const cached = await getCachedRobotsSitemap(domain);
   if (cached) {
     robotsLogger.debug('Cache hit for robots/sitemap discovery', { domain });
     return cached;
   }
 
-  const result = await discoverRobotsSitemap(domain, options);
-  cacheRobotsSitemap(domain, result);
-  return result;
+  try {
+    const result = await discoverRobotsSitemap(domain, options);
+    await cacheRobotsSitemap(domain, result);
+    return result;
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : 'Unknown error';
+    cache.recordFailure('robots-sitemap', domain, errorMsg);
+    throw err;
+  }
 }
 
 // ============================================

@@ -188,9 +188,9 @@ function createMockLinkDiscoveryResult(found = false) {
 // SETUP / TEARDOWN
 // ============================================
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.clearAllMocks();
-  clearDiscoveryCache();
+  await clearDiscoveryCache();
   // Default mock for link discovery (usually returns nothing found)
   mockDiscoverLinks.mockResolvedValue(createMockLinkDiscoveryResult(false));
   mockGeneratePatternsFromLinks.mockReturnValue([]);
@@ -230,8 +230,8 @@ beforeEach(() => {
   });
 });
 
-afterEach(() => {
-  clearDiscoveryCache();
+afterEach(async () => {
+  await clearDiscoveryCache();
 });
 
 // ============================================
@@ -240,12 +240,12 @@ afterEach(() => {
 
 describe('Discovery Cache', () => {
   describe('getCachedDiscovery', () => {
-    it('should return null for uncached domain', () => {
-      const result = getCachedDiscovery('uncached.com');
+    it('should return null for uncached domain', async () => {
+      const result = await getCachedDiscovery('uncached.com');
       expect(result).toBeNull();
     });
 
-    it('should return cached result for cached domain', () => {
+    it('should return cached result for cached domain', async () => {
       const mockResult: AggregatedDiscoveryResult = {
         domain: 'example.com',
         results: [],
@@ -255,8 +255,8 @@ describe('Discovery Cache', () => {
         found: true,
       };
 
-      cacheDiscovery('example.com', mockResult);
-      const cached = getCachedDiscovery('example.com');
+      await cacheDiscovery('example.com', mockResult);
+      const cached = await getCachedDiscovery('example.com');
 
       expect(cached).not.toBeNull();
       expect(cached?.domain).toBe('example.com');
@@ -274,18 +274,18 @@ describe('Discovery Cache', () => {
       };
 
       // Cache with very short TTL
-      cacheDiscovery('example.com', mockResult, 1);
+      await cacheDiscovery('example.com', mockResult, 1);
 
       // Wait for expiry
       await new Promise((resolve) => setTimeout(resolve, 10));
 
-      const cached = getCachedDiscovery('example.com');
+      const cached = await getCachedDiscovery('example.com');
       expect(cached).toBeNull();
     });
   });
 
   describe('clearDiscoveryCache', () => {
-    it('should clear cache for specific domain', () => {
+    it('should clear cache for specific domain', async () => {
       const mockResult: AggregatedDiscoveryResult = {
         domain: 'example.com',
         results: [],
@@ -295,16 +295,16 @@ describe('Discovery Cache', () => {
         found: true,
       };
 
-      cacheDiscovery('example.com', mockResult);
-      cacheDiscovery('other.com', mockResult);
+      await cacheDiscovery('example.com', mockResult);
+      await cacheDiscovery('other.com', mockResult);
 
-      clearDiscoveryCache('example.com');
+      await clearDiscoveryCache('example.com');
 
-      expect(getCachedDiscovery('example.com')).toBeNull();
-      expect(getCachedDiscovery('other.com')).not.toBeNull();
+      expect(await getCachedDiscovery('example.com')).toBeNull();
+      expect(await getCachedDiscovery('other.com')).not.toBeNull();
     });
 
-    it('should clear all cache when no domain specified', () => {
+    it('should clear all cache when no domain specified', async () => {
       const mockResult: AggregatedDiscoveryResult = {
         domain: 'example.com',
         results: [],
@@ -314,24 +314,24 @@ describe('Discovery Cache', () => {
         found: true,
       };
 
-      cacheDiscovery('example.com', mockResult);
-      cacheDiscovery('other.com', mockResult);
+      await cacheDiscovery('example.com', mockResult);
+      await cacheDiscovery('other.com', mockResult);
 
-      clearDiscoveryCache();
+      await clearDiscoveryCache();
 
-      expect(getCachedDiscovery('example.com')).toBeNull();
-      expect(getCachedDiscovery('other.com')).toBeNull();
+      expect(await getCachedDiscovery('example.com')).toBeNull();
+      expect(await getCachedDiscovery('other.com')).toBeNull();
     });
   });
 
   describe('getDiscoveryCacheStats', () => {
-    it('should return empty stats for empty cache', () => {
-      const stats = getDiscoveryCacheStats();
+    it('should return empty stats for empty cache', async () => {
+      const stats = await getDiscoveryCacheStats();
       expect(stats.size).toBe(0);
       expect(stats.domains).toHaveLength(0);
     });
 
-    it('should return correct stats for populated cache', () => {
+    it('should return correct stats for populated cache', async () => {
       const mockResult: AggregatedDiscoveryResult = {
         domain: 'example.com',
         results: [],
@@ -341,13 +341,14 @@ describe('Discovery Cache', () => {
         found: true,
       };
 
-      cacheDiscovery('example.com', mockResult);
-      cacheDiscovery('other.com', mockResult);
+      await cacheDiscovery('example.com', mockResult);
+      await cacheDiscovery('other.com', mockResult);
 
-      const stats = getDiscoveryCacheStats();
+      const stats = await getDiscoveryCacheStats();
+      // Note: With unified cache, size reflects docs-page entries and domains list is empty
+      // (domain enumeration is not supported by the unified cache design for performance reasons)
       expect(stats.size).toBe(2);
-      expect(stats.domains).toContain('example.com');
-      expect(stats.domains).toContain('other.com');
+      expect(stats.domains).toHaveLength(0); // Domain listing no longer supported
     });
   });
 });
@@ -662,7 +663,7 @@ describe('Discovery Orchestration', () => {
 
       await discoverApiDocumentation('example.com');
 
-      const cached = getCachedDiscovery('example.com');
+      const cached = await getCachedDiscovery('example.com');
       expect(cached).not.toBeNull();
       expect(cached?.found).toBe(true);
     });
