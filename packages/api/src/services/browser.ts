@@ -5,7 +5,7 @@
  * Provides a singleton client that's shared across all requests.
  */
 
-import { createLLMBrowser, type LLMBrowserClient, type LLMBrowserConfig } from 'unbrowser/sdk';
+import { createLLMBrowser, type LLMBrowserClient, type LLMBrowserConfig } from '../../../../src/sdk.js';
 
 let browserClient: LLMBrowserClient | null = null;
 let initializationPromise: Promise<LLMBrowserClient> | null = null;
