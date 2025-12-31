@@ -9,7 +9,7 @@
  * - api.unbrowser.ai -> API endpoints only
  * - localhost:3001 -> Both (for development)
  *
- * IMPORTANT: API routes that depend on llm-browser are dynamically imported
+ * IMPORTANT: API routes that depend on unbrowser are dynamically imported
  * to avoid loading native modules in marketing-only mode.
  */
 
@@ -20,11 +20,11 @@ import { secureHeaders } from 'hono/secure-headers';
 import { HTTPException } from 'hono/http-exception';
 import { requestLoggerMiddleware } from './middleware/request-logger.js';
 
-// Shared routes (no llm-browser dependency)
+// Shared routes (no unbrowser dependency)
 import { health } from './routes/health.js';
 import { pricingCalculator } from './routes/pricing-calculator.js';
 
-// Marketing routes (no llm-browser dependency)
+// Marketing routes (no unbrowser dependency)
 import { auth } from './routes/auth.js';
 import { dashboardUI } from './routes/dashboard-ui.js';
 import { landing } from './routes/landing.js';
@@ -326,7 +326,7 @@ app.onError((err, c) => {
 
 /**
  * Initialize API routes (only when not in marketing mode)
- * This function dynamically imports routes that depend on llm-browser
+ * This function dynamically imports routes that depend on unbrowser
  * to avoid loading native modules when they're not needed.
  */
 async function initializeApiRoutes(): Promise<void> {
@@ -338,7 +338,7 @@ async function initializeApiRoutes(): Promise<void> {
   console.log('Initializing API routes...');
 
   try {
-    // Dynamic imports to avoid loading llm-browser in marketing mode
+    // Dynamic imports to avoid loading unbrowser in marketing mode
     const [
       docsModule,
       browseModule,
