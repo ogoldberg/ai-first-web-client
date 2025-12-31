@@ -338,8 +338,15 @@ export class GuidedAuthWorkflow {
 
         if (stepResult.failed) {
           // Don't fail entire workflow on one step failure unless critical
-          if (step.type === 'enter_username' || step.type === 'enter_password') {
-            throw new Error(step.error || 'Critical step failed');
+          const criticalSteps: AuthStepType[] = [
+            'enter_username',
+            'enter_password',
+            'mfa_code',
+            'sms_code',
+            'security_question',
+          ];
+          if (criticalSteps.includes(step.type)) {
+            throw new Error(step.error || `Critical step '${step.type}' failed`);
           }
         }
       }
@@ -392,9 +399,7 @@ export class GuidedAuthWorkflow {
       if (options.preserveCookies && progress.status === 'completed') {
         const context = page.context();
         const cookies = await context.cookies();
-        result.cookies = cookies
-          .filter(c => c.domain.includes(domain) || domain.includes(c.domain.replace(/^\./, '')))
-          .map(c => ({
+        result.cookies = this.filterDomainCookies(cookies, domain).map(c => ({
             name: c.name,
             value: c.value,
             domain: c.domain,
@@ -441,6 +446,7 @@ export class GuidedAuthWorkflow {
   ): Promise<GuidedAuthResult> {
     const progress = this.activeSessions.get(sessionId);
     if (!progress) {
+      const error = 'Session not found or expired';
       return {
         success: false,
         progress: {
@@ -450,10 +456,12 @@ export class GuidedAuthWorkflow {
           currentStepIndex: 0,
           steps: [],
           status: 'failed',
-          startedAt: 0,
+          startedAt: Date.now(),
+          completedAt: Date.now(),
           sessionCaptured: false,
+          error,
         },
-        error: 'Session not found or expired',
+        error,
       };
     }
 
@@ -639,7 +647,8 @@ export class GuidedAuthWorkflow {
             break;
           }
         }
-      } catch {
+      } catch (e) {
+        authLogger.debug('Selector failed, trying next', { selector, error: e });
         // Continue to next selector
       }
     }
@@ -667,15 +676,19 @@ export class GuidedAuthWorkflow {
           const isEnabled = await element.isEnabled();
           if (isVisible && isEnabled) {
             await element.click();
-            // Wait for navigation or network
-            await Promise.race([
-              page.waitForNavigation({ timeout: 5000 }).catch(() => {}),
-              page.waitForLoadState('networkidle', { timeout: 5000 }).catch(() => {}),
-            ]);
+            // Wait for navigation or network idle (either completing means page updated)
+            await Promise.any([
+              page.waitForNavigation({ timeout: 5000 }),
+              page.waitForLoadState('networkidle', { timeout: 5000 }),
+            ]).catch(() => {
+              // It's okay if both time out; it might be a simple form with no navigation
+              authLogger.debug('No navigation or network idle detected after click');
+            });
             return;
           }
         }
-      } catch {
+      } catch (e) {
+        authLogger.debug('Selector failed, trying next', { selector, error: e });
         // Continue to next selector
       }
     }
@@ -883,9 +896,7 @@ export class GuidedAuthWorkflow {
     try {
       const context = page.context();
       const cookies = await context.cookies();
-      const domainCookies = cookies.filter(
-        c => c.domain.includes(domain) || domain.includes(c.domain.replace(/^\./, ''))
-      );
+      const domainCookies = this.filterDomainCookies(cookies, domain);
 
       if (domainCookies.length > 0) {
         // Store session via SessionManager - pass the BrowserContext
@@ -958,12 +969,12 @@ export class GuidedAuthWorkflow {
     // Default to checking for session cookies
     const context = page.context();
     const cookies = await context.cookies();
-    const hasSessionCookies = cookies.some(
+    const domainCookies = this.filterDomainCookies(cookies, domain);
+    const hasSessionCookies = domainCookies.some(
       c =>
-        (c.domain.includes(domain) || domain.includes(c.domain.replace(/^\./, ''))) &&
-        (c.name.toLowerCase().includes('session') ||
-          c.name.toLowerCase().includes('auth') ||
-          c.name.toLowerCase().includes('token'))
+        c.name.toLowerCase().includes('session') ||
+        c.name.toLowerCase().includes('auth') ||
+        c.name.toLowerCase().includes('token')
     );
 
     return hasSessionCookies;
@@ -972,6 +983,20 @@ export class GuidedAuthWorkflow {
   // ============================================
   // HELPERS
   // ============================================
+
+  /**
+   * Checks if a cookie belongs to the given domain (handles subdomain matching)
+   */
+  private isCookieForDomain(cookieDomain: string, domain: string): boolean {
+    return cookieDomain.includes(domain) || domain.includes(cookieDomain.replace(/^\./, ''));
+  }
+
+  /**
+   * Filters cookies that belong to the given domain
+   */
+  private filterDomainCookies<T extends { domain: string }>(cookies: T[], domain: string): T[] {
+    return cookies.filter(c => this.isCookieForDomain(c.domain, domain));
+  }
 
   private createStep(
     type: AuthStepType,
