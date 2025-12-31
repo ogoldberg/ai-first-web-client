@@ -929,7 +929,7 @@ These features are designed for MoveAhead but extensible to other government/reg
 | INT-013 | Appointment availability detection | M | Complete | Detect "cita previa" and similar appointment systems. Check for available slots. Monitor for openings. Extensible to any scheduling/booking systems. |
 | INT-014 | Field-level change tracking | M | Complete | Track specific field changes (fee increased, deadline moved). Structured diff output (before/after). Severity classification (breaking vs minor). Extensible to any content monitoring. |
 | INT-015 | Cross-source verification | M | Complete | Compare same topic across multiple sources. Detect contradictions. Confidence scoring based on agreement. Extensible to any fact-checking use case. |
-| INT-016 | Auto portal discovery | L | Not Started | Given a country code, discover official gov portals. Map portal structure. Identify relevant sections. Extensible to any domain discovery. |
+| INT-016 | Auto portal discovery | L | Complete | AutoPortalDiscovery class with 45+ country database, multiple discovery strategies (known DB, skill pack, heuristics, DNS probing), category-based grouping, caching. 36 tests. PR #218 |
 | INT-017 | Form/PDF field extraction | L | Not Started | Extract form fields from PDFs. Parse application forms. Map required documents. Extensible to any form processing. |
 
 **Potential Users Beyond MoveAhead:**
