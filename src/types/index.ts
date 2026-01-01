@@ -35,6 +35,9 @@ export * from './verification.js';
 // Re-export content change prediction types (GAP-011)
 export * from './content-change.js';
 
+// Re-export PDF form types (INT-017)
+export * from './pdf-forms.js';
+
 export interface NetworkRequest {
   url: string;
   method: string;

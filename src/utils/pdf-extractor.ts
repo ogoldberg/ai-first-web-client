@@ -231,6 +231,17 @@ export function isPDFUrl(url: string): boolean {
   }
 }
 
+// Re-export PDF form extraction types and functions (INT-017)
+export type {
+  PDFFormField,
+  PDFFormSection,
+  PDFDocumentRequirement,
+  PDFFormExtractionResult,
+  PDFFormExtractionOptions,
+  PDFFormFieldType,
+  PDFFormInfo,
+} from '../types/pdf-forms.js';
+
 /**
  * PDF extractor class for stateful operations
  */
@@ -288,6 +299,58 @@ export class PDFExtractor {
       lists,
       keyValues,
     };
+  }
+
+  /**
+   * Extract form fields from PDF (INT-017)
+   *
+   * Extracts fillable form fields (AcroForms) from PDFs using pdf-lib.
+   * Also extracts document requirements from text content.
+   *
+   * @example
+   * ```typescript
+   * const extractor = new PDFExtractor();
+   * const result = await extractor.extractFormFields('https://example.gov/form.pdf', {
+   *   language: 'es',
+   *   extractDocumentRequirements: true,
+   * });
+   * console.log(`Found ${result.fields.length} form fields`);
+   * ```
+   */
+  async extractFormFields(
+    source: string | Buffer,
+    options?: import('../types/pdf-forms.js').PDFFormExtractionOptions
+  ): Promise<import('../types/pdf-forms.js').PDFFormExtractionResult> {
+    // Dynamic import to make pdf-lib optional
+    const { extractPDFFormFields } = await import(
+      '../core/pdf-form-extractor.js'
+    );
+
+    if (Buffer.isBuffer(source)) {
+      return extractPDFFormFields(source, options);
+    }
+
+    // Get the buffer first
+    const buffer = await this.getBuffer(source);
+    return extractPDFFormFields(buffer, options);
+  }
+
+  /**
+   * Get buffer from source (URL or file path)
+   */
+  private async getBuffer(source: string): Promise<Buffer> {
+    if (source.startsWith('http://') || source.startsWith('https://')) {
+      const response = await fetch(source);
+      if (!response.ok) {
+        throw new Error(
+          `Failed to fetch PDF: ${response.status} ${response.statusText}`
+        );
+      }
+      return Buffer.from(await response.arrayBuffer());
+    } else {
+      const fs = await import('fs/promises');
+      return fs.readFile(source);
+    }
   }
 }
 

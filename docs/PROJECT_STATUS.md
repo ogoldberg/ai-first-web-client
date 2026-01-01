@@ -13,6 +13,7 @@
 Working on MoveAhead.ai integration tasks (INT initiative).
 
 **Completed:**
+- INT-017 - Form/PDF field extraction (extract AcroForm fields from PDFs, parse document requirements, detect form numbers like Modelo/Cerfa/Form I-94, API endpoint POST /v1/pdf/extract-forms, 22 tests)
 - INT-011 - Language-aware extraction (auto-detect page language, multi-language field mapping, 7 languages, 17 field categories)
 - INT-009 - Create MoveAhead example integration (full example showing HTTP API usage for relocation research pipeline, demos for workflows, skill packs, API discovery)
 - INT-008 - Add content change prediction (DynamicRefreshScheduler with 9 content type presets, 10 domain patterns, intelligent refresh scheduling replacing fixed 90-day staleness)

@@ -930,7 +930,7 @@ These features are designed for MoveAhead but extensible to other government/reg
 | INT-014 | Field-level change tracking | M | Complete | Track specific field changes (fee increased, deadline moved). Structured diff output (before/after). Severity classification (breaking vs minor). Extensible to any content monitoring. |
 | INT-015 | Cross-source verification | M | Complete | Compare same topic across multiple sources. Detect contradictions. Confidence scoring based on agreement. Extensible to any fact-checking use case. |
 | INT-016 | Auto portal discovery | L | Complete | AutoPortalDiscovery class with 45+ country database, multiple discovery strategies (known DB, skill pack, heuristics, DNS probing), category-based grouping, caching. 36 tests. PR #218 |
-| INT-017 | Form/PDF field extraction | L | Not Started | Extract form fields from PDFs. Parse application forms. Map required documents. Extensible to any form processing. |
+| INT-017 | Form/PDF field extraction | L | Complete | Extract AcroForm fields from PDFs (text, checkbox, radio, dropdown, optionList). Parse document requirements. Detect form numbers (Modelo, Cerfa, Form I-94). API endpoint POST /v1/pdf/extract-forms. 22 tests. |
 
 **Potential Users Beyond MoveAhead:**
 - Immigration/visa services and consultants
