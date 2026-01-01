@@ -274,6 +274,81 @@ paths:
         '429':
           $ref: '#/components/responses/RateLimited'
 
+  /v1/browse/paginate:
+    post:
+      tags:
+        - Browse
+      summary: Browse with automatic pagination
+      description: |
+        Browse a URL and automatically follow pagination links to fetch
+        multiple pages of content.
+
+        **How it works**:
+        1. Fetches the starting URL
+        2. Discovers pagination links (next, prev, first, last) via:
+           - RFC 8288 Link headers
+           - HTML `<link rel="next">` elements
+           - HATEOAS `_links` in JSON responses
+           - Common pagination URL patterns
+        3. Follows "next" links up to `maxPages` limit
+        4. Returns combined content from all pages
+
+        **Use cases**:
+        - Scraping product catalogs
+        - Extracting blog post archives
+        - Gathering search results across pages
+        - Collecting paginated API responses
+
+        **Options**:
+        - `maxPages`: Maximum pages to fetch (1-50, default: 10)
+        - `strategy`: 'links' (follow HTML links) or 'auto' (try API patterns first)
+        - `delayMs`: Delay between requests for rate limiting
+        - `stopOnError`: Stop if a page fails (default: true)
+      operationId: paginateBrowse
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaginateRequest'
+            examples:
+              simple:
+                summary: Simple pagination
+                value:
+                  url: https://example.com/products
+              withOptions:
+                summary: With pagination options
+                value:
+                  url: https://example.com/products?page=1
+                  options:
+                    maxPages: 5
+                    delayMs: 500
+                    maxChars: 10000
+              fullCatalog:
+                summary: Full catalog scrape
+                value:
+                  url: https://example.com/products
+                  options:
+                    maxPages: 50
+                    strategy: auto
+                    delayMs: 1000
+                    stopOnError: false
+      responses:
+        '200':
+          description: Paginated browse results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginateResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/RateLimited'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
   /v1/domains/{domain}/intelligence:
     get:
       tags:
@@ -768,6 +843,160 @@ components:
             totalTime:
               type: integer
               description: Total processing time in milliseconds
+
+    PaginateRequest:
+      type: object
+      required:
+        - url
+      properties:
+        url:
+          type: string
+          format: uri
+          description: Starting URL for pagination
+        options:
+          allOf:
+            - $ref: '#/components/schemas/BrowseOptions'
+            - type: object
+              properties:
+                maxPages:
+                  type: integer
+                  minimum: 1
+                  maximum: 50
+                  default: 10
+                  description: Maximum number of pages to fetch
+                strategy:
+                  type: string
+                  enum: [links, auto]
+                  default: auto
+                  description: |
+                    Pagination strategy:
+                    - `links`: Follow next/prev links found in HTML
+                    - `auto`: Try API patterns first, fall back to links
+                delayMs:
+                  type: integer
+                  minimum: 0
+                  maximum: 10000
+                  default: 0
+                  description: Delay between page requests in milliseconds
+                stopOnError:
+                  type: boolean
+                  default: true
+                  description: Stop pagination if a page fails
+        session:
+          $ref: '#/components/schemas/SessionData'
+
+    PaginateResponse:
+      type: object
+      required:
+        - success
+        - data
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          required:
+            - combinedContent
+            - pages
+            - pagination
+            - metadata
+          properties:
+            combinedContent:
+              type: object
+              description: Aggregated content from all pages
+              properties:
+                markdown:
+                  type: string
+                  description: Combined markdown with page headers
+                text:
+                  type: string
+                  description: Combined plain text with page headers
+            pages:
+              type: array
+              description: Individual page results
+              items:
+                type: object
+                required:
+                  - pageNumber
+                  - url
+                  - success
+                properties:
+                  pageNumber:
+                    type: integer
+                    description: Page number (1-indexed)
+                  url:
+                    type: string
+                    format: uri
+                    description: URL of this page
+                  success:
+                    type: boolean
+                  data:
+                    $ref: '#/components/schemas/BrowseResult'
+                  error:
+                    type: object
+                    properties:
+                      code:
+                        type: string
+                      message:
+                        type: string
+                  paginationLinks:
+                    type: object
+                    description: Discovered pagination links on this page
+                    properties:
+                      next:
+                        type: string
+                        format: uri
+                      prev:
+                        type: string
+                        format: uri
+                      first:
+                        type: string
+                        format: uri
+                      last:
+                        type: string
+                        format: uri
+            pagination:
+              type: object
+              description: Pagination metadata
+              required:
+                - totalPages
+                - successfulPages
+                - failedPages
+              properties:
+                totalPages:
+                  type: integer
+                  description: Total pages fetched
+                successfulPages:
+                  type: integer
+                  description: Number of pages successfully fetched
+                failedPages:
+                  type: integer
+                  description: Number of pages that failed
+                maxPagesReached:
+                  type: boolean
+                  description: Whether maxPages limit was hit
+                strategy:
+                  type: string
+                  enum: [links, auto]
+                  description: Strategy that was used
+            metadata:
+              type: object
+              description: Aggregate timing metadata
+              properties:
+                totalTime:
+                  type: integer
+                  description: Total time in milliseconds
+                totalLoadTime:
+                  type: integer
+                  description: Sum of individual page load times
+                startUrl:
+                  type: string
+                  format: uri
+                  description: Starting URL
+                lastUrl:
+                  type: string
+                  format: uri
+                  description: Last URL fetched
 
     DomainIntelligenceResponse:
       type: object
