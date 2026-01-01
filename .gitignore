@@ -38,3 +38,4 @@ temp/
 .claude/settings.local.json
 enhanced-knowledge-base.json
 learned-patterns.json
+.playwright-mcp/
