@@ -136,6 +136,10 @@ export class InMemoryTenantStore implements TenantStore {
       verificationTokenExpiresAt: data.verificationTokenExpiresAt ?? null,
       passwordResetToken: null,
       passwordResetTokenExpiresAt: null,
+      // Beta program fields
+      isBetaUser: false,
+      betaInviteCode: null,
+      betaJoinedAt: null,
     };
 
     this.tenants.set(tenant.id, tenant);

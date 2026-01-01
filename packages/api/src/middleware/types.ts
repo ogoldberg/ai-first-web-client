@@ -26,6 +26,11 @@ export interface Tenant {
   verificationTokenExpiresAt: Date | null;
   passwordResetToken: string | null;
   passwordResetTokenExpiresAt: Date | null;
+
+  // Beta program fields
+  isBetaUser: boolean;
+  betaInviteCode: string | null;
+  betaJoinedAt: Date | null;
 }
 
 export interface OAuthAccount {
@@ -64,4 +69,82 @@ export interface ApiKey {
   createdAt: Date;
   tenantId: string;
   tenant?: Tenant;
+}
+
+// =============================================================================
+// Beta Program Types
+// =============================================================================
+
+export type BetaWaitlistStatus = 'pending' | 'invited' | 'joined' | 'declined';
+
+export interface BetaWaitlistEntry {
+  id: string;
+  email: string;
+  name: string;
+  company: string | null;
+  useCase: string;
+  expectedVolume: string | null;
+  referralSource: string | null;
+  status: BetaWaitlistStatus;
+  inviteCode: string | null;
+  invitedAt: Date | null;
+  joinedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface BetaInvite {
+  id: string;
+  code: string;
+  email: string | null;
+  maxUses: number;
+  usedCount: number;
+  expiresAt: Date | null;
+  createdBy: string;
+  createdAt: Date;
+  revokedAt: Date | null;
+}
+
+export type BetaFeedbackCategory =
+  | 'bug'
+  | 'feature_request'
+  | 'documentation'
+  | 'performance'
+  | 'usability'
+  | 'other';
+
+export type BetaFeedbackPriority = 'low' | 'medium' | 'high' | 'critical';
+
+export interface BetaFeedback {
+  id: string;
+  tenantId: string;
+  category: BetaFeedbackCategory;
+  priority: BetaFeedbackPriority;
+  title: string;
+  description: string;
+  context: {
+    endpoint?: string;
+    requestId?: string;
+    errorCode?: string;
+    browserInfo?: string;
+  } | null;
+  status: 'new' | 'acknowledged' | 'in_progress' | 'resolved' | 'wont_fix';
+  adminNotes: string | null;
+  resolvedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface BetaProgramStats {
+  waitlist: {
+    total: number;
+    pending: number;
+    invited: number;
+    joined: number;
+    declined: number;
+  };
+  activeUsers: number;
+  totalFeedback: number;
+  openIssues: number;
+  inviteCodesActive: number;
 }

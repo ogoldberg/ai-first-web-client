@@ -183,6 +183,9 @@ export class PrismaTenantStore implements TenantStore {
       verificationTokenExpiresAt: tenant.verificationTokenExpiresAt,
       passwordResetToken: tenant.passwordResetToken,
       passwordResetTokenExpiresAt: tenant.passwordResetTokenExpiresAt,
+      isBetaUser: tenant.isBetaUser ?? false,
+      betaInviteCode: tenant.betaInviteCode ?? null,
+      betaJoinedAt: tenant.betaJoinedAt ?? null,
     };
   }
 }
@@ -228,6 +231,9 @@ export class PrismaApiKeyStore implements ApiKeyStore {
         verificationTokenExpiresAt: apiKey.tenant.verificationTokenExpiresAt,
         passwordResetToken: apiKey.tenant.passwordResetToken,
         passwordResetTokenExpiresAt: apiKey.tenant.passwordResetTokenExpiresAt,
+        isBetaUser: (apiKey.tenant as any).isBetaUser ?? false,
+        betaInviteCode: (apiKey.tenant as any).betaInviteCode ?? null,
+        betaJoinedAt: (apiKey.tenant as any).betaJoinedAt ?? null,
       },
     };
   }
