@@ -241,6 +241,7 @@ packages/
 |--------|----------|-------------|
 | `POST` | `/v1/browse` | Browse URL, extract content |
 | `POST` | `/v1/browse/preview` | Preview execution plan without running (COMP-002) |
+| `POST` | `/v1/browse/paginate` | Browse with automatic pagination (follows next links) |
 | `POST` | `/v1/batch` | Browse multiple URLs |
 | `POST` | `/v1/fetch` | Fast tiered fetch |
 | `GET` | `/v1/domains/:domain/intelligence` | Domain learning summary |

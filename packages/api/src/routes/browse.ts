@@ -24,6 +24,7 @@ import {
 import { getProxyManager, hasProxiesConfigured } from '../services/proxy-manager.js';
 import type { ProxyTier } from '../services/proxy-types.js';
 import { WorkflowRecorder } from '../../../../src/core/workflow-recorder.js';
+import { discoverLinks, extractPaginationLinks } from '../../../../src/core/link-discovery.js';
 
 interface BrowseRequest {
   url: string;
@@ -64,6 +65,41 @@ interface BatchRequest {
   urls: string[];
   options?: BrowseRequest['options'];
   session?: BrowseRequest['session'];
+}
+
+interface PaginateRequest {
+  url: string;
+  options?: BrowseRequest['options'] & {
+    /** Maximum number of pages to fetch (default: 10, max: 50) */
+    maxPages?: number;
+    /**
+     * Pagination strategy:
+     * - 'links': Follow 'next' links discovered in Link headers, HTML, or HATEOAS responses
+     * - 'auto': (Not yet implemented) Would try API patterns first, fall back to links
+     * Currently defaults to 'links' behavior regardless of setting
+     */
+    strategy?: 'links' | 'auto';
+    /** Delay between page requests in ms (default: 0, useful for rate limiting) */
+    delayMs?: number;
+    /** Stop pagination if a page fails (default: true) */
+    stopOnError?: boolean;
+  };
+  session?: BrowseRequest['session'];
+}
+
+/** Result for a single page in pagination */
+interface PaginatedPageResult {
+  pageNumber: number;
+  url: string;
+  success: boolean;
+  data?: ReturnType<typeof formatBrowseResult>;
+  error?: { code: string; message: string };
+  paginationLinks?: {
+    next?: string;
+    prev?: string;
+    first?: string;
+    last?: string;
+  };
 }
 
 interface FormatOptions {
@@ -620,6 +656,217 @@ browse.post(
           success: false,
           error: {
             code: 'BATCH_ERROR',
+            message: error instanceof Error ? error.message : 'Unknown error',
+          },
+        },
+        500
+      );
+    }
+  }
+);
+
+/**
+ * POST /v1/browse/paginate
+ * Browse a URL and automatically follow pagination links
+ *
+ * Features:
+ * - Automatically discovers pagination links (next, prev, first, last)
+ * - Follows 'next' links up to maxPages limit
+ * - Aggregates results from all pages
+ * - Supports delay between requests for rate limiting
+ * - Returns combined content with pagination metadata
+ */
+browse.post(
+  '/browse/paginate',
+  requirePermission('browse'),
+  validator('json', (value, c) => {
+    const body = value as PaginateRequest;
+
+    if (!body.url || typeof body.url !== 'string') {
+      return c.json(
+        {
+          success: false,
+          error: { code: 'INVALID_REQUEST', message: 'url is required' },
+        },
+        400
+      );
+    }
+
+    if (!isValidUrl(body.url)) {
+      return c.json(
+        {
+          success: false,
+          error: { code: 'INVALID_URL', message: 'Invalid URL format. Must be http or https.' },
+        },
+        400
+      );
+    }
+
+    // Validate maxPages
+    const maxPages = body.options?.maxPages ?? 10;
+    if (maxPages < 1 || maxPages > 50) {
+      return c.json(
+        {
+          success: false,
+          error: { code: 'INVALID_REQUEST', message: 'maxPages must be between 1 and 50' },
+        },
+        400
+      );
+    }
+
+    return body;
+  }),
+  async (c) => {
+    const body = c.req.valid('json') as PaginateRequest;
+    const startTime = Date.now();
+    const tenant = c.get('tenant');
+
+    // Pagination options
+    const maxPages = Math.min(body.options?.maxPages ?? 10, 50);
+    const strategy = body.options?.strategy ?? 'auto';
+    const delayMs = body.options?.delayMs ?? 0;
+    const stopOnError = body.options?.stopOnError ?? true;
+
+    // Format options (applied after browse)
+    const formatOptions: FormatOptions = {
+      maxChars: body.options?.maxChars,
+      includeTables: body.options?.includeTables,
+    };
+
+    const pages: PaginatedPageResult[] = [];
+
+    let currentUrl = body.url;
+    let pageNumber = 1;
+
+    try {
+      const client = await getBrowserClient();
+
+      while (pageNumber <= maxPages && currentUrl) {
+        const pageStartTime = Date.now();
+
+        // Add delay between requests (except first page)
+        if (pageNumber > 1 && delayMs > 0) {
+          await new Promise((resolve) => setTimeout(resolve, delayMs));
+        }
+
+        try {
+          // Browse the current page
+          const browseResult = await client.browse(currentUrl, {
+            waitForSelector: body.options?.waitForSelector,
+            scrollToLoad: body.options?.scrollToLoad,
+            maxLatencyMs: body.options?.maxLatencyMs,
+            maxCostTier: body.options?.maxCostTier,
+            verify: normalizeVerifyOptions(body.options?.verify),
+          });
+
+          // Record usage for the tier used
+          recordTierUsage(tenant.id, browseResult.learning?.renderTier || 'intelligence');
+
+          // Discover pagination links from the page
+          const linkDiscovery = await discoverLinks(currentUrl, {
+            htmlContent: browseResult.content?.html,
+            baseUrl: currentUrl,
+          });
+
+          const paginationLinks = extractPaginationLinks(linkDiscovery.links);
+
+          // Format and store the page result
+          pages.push({
+            pageNumber,
+            url: currentUrl,
+            success: true,
+            data: formatBrowseResult(browseResult, pageStartTime, formatOptions),
+            paginationLinks,
+          });
+
+          // Determine next URL
+          if (paginationLinks?.next) {
+            currentUrl = paginationLinks.next;
+          } else {
+            // No more pages
+            break;
+          }
+
+          pageNumber++;
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
+          pages.push({
+            pageNumber,
+            url: currentUrl,
+            success: false,
+            error: {
+              code: 'PAGE_ERROR',
+              message: errorMessage,
+            },
+          });
+
+          if (stopOnError) {
+            break;
+          }
+
+          // If not stopping on error, we can't continue without a next link
+          // Set currentUrl to empty to gracefully terminate the loop
+          // (future 'auto' strategy could attempt to guess next URL here)
+          currentUrl = '';
+        }
+      }
+
+      // Calculate aggregate statistics
+      const successfulPages = pages.filter((p) => p.success);
+      const totalLoadTime = pages.reduce(
+        (sum, p) => sum + (p.data?.metadata?.loadTime || 0),
+        0
+      );
+
+      // Combine content from all successful pages
+      const combinedMarkdown = successfulPages
+        .map((p) => {
+          const pageHeader = `\n\n---\n## Page ${p.pageNumber}\n**URL:** ${p.url}\n\n`;
+          return pageHeader + (p.data?.content?.markdown || '');
+        })
+        .join('');
+
+      const combinedText = successfulPages
+        .map((p) => {
+          const pageHeader = `\n\n--- Page ${p.pageNumber} ---\nURL: ${p.url}\n\n`;
+          return pageHeader + (p.data?.content?.text || '');
+        })
+        .join('');
+
+      return c.json({
+        success: true,
+        data: {
+          // Combined content from all pages
+          combinedContent: {
+            markdown: combinedMarkdown,
+            text: combinedText,
+          },
+          // Individual page results
+          pages,
+          // Pagination metadata
+          pagination: {
+            totalPages: pages.length,
+            successfulPages: successfulPages.length,
+            failedPages: pages.length - successfulPages.length,
+            maxPagesReached: pageNumber > maxPages,
+            strategy,
+          },
+          // Aggregate metadata
+          metadata: {
+            totalTime: Date.now() - startTime,
+            totalLoadTime,
+            startUrl: body.url,
+            lastUrl: pages[pages.length - 1]?.url,
+          },
+        },
+      });
+    } catch (error) {
+      return c.json(
+        {
+          success: false,
+          error: {
+            code: 'PAGINATE_ERROR',
             message: error instanceof Error ? error.message : 'Unknown error',
           },
         },
