@@ -14,7 +14,8 @@
     "loadtest": "tsx load-tests/run-load-tests.ts",
     "loadtest:baseline": "tsx load-tests/run-load-tests.ts baseline",
     "loadtest:stress": "tsx load-tests/run-load-tests.ts stress",
-    "loadtest:full": "tsx load-tests/run-load-tests.ts full"
+    "loadtest:full": "tsx load-tests/run-load-tests.ts full",
+    "setup:stripe": "tsx scripts/setup-stripe.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.11.0",
