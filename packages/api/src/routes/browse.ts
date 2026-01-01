@@ -72,7 +72,12 @@ interface PaginateRequest {
   options?: BrowseRequest['options'] & {
     /** Maximum number of pages to fetch (default: 10, max: 50) */
     maxPages?: number;
-    /** Pagination strategy: 'links' follows next links, 'auto' tries API patterns first */
+    /**
+     * Pagination strategy:
+     * - 'links': Follow 'next' links discovered in Link headers, HTML, or HATEOAS responses
+     * - 'auto': (Not yet implemented) Would try API patterns first, fall back to links
+     * Currently defaults to 'links' behavior regardless of setting
+     */
     strategy?: 'links' | 'auto';
     /** Delay between page requests in ms (default: 0, useful for rate limiting) */
     delayMs?: number;
@@ -80,6 +85,21 @@ interface PaginateRequest {
     stopOnError?: boolean;
   };
   session?: BrowseRequest['session'];
+}
+
+/** Result for a single page in pagination */
+interface PaginatedPageResult {
+  pageNumber: number;
+  url: string;
+  success: boolean;
+  data?: ReturnType<typeof formatBrowseResult>;
+  error?: { code: string; message: string };
+  paginationLinks?: {
+    next?: string;
+    prev?: string;
+    first?: string;
+    last?: string;
+  };
 }
 
 interface FormatOptions {
@@ -713,19 +733,7 @@ browse.post(
       includeTables: body.options?.includeTables,
     };
 
-    const pages: Array<{
-      pageNumber: number;
-      url: string;
-      success: boolean;
-      data?: ReturnType<typeof formatBrowseResult>;
-      error?: { code: string; message: string };
-      paginationLinks?: {
-        next?: string;
-        prev?: string;
-        first?: string;
-        last?: string;
-      };
-    }> = [];
+    const pages: PaginatedPageResult[] = [];
 
     let currentUrl = body.url;
     let pageNumber = 1;
@@ -798,7 +806,9 @@ browse.post(
           }
 
           // If not stopping on error, we can't continue without a next link
-          break;
+          // Set currentUrl to empty to gracefully terminate the loop
+          // (future 'auto' strategy could attempt to guess next URL here)
+          currentUrl = '';
         }
       }
 

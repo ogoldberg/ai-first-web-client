@@ -870,8 +870,9 @@ components:
                   default: auto
                   description: |
                     Pagination strategy:
-                    - `links`: Follow next/prev links found in HTML
-                    - `auto`: Try API patterns first, fall back to links
+                    - `links`: Follow 'next' links discovered in Link headers, HTML, or HATEOAS responses
+                    - `auto`: (Not yet implemented) Would try API patterns first, fall back to links
+                    Currently defaults to 'links' behavior regardless of setting.
                 delayMs:
                   type: integer
                   minimum: 0
