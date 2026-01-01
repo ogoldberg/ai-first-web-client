@@ -437,7 +437,7 @@ All 10 phases complete:
 | P1 | Implement usage metering and billing (CLOUD-002) | Complete |
 | P2 | Add Supabase/Postgres persistence (CLOUD-004) | Complete |
 | P2 | Production infrastructure and monitoring | Not Started |
-| P2 | Beta program launch | Not Started |
+| P2 | Beta program launch (API-017) | Complete |
 | P2 | Admin dashboard (API-008) | Complete |
 | P2 | Pricing calculator (API-016) | Complete |
 | P3 | Type-safe configuration validation (D-009) | Complete |

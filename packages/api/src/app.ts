@@ -352,6 +352,7 @@ async function initializeApiRoutes(): Promise<void> {
       adminUIModule,
       inspectionUIModule,
       pdfModule,
+      betaModule,
     ] = await Promise.all([
       import('./routes/docs.js'),
       import('./routes/browse.js'),
@@ -365,6 +366,7 @@ async function initializeApiRoutes(): Promise<void> {
       import('./routes/admin-ui.js'),
       import('./routes/inspection-ui.js'),
       import('./routes/pdf.js'),
+      import('./routes/beta.js'),
     ]);
 
     // Extract exports (some use named, some use default)
@@ -380,6 +382,7 @@ async function initializeApiRoutes(): Promise<void> {
     const adminUI = adminUIModule.adminUI;
     const inspectionUI = inspectionUIModule.inspectionUI;
     const pdf = pdfModule.pdf;
+    const beta = betaModule.beta;
 
     // API documentation
     app.route('/docs', docs); // API-011: Interactive API documentation
@@ -402,6 +405,9 @@ async function initializeApiRoutes(): Promise<void> {
 
     // PDF form extraction (INT-017)
     app.route('/v1/pdf', pdf); // PDF form field extraction
+
+    // Beta program (API-017)
+    app.route('/v1/beta', beta); // Beta waitlist, invites, feedback
 
     // LLM documentation (also available in marketing mode via redirect)
     app.route('', llmDocs); // LLM documentation at /llm.txt, /llm.md

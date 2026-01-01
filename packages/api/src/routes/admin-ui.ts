@@ -388,6 +388,7 @@ function getDashboardHTML() {
       <button class="tab active" data-tab="overview" onclick="switchTab('overview')">Overview</button>
       <button class="tab" data-tab="usage" onclick="switchTab('usage')">Usage</button>
       <button class="tab" data-tab="tenants" onclick="switchTab('tenants')">Tenants</button>
+      <button class="tab" data-tab="beta" onclick="switchTab('beta')">Beta</button>
       <button class="tab" data-tab="errors" onclick="switchTab('errors')">Errors</button>
       <button class="tab" data-tab="system" onclick="switchTab('system')">System</button>
     </div>
@@ -428,6 +429,79 @@ function getDashboardHTML() {
           </thead>
           <tbody id="tenantsTableBody">
             <tr><td colspan="6" class="loading">Loading tenants...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Beta Tab -->
+    <div id="tab-beta" class="tab-content hidden">
+      <div class="grid" id="betaStatsCards">
+        <div class="loading">Loading beta stats...</div>
+      </div>
+
+      <div class="table-container" style="margin-top: 24px;">
+        <div class="table-header">
+          <span class="table-title">Waitlist</span>
+          <span id="waitlistCount" class="last-updated"></span>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Email</th>
+              <th>Name</th>
+              <th>Company</th>
+              <th>Use Case</th>
+              <th>Status</th>
+              <th>Joined</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="waitlistTableBody">
+            <tr><td colspan="7" class="loading">Loading waitlist...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="table-container" style="margin-top: 24px;">
+        <div class="table-header">
+          <span class="table-title">Invite Codes</span>
+          <button class="refresh-btn" onclick="createInvite()">Create Invite</button>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Code</th>
+              <th>Email</th>
+              <th>Uses</th>
+              <th>Expires</th>
+              <th>Created</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="invitesTableBody">
+            <tr><td colspan="6" class="loading">Loading invites...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="table-container" style="margin-top: 24px;">
+        <div class="table-header">
+          <span class="table-title">Recent Feedback</span>
+          <span id="feedbackCount" class="last-updated"></span>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Category</th>
+              <th>Priority</th>
+              <th>Title</th>
+              <th>Status</th>
+              <th>Created</th>
+            </tr>
+          </thead>
+          <tbody id="feedbackTableBody">
+            <tr><td colspan="5" class="loading">Loading feedback...</td></tr>
           </tbody>
         </table>
       </div>
@@ -526,6 +600,9 @@ function getDashboardHTML() {
           break;
         case 'tenants':
           await loadTenants();
+          break;
+        case 'beta':
+          await loadBeta();
           break;
         case 'errors':
           await loadErrors();
@@ -841,6 +918,403 @@ function getDashboardHTML() {
         hideError();
       } catch (err) {
         showError('Failed to load tenants: ' + err.message);
+      }
+    }
+
+    // Beta API base
+    var BETA_API = '/v1/beta/admin';
+
+    // Load beta data
+    async function loadBeta() {
+      await Promise.all([
+        loadBetaStats(),
+        loadWaitlist(),
+        loadInvites(),
+        loadBetaFeedback()
+      ]);
+    }
+
+    // Load beta stats
+    async function loadBetaStats() {
+      try {
+        var response = await fetch(BETA_API + '/stats', {
+          headers: { 'Accept': 'application/json' },
+          credentials: 'include'
+        });
+        var data = await response.json();
+        var container = document.getElementById('betaStatsCards');
+
+        while (container.firstChild) {
+          container.removeChild(container.firstChild);
+        }
+
+        if (data.success && data.stats) {
+          var s = data.stats;
+
+          container.appendChild(createCard(
+            'Waitlist Total',
+            formatNumber(s.waitlist.total),
+            formatNumber(s.waitlist.pending) + ' pending'
+          ));
+
+          container.appendChild(createCard(
+            'Invited',
+            formatNumber(s.waitlist.invited),
+            null,
+            'accent-blue'
+          ));
+
+          container.appendChild(createCard(
+            'Active Beta Users',
+            formatNumber(s.activeUsers),
+            null,
+            'accent-green'
+          ));
+
+          container.appendChild(createCard(
+            'Active Invites',
+            formatNumber(s.inviteCodesActive)
+          ));
+
+          container.appendChild(createCard(
+            'Total Feedback',
+            formatNumber(s.totalFeedback),
+            formatNumber(s.openIssues) + ' open issues'
+          ));
+        }
+      } catch (err) {
+        console.error('Failed to load beta stats:', err);
+      }
+    }
+
+    // Load waitlist
+    async function loadWaitlist() {
+      try {
+        var response = await fetch(BETA_API + '/waitlist?limit=20', {
+          headers: { 'Accept': 'application/json' },
+          credentials: 'include'
+        });
+        var data = await response.json();
+        var tbody = document.getElementById('waitlistTableBody');
+
+        while (tbody.firstChild) {
+          tbody.removeChild(tbody.firstChild);
+        }
+
+        if (data.success && data.entries) {
+          document.getElementById('waitlistCount').textContent =
+            'Showing ' + data.entries.length + ' of ' + data.total;
+
+          if (data.entries.length === 0) {
+            var emptyRow = document.createElement('tr');
+            var emptyCell = document.createElement('td');
+            emptyCell.colSpan = 7;
+            emptyCell.textContent = 'No waitlist entries';
+            emptyRow.appendChild(emptyCell);
+            tbody.appendChild(emptyRow);
+          } else {
+            data.entries.forEach(function(entry) {
+              var row = document.createElement('tr');
+
+              var emailCell = document.createElement('td');
+              emailCell.textContent = entry.email;
+              row.appendChild(emailCell);
+
+              var nameCell = document.createElement('td');
+              nameCell.textContent = entry.name;
+              row.appendChild(nameCell);
+
+              var companyCell = document.createElement('td');
+              companyCell.textContent = entry.company || '-';
+              row.appendChild(companyCell);
+
+              var useCaseCell = document.createElement('td');
+              useCaseCell.textContent = entry.useCase.substring(0, 50) + (entry.useCase.length > 50 ? '...' : '');
+              useCaseCell.title = entry.useCase;
+              row.appendChild(useCaseCell);
+
+              var statusCell = document.createElement('td');
+              var statusBadge = document.createElement('span');
+              statusBadge.className = 'badge badge-' + getStatusBadgeClass(entry.status);
+              statusBadge.textContent = entry.status;
+              statusCell.appendChild(statusBadge);
+              row.appendChild(statusCell);
+
+              var dateCell = document.createElement('td');
+              dateCell.textContent = new Date(entry.createdAt).toLocaleDateString();
+              row.appendChild(dateCell);
+
+              var actionsCell = document.createElement('td');
+              if (entry.status === 'pending') {
+                var inviteBtn = document.createElement('button');
+                inviteBtn.className = 'refresh-btn';
+                inviteBtn.style.padding = '4px 12px';
+                inviteBtn.style.fontSize = '12px';
+                inviteBtn.textContent = 'Invite';
+                inviteBtn.onclick = function() { inviteWaitlistUser(entry.id); };
+                actionsCell.appendChild(inviteBtn);
+              } else if (entry.inviteCode) {
+                var codeSpan = document.createElement('span');
+                codeSpan.style.fontFamily = 'Monaco, Menlo, monospace';
+                codeSpan.style.fontSize = '11px';
+                codeSpan.textContent = entry.inviteCode;
+                actionsCell.appendChild(codeSpan);
+              }
+              row.appendChild(actionsCell);
+
+              tbody.appendChild(row);
+            });
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load waitlist:', err);
+      }
+    }
+
+    function getStatusBadgeClass(status) {
+      switch (status) {
+        case 'pending': return 'warning';
+        case 'invited': return 'starter';
+        case 'joined': return 'success';
+        case 'declined': return 'error';
+        default: return 'free';
+      }
+    }
+
+    // Invite a waitlist user
+    async function inviteWaitlistUser(id) {
+      try {
+        var response = await fetch(BETA_API + '/waitlist/' + id + '/invite', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          credentials: 'include',
+          body: JSON.stringify({ expiresInDays: 14 })
+        });
+        var data = await response.json();
+
+        if (data.success) {
+          alert('Invite sent! Code: ' + data.invite.code);
+          await loadBeta();
+        } else {
+          alert('Failed to invite: ' + data.error);
+        }
+      } catch (err) {
+        alert('Error inviting user: ' + err.message);
+      }
+    }
+
+    // Load invites
+    async function loadInvites() {
+      try {
+        var response = await fetch(BETA_API + '/invites?limit=20', {
+          headers: { 'Accept': 'application/json' },
+          credentials: 'include'
+        });
+        var data = await response.json();
+        var tbody = document.getElementById('invitesTableBody');
+
+        while (tbody.firstChild) {
+          tbody.removeChild(tbody.firstChild);
+        }
+
+        if (data.success && data.invites) {
+          if (data.invites.length === 0) {
+            var emptyRow = document.createElement('tr');
+            var emptyCell = document.createElement('td');
+            emptyCell.colSpan = 6;
+            emptyCell.textContent = 'No invite codes';
+            emptyRow.appendChild(emptyCell);
+            tbody.appendChild(emptyRow);
+          } else {
+            data.invites.forEach(function(invite) {
+              var row = document.createElement('tr');
+
+              var codeCell = document.createElement('td');
+              codeCell.style.fontFamily = 'Monaco, Menlo, monospace';
+              codeCell.textContent = invite.code;
+              row.appendChild(codeCell);
+
+              var emailCell = document.createElement('td');
+              emailCell.textContent = invite.email || 'Any';
+              row.appendChild(emailCell);
+
+              var usesCell = document.createElement('td');
+              usesCell.textContent = invite.usedCount + ' / ' + invite.maxUses;
+              row.appendChild(usesCell);
+
+              var expiresCell = document.createElement('td');
+              expiresCell.textContent = invite.expiresAt
+                ? new Date(invite.expiresAt).toLocaleDateString()
+                : 'Never';
+              row.appendChild(expiresCell);
+
+              var createdCell = document.createElement('td');
+              createdCell.textContent = new Date(invite.createdAt).toLocaleDateString();
+              row.appendChild(createdCell);
+
+              var actionsCell = document.createElement('td');
+              if (!invite.revokedAt && invite.usedCount < invite.maxUses) {
+                var revokeBtn = document.createElement('button');
+                revokeBtn.className = 'refresh-btn';
+                revokeBtn.style.padding = '4px 12px';
+                revokeBtn.style.fontSize = '12px';
+                revokeBtn.style.background = 'var(--accent-red)';
+                revokeBtn.textContent = 'Revoke';
+                revokeBtn.onclick = function() { revokeInvite(invite.id); };
+                actionsCell.appendChild(revokeBtn);
+              } else if (invite.revokedAt) {
+                actionsCell.textContent = 'Revoked';
+              }
+              row.appendChild(actionsCell);
+
+              tbody.appendChild(row);
+            });
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load invites:', err);
+      }
+    }
+
+    // Create invite
+    async function createInvite() {
+      var email = prompt('Email (leave blank for open invite):');
+      var maxUses = prompt('Max uses:', '1');
+
+      try {
+        var response = await fetch(BETA_API + '/invites', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          credentials: 'include',
+          body: JSON.stringify({
+            email: email || undefined,
+            maxUses: parseInt(maxUses, 10) || 1,
+            expiresInDays: 30
+          })
+        });
+        var data = await response.json();
+
+        if (data.success) {
+          alert('Created invite: ' + data.invite.code);
+          await loadInvites();
+          await loadBetaStats();
+        } else {
+          alert('Failed to create invite: ' + data.error);
+        }
+      } catch (err) {
+        alert('Error creating invite: ' + err.message);
+      }
+    }
+
+    // Revoke invite
+    async function revokeInvite(id) {
+      if (!confirm('Are you sure you want to revoke this invite?')) return;
+
+      try {
+        var response = await fetch(BETA_API + '/invites/' + id, {
+          method: 'DELETE',
+          headers: { 'Accept': 'application/json' },
+          credentials: 'include'
+        });
+        var data = await response.json();
+
+        if (data.success) {
+          await loadInvites();
+          await loadBetaStats();
+        } else {
+          alert('Failed to revoke invite: ' + data.error);
+        }
+      } catch (err) {
+        alert('Error revoking invite: ' + err.message);
+      }
+    }
+
+    // Load feedback
+    async function loadBetaFeedback() {
+      try {
+        var response = await fetch(BETA_API + '/feedback?limit=10', {
+          headers: { 'Accept': 'application/json' },
+          credentials: 'include'
+        });
+        var data = await response.json();
+        var tbody = document.getElementById('feedbackTableBody');
+
+        while (tbody.firstChild) {
+          tbody.removeChild(tbody.firstChild);
+        }
+
+        if (data.success && data.feedback) {
+          document.getElementById('feedbackCount').textContent =
+            'Showing ' + data.feedback.length + ' of ' + data.total;
+
+          if (data.feedback.length === 0) {
+            var emptyRow = document.createElement('tr');
+            var emptyCell = document.createElement('td');
+            emptyCell.colSpan = 5;
+            emptyCell.textContent = 'No feedback yet';
+            emptyRow.appendChild(emptyCell);
+            tbody.appendChild(emptyRow);
+          } else {
+            data.feedback.forEach(function(fb) {
+              var row = document.createElement('tr');
+
+              var categoryCell = document.createElement('td');
+              var categoryBadge = document.createElement('span');
+              categoryBadge.className = 'badge badge-' + getCategoryBadgeClass(fb.category);
+              categoryBadge.textContent = fb.category.replace('_', ' ');
+              categoryCell.appendChild(categoryBadge);
+              row.appendChild(categoryCell);
+
+              var priorityCell = document.createElement('td');
+              var priorityBadge = document.createElement('span');
+              priorityBadge.className = 'badge badge-' + getPriorityBadgeClass(fb.priority);
+              priorityBadge.textContent = fb.priority;
+              priorityCell.appendChild(priorityBadge);
+              row.appendChild(priorityCell);
+
+              var titleCell = document.createElement('td');
+              titleCell.textContent = fb.title;
+              titleCell.title = fb.description;
+              row.appendChild(titleCell);
+
+              var statusCell = document.createElement('td');
+              statusCell.textContent = fb.status.replace('_', ' ');
+              row.appendChild(statusCell);
+
+              var dateCell = document.createElement('td');
+              dateCell.textContent = new Date(fb.createdAt).toLocaleDateString();
+              row.appendChild(dateCell);
+
+              tbody.appendChild(row);
+            });
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load feedback:', err);
+      }
+    }
+
+    function getCategoryBadgeClass(category) {
+      switch (category) {
+        case 'bug': return 'error';
+        case 'feature_request': return 'starter';
+        case 'performance': return 'warning';
+        default: return 'free';
+      }
+    }
+
+    function getPriorityBadgeClass(priority) {
+      switch (priority) {
+        case 'critical': return 'error';
+        case 'high': return 'warning';
+        case 'medium': return 'starter';
+        default: return 'free';
       }
     }
 
