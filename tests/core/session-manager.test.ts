@@ -637,6 +637,13 @@ describe('SessionManager', () => {
       ...overrides,
     });
 
+    // Clear sessions between tests to prevent state leakage
+    beforeEach(async () => {
+      for (const { domain, profile } of sessionManager.listSessions()) {
+        await sessionManager.deleteSession(domain, profile);
+      }
+    });
+
     describe('Portal Group Management', () => {
       it('should return empty array when no portal groups exist', () => {
         expect(sessionManager.listPortalGroups()).toEqual([]);
