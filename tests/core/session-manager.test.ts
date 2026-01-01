@@ -638,9 +638,10 @@ describe('SessionManager', () => {
     });
 
     // Clear sessions between tests to prevent state leakage
-    beforeEach(() => {
-      const sessions = (sessionManager as any).sessions;
-      sessions.clear();
+    beforeEach(async () => {
+      for (const { domain, profile } of sessionManager.listSessions()) {
+        await sessionManager.deleteSession(domain, profile);
+      }
     });
 
     describe('Portal Group Management', () => {
