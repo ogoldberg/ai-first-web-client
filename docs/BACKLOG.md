@@ -327,7 +327,7 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 | API-006 | Add API request/response logging | M | Complete | Request logging middleware with unique IDs, timing, redaction. Admin log endpoints. 28 tests. PR #135 |
 | API-007 | Implement billing integration | L | Complete | Stripe integration with customer/subscription management, usage-based billing via Meter Events API, webhook handling. PR #144 |
 | API-008 | Create admin dashboard | L | Complete | Web UI at /admin with dashboard API at /v1/admin/dashboard. Usage analytics, tenant management, error analysis. 26 tests. PR #158 |
-| API-009 | Set up production infrastructure | XL | Not Started | Docker containers, orchestration (K8s or ECS), load balancing, auto-scaling |
+| API-009 | Set up production infrastructure | XL | N/A | Using Railway PaaS - handles containers, scaling, load balancing automatically via railway.toml |
 | API-010 | Implement health checks and monitoring | M | Complete | Comprehensive /health with service checks, Prometheus metrics at /health/metrics, K8s probes (/ready, /live). 27 tests |
 | API-011 | Add API documentation | L | Complete | OpenAPI/Swagger UI at /docs, getting started guide, code examples (curl, Python, Node.js). 25 tests. PR #145 |
 | API-012 | Create API client libraries | L | Complete | TypeScript SDK in packages/core, Python client in clients/python with full type hints, dataclasses, error handling. 25 Python tests. PR #146 |
