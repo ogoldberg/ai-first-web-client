@@ -31,7 +31,6 @@ import {
   type DiscoverySource as CacheDiscoverySource,
 } from '../utils/discovery-cache.js';
 import {
-  GOVERNMENT_SKILL_PACK,
   getSkillsForCountry,
   type GovernmentSkill,
   type GovernmentServiceCategory,
@@ -40,6 +39,9 @@ import { getConfig } from '../utils/heuristics-config.js';
 
 // Use a custom source for portal discovery since it's not a standard API discovery source
 const PORTAL_DISCOVERY_SOURCE: CacheDiscoverySource = 'links'; // Use 'links' as closest match
+
+// Cache TTL for portal discovery results (24 hours)
+const PORTAL_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
 const discoveryLogger = logger.create('AutoPortalDiscovery');
 
@@ -745,14 +747,14 @@ const KNOWN_PORTALS_BY_COUNTRY: Record<
       url: 'https://www.gov.uk',
     },
     {
-      domain: 'gov.uk/browse/visas-immigration',
+      domain: 'www.gov.uk',
       name: 'UK Visas',
       description: 'Visa and immigration',
       categories: ['visa_residence', 'work_permit'],
       url: 'https://www.gov.uk/browse/visas-immigration',
     },
     {
-      domain: 'gov.uk/government/organisations/hm-revenue-customs',
+      domain: 'www.gov.uk',
       name: 'HMRC',
       description: 'Tax authority',
       categories: ['tax_registration'],
@@ -951,7 +953,7 @@ export class AutoPortalDiscovery {
     };
 
     // Cache result
-    await this.cache.set(this.cacheSource, `portal:${normalizedCode}`, result, 24 * 60 * 60 * 1000); // 24h TTL
+    await this.cache.set(this.cacheSource, `portal:${normalizedCode}`, result, PORTAL_CACHE_TTL_MS);
 
     discoveryLogger.info('Portal discovery complete', {
       countryCode: normalizedCode,
@@ -1060,11 +1062,9 @@ export class AutoPortalDiscovery {
         // Check if already in portals
         const existing = portals.find(p => p.domain === domain);
         if (existing) {
-          // Merge categories
-          for (const category of [skill.category]) {
-            if (!existing.categories.includes(category)) {
-              existing.categories.push(category);
-            }
+          // Merge category
+          if (!existing.categories.includes(skill.category)) {
+            existing.categories.push(skill.category);
           }
           continue;
         }
@@ -1109,18 +1109,14 @@ export class AutoPortalDiscovery {
       if (patterns.some(p => groupNameLower.includes(p))) {
         for (const domain of group.domains) {
           if (!portals.some(p => p.domain === domain)) {
+            const languages = this.getLanguagesFromSharedPatterns(group.sharedPatterns?.language);
             portals.push({
               domain,
               url: `https://${domain}`,
               name: this.inferPortalNameFromDomain(domain),
               description: `Part of ${group.name} domain group`,
               countryCode,
-              languages:
-                group.sharedPatterns?.language === 'es'
-                  ? ['es']
-                  : group.sharedPatterns?.language === 'de'
-                    ? ['de']
-                    : ['en'],
+              languages,
               categories: this.inferCategoriesFromDomain(domain),
               confidence: 0.8,
               discoverySource: 'heuristics_config',
@@ -1200,6 +1196,24 @@ export class AutoPortalDiscovery {
       .join(' ');
 
     return name || domain;
+  }
+
+  /**
+   * Get languages array from shared patterns language setting
+   */
+  private getLanguagesFromSharedPatterns(language: string | undefined): string[] {
+    switch (language) {
+      case 'es':
+        return ['es'];
+      case 'de':
+        return ['de'];
+      case 'fr':
+        return ['fr'];
+      case 'pt':
+        return ['pt'];
+      default:
+        return ['en'];
+    }
   }
 
   private inferCategoriesFromDomain(domain: string): GovernmentServiceCategory[] {
