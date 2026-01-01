@@ -367,6 +367,34 @@ UNBROWSER_API_URL=https://api.unbrowser.ai  # optional, default
 LLM_BROWSER_STEALTH=true
 ```
 
+### Browserless.io Configuration
+
+Browserless provides remote browser rendering. The system includes built-in rate limiting to stay within plan limits.
+
+```bash
+BROWSERLESS_TOKEN=your_token_here
+BROWSERLESS_URL=wss://chrome.browserless.io  # Optional, this is the default
+BROWSERLESS_PLAN=free  # Options: free, starter, team, enterprise
+```
+
+**Plan Limits:**
+
+| Plan       | Concurrent | Max Session | Monthly Units | Queue Size |
+|------------|------------|-------------|---------------|------------|
+| free       | 1          | 60s         | 1,000         | 5          |
+| starter    | 5          | 300s        | 10,000        | 10         |
+| team       | 10         | 600s        | 50,000        | 20         |
+| enterprise | 50         | 1800s       | 500,000       | 100        |
+
+**Unit Calculation:** 1 unit = 30 seconds of browser time. A 45-second session uses 2 units.
+
+**Rate Limiting Behavior:**
+
+- Requests exceeding concurrent limit are queued
+- Queue-full requests are rejected with `BrowserlessQueueFullError`
+- Quota exceeded requests fail with `BrowserlessQuotaExceededError`
+- Automatic retry with exponential backoff for transient failures
+
 ### Proxy Configuration (IP Blocking Prevention)
 
 The API supports intelligent proxy routing to prevent IP blocking. Proxies are optional - the system works without them but may face blocking on high-protection sites.

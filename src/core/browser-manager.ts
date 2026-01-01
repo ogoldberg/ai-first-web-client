@@ -95,10 +95,14 @@ export class BrowserManager {
   private provider: BrowserProvider;
   private fingerprint: BrowserFingerprint | null = null;
   private stealthEnabled: boolean = false;
+  private slotReleaseFunction: (() => void) | null = null;
+  private sessionId: string;
 
   constructor(config: Partial<BrowserConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
     this.provider = createProvider(this.config.provider);
+    // Generate a unique session ID for rate limiting tracking
+    this.sessionId = `browser-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
   }
 
   /**
@@ -175,6 +179,28 @@ export class BrowserManager {
 
       if (endpoint) {
         // Remote browser connection
+
+        // For rate-limited providers (like Browserless), acquire a slot first
+        if (this.provider.acquireSlot) {
+          try {
+            logger.browser.debug('Acquiring rate limiter slot', {
+              sessionId: this.sessionId,
+              provider: this.provider.name,
+            });
+            this.slotReleaseFunction = await this.provider.acquireSlot(this.sessionId);
+            logger.browser.debug('Rate limiter slot acquired', {
+              sessionId: this.sessionId,
+            });
+          } catch (error) {
+            const message = error instanceof Error ? error.message : 'Unknown error';
+            logger.browser.error('Failed to acquire rate limiter slot', {
+              provider: this.provider.name,
+              error: message,
+            });
+            throw error;
+          }
+        }
+
         const safeEndpoint = endpoint
           .replace(/token=[^&]+/, 'token=***')
           .replace(/:[^:@]+@/, ':***@'); // Hide passwords in URLs
@@ -196,6 +222,11 @@ export class BrowserManager {
             provider: this.provider.name,
           });
         } catch (error) {
+          // Release the slot if connection failed
+          if (this.slotReleaseFunction) {
+            this.slotReleaseFunction();
+            this.slotReleaseFunction = null;
+          }
           const message = error instanceof Error ? error.message : 'Unknown error';
           logger.browser.error('Failed to connect to remote browser', {
             provider: this.provider.name,
@@ -479,6 +510,30 @@ export class BrowserManager {
       await this.browser.close();
       this.browser = null;
     }
+
+    // Release the rate limiter slot if one was acquired
+    if (this.slotReleaseFunction) {
+      logger.browser.debug('Releasing rate limiter slot', {
+        sessionId: this.sessionId,
+      });
+      this.slotReleaseFunction();
+      this.slotReleaseFunction = null;
+    }
+  }
+
+  /**
+   * Get usage stats from the provider (if rate-limited)
+   */
+  getUsageStats(): { unitsUsed: number; unitsRemaining: number; activeConnections: number } | null {
+    if (this.provider.getUsageStats) {
+      const stats = this.provider.getUsageStats();
+      return {
+        unitsUsed: stats.unitsUsed,
+        unitsRemaining: stats.unitsRemaining,
+        activeConnections: stats.activeConnections,
+      };
+    }
+    return null;
   }
 
   /**

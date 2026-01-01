@@ -13,6 +13,13 @@
  */
 
 import { logger } from '../utils/logger.js';
+import {
+  BrowserlessRateLimiter,
+  getDefaultRateLimiter,
+  BROWSERLESS_PLANS,
+  type BrowserlessPlanLimits,
+  type BrowserlessUsageStats,
+} from './browserless-rate-limiter.js';
 
 export type BrowserProviderType = 'local' | 'browserless' | 'brightdata' | 'custom';
 
@@ -21,6 +28,7 @@ export interface BrowserProviderConfig {
   // Browserless options
   browserlessToken?: string;
   browserlessUrl?: string; // Default: wss://chrome.browserless.io
+  browserlessPlan?: keyof typeof BROWSERLESS_PLANS; // Plan tier for rate limiting
   // Bright Data options
   brightdataAuth?: string; // format: username:password
   brightdataZone?: string; // Scraping Browser zone
@@ -58,6 +66,22 @@ export interface BrowserProvider {
    * Get additional connection options if needed
    */
   getConnectionOptions(): Record<string, unknown>;
+
+  /**
+   * Acquire a connection slot (for rate-limited providers)
+   * Returns a release function to call when done
+   */
+  acquireSlot?(sessionId: string): Promise<() => void>;
+
+  /**
+   * Get rate limiting stats (for rate-limited providers)
+   */
+  getUsageStats?(): BrowserlessUsageStats;
+
+  /**
+   * Get plan limits (for rate-limited providers)
+   */
+  getPlanLimits?(): BrowserlessPlanLimits;
 }
 
 /**
@@ -92,6 +116,13 @@ class LocalProvider implements BrowserProvider {
 /**
  * Browserless.io - Standard CDP-compatible hosted browser
  * https://browserless.io
+ *
+ * Free Plan Limits:
+ * - 1,000 units/month (1 unit = 30 seconds)
+ * - 1 max concurrent browser
+ * - 1 minute max session time
+ *
+ * @see https://www.browserless.io/pricing
  */
 class BrowserlessProvider implements BrowserProvider {
   static readonly capabilities: ProviderCapabilities = {
@@ -109,11 +140,31 @@ class BrowserlessProvider implements BrowserProvider {
   private token: string;
   private baseUrl: string;
   private timeout: number;
+  private rateLimiter: BrowserlessRateLimiter;
 
   constructor(config: BrowserProviderConfig) {
     this.token = config.browserlessToken || process.env.BROWSERLESS_TOKEN || '';
     this.baseUrl = config.browserlessUrl || process.env.BROWSERLESS_URL || 'wss://chrome.browserless.io';
-    this.timeout = config.timeout || 30000;
+
+    // Determine plan from config or env
+    const plan = config.browserlessPlan ||
+      (process.env.BROWSERLESS_PLAN as keyof typeof BROWSERLESS_PLANS) ||
+      'free';
+
+    // Get rate limiter (use shared instance for consistent tracking)
+    this.rateLimiter = getDefaultRateLimiter();
+    this.rateLimiter.setPlan(plan);
+
+    // Use plan-specific timeout
+    const planLimits = this.rateLimiter.getLimits();
+    this.timeout = config.timeout || planLimits.connectionTimeout;
+
+    logger.browser.debug('BrowserlessProvider initialized', {
+      plan,
+      timeout: this.timeout,
+      maxConcurrent: planLimits.maxConcurrent,
+      maxSessionDuration: planLimits.maxSessionDuration,
+    });
   }
 
   getEndpoint(): string {
@@ -123,6 +174,9 @@ class BrowserlessProvider implements BrowserProvider {
     url.searchParams.set('stealth', 'true');
     // Block ads for faster loading
     url.searchParams.set('blockAds', 'true');
+    // Set timeout based on plan's max session duration
+    const limits = this.rateLimiter.getLimits();
+    url.searchParams.set('timeout', String(limits.maxSessionDuration));
     return url.toString();
   }
 
@@ -133,11 +187,45 @@ class BrowserlessProvider implements BrowserProvider {
         error: 'Browserless token not configured. Set BROWSERLESS_TOKEN environment variable.',
       };
     }
+
+    // Check if we have units available
+    if (!this.rateLimiter.hasUnitsAvailable()) {
+      const stats = this.rateLimiter.getStats();
+      return {
+        valid: false,
+        error: `Monthly unit quota exceeded (${stats.unitsUsed}/${stats.unitsUsed + stats.unitsRemaining} units). ` +
+          `Quota resets on ${stats.quotaResetDate.toISOString().split('T')[0]}.`,
+      };
+    }
+
     return { valid: true };
   }
 
   getConnectionOptions(): Record<string, unknown> {
     return { timeout: this.timeout };
+  }
+
+  /**
+   * Acquire a connection slot with rate limiting
+   * @param sessionId Unique identifier for this session
+   * @returns Release function to call when done
+   */
+  async acquireSlot(sessionId: string): Promise<() => void> {
+    return this.rateLimiter.acquire(sessionId);
+  }
+
+  /**
+   * Get current usage statistics
+   */
+  getUsageStats(): BrowserlessUsageStats {
+    return this.rateLimiter.getStats();
+  }
+
+  /**
+   * Get plan limits
+   */
+  getPlanLimits(): BrowserlessPlanLimits {
+    return this.rateLimiter.getLimits();
   }
 }
 
