@@ -8,7 +8,7 @@
  * - Program statistics
  */
 
-import { randomBytes, createHash } from 'crypto';
+import { randomBytes } from 'crypto';
 import type {
   BetaWaitlistEntry,
   BetaWaitlistStatus,
@@ -454,7 +454,7 @@ export async function listFeedback(options?: {
  */
 export async function updateFeedbackStatus(
   id: string,
-  status: BetaFeedback['status'],
+  status?: BetaFeedback['status'],
   adminNotes?: string
 ): Promise<{ success: boolean; error?: string }> {
   const feedback = feedbackStore.get(id);
@@ -462,15 +462,17 @@ export async function updateFeedbackStatus(
     return { success: false, error: 'Feedback not found' };
   }
 
-  feedback.status = status;
   feedback.updatedAt = new Date();
+
+  if (status !== undefined) {
+    feedback.status = status;
+    if (status === 'resolved' || status === 'wont_fix') {
+      feedback.resolvedAt = new Date();
+    }
+  }
 
   if (adminNotes !== undefined) {
     feedback.adminNotes = adminNotes;
-  }
-
-  if (status === 'resolved' || status === 'wont_fix') {
-    feedback.resolvedAt = new Date();
   }
 
   feedbackStore.set(id, feedback);
@@ -574,19 +576,17 @@ export async function batchInviteWaitlist(
   failed: number;
   errors: string[];
 }> {
-  let invited = 0;
-  let failed = 0;
-  const errors: string[] = [];
+  const results = await Promise.all(
+    waitlistIds.map(id =>
+      inviteWaitlistEntry(id, createdBy, options).then(res => ({ id, ...res }))
+    )
+  );
 
-  for (const id of waitlistIds) {
-    const result = await inviteWaitlistEntry(id, createdBy, options);
-    if (result.success) {
-      invited++;
-    } else {
-      failed++;
-      errors.push(`${id}: ${result.error}`);
-    }
-  }
+  const invited = results.filter(r => r.success).length;
+  const failed = results.length - invited;
+  const errors = results
+    .filter(r => !r.success)
+    .map(r => `${r.id}: ${r.error}`);
 
   return { success: failed === 0, invited, failed, errors };
 }

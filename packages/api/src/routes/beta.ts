@@ -273,14 +273,29 @@ beta.post('/feedback', authMiddleware, async (c) => {
 /**
  * GET /beta/feedback - List user's own feedback (requires auth)
  */
+const validFeedbackStatuses = ['new', 'acknowledged', 'in_progress', 'resolved', 'wont_fix'] as const;
+type FeedbackStatus = typeof validFeedbackStatuses[number];
+
 beta.get('/feedback', authMiddleware, async (c) => {
   const tenant = c.get('tenant');
   const query = c.req.query();
 
+  // Validate status if provided
+  let status: FeedbackStatus | undefined;
+  if (query.status) {
+    if (!validFeedbackStatuses.includes(query.status as FeedbackStatus)) {
+      return c.json({
+        success: false,
+        error: `Invalid status. Must be one of: ${validFeedbackStatuses.join(', ')}`,
+      }, 400);
+    }
+    status = query.status as FeedbackStatus;
+  }
+
   const result = await listFeedback({
     tenantId: tenant.id,
     category: query.category as BetaFeedbackCategory | undefined,
-    status: query.status as any,
+    status,
     limit: query.limit ? parseInt(query.limit, 10) : undefined,
     offset: query.offset ? parseInt(query.offset, 10) : undefined,
   });
@@ -473,10 +488,22 @@ adminBeta.delete('/invites/:id', async (c) => {
 adminBeta.get('/feedback', async (c) => {
   const query = c.req.query();
 
+  // Validate status if provided
+  let status: FeedbackStatus | undefined;
+  if (query.status) {
+    if (!validFeedbackStatuses.includes(query.status as FeedbackStatus)) {
+      return c.json({
+        success: false,
+        error: `Invalid status. Must be one of: ${validFeedbackStatuses.join(', ')}`,
+      }, 400);
+    }
+    status = query.status as FeedbackStatus;
+  }
+
   const result = await listFeedback({
     tenantId: query.tenantId,
     category: query.category as BetaFeedbackCategory | undefined,
-    status: query.status as any,
+    status,
     priority: query.priority as BetaFeedbackPriority | undefined,
     limit: query.limit ? parseInt(query.limit, 10) : undefined,
     offset: query.offset ? parseInt(query.offset, 10) : undefined,
@@ -522,7 +549,7 @@ adminBeta.patch('/feedback/:id', async (c) => {
     );
   }
 
-  const result = await updateFeedbackStatus(id, body.status!, body.adminNotes);
+  const result = await updateFeedbackStatus(id, body.status, body.adminNotes);
 
   if (!result.success) {
     return c.json({ success: false, error: result.error }, 400);
