@@ -1,8 +1,10 @@
 /**
  * Tests for EmbeddingPipeline (V-002)
+ *
+ * Uses centralized beforeEach with context.skip() for cleaner test setup.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, type TaskContext } from 'vitest';
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 import { tmpdir } from 'node:os';
@@ -210,43 +212,50 @@ describe('EmbeddingPipeline (V-002)', () => {
   });
 
   describe('Initialization', () => {
-    it('should initialize the pipeline', async () => {
+    // Initialize pipeline and skip if not available
+    beforeEach(async (context: TaskContext) => {
       const available = await EmbeddingPipeline.isAvailable();
       if (!available) {
         console.log('Skipping test - dependencies not available');
+        context.skip();
         return;
       }
-
       try {
         await pipeline.initialize();
-      } catch {
-        // Initialization failed (e.g., model download), skip test
-        console.log('Skipping test - initialization failed');
-        return;
+      } catch (e) {
+        console.log('Skipping test - initialization failed', e);
+        context.skip();
       }
+    });
 
+    it('should initialize the pipeline', async () => {
       expect(pipeline.getVectorStore()).not.toBeNull();
       expect(pipeline.getEmbeddingProvider()).not.toBeNull();
     }, 60000);
   });
 
   describe('Pattern Indexing', () => {
-    beforeEach(async () => {
+    // Initialize pipeline and skip if not available
+    beforeEach(async (context: TaskContext) => {
       const available = await EmbeddingPipeline.isAvailable();
-      if (available) {
-        try {
-          await pipeline.initialize();
-        } catch {
-          // Initialization failed (e.g., model download), tests will skip
+      if (!available) {
+        console.log('Skipping test - dependencies not available');
+        context.skip();
+        return;
+      }
+      try {
+        await pipeline.initialize();
+        if (!pipeline.getVectorStore()) {
+          console.log('Skipping test - vector store not initialized');
+          context.skip();
         }
+      } catch (e) {
+        console.log('Skipping test - initialization failed', e);
+        context.skip();
       }
     });
 
     it('should index a single pattern', async () => {
-      const available = await EmbeddingPipeline.isAvailable();
-      if (!available) return;
-      if (!pipeline.getVectorStore()) return;
-
       const pattern: LearnedPattern = {
         id: 'pattern-1',
         urlPattern: 'api.example.com/v1/users/{id}',
@@ -261,10 +270,6 @@ describe('EmbeddingPipeline (V-002)', () => {
     }, 60000);
 
     it('should fail for empty pattern', async () => {
-      const available = await EmbeddingPipeline.isAvailable();
-      if (!available) return;
-      if (!pipeline.getVectorStore()) return;
-
       const pattern: LearnedPattern = {
         id: 'empty-pattern',
         urlPattern: '',
@@ -277,10 +282,6 @@ describe('EmbeddingPipeline (V-002)', () => {
     }, 60000);
 
     it('should generate ID if not provided', async () => {
-      const available = await EmbeddingPipeline.isAvailable();
-      if (!available) return;
-      if (!pipeline.getVectorStore()) return;
-
       const pattern: LearnedPattern = {
         urlPattern: 'api.example.com/v1/products',
       };
@@ -292,10 +293,6 @@ describe('EmbeddingPipeline (V-002)', () => {
     }, 60000);
 
     it('should index multiple patterns in batch', async () => {
-      const available = await EmbeddingPipeline.isAvailable();
-      if (!available) return;
-      if (!pipeline.getVectorStore()) return;
-
       const patterns: LearnedPattern[] = [
         { id: 'batch-1', urlPattern: 'api.example.com/v1/users' },
         { id: 'batch-2', urlPattern: 'api.example.com/v1/posts' },
@@ -311,10 +308,6 @@ describe('EmbeddingPipeline (V-002)', () => {
     }, 60000);
 
     it('should skip empty patterns in batch', async () => {
-      const available = await EmbeddingPipeline.isAvailable();
-      if (!available) return;
-      if (!pipeline.getVectorStore()) return;
-
       const patterns: LearnedPattern[] = [
         { id: 'valid-1', urlPattern: 'api.example.com/v1/users' },
         { id: 'empty-1', urlPattern: '' },
@@ -329,22 +322,27 @@ describe('EmbeddingPipeline (V-002)', () => {
   });
 
   describe('Skill Indexing', () => {
-    beforeEach(async () => {
+    // Initialize pipeline and skip if not available
+    beforeEach(async (context: TaskContext) => {
       const available = await EmbeddingPipeline.isAvailable();
-      if (available) {
-        try {
-          await pipeline.initialize();
-        } catch {
-          // Initialization failed (e.g., model download), tests will skip
+      if (!available) {
+        console.log('Skipping test - dependencies not available');
+        context.skip();
+        return;
+      }
+      try {
+        await pipeline.initialize();
+        if (!pipeline.getVectorStore()) {
+          console.log('Skipping test - vector store not initialized');
+          context.skip();
         }
+      } catch (e) {
+        console.log('Skipping test - initialization failed', e);
+        context.skip();
       }
     });
 
     it('should index a single skill', async () => {
-      const available = await EmbeddingPipeline.isAvailable();
-      if (!available) return;
-      if (!pipeline.getVectorStore()) return;
-
       const skill: Skill = {
         id: 'skill-1',
         name: 'Login Flow',
@@ -359,10 +357,6 @@ describe('EmbeddingPipeline (V-002)', () => {
     }, 60000);
 
     it('should index multiple skills in batch', async () => {
-      const available = await EmbeddingPipeline.isAvailable();
-      if (!available) return;
-      if (!pipeline.getVectorStore()) return;
-
       const skills: Skill[] = [
         { id: 'skill-1', name: 'Login' },
         { id: 'skill-2', name: 'Logout' },
@@ -377,22 +371,27 @@ describe('EmbeddingPipeline (V-002)', () => {
   });
 
   describe('Statistics', () => {
-    beforeEach(async () => {
+    // Initialize pipeline and skip if not available
+    beforeEach(async (context: TaskContext) => {
       const available = await EmbeddingPipeline.isAvailable();
-      if (available) {
-        try {
-          await pipeline.initialize();
-        } catch {
-          // Initialization failed (e.g., model download), tests will skip
+      if (!available) {
+        console.log('Skipping test - dependencies not available');
+        context.skip();
+        return;
+      }
+      try {
+        await pipeline.initialize();
+        if (!pipeline.getVectorStore()) {
+          console.log('Skipping test - vector store not initialized');
+          context.skip();
         }
+      } catch (e) {
+        console.log('Skipping test - initialization failed', e);
+        context.skip();
       }
     });
 
     it('should return zero stats when empty', async () => {
-      const available = await EmbeddingPipeline.isAvailable();
-      if (!available) return;
-      if (!pipeline.getVectorStore()) return;
-
       const stats = await pipeline.getStats();
 
       expect(stats.patterns).toBe(0);
@@ -401,10 +400,6 @@ describe('EmbeddingPipeline (V-002)', () => {
     }, 60000);
 
     it('should count indexed entities', async () => {
-      const available = await EmbeddingPipeline.isAvailable();
-      if (!available) return;
-      if (!pipeline.getVectorStore()) return;
-
       // Index some patterns and skills
       await pipeline.indexPatterns([
         { id: 'p1', urlPattern: 'api.example.com/v1/a' },
@@ -427,22 +422,27 @@ describe('EmbeddingPipeline (V-002)', () => {
   });
 
   describe('Deletion', () => {
-    beforeEach(async () => {
+    // Initialize pipeline and skip if not available
+    beforeEach(async (context: TaskContext) => {
       const available = await EmbeddingPipeline.isAvailable();
-      if (available) {
-        try {
-          await pipeline.initialize();
-        } catch {
-          // Initialization failed (e.g., model download), tests will skip
+      if (!available) {
+        console.log('Skipping test - dependencies not available');
+        context.skip();
+        return;
+      }
+      try {
+        await pipeline.initialize();
+        if (!pipeline.getVectorStore()) {
+          console.log('Skipping test - vector store not initialized');
+          context.skip();
         }
+      } catch (e) {
+        console.log('Skipping test - initialization failed', e);
+        context.skip();
       }
     });
 
     it('should delete embedding by ID', async () => {
-      const available = await EmbeddingPipeline.isAvailable();
-      if (!available) return;
-      if (!pipeline.getVectorStore()) return;
-
       await pipeline.indexPattern({
         id: 'to-delete',
         urlPattern: 'api.example.com/v1/users',
@@ -456,10 +456,6 @@ describe('EmbeddingPipeline (V-002)', () => {
     }, 60000);
 
     it('should delete embeddings by domain', async () => {
-      const available = await EmbeddingPipeline.isAvailable();
-      if (!available) return;
-      if (!pipeline.getVectorStore()) return;
-
       await pipeline.indexPatterns([
         { id: 'd1', urlPattern: 'api.example.com/v1/users', domain: 'example.com' },
         { id: 'd2', urlPattern: 'api.example.com/v1/posts', domain: 'example.com' },
@@ -482,22 +478,27 @@ describe('EmbeddingPipeline (V-002)', () => {
   });
 
   describe('Semantic Search', () => {
-    beforeEach(async () => {
+    // Initialize pipeline and skip if not available
+    beforeEach(async (context: TaskContext) => {
       const available = await EmbeddingPipeline.isAvailable();
-      if (available) {
-        try {
-          await pipeline.initialize();
-        } catch {
-          // Initialization failed (e.g., model download), tests will skip
+      if (!available) {
+        console.log('Skipping test - dependencies not available');
+        context.skip();
+        return;
+      }
+      try {
+        await pipeline.initialize();
+        if (!pipeline.getVectorStore()) {
+          console.log('Skipping test - vector store not initialized');
+          context.skip();
         }
+      } catch (e) {
+        console.log('Skipping test - initialization failed', e);
+        context.skip();
       }
     });
 
     it('should find similar patterns via vector store', async () => {
-      const available = await EmbeddingPipeline.isAvailable();
-      if (!available) return;
-      if (!pipeline.getVectorStore()) return;
-
       // Index some patterns
       await pipeline.indexPatterns([
         {
@@ -533,17 +534,23 @@ describe('EmbeddingPipeline (V-002)', () => {
   });
 
   describe('Close and Cleanup', () => {
-    it('should close pipeline and release resources', async () => {
+    // Initialize pipeline and skip if not available
+    beforeEach(async (context: TaskContext) => {
       const available = await EmbeddingPipeline.isAvailable();
-      if (!available) return;
-
-      try {
-        await pipeline.initialize();
-      } catch {
-        // Initialization failed (e.g., model download), skip test
+      if (!available) {
+        console.log('Skipping test - dependencies not available');
+        context.skip();
         return;
       }
+      try {
+        await pipeline.initialize();
+      } catch (e) {
+        console.log('Skipping test - initialization failed', e);
+        context.skip();
+      }
+    });
 
+    it('should close pipeline and release resources', async () => {
       expect(pipeline.getVectorStore()).not.toBeNull();
 
       await pipeline.close();

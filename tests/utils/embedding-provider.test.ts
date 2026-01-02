@@ -1,8 +1,10 @@
 /**
  * Tests for EmbeddingProvider (V-002)
+ *
+ * Uses centralized beforeEach with context.skip() for cleaner test setup.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, type TaskContext } from 'vitest';
 import {
   EmbeddingProvider,
   createEmbeddingProvider,
@@ -10,9 +12,13 @@ import {
 } from '../../src/utils/embedding-provider.js';
 
 describe('EmbeddingProvider (V-002)', () => {
+  // Provider that gets initialized for tests that need it
+  let provider: EmbeddingProvider | null = null;
+
   beforeEach(() => {
     // Reset singleton before each test
     EmbeddingProvider.reset();
+    provider = null;
   });
 
   afterEach(() => {
@@ -32,74 +38,75 @@ describe('EmbeddingProvider (V-002)', () => {
   });
 
   describe('Singleton Pattern', () => {
-    it('should return same instance on multiple create calls', async () => {
+    // Initialize provider and skip if not available
+    beforeEach(async (context: TaskContext) => {
       const available = await EmbeddingProvider.isAvailable();
       if (!available) {
         console.log('Skipping test - transformers not available');
+        context.skip();
         return;
       }
+      try {
+        provider = await EmbeddingProvider.create();
+        if (!provider) {
+          context.skip();
+        }
+      } catch (e) {
+        console.log('Skipping test - provider initialization failed', e);
+        context.skip();
+      }
+    });
 
-      const provider1 = await EmbeddingProvider.create();
+    it('should return same instance on multiple create calls', async () => {
       const provider2 = await EmbeddingProvider.create();
-
-      expect(provider1).toBe(provider2);
+      expect(provider).toBe(provider2);
     });
 
     it('should reset singleton on reset()', async () => {
-      const available = await EmbeddingProvider.isAvailable();
-      if (!available) return;
-
-      const provider1 = await EmbeddingProvider.create();
-      if (!provider1) return;
-
       EmbeddingProvider.reset();
       const provider2 = await EmbeddingProvider.create();
-      if (!provider2) return;
 
       // After reset, we get a fresh instance (which should be equal since it reinitializes)
       expect(provider2).not.toBeNull();
     });
 
     it('should use createEmbeddingProvider helper', async () => {
-      const available = await EmbeddingProvider.isAvailable();
-      if (!available) return;
-
-      const provider = await createEmbeddingProvider();
-      if (!provider) return;
-
-      expect(provider).not.toBeNull();
+      const helperProvider = await createEmbeddingProvider();
+      expect(helperProvider).not.toBeNull();
     });
   });
 
   describe('Embedding Generation', () => {
-    it('should generate embedding for single text', async () => {
+    // Initialize provider and skip if not available
+    beforeEach(async (context: TaskContext) => {
       const available = await EmbeddingProvider.isAvailable();
       if (!available) {
         console.log('Skipping test - transformers not available');
+        context.skip();
         return;
       }
-
-      const provider = await EmbeddingProvider.create();
-      if (!provider) {
-        console.log('Skipping test - provider could not be initialized');
-        return;
+      try {
+        provider = await EmbeddingProvider.create();
+        if (!provider) {
+          console.log('Skipping test - provider could not be initialized');
+          context.skip();
+        }
+      } catch (e) {
+        console.log('Skipping embedding provider tests - initialization failed', e);
+        context.skip();
       }
+    });
 
-      const result = await provider.generateEmbedding('hello world');
+    it('should generate embedding for single text', async () => {
+      const result = await provider!.generateEmbedding('hello world');
 
       expect(result.vector).toBeInstanceOf(Float32Array);
-      expect(result.vector.length).toBe(provider.getDimensions());
-      expect(result.model).toBe(provider.getModelName());
+      expect(result.vector.length).toBe(provider!.getDimensions());
+      expect(result.model).toBe(provider!.getModelName());
     }, 60000); // Allow 60s for model loading
 
     it('should generate normalized embeddings', async () => {
-      const available = await EmbeddingProvider.isAvailable();
-      if (!available) return;
-
-      const provider = await EmbeddingProvider.create();
-      if (!provider) return;
-
-      const result = await provider.generateEmbedding('test text');
+      const result = await provider!.generateEmbedding('test text');
 
       // Check if vector is normalized (magnitude close to 1)
       let magnitude = 0;
@@ -112,95 +119,76 @@ describe('EmbeddingProvider (V-002)', () => {
     }, 60000);
 
     it('should throw for empty text', async () => {
-      const available = await EmbeddingProvider.isAvailable();
-      if (!available) return;
-
-      const provider = await EmbeddingProvider.create();
-      if (!provider) return;
-
-      await expect(provider.generateEmbedding('')).rejects.toThrow();
-      await expect(provider.generateEmbedding('   ')).rejects.toThrow();
+      await expect(provider!.generateEmbedding('')).rejects.toThrow();
+      await expect(provider!.generateEmbedding('   ')).rejects.toThrow();
     }, 60000);
 
     it('should handle special characters in text', async () => {
-      const available = await EmbeddingProvider.isAvailable();
-      if (!available) return;
-
-      const provider = await EmbeddingProvider.create();
-      if (!provider) return;
-
-      const result = await provider.generateEmbedding(
+      const result = await provider!.generateEmbedding(
         'Test with special chars: @#$%^&*() and unicode: '
       );
 
       expect(result.vector).toBeInstanceOf(Float32Array);
-      expect(result.vector.length).toBe(provider.getDimensions());
+      expect(result.vector.length).toBe(provider!.getDimensions());
     }, 60000);
 
     it('should handle long text', async () => {
-      const available = await EmbeddingProvider.isAvailable();
-      if (!available) return;
-
-      const provider = await EmbeddingProvider.create();
-      if (!provider) return;
-
       const longText = 'word '.repeat(1000);
-      const result = await provider.generateEmbedding(longText);
+      const result = await provider!.generateEmbedding(longText);
 
       expect(result.vector).toBeInstanceOf(Float32Array);
-      expect(result.vector.length).toBe(provider.getDimensions());
+      expect(result.vector.length).toBe(provider!.getDimensions());
     }, 60000);
   });
 
   describe('Batch Embedding Generation', () => {
-    it('should generate embeddings for multiple texts', async () => {
+    // Initialize provider and skip if not available
+    beforeEach(async (context: TaskContext) => {
       const available = await EmbeddingProvider.isAvailable();
-      if (!available) return;
+      if (!available) {
+        context.skip();
+        return;
+      }
+      try {
+        provider = await EmbeddingProvider.create();
+        if (!provider) {
+          context.skip();
+        }
+      } catch {
+        context.skip();
+      }
+    });
 
-      const provider = await EmbeddingProvider.create();
-      if (!provider) return;
-
+    it('should generate embeddings for multiple texts', async () => {
       const texts = ['hello', 'world', 'test'];
 
-      const result = await provider.generateBatch(texts);
+      const result = await provider!.generateBatch(texts);
 
       expect(result.vectors).toHaveLength(3);
-      expect(result.model).toBe(provider.getModelName());
+      expect(result.model).toBe(provider!.getModelName());
       expect(result.processingTimeMs).toBeGreaterThan(0);
 
       for (const vector of result.vectors) {
         expect(vector).toBeInstanceOf(Float32Array);
-        expect(vector.length).toBe(provider.getDimensions());
+        expect(vector.length).toBe(provider!.getDimensions());
       }
     }, 60000);
 
     it('should handle empty batch', async () => {
-      const available = await EmbeddingProvider.isAvailable();
-      if (!available) return;
-
-      const provider = await EmbeddingProvider.create();
-      if (!provider) return;
-
-      const result = await provider.generateBatch([]);
+      const result = await provider!.generateBatch([]);
 
       expect(result.vectors).toHaveLength(0);
       expect(result.processingTimeMs).toBe(0);
     }, 60000);
 
     it('should generate similar embeddings for similar texts', async () => {
-      const available = await EmbeddingProvider.isAvailable();
-      if (!available) return;
-
-      const provider = await EmbeddingProvider.create();
-      if (!provider) return;
-
       const texts = [
         'The cat sat on the mat',
         'A cat was sitting on a mat',
         'The stock market crashed today',
       ];
 
-      const result = await provider.generateBatch(texts);
+      const result = await provider!.generateBatch(texts);
 
       // Compute cosine similarity between first two (similar) texts
       const similarity12 = cosineSimilarity(result.vectors[0], result.vectors[1]);
@@ -213,38 +201,35 @@ describe('EmbeddingProvider (V-002)', () => {
   });
 
   describe('Model Information', () => {
-    it('should return correct model dimensions', async () => {
+    // Initialize provider and skip if not available
+    beforeEach(async (context: TaskContext) => {
       const available = await EmbeddingProvider.isAvailable();
-      if (!available) return;
+      if (!available) {
+        context.skip();
+        return;
+      }
+      try {
+        provider = await EmbeddingProvider.create();
+        if (!provider) {
+          context.skip();
+        }
+      } catch {
+        context.skip();
+      }
+    });
 
-      const provider = await EmbeddingProvider.create();
-      if (!provider) return;
-
-      const dimensions = provider.getDimensions();
-
+    it('should return correct model dimensions', async () => {
+      const dimensions = provider!.getDimensions();
       expect(dimensions).toBe(384); // Default model dimensions
     }, 60000);
 
     it('should return model name', async () => {
-      const available = await EmbeddingProvider.isAvailable();
-      if (!available) return;
-
-      const provider = await EmbeddingProvider.create();
-      if (!provider) return;
-
-      const modelName = provider.getModelName();
-
+      const modelName = provider!.getModelName();
       expect(modelName).toBe('Xenova/all-MiniLM-L6-v2');
     }, 60000);
 
     it('should report initialized state', async () => {
-      const available = await EmbeddingProvider.isAvailable();
-      if (!available) return;
-
-      const provider = await EmbeddingProvider.create();
-      if (!provider) return;
-
-      expect(provider.isInitialized()).toBe(true);
+      expect(provider!.isInitialized()).toBe(true);
     }, 60000);
   });
 });
