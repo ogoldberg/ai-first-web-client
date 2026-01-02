@@ -7,6 +7,7 @@
 
 import { Hono } from 'hono';
 import { html } from 'hono/html';
+import { getEnvironmentUrls, type EnvironmentUrls } from '../utils/url-helpers.js';
 
 export const pricingCalculator = new Hono();
 
@@ -69,7 +70,8 @@ const PRICING = {
  * GET / - Serve the pricing calculator HTML
  */
 pricingCalculator.get('/', (c) => {
-  return c.html(getPricingCalculatorHTML());
+  const urls = getEnvironmentUrls(c.req);
+  return c.html(getPricingCalculatorHTML(urls));
 });
 
 /**
@@ -184,7 +186,7 @@ pricingCalculator.post('/calculate', async (c) => {
  * Generate the pricing calculator HTML.
  * Uses safe DOM manipulation in JavaScript - no innerHTML with dynamic content.
  */
-function getPricingCalculatorHTML() {
+function getPricingCalculatorHTML(urls: EnvironmentUrls) {
   return html`<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -833,7 +835,7 @@ function getPricingCalculatorHTML() {
       <h2>Ready to get started?</h2>
       <p>Start with our free tier to see how Unbrowser works with your use case.</p>
       <div class="cta-buttons">
-        <a href="/docs" class="cta-btn primary">View Documentation</a>
+        <a href="${urls.docs}" class="cta-btn primary">View Documentation</a>
         <a href="mailto:sales@unbrowser.ai" class="cta-btn secondary">Contact Sales</a>
       </div>
     </div>

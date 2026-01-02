@@ -7,6 +7,7 @@
 
 import { Hono } from 'hono';
 import { html } from 'hono/html';
+import { getEnvironmentUrls } from '../utils/url-helpers.js';
 
 export const pricingPage = new Hono();
 
@@ -581,6 +582,7 @@ const pricingStyles = `
  * GET / - Pricing page
  */
 pricingPage.get('/', (c) => {
+  const urls = getEnvironmentUrls(c.req);
   return c.html(html`<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -600,14 +602,14 @@ pricingPage.get('/', (c) => {
   <!-- Navigation -->
   <nav>
     <div class="nav-inner">
-      <a href="/" class="nav-logo">Unbrowser</a>
+      <a href="${urls.home}" class="nav-logo">Unbrowser</a>
       <div class="nav-links">
-        <a href="/#features">Features</a>
-        <a href="/#use-cases">Use Cases</a>
-        <a href="/pricing">Pricing</a>
-        <a href="/docs">Docs</a>
-        <a href="/auth/login">Sign In</a>
-        <a href="/auth/signup" class="btn btn-primary">Get Started</a>
+        <a href="${urls.home}#features">Features</a>
+        <a href="${urls.home}#use-cases">Use Cases</a>
+        <a href="${urls.pricing}">Pricing</a>
+        <a href="${urls.docs}">Docs</a>
+        <a href="${urls.authLogin}">Sign In</a>
+        <a href="${urls.authSignup}" class="btn btn-primary">Get Started</a>
       </div>
     </div>
   </nav>
@@ -660,7 +662,7 @@ pricingPage.get('/', (c) => {
             <span>Community support</span>
           </div>
         </div>
-        <a href="/auth/signup" class="btn btn-outline">Get Started Free</a>
+        <a href="${urls.authSignup}" class="btn btn-outline">Get Started Free</a>
       </div>
 
       <!-- Starter -->
@@ -706,7 +708,7 @@ pricingPage.get('/', (c) => {
             <span>Email support</span>
           </div>
         </div>
-        <a href="/auth/signup" class="btn btn-outline">Get Started</a>
+        <a href="${urls.authSignup}" class="btn btn-outline">Get Started</a>
       </div>
 
       <!-- Team (Featured) -->
@@ -764,7 +766,7 @@ pricingPage.get('/', (c) => {
             <span>99.9% SLA</span>
           </div>
         </div>
-        <a href="/auth/signup" class="btn btn-primary">Get Started</a>
+        <a href="${urls.authSignup}" class="btn btn-primary">Get Started</a>
       </div>
 
       <!-- Enterprise -->
@@ -1046,11 +1048,11 @@ pricingPage.get('/', (c) => {
 
   <!-- Footer -->
   <footer>
-    <a href="/">Home</a>
-    <a href="/docs">Documentation</a>
-    <a href="/llm.txt">LLM Reference</a>
-    <a href="/privacy">Privacy</a>
-    <a href="/terms">Terms</a>
+    <a href="${urls.home}">Home</a>
+    <a href="${urls.docs}">Documentation</a>
+    <a href="${urls.llmTxt}">LLM Reference</a>
+    <a href="${urls.privacy}">Privacy</a>
+    <a href="${urls.terms}">Terms</a>
   </footer>
 </body>
 </html>`);

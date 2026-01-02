@@ -9,6 +9,7 @@ import { Hono } from 'hono';
 import { html } from 'hono/html';
 import { randomBytes } from 'crypto';
 import { HTTPException } from 'hono/http-exception';
+import { getEnvironmentUrls } from '../utils/url-helpers.js';
 import { getTenantStore, type CreateTenantInput } from '../services/tenants.js';
 import { hashPassword, verifyPassword, validatePasswordStrength } from '../services/password.js';
 import { sendVerificationEmail, sendPasswordResetEmail, sendWelcomeEmail } from '../services/email.js';
@@ -452,6 +453,7 @@ const authStyles = `
  * GET /signup - Signup page
  */
 auth.get('/signup', (c) => {
+  const urls = getEnvironmentUrls(c.req);
   const error = c.req.query('error');
   const email = c.req.query('email') || '';
 
@@ -526,13 +528,13 @@ auth.get('/signup', (c) => {
       </form>
 
       <div class="links">
-        Already have an account? <a href="/auth/login">Sign in</a>
+        Already have an account? <a href="${urls.authLogin}">Sign in</a>
       </div>
     </div>
   </div>
 
   <footer class="footer">
-    <a href="/">Home</a> | <a href="/pricing">Pricing</a> | <a href="/docs">API Docs</a>
+    <a href="${urls.home}">Home</a> | <a href="${urls.pricing}">Pricing</a> | <a href="${urls.docs}">API Docs</a>
   </footer>
 </body>
 </html>`);
@@ -611,6 +613,7 @@ auth.post('/signup', signupRateLimit, async (c) => {
  * GET /login - Login page
  */
 auth.get('/login', (c) => {
+  const urls = getEnvironmentUrls(c.req);
   const error = c.req.query('error');
   const success = c.req.query('success');
   const redirect = c.req.query('redirect') || '/dashboard';
@@ -681,15 +684,15 @@ auth.get('/login', (c) => {
       </form>
 
       <div class="links">
-        <a href="/auth/forgot-password">Forgot your password?</a>
+        <a href="${urls.authForgotPassword}">Forgot your password?</a>
         <br><br>
-        Don't have an account? <a href="/auth/signup">Sign up</a>
+        Don't have an account? <a href="${urls.authSignup}">Sign up</a>
       </div>
     </div>
   </div>
 
   <footer class="footer">
-    <a href="/">Home</a> | <a href="/pricing">Pricing</a> | <a href="/docs">API Docs</a>
+    <a href="${urls.home}">Home</a> | <a href="${urls.pricing}">Pricing</a> | <a href="${urls.docs}">API Docs</a>
   </footer>
 </body>
 </html>`);
@@ -766,6 +769,7 @@ auth.get('/logout', async (c) => {
  * GET /verify-email-required - Page shown when email not verified
  */
 auth.get('/verify-email-required', async (c) => {
+  const urls = getEnvironmentUrls(c.req);
   const session = await validateSession(c);
 
   return c.html(html`<!DOCTYPE html>
@@ -800,7 +804,7 @@ auth.get('/verify-email-required', async (c) => {
       ` : ''}
 
       <div class="links" style="margin-top: 24px;">
-        <a href="/auth/login">Back to login</a>
+        <a href="${urls.authLogin}">Back to login</a>
       </div>
     </div>
   </div>
@@ -881,6 +885,7 @@ auth.post('/resend-verification', async (c) => {
  * GET /forgot-password - Forgot password page
  */
 auth.get('/forgot-password', (c) => {
+  const urls = getEnvironmentUrls(c.req);
   const success = c.req.query('success');
   const error = c.req.query('error');
 
@@ -915,7 +920,7 @@ auth.get('/forgot-password', (c) => {
       </form>
 
       <div class="links">
-        <a href="/auth/login">Back to login</a>
+        <a href="${urls.authLogin}">Back to login</a>
       </div>
     </div>
   </div>
@@ -960,6 +965,7 @@ auth.post('/forgot-password', passwordResetRateLimit, async (c) => {
  * GET /reset-password - Reset password page
  */
 auth.get('/reset-password', async (c) => {
+  const urls = getEnvironmentUrls(c.req);
   const token = c.req.query('token');
   const error = c.req.query('error');
 

@@ -11,6 +11,7 @@ import type { Tenant } from '../middleware/types.js';
 import { sessionAuthMiddleware, requireVerifiedEmail } from '../middleware/session-auth.js';
 import { getTenantStore } from '../services/tenants.js';
 import { generateApiKey, getApiKeyStore } from '../middleware/auth.js';
+import { getEnvironmentUrls, type EnvironmentUrls } from '../utils/url-helpers.js';
 
 export const dashboardUI = new Hono();
 
@@ -451,7 +452,7 @@ const dashboardStyles = `
 // Helper function to get sidebar HTML
 // =============================================================================
 
-function getSidebar(activePage: string, tenant: Tenant) {
+function getSidebar(activePage: string, tenant: Tenant, urls: EnvironmentUrls) {
   return html`
     <aside class="sidebar">
       <div class="sidebar-logo">
@@ -462,7 +463,7 @@ function getSidebar(activePage: string, tenant: Tenant) {
       <nav>
         <div class="nav-section">
           <div class="nav-section-title">Overview</div>
-          <a href="/dashboard" class="nav-link ${activePage === 'overview' ? 'active' : ''}">
+          <a href="${urls.dashboard}" class="nav-link ${activePage === 'overview' ? 'active' : ''}">
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
             </svg>
@@ -472,13 +473,13 @@ function getSidebar(activePage: string, tenant: Tenant) {
 
         <div class="nav-section">
           <div class="nav-section-title">API</div>
-          <a href="/dashboard/api-keys" class="nav-link ${activePage === 'api-keys' ? 'active' : ''}">
+          <a href="${urls.dashboardApiKeys}" class="nav-link ${activePage === 'api-keys' ? 'active' : ''}">
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"/>
             </svg>
             API Keys
           </a>
-          <a href="/dashboard/usage" class="nav-link ${activePage === 'usage' ? 'active' : ''}">
+          <a href="${urls.dashboardUsage}" class="nav-link ${activePage === 'usage' ? 'active' : ''}">
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
             </svg>
@@ -488,14 +489,14 @@ function getSidebar(activePage: string, tenant: Tenant) {
 
         <div class="nav-section">
           <div class="nav-section-title">Account</div>
-          <a href="/dashboard/settings" class="nav-link ${activePage === 'settings' ? 'active' : ''}">
+          <a href="${urls.dashboardSettings}" class="nav-link ${activePage === 'settings' ? 'active' : ''}">
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
             </svg>
             Settings
           </a>
-          <a href="/auth/logout" class="nav-link">
+          <a href="${urls.authLogout}" class="nav-link">
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/>
             </svg>
@@ -505,13 +506,13 @@ function getSidebar(activePage: string, tenant: Tenant) {
 
         <div class="nav-section">
           <div class="nav-section-title">Resources</div>
-          <a href="/docs" class="nav-link" target="_blank">
+          <a href="${urls.docs}" class="nav-link" target="_blank">
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
             </svg>
             Documentation
           </a>
-          <a href="/pricing" class="nav-link" target="_blank">
+          <a href="${urls.pricing}" class="nav-link" target="_blank">
             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
             </svg>
@@ -524,7 +525,7 @@ function getSidebar(activePage: string, tenant: Tenant) {
         <div style="font-size: 12px; color: var(--text-muted);">Current Plan</div>
         <div style="font-size: 14px; font-weight: 600; margin-top: 4px;">${tenant.plan}</div>
         ${tenant.plan === 'FREE' ? html`
-          <a href="/pricing" class="btn btn-primary btn-sm" style="margin-top: 12px; width: 100%;">Upgrade</a>
+          <a href="${urls.pricing}" class="btn btn-primary btn-sm" style="margin-top: 12px; width: 100%;">Upgrade</a>
         ` : ''}
       </div>
     </aside>
@@ -539,6 +540,7 @@ function getSidebar(activePage: string, tenant: Tenant) {
  * GET / - Dashboard overview
  */
 dashboardUI.get('/', requireVerifiedEmail, async (c) => {
+  const urls = getEnvironmentUrls(c.req);
   const tenant = c.get('sessionTenant');
   const welcome = c.req.query('welcome');
 
@@ -552,7 +554,7 @@ dashboardUI.get('/', requireVerifiedEmail, async (c) => {
 </head>
 <body>
   <div class="layout">
-    ${getSidebar('overview', tenant)}
+    ${getSidebar('overview', tenant, urls)}
 
     <main class="main">
       <div class="header">
@@ -587,14 +589,14 @@ dashboardUI.get('/', requireVerifiedEmail, async (c) => {
           <div class="stat-label">Current Plan</div>
           <div class="stat-value">${tenant.plan}</div>
           ${tenant.plan === 'FREE' ? html`
-            <div class="stat-meta"><a href="/pricing" style="color: var(--accent-blue);">Upgrade</a></div>
+            <div class="stat-meta"><a href="${urls.pricing}" style="color: var(--accent-blue);">Upgrade</a></div>
           ` : ''}
         </div>
 
         <div class="stat-card">
           <div class="stat-label">API Keys</div>
           <div class="stat-value" id="apiKeyCount">-</div>
-          <div class="stat-meta"><a href="/dashboard/api-keys" style="color: var(--accent-blue);">Manage</a></div>
+          <div class="stat-meta"><a href="${urls.dashboardApiKeys}" style="color: var(--accent-blue);">Manage</a></div>
         </div>
       </div>
 
@@ -608,7 +610,7 @@ dashboardUI.get('/', requireVerifiedEmail, async (c) => {
 
         <div style="margin-top: 16px;">
           <p style="color: var(--text-secondary); font-size: 14px; margin-bottom: 16px;">
-            First, create an API key from the <a href="/dashboard/api-keys" style="color: var(--accent-blue);">API Keys</a> page.
+            First, create an API key from the <a href="${urls.dashboardApiKeys}" style="color: var(--accent-blue);">API Keys</a> page.
             Then use it in your requests:
           </p>
 
@@ -674,6 +676,7 @@ console.log(result.content.markdown);</pre>
  * GET /api-keys - API keys management page
  */
 dashboardUI.get('/api-keys', requireVerifiedEmail, async (c) => {
+  const urls = getEnvironmentUrls(c.req);
   const tenant = c.get('sessionTenant');
   const newKey = c.req.query('newKey');
   const error = c.req.query('error');
@@ -689,7 +692,7 @@ dashboardUI.get('/api-keys', requireVerifiedEmail, async (c) => {
 </head>
 <body>
   <div class="layout">
-    ${getSidebar('api-keys', tenant)}
+    ${getSidebar('api-keys', tenant, urls)}
 
     <main class="main">
       <div class="header">
@@ -951,6 +954,7 @@ dashboardUI.post('/api-keys/:id/revoke', requireVerifiedEmail, async (c) => {
  * GET /usage - Usage statistics page
  */
 dashboardUI.get('/usage', requireVerifiedEmail, async (c) => {
+  const urls = getEnvironmentUrls(c.req);
   const tenant = c.get('sessionTenant');
 
   return c.html(html`<!DOCTYPE html>
@@ -963,7 +967,7 @@ dashboardUI.get('/usage', requireVerifiedEmail, async (c) => {
 </head>
 <body>
   <div class="layout">
-    ${getSidebar('usage', tenant)}
+    ${getSidebar('usage', tenant, urls)}
 
     <main class="main">
       <div class="header">
@@ -1134,6 +1138,7 @@ dashboardUI.get('/usage', requireVerifiedEmail, async (c) => {
  * GET /settings - Account settings page
  */
 dashboardUI.get('/settings', async (c) => {
+  const urls = getEnvironmentUrls(c.req);
   const tenant = c.get('sessionTenant');
   const success = c.req.query('success');
   const error = c.req.query('error');
@@ -1148,7 +1153,7 @@ dashboardUI.get('/settings', async (c) => {
 </head>
 <body>
   <div class="layout">
-    ${getSidebar('settings', tenant)}
+    ${getSidebar('settings', tenant, urls)}
 
     <main class="main">
       <div class="header">
@@ -1243,7 +1248,7 @@ dashboardUI.get('/settings', async (c) => {
 
           ${tenant.plan === 'FREE' ? html`
             <div style="margin-top: 16px;">
-              <a href="/pricing" class="btn btn-primary">Upgrade Your Plan</a>
+              <a href="${urls.pricing}" class="btn btn-primary">Upgrade Your Plan</a>
             </div>
           ` : ''}
         </div>
