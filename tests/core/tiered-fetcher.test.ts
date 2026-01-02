@@ -10,12 +10,16 @@ import { LearningEngine } from '../../src/core/learning-engine.js';
 vi.mock('../../src/core/content-intelligence.js');
 vi.mock('../../src/core/lightweight-renderer.js');
 
-// Create a mock rate limiter with a spy
-const mockAcquire = vi.fn().mockResolvedValue(undefined);
+// Create a mock rate limiter with hoisted functions
+const { mockAcquire, mockRelease } = vi.hoisted(() => ({
+  mockAcquire: vi.fn().mockResolvedValue(undefined),
+  mockRelease: vi.fn(),
+}));
+
 vi.mock('../../src/utils/rate-limiter.js', () => ({
   rateLimiter: {
     acquire: mockAcquire,
-    release: vi.fn(),
+    release: mockRelease,
   },
   RateLimiter: vi.fn(),
 }));
