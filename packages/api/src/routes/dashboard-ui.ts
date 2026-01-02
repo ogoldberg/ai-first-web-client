@@ -452,7 +452,7 @@ const dashboardStyles = `
 // Helper function to get sidebar HTML
 // =============================================================================
 
-function getSidebar(activePage: string, tenant: Tenant) {
+function getSidebar(activePage: string, tenant: Tenant, urls: any) {
   return html`
     <aside class="sidebar">
       <div class="sidebar-logo">
@@ -554,7 +554,7 @@ dashboardUI.get('/', requireVerifiedEmail, async (c) => {
 </head>
 <body>
   <div class="layout">
-    ${getSidebar('overview', tenant)}
+    ${getSidebar('overview', tenant, urls)}
 
     <main class="main">
       <div class="header">
@@ -692,7 +692,7 @@ dashboardUI.get('/api-keys', requireVerifiedEmail, async (c) => {
 </head>
 <body>
   <div class="layout">
-    ${getSidebar('api-keys', tenant)}
+    ${getSidebar('api-keys', tenant, urls)}
 
     <main class="main">
       <div class="header">
@@ -954,6 +954,7 @@ dashboardUI.post('/api-keys/:id/revoke', requireVerifiedEmail, async (c) => {
  * GET /usage - Usage statistics page
  */
 dashboardUI.get('/usage', requireVerifiedEmail, async (c) => {
+  const urls = getEnvironmentUrls(c.req);
   const tenant = c.get('sessionTenant');
 
   return c.html(html`<!DOCTYPE html>
@@ -966,7 +967,7 @@ dashboardUI.get('/usage', requireVerifiedEmail, async (c) => {
 </head>
 <body>
   <div class="layout">
-    ${getSidebar('usage', tenant)}
+    ${getSidebar('usage', tenant, urls)}
 
     <main class="main">
       <div class="header">
@@ -1137,6 +1138,7 @@ dashboardUI.get('/usage', requireVerifiedEmail, async (c) => {
  * GET /settings - Account settings page
  */
 dashboardUI.get('/settings', async (c) => {
+  const urls = getEnvironmentUrls(c.req);
   const tenant = c.get('sessionTenant');
   const success = c.req.query('success');
   const error = c.req.query('error');
@@ -1151,7 +1153,7 @@ dashboardUI.get('/settings', async (c) => {
 </head>
 <body>
   <div class="layout">
-    ${getSidebar('settings', tenant)}
+    ${getSidebar('settings', tenant, urls)}
 
     <main class="main">
       <div class="header">

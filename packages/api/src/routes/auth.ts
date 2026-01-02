@@ -769,6 +769,7 @@ auth.get('/logout', async (c) => {
  * GET /verify-email-required - Page shown when email not verified
  */
 auth.get('/verify-email-required', async (c) => {
+  const urls = getEnvironmentUrls(c.req);
   const session = await validateSession(c);
 
   return c.html(html`<!DOCTYPE html>
