@@ -119,12 +119,11 @@ const redirectToMarketing = async (c: any) => {
 };
 
 // Redirect all marketing routes to www.unbrowser.ai
-app.get('/auth/*', redirectToMarketing);
-app.get('/auth', redirectToMarketing);
-app.get('/dashboard/*', redirectToMarketing);
-app.get('/dashboard', redirectToMarketing);
-app.get('/pricing/*', redirectToMarketing);
-app.get('/pricing', redirectToMarketing);
+const marketingPaths = ['/auth', '/dashboard', '/pricing'];
+for (const path of marketingPaths) {
+  app.get(`${path}/*`, redirectToMarketing);
+  app.get(path, redirectToMarketing);
+}
 
 // =============================================================================
 // ROOT ENDPOINT - API welcome or redirect to marketing
