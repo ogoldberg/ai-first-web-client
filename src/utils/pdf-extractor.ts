@@ -34,44 +34,54 @@ export interface PDFPageContent {
  */
 export async function extractPDFText(pdfBuffer: Buffer): Promise<PDFExtractResult> {
   // Dynamic import to handle optional dependency
-  let pdfParse: (buffer: Buffer) => Promise<{
-    text: string;
-    numpages: number;
-    info?: {
-      Title?: string;
-      Author?: string;
-      Subject?: string;
-      Keywords?: string;
-      CreationDate?: string;
-      ModDate?: string;
-    };
-    metadata?: Record<string, unknown>;
-  }>;
+  // pdf-parse v2 uses a class-based API with PDFParse class
+  let PDFParse: unknown;
 
   try {
     const module = await import('pdf-parse');
-    pdfParse = module.default || module;
+    PDFParse = module.PDFParse;
   } catch {
     throw new Error(
-      'pdf-parse package not installed. Run: npm install pdf-parse @types/pdf-parse'
+      'pdf-parse package not installed. Run: npm install pdf-parse'
     );
   }
 
-  const data = await pdfParse(pdfBuffer);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const parser = new (PDFParse as any)({ data: new Uint8Array(pdfBuffer) });
 
-  return {
-    text: data.text,
-    numPages: data.numpages,
-    info: {
-      title: data.info?.Title,
-      author: data.info?.Author,
-      subject: data.info?.Subject,
-      keywords: data.info?.Keywords,
-      creationDate: data.info?.CreationDate ? new Date(data.info.CreationDate) : undefined,
-      modificationDate: data.info?.ModDate ? new Date(data.info.ModDate) : undefined,
-    },
-    metadata: data.metadata,
-  };
+  try {
+    const [textResult, infoResult] = await Promise.all([
+      parser.getText() as Promise<{ text: string }>,
+      parser.getInfo() as Promise<{
+        info?: {
+          Title?: string;
+          Author?: string;
+          Subject?: string;
+          Keywords?: string;
+          CreationDate?: string;
+          ModDate?: string;
+        };
+        numPages: number;
+        metadata?: Record<string, unknown>;
+      }>,
+    ]);
+
+    return {
+      text: textResult.text,
+      numPages: infoResult.numPages,
+      info: {
+        title: infoResult.info?.Title,
+        author: infoResult.info?.Author,
+        subject: infoResult.info?.Subject,
+        keywords: infoResult.info?.Keywords,
+        creationDate: infoResult.info?.CreationDate ? new Date(infoResult.info.CreationDate) : undefined,
+        modificationDate: infoResult.info?.ModDate ? new Date(infoResult.info.ModDate) : undefined,
+      },
+      metadata: infoResult.metadata,
+    };
+  } finally {
+    await parser.destroy();
+  }
 }
 
 /**

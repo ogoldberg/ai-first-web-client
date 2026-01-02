@@ -116,8 +116,9 @@ describe('EmbeddedStore (CX-007)', () => {
         expect(() => store.set('test', 'undefined', undefined)).toThrow();
       } else {
         // JSON fallback allows undefined (stored as undefined in Map)
+        // but get() returns null for undefined values due to ?? null coalescing
         store.set('test', 'undefined', undefined);
-        expect(store.get('test', 'undefined')).toBeUndefined();
+        expect(store.get('test', 'undefined')).toBeNull();
       }
     });
   });
