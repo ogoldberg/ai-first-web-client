@@ -8,6 +8,10 @@
  * 3. LLM researches solutions
  * 4. LLM retries with new parameters
  * 5. Success is learned
+ *
+ * NOTE: This script tests internal APIs from the local MCP server package (llm-browser).
+ * These functions are NOT exported by the cloud SDK (unbrowser-core) as they are
+ * implementation details of the server-side intelligence.
  */
 
 import {
@@ -16,7 +20,7 @@ import {
   classifyProblem,
   createProblemResponse,
   suggestRetryConfig,
-} from '../packages/core/dist/index.js';
+} from '../dist/core/research-suggestion.js';
 
 const COLORS = {
   green: '\x1b[32m',

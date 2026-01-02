@@ -17,7 +17,7 @@ import {
   type SessionData,
   type Cookie,
   type DomainIntelligence,
-} from '../../packages/core/src/index.js';
+} from 'unbrowser-core';
 
 // Mock fetch for testing
 const mockFetch = vi.fn();

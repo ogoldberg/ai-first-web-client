@@ -71,25 +71,13 @@ describe('SDK Package Should Be Removed', () => {
      * This test will FAIL before deduplication (directory exists)
      * and PASS after deduplication (directory removed).
      *
-     * Skip this test until ready to remove SDK.
+     * Phase 3 complete: SDK moved to unbrowser-core npm package
      */
-    it.skip('should NOT have packages/core directory (SDK in rabbit-found/unbrowser)', () => {
+    it('should NOT have packages/core directory (SDK in unbrowser-core npm package)', () => {
       expect(fs.existsSync(SDK_DIR)).toBe(false);
     });
   });
 
-  describe('SDK directory currently present (to be removed)', () => {
-    it('currently has packages/core (will be removed later)', () => {
-      const exists = fs.existsSync(SDK_DIR);
-
-      if (exists) {
-        console.log('  NOTE: packages/core exists - SDK removal is Phase 2');
-      }
-
-      // This documents current state - doesn't fail
-      expect(true).toBe(true);
-    });
-  });
 });
 
 describe('Deduplication Summary', () => {
