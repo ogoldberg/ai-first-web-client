@@ -11,7 +11,7 @@ import type { Tenant } from '../middleware/types.js';
 import { sessionAuthMiddleware, requireVerifiedEmail } from '../middleware/session-auth.js';
 import { getTenantStore } from '../services/tenants.js';
 import { generateApiKey, getApiKeyStore } from '../middleware/auth.js';
-import { getEnvironmentUrls } from '../utils/url-helpers.js';
+import { getEnvironmentUrls, type EnvironmentUrls } from '../utils/url-helpers.js';
 
 export const dashboardUI = new Hono();
 
@@ -452,7 +452,7 @@ const dashboardStyles = `
 // Helper function to get sidebar HTML
 // =============================================================================
 
-function getSidebar(activePage: string, tenant: Tenant, urls: any) {
+function getSidebar(activePage: string, tenant: Tenant, urls: EnvironmentUrls) {
   return html`
     <aside class="sidebar">
       <div class="sidebar-logo">

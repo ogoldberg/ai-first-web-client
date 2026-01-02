@@ -6,6 +6,16 @@
  * In development, all routes use relative paths.
  */
 
+import type { HonoRequest } from 'hono';
+
+/**
+ * Domain constants
+ */
+const API_DOMAIN = 'https://api.unbrowser.ai';
+const MARKETING_DOMAIN = 'https://unbrowser.ai';
+const STATUS_DOMAIN = 'https://status.unbrowser.ai';
+const GITHUB_REPO = 'https://github.com/unbrowser/unbrowser';
+
 /**
  * Environment-aware URLs for navigation across domains
  */
@@ -50,17 +60,17 @@ export interface EnvironmentUrls {
  * });
  * ```
  */
-export function getEnvironmentUrls(req: any): EnvironmentUrls {
+export function getEnvironmentUrls(req: HonoRequest): EnvironmentUrls {
   const isDev = process.env.NODE_ENV !== 'production';
   const host = req.header('host') || 'localhost:3001';
   const isApiDomain = host.includes('api.unbrowser.ai');
   const isMarketingDomain = host.includes('unbrowser.ai') && !isApiDomain;
 
   // API routes (docs, llm.txt, etc.)
-  const apiBase = isDev ? '' : isMarketingDomain ? 'https://api.unbrowser.ai' : '';
+  const apiBase = isDev ? '' : isMarketingDomain ? API_DOMAIN : '';
 
   // Marketing routes (auth, pricing, dashboard, etc.)
-  const marketingBase = isDev ? '' : isApiDomain ? 'https://unbrowser.ai' : '';
+  const marketingBase = isDev ? '' : isApiDomain ? MARKETING_DOMAIN : '';
 
   return {
     // API routes
@@ -83,8 +93,8 @@ export function getEnvironmentUrls(req: any): EnvironmentUrls {
     terms: `${marketingBase}/terms`,
 
     // External links
-    status: 'https://status.unbrowser.ai',
-    github: 'https://github.com/unbrowser/unbrowser',
+    status: STATUS_DOMAIN,
+    github: GITHUB_REPO,
   };
 }
 
@@ -97,7 +107,7 @@ export function getEnvironmentUrls(req: any): EnvironmentUrls {
  */
 export function getMarketingUrl(path: string): string {
   const isDev = process.env.NODE_ENV !== 'production';
-  const base = isDev ? '' : 'https://unbrowser.ai';
+  const base = isDev ? '' : MARKETING_DOMAIN;
   return `${base}${path}`;
 }
 
@@ -110,6 +120,6 @@ export function getMarketingUrl(path: string): string {
  */
 export function getApiUrl(path: string): string {
   const isDev = process.env.NODE_ENV !== 'production';
-  const base = isDev ? '' : 'https://api.unbrowser.ai';
+  const base = isDev ? '' : API_DOMAIN;
   return `${base}${path}`;
 }

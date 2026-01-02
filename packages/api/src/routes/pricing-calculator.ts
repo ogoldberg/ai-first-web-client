@@ -7,7 +7,7 @@
 
 import { Hono } from 'hono';
 import { html } from 'hono/html';
-import { getEnvironmentUrls } from '../utils/url-helpers.js';
+import { getEnvironmentUrls, type EnvironmentUrls } from '../utils/url-helpers.js';
 
 export const pricingCalculator = new Hono();
 
@@ -186,7 +186,7 @@ pricingCalculator.post('/calculate', async (c) => {
  * Generate the pricing calculator HTML.
  * Uses safe DOM manipulation in JavaScript - no innerHTML with dynamic content.
  */
-function getPricingCalculatorHTML(urls: any) {
+function getPricingCalculatorHTML(urls: EnvironmentUrls) {
   return html`<!DOCTYPE html>
 <html lang="en">
 <head>
