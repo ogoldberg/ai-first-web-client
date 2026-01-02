@@ -1,18 +1,19 @@
 # Unbrowser - Project Status
 
-**Last Updated:** 2025-12-28
+**Last Updated:** 2026-01-01
 **Version:** 0.5.0
 **Current Phase:** Production Readiness (Phase 2)
 **Total Code:** ~20,000 lines TypeScript
-**Tests:** 3418+ passing + 44 live tests
+**Tests:** 3469+ passing + 44 live tests
 
 ---
 
-## Recent: MoveAhead Integration (2025-12-28)
+## Recent: MoveAhead Integration (2026-01-01)
 
 Working on MoveAhead.ai integration tasks (INT initiative).
 
 **Completed:**
+- INT-018 - Enhanced content change prediction (calendar triggers, seasonal patterns, prediction accuracy tracking, urgency levels 0-3 with poll optimization, API endpoint GET /v1/predictions, 51 tests)
 - INT-017 - Form/PDF field extraction (extract AcroForm fields from PDFs, parse document requirements, detect form numbers like Modelo/Cerfa/Form I-94, API endpoint POST /v1/pdf/extract-forms, 22 tests)
 - INT-011 - Language-aware extraction (auto-detect page language, multi-language field mapping, 7 languages, 17 field categories)
 - INT-009 - Create MoveAhead example integration (full example showing HTTP API usage for relocation research pipeline, demos for workflows, skill packs, API discovery)
