@@ -5,12 +5,20 @@ import { ContentExtractor } from '../../src/utils/content-extractor.js';
 import { ContentIntelligence, type ContentResult, type ExtractionStrategy } from '../../src/core/content-intelligence.js';
 import { LightweightRenderer, type LightweightRenderResult } from '../../src/core/lightweight-renderer.js';
 import { LearningEngine } from '../../src/core/learning-engine.js';
-import { rateLimiter } from '../../src/utils/rate-limiter.js';
 
 // Mock the modules
 vi.mock('../../src/core/content-intelligence.js');
 vi.mock('../../src/core/lightweight-renderer.js');
-vi.mock('../../src/utils/rate-limiter.js');
+
+// Create a mock rate limiter with a spy
+const mockAcquire = vi.fn().mockResolvedValue(undefined);
+vi.mock('../../src/utils/rate-limiter.js', () => ({
+  rateLimiter: {
+    acquire: mockAcquire,
+    release: vi.fn(),
+  },
+  RateLimiter: vi.fn(),
+}));
 
 describe('TieredFetcher', () => {
   let fetcher: TieredFetcher;
@@ -65,7 +73,9 @@ describe('TieredFetcher', () => {
   });
 
   beforeEach(() => {
-    vi.resetAllMocks();
+    // Clear mock call history but keep mock implementations
+    mockAcquire.mockClear();
+    vi.clearAllMocks();
 
     // Create mock browser manager
     mockBrowserManager = {
@@ -87,9 +97,6 @@ describe('TieredFetcher', () => {
         markdown: '# Extracted\n\nContent here with plenty of text.',
       }),
     } as unknown as ContentExtractor;
-
-    // Mock rate limiter with spy to track calls
-    vi.spyOn(rateLimiter, 'acquire').mockResolvedValue(undefined);
 
     // Create mock learning engine (FEAT-003)
     mockLearningEngine = {
@@ -319,7 +326,7 @@ describe('TieredFetcher', () => {
 
       await fetcher.fetch('https://example.com');
 
-      expect(rateLimiter.acquire).toHaveBeenCalledWith('https://example.com');
+      expect(mockAcquire).toHaveBeenCalledWith('https://example.com');
     });
 
     it('should skip rate limiting when disabled', async () => {
@@ -327,7 +334,7 @@ describe('TieredFetcher', () => {
 
       await fetcher.fetch('https://example.com', { useRateLimiting: false });
 
-      expect(rateLimiter.acquire).not.toHaveBeenCalled();
+      expect(mockAcquire).not.toHaveBeenCalled();
     });
   });
 
