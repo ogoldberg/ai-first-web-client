@@ -164,8 +164,8 @@ describe('Inspection UI (F-013)', () => {
       });
       const json = await response.json();
 
-      // In 'all' mode with JSON Accept header, API info is returned
-      expect(json.api).toHaveProperty('docs');
+      // API info is returned with docs endpoint
+      expect(json.endpoints).toHaveProperty('docs');
     });
   });
 });

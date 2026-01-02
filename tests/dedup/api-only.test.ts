@@ -2,8 +2,7 @@
  * API-Only Verification Tests
  *
  * These tests verify that packages/api ONLY contains API routes,
- * not marketing pages. They should FAIL before deduplication
- * and PASS after.
+ * not marketing pages (those belong in unbrowser-marketing repo).
  *
  * Run with: npm test -- tests/dedup/api-only.test.ts
  */
@@ -36,7 +35,7 @@ const EXPECTED_API_FILES = [
 ];
 
 // Files that should NOT exist in packages/api (belong in unbrowser-marketing)
-const MARKETING_FILES_TO_REMOVE = [
+const MARKETING_FILES = [
   'landing.ts',
   'auth.ts',
   'pricing-page.ts',
@@ -45,62 +44,16 @@ const MARKETING_FILES_TO_REMOVE = [
 ];
 
 describe('API Package Should Only Contain API Routes', () => {
-  describe('Marketing files that should be removed', () => {
-    /**
-     * These tests will FAIL before deduplication (files exist)
-     * and PASS after deduplication (files removed).
-     *
-     * Skip these tests until ready to deduplicate.
-     */
-
-    it.skip('should NOT have landing.ts (belongs in unbrowser-marketing)', () => {
-      const filePath = path.join(API_ROUTES_DIR, 'landing.ts');
-      expect(fs.existsSync(filePath)).toBe(false);
-    });
-
-    it.skip('should NOT have auth.ts (belongs in unbrowser-marketing)', () => {
-      const filePath = path.join(API_ROUTES_DIR, 'auth.ts');
-      expect(fs.existsSync(filePath)).toBe(false);
-    });
-
-    it.skip('should NOT have pricing-page.ts (belongs in unbrowser-marketing)', () => {
-      const filePath = path.join(API_ROUTES_DIR, 'pricing-page.ts');
-      expect(fs.existsSync(filePath)).toBe(false);
-    });
-
-    it.skip('should NOT have pricing-calculator.ts (belongs in unbrowser-marketing)', () => {
-      const filePath = path.join(API_ROUTES_DIR, 'pricing-calculator.ts');
-      expect(fs.existsSync(filePath)).toBe(false);
-    });
-
-    it.skip('should NOT have dashboard-ui.ts (belongs in unbrowser-marketing)', () => {
-      const filePath = path.join(API_ROUTES_DIR, 'dashboard-ui.ts');
-      expect(fs.existsSync(filePath)).toBe(false);
-    });
-  });
-
-  describe('Marketing files currently present (to be removed)', () => {
-    /**
-     * These tests document what currently exists.
-     * They will be removed after deduplication.
-     */
-
-    MARKETING_FILES_TO_REMOVE.forEach((file) => {
-      it(`currently has ${file} (will be removed)`, () => {
+  describe('Marketing files should NOT exist (belong in unbrowser-marketing)', () => {
+    MARKETING_FILES.forEach((file) => {
+      it(`should NOT have ${file}`, () => {
         const filePath = path.join(API_ROUTES_DIR, file);
-        const exists = fs.existsSync(filePath);
-
-        if (exists) {
-          console.log(`  WARNING: ${file} exists in packages/api - should be in unbrowser-marketing only`);
-        }
-
-        // This documents current state - doesn't fail
-        expect(true).toBe(true);
+        expect(fs.existsSync(filePath)).toBe(false);
       });
     });
   });
 
-  describe('API files that should remain', () => {
+  describe('API files that should exist', () => {
     EXPECTED_API_FILES.forEach((file) => {
       it(`should have ${file}`, () => {
         const filePath = path.join(API_ROUTES_DIR, file);
@@ -115,23 +68,22 @@ describe('SDK Package Should Be Removed', () => {
 
   describe('SDK directory (to be removed)', () => {
     /**
-     * These tests will FAIL before deduplication (directory exists)
+     * This test will FAIL before deduplication (directory exists)
      * and PASS after deduplication (directory removed).
      *
-     * Skip these tests until ready to deduplicate.
+     * Skip this test until ready to remove SDK.
      */
-
     it.skip('should NOT have packages/core directory (SDK in rabbit-found/unbrowser)', () => {
       expect(fs.existsSync(SDK_DIR)).toBe(false);
     });
   });
 
   describe('SDK directory currently present (to be removed)', () => {
-    it('currently has packages/core (will be removed)', () => {
+    it('currently has packages/core (will be removed later)', () => {
       const exists = fs.existsSync(SDK_DIR);
 
       if (exists) {
-        console.log('  WARNING: packages/core exists - SDK should be in rabbit-found/unbrowser only');
+        console.log('  NOTE: packages/core exists - SDK removal is Phase 2');
       }
 
       // This documents current state - doesn't fail
@@ -145,7 +97,7 @@ describe('Deduplication Summary', () => {
     const duplications: string[] = [];
 
     // Check marketing files
-    MARKETING_FILES_TO_REMOVE.forEach((file) => {
+    MARKETING_FILES.forEach((file) => {
       const filePath = path.join(API_ROUTES_DIR, file);
       if (fs.existsSync(filePath)) {
         duplications.push(`packages/api/src/routes/${file}`);
@@ -155,12 +107,16 @@ describe('Deduplication Summary', () => {
     // Check SDK
     const sdkDir = path.join(process.cwd(), 'packages/core');
     if (fs.existsSync(sdkDir)) {
-      duplications.push('packages/core/ (entire SDK)');
+      duplications.push('packages/core/ (SDK - Phase 2)');
     }
 
     console.log('\n=== DEDUPLICATION STATUS ===');
     if (duplications.length === 0) {
-      console.log('No duplications found - deduplication complete!');
+      console.log('All deduplication complete!');
+    } else if (duplications.length === 1 && duplications[0].includes('SDK')) {
+      console.log('Phase 1 (marketing pages) complete!');
+      console.log('Phase 2 (SDK removal) pending:');
+      duplications.forEach((d) => console.log(`  - ${d}`));
     } else {
       console.log(`Found ${duplications.length} items to deduplicate:`);
       duplications.forEach((d) => console.log(`  - ${d}`));
