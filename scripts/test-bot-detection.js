@@ -6,6 +6,10 @@
  * 1. Bot detection test sites (nowsecure, sannysoft, etc.)
  * 2. Cloudflare-protected sites
  * 3. Common protected APIs
+ *
+ * NOTE: This script tests internal APIs from the local MCP server package (llm-browser).
+ * These functions are NOT exported by the cloud SDK (unbrowser-core) as they are
+ * implementation details of the server-side intelligence.
  */
 
 import {

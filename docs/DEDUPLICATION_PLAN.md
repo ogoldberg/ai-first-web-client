@@ -6,7 +6,7 @@
 |-------|-------------|--------|
 | Phase 1 | Preparation | DONE |
 | Phase 2 | Remove marketing pages | DONE (PR #224) |
-| Phase 3 | Remove SDK | BLOCKED (needs SDK published to npm) |
+| Phase 3 | Remove SDK | DONE (PR #225) |
 | Phase 4 | Test cleanup | PARTIAL (marketing tests done) |
 | Phase 5 | Verification | PENDING |
 
@@ -50,24 +50,15 @@ After deduplication:
 - Removed `tests/dedup/marketing-pages.test.ts`
 - Updated `tests/dedup/api-only.test.ts` to verify marketing files don't exist
 
+### Phase 3: Remove SDK from packages/core (DONE - PR #225)
+
+**Completed:**
+- Removed entire `packages/core/` directory
+- Updated root `package.json` to remove `packages/core` from workspaces
+- Examples updated to import from `unbrowser-core` npm package
+- SDK published to npm as `unbrowser-core@0.1.0-alpha.4`
+
 ## Pending Work
-
-### Phase 3: Remove SDK from packages/core (BLOCKED)
-
-**Dependency:** `unbrowser-core` npm package needs to be updated to current version
-
-**Current status:** Package exists at https://www.npmjs.com/package/unbrowser-core but contains an old version. Need to publish updated SDK from `rabbit-found/unbrowser` before removing local copy.
-
-**Files to REMOVE from `packages/core/`:**
-- Entire `packages/core/` directory
-
-**Update root `package.json`:**
-- Remove `packages/core` from workspaces
-- Add `unbrowser-core` as dependency (from npm)
-
-**Update imports in `packages/api/`:**
-- Change: `import { ... } from '../../core/src/...'`
-- To: `import { ... } from 'unbrowser-core'`
 
 ### Phase 4: Test Cleanup (Partial)
 
