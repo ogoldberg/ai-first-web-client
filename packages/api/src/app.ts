@@ -4,13 +4,14 @@
  * Hono-based REST API for the Unbrowser cloud service.
  * Provides intelligent browsing capabilities via HTTP endpoints.
  *
- * Domain Routing:
- * - unbrowser.ai / www.unbrowser.ai -> Marketing site (landing, pricing, auth, dashboard)
- * - api.unbrowser.ai -> API endpoints only
- * - localhost:3001 -> Both (for development)
+ * Domain: api.unbrowser.ai
+ *
+ * Marketing routes (/, /pricing, /auth, /dashboard) are served from
+ * www.unbrowser.ai by the unbrowser-marketing project. This API server
+ * redirects any marketing route requests to the marketing domain.
  *
  * IMPORTANT: API routes that depend on unbrowser are dynamically imported
- * to avoid loading native modules in marketing-only mode.
+ * to avoid loading native modules when not needed.
  */
 
 import { Hono } from 'hono';
@@ -22,35 +23,10 @@ import { requestLoggerMiddleware } from './middleware/request-logger.js';
 
 // Shared routes (no unbrowser dependency)
 import { health } from './routes/health.js';
-import { pricingCalculator } from './routes/pricing-calculator.js';
-
-// Marketing routes (no unbrowser dependency)
-import { auth } from './routes/auth.js';
-import { dashboardUI } from './routes/dashboard-ui.js';
-import { landing } from './routes/landing.js';
-import { pricingPage } from './routes/pricing-page.js';
 import { llmDocs } from './routes/llm-docs.js';
 
-// Server mode - set via UNBROWSER_MODE environment variable
-// - 'marketing': Only serve marketing pages (unbrowser.ai)
-// - 'api': Only serve API endpoints (api.unbrowser.ai)
-// - 'all' or unset: Serve everything (development/localhost)
-const SERVER_MODE = process.env.UNBROWSER_MODE || 'all';
-
-// Helper to check if we're in marketing-only mode
-function isMarketingMode(): boolean {
-  return SERVER_MODE === 'marketing';
-}
-
-// Helper to check if we're in API-only mode
-function isApiMode(): boolean {
-  return SERVER_MODE === 'api';
-}
-
-// Helper to check if we're serving all routes (development)
-function isAllMode(): boolean {
-  return SERVER_MODE === 'all' || !SERVER_MODE;
-}
+// Marketing domain for redirects
+const MARKETING_DOMAIN = process.env.MARKETING_DOMAIN || 'www.unbrowser.ai';
 
 // Create the main Hono app
 const app = new Hono();
@@ -125,146 +101,67 @@ app.use(
 );
 
 // =============================================================================
-// SHARED ROUTES (available in all modes)
+// SHARED ROUTES
 // =============================================================================
 app.route('/health', health);
 
 // =============================================================================
-// API ROUTES (api.unbrowser.ai - UNBROWSER_MODE=api)
+// MARKETING ROUTES - Redirect to www.unbrowser.ai
 // =============================================================================
 
-// Middleware to redirect API routes to api.unbrowser.ai when in marketing mode
-const apiOnlyMiddleware = async (c: any, next: any) => {
-  if (isMarketingMode()) {
-    // Redirect to API domain
-    const url = new URL(c.req.url);
-    url.host = 'api.unbrowser.ai';
-    url.protocol = 'https:';
-    url.port = '';
-    return c.redirect(url.toString(), 301);
-  }
-  return next();
+// Middleware to redirect marketing routes to the marketing domain
+const redirectToMarketing = async (c: any) => {
+  const url = new URL(c.req.url);
+  url.host = MARKETING_DOMAIN;
+  url.protocol = 'https:';
+  url.port = '';
+  return c.redirect(url.toString(), 301);
 };
 
-// In marketing mode, redirect API routes to api.unbrowser.ai
-if (isMarketingMode()) {
-  app.use('/docs/*', apiOnlyMiddleware);
-  app.use('/docs', apiOnlyMiddleware);
-  app.use('/v1/*', apiOnlyMiddleware);
-  app.use('/admin/*', apiOnlyMiddleware);
-  app.use('/admin', apiOnlyMiddleware);
-  app.use('/inspect/*', apiOnlyMiddleware);
-  app.use('/inspect', apiOnlyMiddleware);
-  app.use('/llm.txt', apiOnlyMiddleware);
-  app.use('/llm.md', apiOnlyMiddleware);
-}
+// Redirect all marketing routes to www.unbrowser.ai
+app.get('/auth/*', redirectToMarketing);
+app.get('/auth', redirectToMarketing);
+app.get('/dashboard/*', redirectToMarketing);
+app.get('/dashboard', redirectToMarketing);
+app.get('/pricing/*', redirectToMarketing);
+app.get('/pricing', redirectToMarketing);
 
 // =============================================================================
-// MARKETING ROUTES (unbrowser.ai - UNBROWSER_MODE=marketing)
+// ROOT ENDPOINT - API welcome or redirect to marketing
 // =============================================================================
 
-// Middleware to redirect marketing routes to unbrowser.ai when in API mode
-const marketingOnlyMiddleware = async (c: any, next: any) => {
-  if (isApiMode()) {
-    // Redirect to marketing domain
-    const url = new URL(c.req.url);
-    url.host = 'unbrowser.ai';
-    url.protocol = 'https:';
-    url.port = '';
-    return c.redirect(url.toString(), 301);
-  }
-  return next();
-};
-
-// Only mount marketing routes if not in API-only mode
-if (!isApiMode()) {
-  // Authentication pages
-  app.route('/auth', auth); // User authentication (signup, login, OAuth)
-
-  // User dashboard
-  app.route('/dashboard', dashboardUI); // User dashboard (API keys, usage, settings)
-
-  // Pricing pages - calculator must be before pricing page to take precedence
-  app.route('/pricing/calculator', pricingCalculator); // API-016: Interactive pricing calculator
-  app.route('/pricing', pricingPage); // Marketing pricing page
-} else {
-  // In API mode, redirect marketing routes to unbrowser.ai
-  app.use('/auth/*', marketingOnlyMiddleware);
-  app.use('/auth', marketingOnlyMiddleware);
-  app.use('/dashboard/*', marketingOnlyMiddleware);
-  app.use('/dashboard', marketingOnlyMiddleware);
-  app.use('/pricing/*', marketingOnlyMiddleware);
-  app.use('/pricing', marketingOnlyMiddleware);
-}
-
-// =============================================================================
-// ROOT ENDPOINT - Mode-aware routing
-// =============================================================================
-
-app.get('/', async (c, next) => {
+app.get('/', async (c) => {
   const accept = c.req.header('Accept') || '';
 
-  // API mode - always serve JSON
-  if (isApiMode()) {
-    return c.json({
-      name: 'Unbrowser API',
-      version: '0.1.0',
+  // If browser is requesting HTML, redirect to marketing site
+  if (accept.includes('text/html') && !accept.includes('application/json')) {
+    return c.redirect(`https://${MARKETING_DOMAIN}/`, 301);
+  }
+
+  // API clients get JSON response
+  return c.json({
+    name: 'Unbrowser API',
+    version: '0.1.0',
+    docs: '/docs',
+    marketing: `https://${MARKETING_DOMAIN}`,
+    endpoints: {
       docs: '/docs',
-      endpoints: {
-        docs: '/docs',
-        openapi: '/docs/openapi.json',
-        gettingStarted: '/docs/getting-started',
-        health: '/health',
-        browse: '/v1/browse',
-        batch: '/v1/batch',
-        fetch: '/v1/fetch',
-        intelligence: '/v1/domains/:domain/intelligence',
-        usage: '/v1/usage',
-        skillPacks: '/v1/skill-packs',
-        workflows: '/v1/workflows',
-        marketplace: '/v1/marketplace',
-        billing: '/v1/billing',
-        llmDocs: '/llm.txt',
-      },
-    });
-  }
-
-  // Marketing mode - always serve landing page
-  if (isMarketingMode()) {
-    return next(); // Fall through to landing page
-  }
-
-  // All mode (development) - content negotiation
-  if (accept.includes('application/json') && !accept.includes('text/html')) {
-    return c.json({
-      name: 'Unbrowser API',
-      version: '0.1.0',
-      mode: SERVER_MODE,
-      docs: '/docs',
-      marketing: {
-        landing: '/',
-        pricing: '/pricing',
-        auth: '/auth/login',
-        dashboard: '/dashboard',
-      },
-      api: {
-        browse: '/v1/browse',
-        batch: '/v1/batch',
-        fetch: '/v1/fetch',
-        docs: '/docs',
-        llmDocs: '/llm.txt',
-      },
-    });
-  }
-
-  // Serve landing page HTML for browsers
-  return next();
+      openapi: '/docs/openapi.json',
+      gettingStarted: '/docs/getting-started',
+      health: '/health',
+      browse: '/v1/browse',
+      batch: '/v1/batch',
+      fetch: '/v1/fetch',
+      intelligence: '/v1/domains/:domain/intelligence',
+      usage: '/v1/usage',
+      skillPacks: '/v1/skill-packs',
+      workflows: '/v1/workflows',
+      marketplace: '/v1/marketplace',
+      billing: '/v1/billing',
+      llmDocs: '/llm.txt',
+    },
+  });
 });
-
-// Mount landing page (only in marketing or all mode)
-if (!isApiMode()) {
-  app.route('', landing);
-}
 
 // 404 handler
 app.notFound((c) => {
@@ -325,20 +222,15 @@ app.onError((err, c) => {
 });
 
 /**
- * Initialize API routes (only when not in marketing mode)
+ * Initialize API routes
  * This function dynamically imports routes that depend on unbrowser
- * to avoid loading native modules when they're not needed.
+ * to avoid loading native modules at startup.
  */
 async function initializeApiRoutes(): Promise<void> {
-  if (isMarketingMode()) {
-    console.log('Marketing mode: Skipping API route initialization');
-    return;
-  }
-
   console.log('Initializing API routes...');
 
   try {
-    // Dynamic imports to avoid loading unbrowser in marketing mode
+    // Dynamic imports to load routes lazily
     const [
       docsModule,
       browseModule,
@@ -421,7 +313,7 @@ async function initializeApiRoutes(): Promise<void> {
     console.log('API routes initialized');
   } catch (error) {
     console.error('Failed to initialize API routes:', error);
-    console.error('API routes will not be available. This is expected in marketing-only mode.');
+    throw error;
   }
 }
 

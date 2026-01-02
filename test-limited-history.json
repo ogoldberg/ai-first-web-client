@@ -1,8 +1,8 @@
 {
   "history": [
     {
-      "id": "c3b1417e-7c20-42c0-908f-6ee272bdc331",
-      "timestamp": 1767360351154,
+      "id": "17f51958-82ed-490d-8b72-717847f1282d",
+      "timestamp": 1767378879164,
       "sourceCount": 2,
       "contradictionCount": 0,
       "overallConfidence": "high",
@@ -12,8 +12,8 @@
       ]
     },
     {
-      "id": "3ea65c2f-c009-4799-b1b7-e2fa2c86f919",
-      "timestamp": 1767360351154,
+      "id": "134c7c0d-1081-412a-986b-954c85ba799a",
+      "timestamp": 1767378879164,
       "sourceCount": 2,
       "contradictionCount": 0,
       "overallConfidence": "high",
@@ -23,8 +23,8 @@
       ]
     },
     {
-      "id": "d66248a6-10ca-4a9c-b385-b36fcf208c68",
-      "timestamp": 1767360351154,
+      "id": "7a7c34d5-ad07-4d47-98a2-63855b71e648",
+      "timestamp": 1767378879164,
       "sourceCount": 2,
       "contradictionCount": 0,
       "overallConfidence": "high",
