@@ -10,7 +10,6 @@ import { rateLimiter } from '../../src/utils/rate-limiter.js';
 // Mock the modules
 vi.mock('../../src/core/content-intelligence.js');
 vi.mock('../../src/core/lightweight-renderer.js');
-vi.mock('../../src/utils/rate-limiter.js');
 
 describe('TieredFetcher', () => {
   let fetcher: TieredFetcher;
@@ -19,6 +18,7 @@ describe('TieredFetcher', () => {
   let mockLearningEngine: LearningEngine;
   let mockContentIntelligence: ContentIntelligence;
   let mockLightweightRenderer: LightweightRenderer;
+  let rateLimiterAcquireSpy: ReturnType<typeof vi.spyOn>;
 
   // Helper to create a successful ContentResult
   // Content must be at least 500 chars to pass default minContentLength validation
@@ -65,7 +65,10 @@ describe('TieredFetcher', () => {
   });
 
   beforeEach(() => {
-    vi.resetAllMocks();
+    vi.clearAllMocks();
+
+    // Spy on rateLimiter.acquire to verify rate limiting calls
+    rateLimiterAcquireSpy = vi.spyOn(rateLimiter, 'acquire').mockResolvedValue(undefined);
 
     // Create mock browser manager
     mockBrowserManager = {
@@ -87,9 +90,6 @@ describe('TieredFetcher', () => {
         markdown: '# Extracted\n\nContent here with plenty of text.',
       }),
     } as unknown as ContentExtractor;
-
-    // Mock rate limiter
-    vi.mocked(rateLimiter.acquire).mockResolvedValue(undefined);
 
     // Create mock learning engine (FEAT-003)
     mockLearningEngine = {
@@ -178,13 +178,14 @@ describe('TieredFetcher', () => {
 
   describe('force tier option', () => {
     it('should use only the specified tier when forceTier is set', async () => {
+      const extractSpy = vi.spyOn(mockContentIntelligence, 'extract').mockResolvedValue(createContentResult());
       vi.spyOn(mockLightweightRenderer, 'render').mockResolvedValue(createLightweightResult());
 
       const result = await fetcher.fetch('https://example.com', { forceTier: 'lightweight' });
 
       expect(result.tier).toBe('lightweight');
       expect(result.tiersAttempted).toEqual(['lightweight']);
-      expect(mockContentIntelligence.extract).not.toHaveBeenCalled();
+      expect(extractSpy).not.toHaveBeenCalled();
     });
 
     it('should handle legacy tier name "static" as "intelligence"', async () => {
@@ -281,6 +282,7 @@ describe('TieredFetcher', () => {
     });
 
     it('should use learned preference after multiple successes', async () => {
+      const extractSpy = vi.spyOn(mockContentIntelligence, 'extract').mockResolvedValue(createContentResult());
       vi.spyOn(mockLightweightRenderer, 'render').mockResolvedValue(createLightweightResult());
 
       // Manually set high-confidence preference
@@ -289,7 +291,7 @@ describe('TieredFetcher', () => {
       await fetcher.fetch('https://preferred.com/page');
 
       // Should start with lightweight due to learned preference
-      expect(mockContentIntelligence.extract).not.toHaveBeenCalled();
+      expect(extractSpy).not.toHaveBeenCalled();
       expect(mockLightweightRenderer.render).toHaveBeenCalledOnce();
     });
 
@@ -317,7 +319,7 @@ describe('TieredFetcher', () => {
 
       await fetcher.fetch('https://example.com');
 
-      expect(rateLimiter.acquire).toHaveBeenCalledWith('https://example.com');
+      expect(rateLimiterAcquireSpy).toHaveBeenCalledWith('https://example.com');
     });
 
     it('should skip rate limiting when disabled', async () => {
@@ -325,7 +327,7 @@ describe('TieredFetcher', () => {
 
       await fetcher.fetch('https://example.com', { useRateLimiting: false });
 
-      expect(rateLimiter.acquire).not.toHaveBeenCalled();
+      expect(rateLimiterAcquireSpy).not.toHaveBeenCalled();
     });
   });
 

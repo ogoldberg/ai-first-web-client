@@ -1,38 +1,44 @@
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+/**
+ * Tests for SessionManager
+ *
+ * Uses vi.spyOn() for fs.promises methods since the setup file loads modules
+ * before vi.mock() can be applied in the ESM environment.
+ */
+
+import { describe, it, expect, beforeEach, vi, afterEach, type SpyInstance } from 'vitest';
 import { SessionManager, type SessionHealth } from '../../src/core/session-manager.js';
 import type { BrowserContext } from 'playwright';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { SessionCrypto } from '../../src/utils/session-crypto.js';
 
-// Mock fs module
-vi.mock('fs', async () => {
-  const actual = await vi.importActual('fs');
-  return {
-    ...actual,
-    promises: {
-      mkdir: vi.fn().mockResolvedValue(undefined),
-      readdir: vi.fn().mockResolvedValue([]),
-      readFile: vi.fn(),
-      writeFile: vi.fn().mockResolvedValue(undefined),
-      rename: vi.fn().mockResolvedValue(undefined),
-      unlink: vi.fn().mockResolvedValue(undefined),
-    },
-  };
-});
+// Create spies for fs.promises methods
+let mkdirSpy: SpyInstance;
+let readdirSpy: SpyInstance;
+let readFileSpy: SpyInstance;
+let writeFileSpy: SpyInstance;
+let renameSpy: SpyInstance;
+let unlinkSpy: SpyInstance;
 
 describe('SessionManager', () => {
   let sessionManager: SessionManager;
   const testSessionsDir = './test-sessions';
 
   beforeEach(async () => {
-    vi.resetAllMocks();
+    // Create spies on fs.promises methods
+    mkdirSpy = vi.spyOn(fs, 'mkdir').mockResolvedValue(undefined);
+    readdirSpy = vi.spyOn(fs, 'readdir').mockResolvedValue([]);
+    readFileSpy = vi.spyOn(fs, 'readFile');
+    writeFileSpy = vi.spyOn(fs, 'writeFile').mockResolvedValue(undefined);
+    renameSpy = vi.spyOn(fs, 'rename').mockResolvedValue(undefined);
+    unlinkSpy = vi.spyOn(fs, 'unlink').mockResolvedValue(undefined);
+
     sessionManager = new SessionManager(testSessionsDir);
     await sessionManager.initialize();
   });
 
   afterEach(() => {
-    vi.clearAllMocks();
+    vi.restoreAllMocks();
   });
 
   describe('Session Health Detection', () => {
@@ -474,7 +480,7 @@ describe('SessionManager', () => {
 
       // We need to capture what was written to disk
       let writtenContent = '';
-      vi.mocked(fs.writeFile).mockImplementation(async (path, content) => {
+      writeFileSpy.mockImplementation(async (path: any, content: any) => {
         writtenContent = content as string;
       });
 
@@ -513,8 +519,8 @@ describe('SessionManager', () => {
       const encryptedData = crypto.encrypt(JSON.stringify(sessionData));
 
       // Mock fs to return encrypted data
-      vi.mocked(fs.readdir).mockResolvedValue(['example.com_default.json'] as any);
-      vi.mocked(fs.readFile).mockResolvedValue(encryptedData);
+      readdirSpy.mockResolvedValue(['example.com_default.json'] as any);
+      readFileSpy.mockResolvedValue(encryptedData);
 
       const manager = new SessionManager(testSessionsDir);
       await manager.initialize();
@@ -545,9 +551,9 @@ describe('SessionManager', () => {
 
       // Track what gets written
       let migratedContent = '';
-      vi.mocked(fs.readdir).mockResolvedValue(['example.com_default.json'] as any);
-      vi.mocked(fs.readFile).mockResolvedValue(plaintextData);
-      vi.mocked(fs.writeFile).mockImplementation(async (path, content) => {
+      readdirSpy.mockResolvedValue(['example.com_default.json'] as any);
+      readFileSpy.mockResolvedValue(plaintextData);
+      writeFileSpy.mockImplementation(async (path: any, content: any) => {
         migratedContent = content as string;
       });
 
@@ -580,8 +586,8 @@ describe('SessionManager', () => {
       // Now try to load without the key
       delete process.env.LLM_BROWSER_SESSION_KEY;
 
-      vi.mocked(fs.readdir).mockResolvedValue(['example.com_default.json'] as any);
-      vi.mocked(fs.readFile).mockResolvedValue(encryptedData);
+      readdirSpy.mockResolvedValue(['example.com_default.json'] as any);
+      readFileSpy.mockResolvedValue(encryptedData);
 
       const manager = new SessionManager(testSessionsDir);
 
@@ -596,14 +602,14 @@ describe('SessionManager', () => {
     it('should skip temp files when loading sessions', async () => {
       process.env.LLM_BROWSER_SESSION_KEY = testPassword;
 
-      vi.mocked(fs.readdir).mockResolvedValue([
+      readdirSpy.mockResolvedValue([
         'example.com_default.json',
         '.tmp.12345.json',
         '.tmp.67890.99999.abc123.json',
       ] as any);
 
       // Only example.com should be read
-      vi.mocked(fs.readFile).mockResolvedValue(
+      readFileSpy.mockResolvedValue(
         JSON.stringify({
           domain: 'example.com',
           cookies: [],
@@ -618,7 +624,7 @@ describe('SessionManager', () => {
       await manager.initialize();
 
       // readFile should only be called once (for the real session file)
-      expect(fs.readFile).toHaveBeenCalledTimes(1);
+      expect(readFileSpy).toHaveBeenCalledTimes(1);
     });
   });
 

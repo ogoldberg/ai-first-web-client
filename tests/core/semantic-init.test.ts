@@ -1,8 +1,11 @@
 /**
  * Tests for Semantic Infrastructure Initialization (LI-001)
+ *
+ * Uses vi.spyOn() for static methods since the setup file loads modules
+ * before vi.mock() can be applied in the ESM environment.
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi, type SpyInstance } from 'vitest';
 import {
   initializeSemanticInfrastructure,
   checkSemanticDependencies,
@@ -12,54 +15,47 @@ import {
   wasInitializationAttempted,
   resetSemanticInfrastructure,
 } from '../../src/core/semantic-init.js';
-
-// Mock the dependencies
-vi.mock('../../src/utils/embedding-provider.js', () => ({
-  EmbeddingProvider: {
-    isAvailable: vi.fn(),
-    create: vi.fn(),
-  },
-}));
-
-vi.mock('../../src/utils/vector-store.js', () => ({
-  VectorStore: {
-    isAvailable: vi.fn(),
-  },
-  getVectorStore: vi.fn(),
-}));
-
-vi.mock('../../src/utils/embedded-store.js', () => ({
-  EmbeddedStore: {
-    isAvailable: vi.fn(),
-  },
-  createEmbeddedStore: vi.fn(),
-}));
-
-vi.mock('../../src/core/semantic-pattern-matcher.js', () => ({
-  createSemanticPatternMatcher: vi.fn(),
-}));
-
 import { EmbeddingProvider } from '../../src/utils/embedding-provider.js';
 import { VectorStore, getVectorStore } from '../../src/utils/vector-store.js';
 import { EmbeddedStore, createEmbeddedStore } from '../../src/utils/embedded-store.js';
-import { createSemanticPatternMatcher } from '../../src/core/semantic-pattern-matcher.js';
+import * as semanticPatternMatcher from '../../src/core/semantic-pattern-matcher.js';
+import * as vectorStoreModule from '../../src/utils/vector-store.js';
+import * as embeddedStoreModule from '../../src/utils/embedded-store.js';
 
 describe('Semantic Infrastructure Initialization', () => {
+  // Spies for static methods
+  let embeddingProviderIsAvailableSpy: SpyInstance;
+  let embeddingProviderCreateSpy: SpyInstance;
+  let vectorStoreIsAvailableSpy: SpyInstance;
+  let getVectorStoreSpy: SpyInstance;
+  let embeddedStoreIsAvailableSpy: SpyInstance;
+  let createEmbeddedStoreSpy: SpyInstance;
+  let createSemanticPatternMatcherSpy: SpyInstance;
+
   beforeEach(async () => {
-    // Reset all mocks and global state
-    vi.clearAllMocks();
+    // Reset global state first
     await resetSemanticInfrastructure();
+
+    // Create fresh spies for each test
+    embeddingProviderIsAvailableSpy = vi.spyOn(EmbeddingProvider, 'isAvailable');
+    embeddingProviderCreateSpy = vi.spyOn(EmbeddingProvider, 'create');
+    vectorStoreIsAvailableSpy = vi.spyOn(VectorStore, 'isAvailable');
+    getVectorStoreSpy = vi.spyOn(vectorStoreModule, 'getVectorStore');
+    embeddedStoreIsAvailableSpy = vi.spyOn(EmbeddedStore, 'isAvailable');
+    createEmbeddedStoreSpy = vi.spyOn(embeddedStoreModule, 'createEmbeddedStore');
+    createSemanticPatternMatcherSpy = vi.spyOn(semanticPatternMatcher, 'createSemanticPatternMatcher');
   });
 
   afterEach(async () => {
+    vi.restoreAllMocks();
     await resetSemanticInfrastructure();
   });
 
   describe('checkSemanticDependencies', () => {
     it('should report all dependencies available when they exist', async () => {
-      vi.mocked(EmbeddingProvider.isAvailable).mockResolvedValue(true);
-      vi.mocked(VectorStore.isAvailable).mockResolvedValue(true);
-      vi.mocked(EmbeddedStore.isAvailable).mockResolvedValue(true);
+      embeddingProviderIsAvailableSpy.mockResolvedValue(true);
+      vectorStoreIsAvailableSpy.mockResolvedValue(true);
+      embeddedStoreIsAvailableSpy.mockResolvedValue(true);
 
       const result = await checkSemanticDependencies();
 
@@ -68,9 +64,9 @@ describe('Semantic Infrastructure Initialization', () => {
     });
 
     it('should report missing @xenova/transformers', async () => {
-      vi.mocked(EmbeddingProvider.isAvailable).mockResolvedValue(false);
-      vi.mocked(VectorStore.isAvailable).mockResolvedValue(true);
-      vi.mocked(EmbeddedStore.isAvailable).mockResolvedValue(true);
+      embeddingProviderIsAvailableSpy.mockResolvedValue(false);
+      vectorStoreIsAvailableSpy.mockResolvedValue(true);
+      embeddedStoreIsAvailableSpy.mockResolvedValue(true);
 
       const result = await checkSemanticDependencies();
 
@@ -79,9 +75,9 @@ describe('Semantic Infrastructure Initialization', () => {
     });
 
     it('should report missing @lancedb/lancedb', async () => {
-      vi.mocked(EmbeddingProvider.isAvailable).mockResolvedValue(true);
-      vi.mocked(VectorStore.isAvailable).mockResolvedValue(false);
-      vi.mocked(EmbeddedStore.isAvailable).mockResolvedValue(true);
+      embeddingProviderIsAvailableSpy.mockResolvedValue(true);
+      vectorStoreIsAvailableSpy.mockResolvedValue(false);
+      embeddedStoreIsAvailableSpy.mockResolvedValue(true);
 
       const result = await checkSemanticDependencies();
 
@@ -90,9 +86,9 @@ describe('Semantic Infrastructure Initialization', () => {
     });
 
     it('should report missing better-sqlite3', async () => {
-      vi.mocked(EmbeddingProvider.isAvailable).mockResolvedValue(true);
-      vi.mocked(VectorStore.isAvailable).mockResolvedValue(true);
-      vi.mocked(EmbeddedStore.isAvailable).mockResolvedValue(false);
+      embeddingProviderIsAvailableSpy.mockResolvedValue(true);
+      vectorStoreIsAvailableSpy.mockResolvedValue(true);
+      embeddedStoreIsAvailableSpy.mockResolvedValue(false);
 
       const result = await checkSemanticDependencies();
 
@@ -101,9 +97,9 @@ describe('Semantic Infrastructure Initialization', () => {
     });
 
     it('should report multiple missing dependencies', async () => {
-      vi.mocked(EmbeddingProvider.isAvailable).mockResolvedValue(false);
-      vi.mocked(VectorStore.isAvailable).mockResolvedValue(false);
-      vi.mocked(EmbeddedStore.isAvailable).mockResolvedValue(false);
+      embeddingProviderIsAvailableSpy.mockResolvedValue(false);
+      vectorStoreIsAvailableSpy.mockResolvedValue(false);
+      embeddedStoreIsAvailableSpy.mockResolvedValue(false);
 
       const result = await checkSemanticDependencies();
 
@@ -117,9 +113,9 @@ describe('Semantic Infrastructure Initialization', () => {
 
   describe('initializeSemanticInfrastructure', () => {
     it('should fail gracefully when dependencies are missing', async () => {
-      vi.mocked(EmbeddingProvider.isAvailable).mockResolvedValue(false);
-      vi.mocked(VectorStore.isAvailable).mockResolvedValue(false);
-      vi.mocked(EmbeddedStore.isAvailable).mockResolvedValue(false);
+      embeddingProviderIsAvailableSpy.mockResolvedValue(false);
+      vectorStoreIsAvailableSpy.mockResolvedValue(false);
+      embeddedStoreIsAvailableSpy.mockResolvedValue(false);
 
       const result = await initializeSemanticInfrastructure();
 
@@ -132,36 +128,28 @@ describe('Semantic Infrastructure Initialization', () => {
 
     it('should succeed when all dependencies are available', async () => {
       // Mock all dependencies as available
-      vi.mocked(EmbeddingProvider.isAvailable).mockResolvedValue(true);
-      vi.mocked(VectorStore.isAvailable).mockResolvedValue(true);
-      vi.mocked(EmbeddedStore.isAvailable).mockResolvedValue(true);
+      embeddingProviderIsAvailableSpy.mockResolvedValue(true);
+      vectorStoreIsAvailableSpy.mockResolvedValue(true);
+      embeddedStoreIsAvailableSpy.mockResolvedValue(true);
 
       // Mock successful creation of each component
       const mockEmbeddingProvider = {
         getDimensions: vi.fn().mockReturnValue(384),
         getModelName: vi.fn().mockReturnValue('test-model'),
       };
-      vi.mocked(EmbeddingProvider.create).mockResolvedValue(
-        mockEmbeddingProvider as unknown as import('../../src/utils/embedding-provider.js').EmbeddingProvider
-      );
+      embeddingProviderCreateSpy.mockResolvedValue(mockEmbeddingProvider);
 
       const mockVectorStore = {};
-      vi.mocked(getVectorStore).mockResolvedValue(
-        mockVectorStore as unknown as import('../../src/utils/vector-store.js').VectorStore
-      );
+      getVectorStoreSpy.mockResolvedValue(mockVectorStore);
 
       const mockEmbeddedStore = {
         initialize: vi.fn().mockResolvedValue(undefined),
         close: vi.fn().mockResolvedValue(undefined),
       };
-      vi.mocked(createEmbeddedStore).mockReturnValue(
-        mockEmbeddedStore as unknown as import('../../src/utils/embedded-store.js').EmbeddedStore
-      );
+      createEmbeddedStoreSpy.mockReturnValue(mockEmbeddedStore);
 
       const mockMatcher = {};
-      vi.mocked(createSemanticPatternMatcher).mockReturnValue(
-        mockMatcher as unknown as import('../../src/core/semantic-pattern-matcher.js').SemanticPatternMatcher
-      );
+      createSemanticPatternMatcherSpy.mockReturnValue(mockMatcher);
 
       const result = await initializeSemanticInfrastructure();
 
@@ -175,25 +163,21 @@ describe('Semantic Infrastructure Initialization', () => {
 
     it('should return cached infrastructure on subsequent calls', async () => {
       // Setup for successful initialization
-      vi.mocked(EmbeddingProvider.isAvailable).mockResolvedValue(true);
-      vi.mocked(VectorStore.isAvailable).mockResolvedValue(true);
-      vi.mocked(EmbeddedStore.isAvailable).mockResolvedValue(true);
+      embeddingProviderIsAvailableSpy.mockResolvedValue(true);
+      vectorStoreIsAvailableSpy.mockResolvedValue(true);
+      embeddedStoreIsAvailableSpy.mockResolvedValue(true);
 
       const mockEmbeddingProvider = {
         getDimensions: vi.fn().mockReturnValue(384),
         getModelName: vi.fn().mockReturnValue('test-model'),
       };
-      vi.mocked(EmbeddingProvider.create).mockResolvedValue(
-        mockEmbeddingProvider as unknown as import('../../src/utils/embedding-provider.js').EmbeddingProvider
-      );
-      vi.mocked(getVectorStore).mockResolvedValue({} as unknown as import('../../src/utils/vector-store.js').VectorStore);
-      vi.mocked(createEmbeddedStore).mockReturnValue({
+      embeddingProviderCreateSpy.mockResolvedValue(mockEmbeddingProvider);
+      getVectorStoreSpy.mockResolvedValue({});
+      createEmbeddedStoreSpy.mockReturnValue({
         initialize: vi.fn().mockResolvedValue(undefined),
         close: vi.fn().mockResolvedValue(undefined),
-      } as unknown as import('../../src/utils/embedded-store.js').EmbeddedStore);
-      vi.mocked(createSemanticPatternMatcher).mockReturnValue(
-        {} as unknown as import('../../src/core/semantic-pattern-matcher.js').SemanticPatternMatcher
-      );
+      });
+      createSemanticPatternMatcherSpy.mockReturnValue({});
 
       // First call initializes
       const result1 = await initializeSemanticInfrastructure();
@@ -205,15 +189,15 @@ describe('Semantic Infrastructure Initialization', () => {
       expect(result2.infrastructure).toBe(result1.infrastructure);
 
       // Create should only be called once
-      expect(EmbeddingProvider.create).toHaveBeenCalledTimes(1);
+      expect(embeddingProviderCreateSpy).toHaveBeenCalledTimes(1);
     });
 
     it('should fail gracefully when EmbeddingProvider.create returns null', async () => {
-      vi.mocked(EmbeddingProvider.isAvailable).mockResolvedValue(true);
-      vi.mocked(VectorStore.isAvailable).mockResolvedValue(true);
-      vi.mocked(EmbeddedStore.isAvailable).mockResolvedValue(true);
+      embeddingProviderIsAvailableSpy.mockResolvedValue(true);
+      vectorStoreIsAvailableSpy.mockResolvedValue(true);
+      embeddedStoreIsAvailableSpy.mockResolvedValue(true);
 
-      vi.mocked(EmbeddingProvider.create).mockResolvedValue(null);
+      embeddingProviderCreateSpy.mockResolvedValue(null);
 
       const result = await initializeSemanticInfrastructure();
 
@@ -223,14 +207,14 @@ describe('Semantic Infrastructure Initialization', () => {
     });
 
     it('should fail gracefully when getVectorStore returns null', async () => {
-      vi.mocked(EmbeddingProvider.isAvailable).mockResolvedValue(true);
-      vi.mocked(VectorStore.isAvailable).mockResolvedValue(true);
-      vi.mocked(EmbeddedStore.isAvailable).mockResolvedValue(true);
+      embeddingProviderIsAvailableSpy.mockResolvedValue(true);
+      vectorStoreIsAvailableSpy.mockResolvedValue(true);
+      embeddedStoreIsAvailableSpy.mockResolvedValue(true);
 
-      vi.mocked(EmbeddingProvider.create).mockResolvedValue({
+      embeddingProviderCreateSpy.mockResolvedValue({
         getDimensions: vi.fn().mockReturnValue(384),
-      } as unknown as import('../../src/utils/embedding-provider.js').EmbeddingProvider);
-      vi.mocked(getVectorStore).mockResolvedValue(null);
+      });
+      getVectorStoreSpy.mockResolvedValue(null);
 
       const result = await initializeSemanticInfrastructure();
 
@@ -240,11 +224,11 @@ describe('Semantic Infrastructure Initialization', () => {
     });
 
     it('should handle initialization errors gracefully', async () => {
-      vi.mocked(EmbeddingProvider.isAvailable).mockResolvedValue(true);
-      vi.mocked(VectorStore.isAvailable).mockResolvedValue(true);
-      vi.mocked(EmbeddedStore.isAvailable).mockResolvedValue(true);
+      embeddingProviderIsAvailableSpy.mockResolvedValue(true);
+      vectorStoreIsAvailableSpy.mockResolvedValue(true);
+      embeddedStoreIsAvailableSpy.mockResolvedValue(true);
 
-      vi.mocked(EmbeddingProvider.create).mockRejectedValue(new Error('Test error'));
+      embeddingProviderCreateSpy.mockRejectedValue(new Error('Test error'));
 
       const result = await initializeSemanticInfrastructure();
 
@@ -263,23 +247,21 @@ describe('Semantic Infrastructure Initialization', () => {
 
     it('should return infrastructure after successful initialization', async () => {
       // Setup for successful initialization
-      vi.mocked(EmbeddingProvider.isAvailable).mockResolvedValue(true);
-      vi.mocked(VectorStore.isAvailable).mockResolvedValue(true);
-      vi.mocked(EmbeddedStore.isAvailable).mockResolvedValue(true);
+      embeddingProviderIsAvailableSpy.mockResolvedValue(true);
+      vectorStoreIsAvailableSpy.mockResolvedValue(true);
+      embeddedStoreIsAvailableSpy.mockResolvedValue(true);
 
       const mockMatcher = { isAvailable: vi.fn().mockReturnValue(true) };
-      vi.mocked(EmbeddingProvider.create).mockResolvedValue({
+      embeddingProviderCreateSpy.mockResolvedValue({
         getDimensions: vi.fn().mockReturnValue(384),
         getModelName: vi.fn().mockReturnValue('test-model'),
-      } as unknown as import('../../src/utils/embedding-provider.js').EmbeddingProvider);
-      vi.mocked(getVectorStore).mockResolvedValue({} as unknown as import('../../src/utils/vector-store.js').VectorStore);
-      vi.mocked(createEmbeddedStore).mockReturnValue({
+      });
+      getVectorStoreSpy.mockResolvedValue({});
+      createEmbeddedStoreSpy.mockReturnValue({
         initialize: vi.fn().mockResolvedValue(undefined),
         close: vi.fn().mockResolvedValue(undefined),
-      } as unknown as import('../../src/utils/embedded-store.js').EmbeddedStore);
-      vi.mocked(createSemanticPatternMatcher).mockReturnValue(
-        mockMatcher as unknown as import('../../src/core/semantic-pattern-matcher.js').SemanticPatternMatcher
-      );
+      });
+      createSemanticPatternMatcherSpy.mockReturnValue(mockMatcher);
 
       await initializeSemanticInfrastructure();
 
@@ -294,9 +276,9 @@ describe('Semantic Infrastructure Initialization', () => {
       expect(wasInitializationAttempted()).toBe(false);
 
       // Setup for failed initialization (missing deps)
-      vi.mocked(EmbeddingProvider.isAvailable).mockResolvedValue(false);
-      vi.mocked(VectorStore.isAvailable).mockResolvedValue(false);
-      vi.mocked(EmbeddedStore.isAvailable).mockResolvedValue(false);
+      embeddingProviderIsAvailableSpy.mockResolvedValue(false);
+      vectorStoreIsAvailableSpy.mockResolvedValue(false);
+      embeddedStoreIsAvailableSpy.mockResolvedValue(false);
 
       await initializeSemanticInfrastructure();
 
@@ -305,22 +287,20 @@ describe('Semantic Infrastructure Initialization', () => {
     });
 
     it('should track successful initialization', async () => {
-      vi.mocked(EmbeddingProvider.isAvailable).mockResolvedValue(true);
-      vi.mocked(VectorStore.isAvailable).mockResolvedValue(true);
-      vi.mocked(EmbeddedStore.isAvailable).mockResolvedValue(true);
+      embeddingProviderIsAvailableSpy.mockResolvedValue(true);
+      vectorStoreIsAvailableSpy.mockResolvedValue(true);
+      embeddedStoreIsAvailableSpy.mockResolvedValue(true);
 
-      vi.mocked(EmbeddingProvider.create).mockResolvedValue({
+      embeddingProviderCreateSpy.mockResolvedValue({
         getDimensions: vi.fn().mockReturnValue(384),
         getModelName: vi.fn().mockReturnValue('test-model'),
-      } as unknown as import('../../src/utils/embedding-provider.js').EmbeddingProvider);
-      vi.mocked(getVectorStore).mockResolvedValue({} as unknown as import('../../src/utils/vector-store.js').VectorStore);
-      vi.mocked(createEmbeddedStore).mockReturnValue({
+      });
+      getVectorStoreSpy.mockResolvedValue({});
+      createEmbeddedStoreSpy.mockReturnValue({
         initialize: vi.fn().mockResolvedValue(undefined),
         close: vi.fn().mockResolvedValue(undefined),
-      } as unknown as import('../../src/utils/embedded-store.js').EmbeddedStore);
-      vi.mocked(createSemanticPatternMatcher).mockReturnValue(
-        {} as unknown as import('../../src/core/semantic-pattern-matcher.js').SemanticPatternMatcher
-      );
+      });
+      createSemanticPatternMatcherSpy.mockReturnValue({});
 
       await initializeSemanticInfrastructure();
 
@@ -332,22 +312,20 @@ describe('Semantic Infrastructure Initialization', () => {
   describe('resetSemanticInfrastructure', () => {
     it('should reset all global state', async () => {
       // Setup and initialize
-      vi.mocked(EmbeddingProvider.isAvailable).mockResolvedValue(true);
-      vi.mocked(VectorStore.isAvailable).mockResolvedValue(true);
-      vi.mocked(EmbeddedStore.isAvailable).mockResolvedValue(true);
+      embeddingProviderIsAvailableSpy.mockResolvedValue(true);
+      vectorStoreIsAvailableSpy.mockResolvedValue(true);
+      embeddedStoreIsAvailableSpy.mockResolvedValue(true);
 
-      vi.mocked(EmbeddingProvider.create).mockResolvedValue({
+      embeddingProviderCreateSpy.mockResolvedValue({
         getDimensions: vi.fn().mockReturnValue(384),
         getModelName: vi.fn().mockReturnValue('test-model'),
-      } as unknown as import('../../src/utils/embedding-provider.js').EmbeddingProvider);
-      vi.mocked(getVectorStore).mockResolvedValue({} as unknown as import('../../src/utils/vector-store.js').VectorStore);
-      vi.mocked(createEmbeddedStore).mockReturnValue({
+      });
+      getVectorStoreSpy.mockResolvedValue({});
+      createEmbeddedStoreSpy.mockReturnValue({
         initialize: vi.fn().mockResolvedValue(undefined),
         close: vi.fn().mockResolvedValue(undefined),
-      } as unknown as import('../../src/utils/embedded-store.js').EmbeddedStore);
-      vi.mocked(createSemanticPatternMatcher).mockReturnValue(
-        {} as unknown as import('../../src/core/semantic-pattern-matcher.js').SemanticPatternMatcher
-      );
+      });
+      createSemanticPatternMatcherSpy.mockReturnValue({});
 
       await initializeSemanticInfrastructure();
       expect(isSemanticInitialized()).toBe(true);
@@ -365,22 +343,20 @@ describe('Semantic Infrastructure Initialization', () => {
 
   describe('concurrent initialization', () => {
     it('should handle concurrent initialization calls', async () => {
-      vi.mocked(EmbeddingProvider.isAvailable).mockResolvedValue(true);
-      vi.mocked(VectorStore.isAvailable).mockResolvedValue(true);
-      vi.mocked(EmbeddedStore.isAvailable).mockResolvedValue(true);
+      embeddingProviderIsAvailableSpy.mockResolvedValue(true);
+      vectorStoreIsAvailableSpy.mockResolvedValue(true);
+      embeddedStoreIsAvailableSpy.mockResolvedValue(true);
 
-      vi.mocked(EmbeddingProvider.create).mockResolvedValue({
+      embeddingProviderCreateSpy.mockResolvedValue({
         getDimensions: vi.fn().mockReturnValue(384),
         getModelName: vi.fn().mockReturnValue('test-model'),
-      } as unknown as import('../../src/utils/embedding-provider.js').EmbeddingProvider);
-      vi.mocked(getVectorStore).mockResolvedValue({} as unknown as import('../../src/utils/vector-store.js').VectorStore);
-      vi.mocked(createEmbeddedStore).mockReturnValue({
+      });
+      getVectorStoreSpy.mockResolvedValue({});
+      createEmbeddedStoreSpy.mockReturnValue({
         initialize: vi.fn().mockResolvedValue(undefined),
         close: vi.fn().mockResolvedValue(undefined),
-      } as unknown as import('../../src/utils/embedded-store.js').EmbeddedStore);
-      vi.mocked(createSemanticPatternMatcher).mockReturnValue(
-        {} as unknown as import('../../src/core/semantic-pattern-matcher.js').SemanticPatternMatcher
-      );
+      });
+      createSemanticPatternMatcherSpy.mockReturnValue({});
 
       // Start multiple concurrent initializations
       const [result1, result2, result3] = await Promise.all([
@@ -397,7 +373,7 @@ describe('Semantic Infrastructure Initialization', () => {
       expect(result2.infrastructure).toBe(result3.infrastructure);
 
       // Create should only be called once despite concurrent calls
-      expect(EmbeddingProvider.create).toHaveBeenCalledTimes(1);
+      expect(embeddingProviderCreateSpy).toHaveBeenCalledTimes(1);
     });
   });
 });
