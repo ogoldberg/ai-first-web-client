@@ -1,4 +1,4 @@
-# @unbrowser/core
+# unbrowser-core
 
 Official SDK for the Unbrowser cloud API - intelligent web browsing for AI agents.
 
@@ -16,13 +16,13 @@ Unbrowser is an intelligent web browsing API that learns from patterns, discover
 ## Installation
 
 ```bash
-npm install @unbrowser/core
+npm install unbrowser-core
 ```
 
 ## Quick Start
 
 ```typescript
-import { createUnbrowser } from '@unbrowser/core';
+import { createUnbrowser } from 'unbrowser-core';
 
 const client = createUnbrowser({
   apiKey: process.env.UNBROWSER_API_KEY
@@ -292,7 +292,7 @@ const newCookies = result.newCookies;
 All errors include recovery guidance:
 
 ```typescript
-import { UnbrowserError, isRetryableError } from '@unbrowser/core';
+import { UnbrowserError, isRetryableError } from 'unbrowser-core';
 
 try {
   await client.browse(url);
@@ -371,7 +371,7 @@ import type {
   // Introspection
   SDKCapabilities,
   MethodInfo,
-} from '@unbrowser/core';
+} from 'unbrowser-core';
 ```
 
 ## Standalone Introspection Functions
@@ -386,7 +386,7 @@ import {
   searchMethods,
   getExampleFor,
   generateLlmsTxt,
-} from '@unbrowser/core';
+} from 'unbrowser-core';
 
 // Get SDK capabilities
 const caps = getCapabilities();

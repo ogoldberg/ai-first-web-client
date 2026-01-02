@@ -1673,7 +1673,7 @@ landing.get('/', (c) => {
 
       <div class="code-example">
         <div class="code-block">
-<pre><span class="keyword">import</span> { createUnbrowser } <span class="keyword">from</span> <span class="string">'@unbrowser/core'</span>;
+<pre><span class="keyword">import</span> { createUnbrowser } <span class="keyword">from</span> <span class="string">'unbrowser-core'</span>;
 
 <span class="comment">// Initialize with your API key</span>
 <span class="keyword">const</span> browser = <span class="function">createUnbrowser</span>({

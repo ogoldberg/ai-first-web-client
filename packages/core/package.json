@@ -1,5 +1,5 @@
 {
-  "name": "@unbrowser/core",
+  "name": "unbrowser-core",
   "version": "0.1.0-alpha.2",
   "description": "Official SDK for Unbrowser cloud API - intelligent web browsing for AI agents",
   "type": "module",
