@@ -54,18 +54,20 @@ After deduplication:
 
 ### Phase 3: Remove SDK from packages/core (BLOCKED)
 
-**Dependency:** `@unbrowser/core` must be published to npm from `rabbit-found/unbrowser`
+**Dependency:** `unbrowser-core` npm package needs to be updated to current version
+
+**Current status:** Package exists at https://www.npmjs.com/package/unbrowser-core but contains an old version. Need to publish updated SDK from `rabbit-found/unbrowser` before removing local copy.
 
 **Files to REMOVE from `packages/core/`:**
 - Entire `packages/core/` directory
 
 **Update root `package.json`:**
 - Remove `packages/core` from workspaces
-- Add `@unbrowser/core` as dependency (from npm)
+- Add `unbrowser-core` as dependency (from npm)
 
 **Update imports in `packages/api/`:**
 - Change: `import { ... } from '../../core/src/...'`
-- To: `import { ... } from '@unbrowser/core'`
+- To: `import { ... } from 'unbrowser-core'`
 
 ### Phase 4: Test Cleanup (Partial)
 
