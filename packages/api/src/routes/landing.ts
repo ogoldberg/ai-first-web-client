@@ -38,6 +38,8 @@ function getUrls(req: any) {
     authLogin: `${marketingBase}/auth/login`,
     authSignup: `${marketingBase}/auth/signup`,
     dashboard: `${marketingBase}/dashboard`,
+    privacy: `${marketingBase}/privacy`,
+    terms: `${marketingBase}/terms`,
 
     // External links
     status: 'https://status.unbrowser.ai',
@@ -1819,8 +1821,8 @@ console.<span class="function">log</span>(<span class="string">\`Confidence: \${
       <div class="footer-links">
         <h4>Company</h4>
         <a href="mailto:hello@unbrowser.ai">Contact</a>
-        <a href="/privacy">Privacy Policy</a>
-        <a href="/terms">Terms of Service</a>
+        <a href="${urls.privacy}">Privacy Policy</a>
+        <a href="${urls.terms}">Terms of Service</a>
       </div>
     </div>
 
