@@ -1,34 +1,18 @@
 /**
  * Tests for CAPTCHA Handler (GAP-007)
+ *
+ * Uses vi.spyOn() for module functions since the setup file loads modules
+ * before vi.mock() can be applied in the ESM environment.
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi, type SpyInstance } from 'vitest';
 import {
   CaptchaHandler,
   createCaptchaHandler,
   type ChallengeCallback,
   type ChallengeInfo,
 } from '../../src/core/captcha-handler.js';
-
-// Mock the challenge-detector module
-vi.mock('../../src/core/challenge-detector.js', () => ({
-  detectChallengeElements: vi.fn(),
-  waitForChallengeResolution: vi.fn(),
-}));
-
-// Mock logger
-vi.mock('../../src/utils/logger.js', () => ({
-  logger: {
-    create: () => ({
-      debug: vi.fn(),
-      info: vi.fn(),
-      warn: vi.fn(),
-      error: vi.fn(),
-    }),
-  },
-}));
-
-import { detectChallengeElements, waitForChallengeResolution } from '../../src/core/challenge-detector.js';
+import * as challengeDetector from '../../src/core/challenge-detector.js';
 
 // Helper to create a mock Page
 function createMockPage(options: {
@@ -63,9 +47,20 @@ function createMockPage(options: {
   } as any;
 }
 
+// Spies for challenge-detector functions
+let detectChallengeElementsSpy: SpyInstance;
+let waitForChallengeResolutionSpy: SpyInstance;
+
 describe('CaptchaHandler', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Create spies on challenge-detector functions
+    detectChallengeElementsSpy = vi.spyOn(challengeDetector, 'detectChallengeElements');
+    waitForChallengeResolutionSpy = vi.spyOn(challengeDetector, 'waitForChallengeResolution');
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   describe('constructor and factory', () => {
@@ -125,7 +120,7 @@ describe('CaptchaHandler', () => {
       page.evaluate = vi.fn().mockResolvedValue("I'm not a robot - click the checkbox");
 
       // Mock detectChallengeElements to return elements
-      vi.mocked(detectChallengeElements).mockResolvedValue({
+      detectChallengeElementsSpy.mockResolvedValue({
         detected: true,
         detectionType: 'recaptcha',
         elements: [
@@ -177,7 +172,7 @@ describe('CaptchaHandler', () => {
       });
 
       // Mock successful auto-solve
-      vi.mocked(detectChallengeElements).mockResolvedValue({
+      detectChallengeElementsSpy.mockResolvedValue({
         detected: true,
         detectionType: 'recaptcha',
         elements: [
@@ -201,7 +196,7 @@ describe('CaptchaHandler', () => {
       expect(result.detected).toBe(true);
       expect(result.resolved).toBe(true);
       expect(result.resolutionMethod).toBe('auto_solve');
-      expect(detectChallengeElements).toHaveBeenCalledWith(page, expect.objectContaining({
+      expect(detectChallengeElementsSpy).toHaveBeenCalledWith(page, expect.objectContaining({
         autoSolve: true,
       }));
     });
@@ -219,7 +214,7 @@ describe('CaptchaHandler', () => {
       });
 
       // Mock detection with requires_human result
-      vi.mocked(detectChallengeElements).mockResolvedValue({
+      detectChallengeElementsSpy.mockResolvedValue({
         detected: true,
         detectionType: 'recaptcha',
         elements: [
@@ -237,7 +232,7 @@ describe('CaptchaHandler', () => {
       });
 
       // Mock waitForChallengeResolution to return resolved
-      vi.mocked(waitForChallengeResolution).mockResolvedValue({
+      waitForChallengeResolutionSpy.mockResolvedValue({
         resolved: true,
         newUrl: 'https://example.com/success',
       });
@@ -250,7 +245,7 @@ describe('CaptchaHandler', () => {
       expect(result.resolutionMethod).toBe('user_solved');
 
       // Check callback received correct challenge info
-      const callbackArg = vi.mocked(userCallback).mock.calls[0][0];
+      const callbackArg = (userCallback as any).mock.calls[0][0];
       expect(callbackArg.type).toBe('recaptcha');
       expect(callbackArg.domain).toBe('example.com');
       expect(callbackArg.elements).toHaveLength(1);
@@ -267,7 +262,7 @@ describe('CaptchaHandler', () => {
         url: 'https://example.com/blocked',
       });
 
-      vi.mocked(detectChallengeElements).mockResolvedValue({
+      detectChallengeElementsSpy.mockResolvedValue({
         detected: true,
         detectionType: 'turnstile',
         elements: [
@@ -302,7 +297,7 @@ describe('CaptchaHandler', () => {
         url: 'https://example.com/px',
       });
 
-      vi.mocked(detectChallengeElements).mockResolvedValue({
+      detectChallengeElementsSpy.mockResolvedValue({
         detected: true,
         detectionType: 'perimeterx',
         elements: [
@@ -350,7 +345,7 @@ describe('CaptchaHandler', () => {
         });
 
         if (!testCase.expectedAuto) {
-          vi.mocked(detectChallengeElements).mockResolvedValue({
+          detectChallengeElementsSpy.mockResolvedValue({
             detected: true,
             elements: [],
             solveAttempted: false,
@@ -394,7 +389,7 @@ describe('CaptchaHandler', () => {
         url: 'https://example.com/captcha',
       });
 
-      vi.mocked(detectChallengeElements).mockResolvedValue({
+      detectChallengeElementsSpy.mockResolvedValue({
         detected: true,
         detectionType: 'recaptcha',
         elements: [
@@ -413,7 +408,7 @@ describe('CaptchaHandler', () => {
 
       await handler.handleChallenge(page, 'example.com');
 
-      const callbackArg = vi.mocked(userCallback).mock.calls[0][0];
+      const callbackArg = (userCallback as any).mock.calls[0][0];
       expect(callbackArg.suggestedAction).toContain('not a robot');
     });
 
@@ -428,7 +423,7 @@ describe('CaptchaHandler', () => {
         url: 'https://example.com/captcha',
       });
 
-      vi.mocked(detectChallengeElements).mockResolvedValue({
+      detectChallengeElementsSpy.mockResolvedValue({
         detected: true,
         detectionType: 'recaptcha',
         elements: [
@@ -447,7 +442,7 @@ describe('CaptchaHandler', () => {
 
       await handler.handleChallenge(page, 'example.com');
 
-      const callbackArg = vi.mocked(userCallback).mock.calls[0][0];
+      const callbackArg = (userCallback as any).mock.calls[0][0];
       expect(callbackArg.suggestedAction).toContain('CAPTCHA');
     });
 
@@ -462,7 +457,7 @@ describe('CaptchaHandler', () => {
         url: 'https://example.com/captcha',
       });
 
-      vi.mocked(detectChallengeElements).mockResolvedValue({
+      detectChallengeElementsSpy.mockResolvedValue({
         detected: true,
         elements: [{ type: 'button', selector: 'button', clickable: true }],
         solveAttempted: false,
@@ -474,7 +469,7 @@ describe('CaptchaHandler', () => {
       await handler.handleChallenge(page, 'example.com');
       const afterTime = Date.now();
 
-      const callbackArg = vi.mocked(userCallback).mock.calls[0][0];
+      const callbackArg = (userCallback as any).mock.calls[0][0];
       expect(callbackArg.detectedAt).toBeGreaterThanOrEqual(beforeTime);
       expect(callbackArg.detectedAt).toBeLessThanOrEqual(afterTime);
     });
@@ -513,7 +508,7 @@ describe('CaptchaHandler', () => {
         url: 'https://example.com/blocked',
       });
 
-      vi.mocked(detectChallengeElements).mockResolvedValue({
+      detectChallengeElementsSpy.mockResolvedValue({
         detected: false,
         elements: [],
         solveAttempted: false,
