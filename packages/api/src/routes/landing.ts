@@ -7,48 +7,9 @@
 
 import { Hono } from 'hono';
 import { html } from 'hono/html';
+import { getEnvironmentUrls } from '../utils/url-helpers.js';
 
 export const landing = new Hono();
-
-/**
- * Get environment-aware URLs for cross-domain links
- * In production, API routes go to api.unbrowser.ai, marketing routes to unbrowser.ai
- * In development, use relative paths
- */
-function getUrls(req: any) {
-  const isDev = process.env.NODE_ENV !== 'production';
-  const host = req.header('host') || 'localhost:3001';
-  const isApiDomain = host.includes('api.unbrowser.ai');
-  const isMarketingDomain = host.includes('unbrowser.ai') && !isApiDomain;
-
-  // API routes (docs, llm.txt, etc.)
-  const apiBase = isDev ? '' : isMarketingDomain ? 'https://api.unbrowser.ai' : '';
-
-  // Marketing routes (auth, pricing, dashboard, etc.)
-  const marketingBase = isDev ? '' : isApiDomain ? 'https://unbrowser.ai' : '';
-
-  return {
-    // API routes
-    docs: `${apiBase}/docs`,
-    llmTxt: `${apiBase}/llm.txt`,
-    llmMd: `${apiBase}/llm.md`,
-
-    // Marketing routes
-    pricing: `${marketingBase}/pricing`,
-    authLogin: `${marketingBase}/auth/login`,
-    authSignup: `${marketingBase}/auth/signup`,
-    dashboard: `${marketingBase}/dashboard`,
-    privacy: `${marketingBase}/privacy`,
-    terms: `${marketingBase}/terms`,
-
-    // External links
-    status: 'https://status.unbrowser.ai',
-    github: 'https://github.com/unbrowser/unbrowser',
-
-    // Root
-    home: marketingBase || '/',
-  };
-}
 
 const landingStyles = `
   :root {
@@ -1262,7 +1223,7 @@ const landingStyles = `
  * GET / - Landing page
  */
 landing.get('/', (c) => {
-  const urls = getUrls(c.req);
+  const urls = getEnvironmentUrls(c.req);
   return c.html(html`<!DOCTYPE html>
 <html lang="en">
 <head>
