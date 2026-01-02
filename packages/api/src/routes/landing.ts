@@ -10,6 +10,44 @@ import { html } from 'hono/html';
 
 export const landing = new Hono();
 
+/**
+ * Get environment-aware URLs for cross-domain links
+ * In production, API routes go to api.unbrowser.ai, marketing routes to unbrowser.ai
+ * In development, use relative paths
+ */
+function getUrls(req: any) {
+  const isDev = process.env.NODE_ENV !== 'production';
+  const host = req.header('host') || 'localhost:3001';
+  const isApiDomain = host.includes('api.unbrowser.ai');
+  const isMarketingDomain = host.includes('unbrowser.ai') && !isApiDomain;
+
+  // API routes (docs, llm.txt, etc.)
+  const apiBase = isDev ? '' : isMarketingDomain ? 'https://api.unbrowser.ai' : '';
+
+  // Marketing routes (auth, pricing, dashboard, etc.)
+  const marketingBase = isDev ? '' : isApiDomain ? 'https://unbrowser.ai' : '';
+
+  return {
+    // API routes
+    docs: `${apiBase}/docs`,
+    llmTxt: `${apiBase}/llm.txt`,
+    llmMd: `${apiBase}/llm.md`,
+
+    // Marketing routes
+    pricing: `${marketingBase}/pricing`,
+    authLogin: `${marketingBase}/auth/login`,
+    authSignup: `${marketingBase}/auth/signup`,
+    dashboard: `${marketingBase}/dashboard`,
+
+    // External links
+    status: 'https://status.unbrowser.ai',
+    github: 'https://github.com/unbrowser/unbrowser',
+
+    // Root
+    home: marketingBase || '/',
+  };
+}
+
 const landingStyles = `
   :root {
     --bg-primary: #030712;
@@ -1222,6 +1260,7 @@ const landingStyles = `
  * GET / - Landing page
  */
 landing.get('/', (c) => {
+  const urls = getUrls(c.req);
   return c.html(html`<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1315,7 +1354,7 @@ landing.get('/', (c) => {
   <header>
     <nav aria-label="Main navigation">
       <div class="nav-inner">
-        <a href="/" class="nav-logo" aria-label="Unbrowser - Home">
+        <a href="${urls.home}" class="nav-logo" aria-label="Unbrowser - Home">
           <div class="nav-logo-icon">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" aria-hidden="true">
               <circle cx="12" cy="12" r="10"/>
@@ -1328,10 +1367,10 @@ landing.get('/', (c) => {
       <div class="nav-links">
         <a href="#features">Features</a>
         <a href="#use-cases">Use Cases</a>
-        <a href="/pricing">Pricing</a>
-        <a href="/docs">Docs</a>
-        <a href="/auth/login">Sign In</a>
-        <a href="/auth/signup" class="btn btn-primary">Get Started</a>
+        <a href="${urls.pricing}">Pricing</a>
+        <a href="${urls.docs}">Docs</a>
+        <a href="${urls.authLogin}">Sign In</a>
+        <a href="${urls.authSignup}" class="btn btn-primary">Get Started</a>
       </div>
     </div>
     </nav>
@@ -1351,8 +1390,8 @@ landing.get('/', (c) => {
         Built for AI agents, researchers, and developers.
       </p>
       <div class="hero-cta">
-        <a href="/auth/signup" class="btn btn-primary btn-lg">Get Started Free</a>
-        <a href="/docs" class="btn btn-outline btn-lg">View Documentation</a>
+        <a href="${urls.authSignup}" class="btn btn-primary btn-lg">Get Started Free</a>
+        <a href="${urls.docs}" class="btn btn-outline btn-lg">View Documentation</a>
       </div>
       <div class="hero-stats">
         <div class="hero-stat">
@@ -1707,21 +1746,21 @@ console.<span class="function">log</span>(<span class="string">\`Confidence: \${
           <h3>Free</h3>
           <div class="price">$0</div>
           <div class="requests">100 requests/day</div>
-          <a href="/auth/signup" class="btn btn-outline">Get Started</a>
+          <a href="${urls.authSignup}" class="btn btn-outline">Get Started</a>
         </div>
 
         <div class="pricing-card">
           <h3>Starter</h3>
           <div class="price">$29<span>/mo</span></div>
           <div class="requests">1,000 requests/day</div>
-          <a href="/auth/signup" class="btn btn-outline">Get Started</a>
+          <a href="${urls.authSignup}" class="btn btn-outline">Get Started</a>
         </div>
 
         <div class="pricing-card featured">
           <h3>Team</h3>
           <div class="price">$99<span>/mo</span></div>
           <div class="requests">10,000 requests/day</div>
-          <a href="/auth/signup" class="btn btn-primary">Get Started</a>
+          <a href="${urls.authSignup}" class="btn btn-primary">Get Started</a>
         </div>
 
         <div class="pricing-card">
@@ -1733,7 +1772,7 @@ console.<span class="function">log</span>(<span class="string">\`Confidence: \${
       </div>
 
       <p style="text-align: center; margin-top: 32px; color: var(--text-muted);">
-        <a href="/pricing" style="color: var(--accent-secondary);">View full pricing details and calculator</a>
+        <a href="${urls.pricing}" style="color: var(--accent-secondary);">View full pricing details and calculator</a>
       </p>
     </div>
   </section>
@@ -1743,7 +1782,7 @@ console.<span class="function">log</span>(<span class="string">\`Confidence: \${
     <div class="cta-content">
       <h2>Ready to browse smarter?</h2>
       <p>Get started for free. No credit card required.</p>
-      <a href="/auth/signup" class="btn btn-lg" style="background: white; color: var(--accent-primary);">
+      <a href="${urls.authSignup}" class="btn btn-lg" style="background: white; color: var(--accent-primary);">
         Start Free Trial
       </a>
     </div>
@@ -1763,18 +1802,18 @@ console.<span class="function">log</span>(<span class="string">\`Confidence: \${
 
       <div class="footer-links">
         <h4>Product</h4>
-        <a href="/docs">Documentation</a>
-        <a href="/pricing">Pricing</a>
-        <a href="/llm.txt">LLM Reference</a>
-        <a href="https://status.unbrowser.ai">Status</a>
+        <a href="${urls.docs}">Documentation</a>
+        <a href="${urls.pricing}">Pricing</a>
+        <a href="${urls.llmTxt}">LLM Reference</a>
+        <a href="${urls.status}">Status</a>
       </div>
 
       <div class="footer-links">
         <h4>Resources</h4>
-        <a href="/docs">API Reference</a>
-        <a href="/docs/quickstart">Quick Start</a>
-        <a href="/docs/examples">Examples</a>
-        <a href="https://github.com/anthropics/unbrowser">GitHub</a>
+        <a href="${urls.docs}">API Reference</a>
+        <a href="${urls.docs}/quickstart">Quick Start</a>
+        <a href="${urls.docs}/examples">Examples</a>
+        <a href="${urls.github}">GitHub</a>
       </div>
 
       <div class="footer-links">
