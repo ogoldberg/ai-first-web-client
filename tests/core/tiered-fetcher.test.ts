@@ -5,24 +5,11 @@ import { ContentExtractor } from '../../src/utils/content-extractor.js';
 import { ContentIntelligence, type ContentResult, type ExtractionStrategy } from '../../src/core/content-intelligence.js';
 import { LightweightRenderer, type LightweightRenderResult } from '../../src/core/lightweight-renderer.js';
 import { LearningEngine } from '../../src/core/learning-engine.js';
+import { rateLimiter } from '../../src/utils/rate-limiter.js';
 
 // Mock the modules
 vi.mock('../../src/core/content-intelligence.js');
 vi.mock('../../src/core/lightweight-renderer.js');
-
-// Create a mock rate limiter with hoisted functions
-const { mockAcquire, mockRelease } = vi.hoisted(() => ({
-  mockAcquire: vi.fn().mockResolvedValue(undefined),
-  mockRelease: vi.fn(),
-}));
-
-vi.mock('../../src/utils/rate-limiter.js', () => ({
-  rateLimiter: {
-    acquire: mockAcquire,
-    release: mockRelease,
-  },
-  RateLimiter: vi.fn(),
-}));
 
 describe('TieredFetcher', () => {
   let fetcher: TieredFetcher;
@@ -31,6 +18,7 @@ describe('TieredFetcher', () => {
   let mockLearningEngine: LearningEngine;
   let mockContentIntelligence: ContentIntelligence;
   let mockLightweightRenderer: LightweightRenderer;
+  let rateLimiterAcquireSpy: ReturnType<typeof vi.spyOn>;
 
   // Helper to create a successful ContentResult
   // Content must be at least 500 chars to pass default minContentLength validation
@@ -77,9 +65,10 @@ describe('TieredFetcher', () => {
   });
 
   beforeEach(() => {
-    // Clear mock call history but keep mock implementations
-    mockAcquire.mockClear();
     vi.clearAllMocks();
+
+    // Spy on rateLimiter.acquire to verify rate limiting calls
+    rateLimiterAcquireSpy = vi.spyOn(rateLimiter, 'acquire').mockResolvedValue(undefined);
 
     // Create mock browser manager
     mockBrowserManager = {
@@ -330,7 +319,7 @@ describe('TieredFetcher', () => {
 
       await fetcher.fetch('https://example.com');
 
-      expect(mockAcquire).toHaveBeenCalledWith('https://example.com');
+      expect(rateLimiterAcquireSpy).toHaveBeenCalledWith('https://example.com');
     });
 
     it('should skip rate limiting when disabled', async () => {
@@ -338,7 +327,7 @@ describe('TieredFetcher', () => {
 
       await fetcher.fetch('https://example.com', { useRateLimiting: false });
 
-      expect(mockAcquire).not.toHaveBeenCalled();
+      expect(rateLimiterAcquireSpy).not.toHaveBeenCalled();
     });
   });
 
