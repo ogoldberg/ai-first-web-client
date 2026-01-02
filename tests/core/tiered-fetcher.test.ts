@@ -88,8 +88,8 @@ describe('TieredFetcher', () => {
       }),
     } as unknown as ContentExtractor;
 
-    // Mock rate limiter
-    vi.mocked(rateLimiter.acquire).mockResolvedValue(undefined);
+    // Mock rate limiter with spy to track calls
+    vi.spyOn(rateLimiter, 'acquire').mockResolvedValue(undefined);
 
     // Create mock learning engine (FEAT-003)
     mockLearningEngine = {
@@ -178,13 +178,14 @@ describe('TieredFetcher', () => {
 
   describe('force tier option', () => {
     it('should use only the specified tier when forceTier is set', async () => {
+      const extractSpy = vi.spyOn(mockContentIntelligence, 'extract').mockResolvedValue(createContentResult());
       vi.spyOn(mockLightweightRenderer, 'render').mockResolvedValue(createLightweightResult());
 
       const result = await fetcher.fetch('https://example.com', { forceTier: 'lightweight' });
 
       expect(result.tier).toBe('lightweight');
       expect(result.tiersAttempted).toEqual(['lightweight']);
-      expect(mockContentIntelligence.extract).not.toHaveBeenCalled();
+      expect(extractSpy).not.toHaveBeenCalled();
     });
 
     it('should handle legacy tier name "static" as "intelligence"', async () => {
@@ -281,6 +282,7 @@ describe('TieredFetcher', () => {
     });
 
     it('should use learned preference after multiple successes', async () => {
+      const extractSpy = vi.spyOn(mockContentIntelligence, 'extract').mockResolvedValue(createContentResult());
       vi.spyOn(mockLightweightRenderer, 'render').mockResolvedValue(createLightweightResult());
 
       // Manually set high-confidence preference
@@ -289,7 +291,7 @@ describe('TieredFetcher', () => {
       await fetcher.fetch('https://preferred.com/page');
 
       // Should start with lightweight due to learned preference
-      expect(mockContentIntelligence.extract).not.toHaveBeenCalled();
+      expect(extractSpy).not.toHaveBeenCalled();
       expect(mockLightweightRenderer.render).toHaveBeenCalledOnce();
     });
 
