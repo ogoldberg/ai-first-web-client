@@ -2,6 +2,31 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Multi-Repository Architecture
+
+**IMPORTANT**: Unbrowser is split across THREE separate repositories. Each repo contains ONLY code for its specific concern:
+
+| Repository | Purpose | Deployed To | Contains |
+|------------|---------|-------------|----------|
+| [`ogoldberg/ai-first-web-client`](https://github.com/ogoldberg/ai-first-web-client) | API Server + Core Intelligence | `api.unbrowser.ai` | This repo. API routes, SmartBrowser, learning engine, MCP server |
+| [`ogoldberg/unbrowser-marketing`](https://github.com/ogoldberg/unbrowser-marketing) | Marketing Site | `www.unbrowser.ai` | Landing page, pricing, auth UI, dashboard |
+| [`rabbit-found/unbrowser`](https://github.com/rabbit-found/unbrowser) | SDK | npm: `@unbrowser/core` | HTTP client SDK for API access |
+
+### Cross-Domain Links
+
+When adding links between sites:
+- **From marketing site** (`www.unbrowser.ai`): Use absolute URLs for API routes (e.g., `https://api.unbrowser.ai/docs`)
+- **From API** (`api.unbrowser.ai`): Use absolute URLs for marketing routes (e.g., `https://unbrowser.ai/pricing`)
+- **Never use relative `/docs` links** on the marketing site - docs are served from the API domain
+
+### When Working on Each Repo
+
+- **This repo (ai-first-web-client)**: API endpoints, core browsing logic, MCP tools
+- **unbrowser-marketing**: Landing page content, signup/login UI, dashboard, pricing pages
+- **rabbit-found/unbrowser**: SDK client code, TypeScript types for API responses
+
+---
+
 ## Project Overview
 
 **Unbrowser** (npm: `llm-browser`) is an intelligent web browsing API for AI agents. It learns from browsing patterns, discovers API endpoints automatically, and progressively optimizes to bypass browser rendering entirely.
