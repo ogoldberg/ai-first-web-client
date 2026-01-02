@@ -5,6 +5,9 @@
  */
 
 import { createRequire } from 'module';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+import { existsSync } from 'fs';
 import type { NetworkRequest } from '../types/index.js';
 import type {
   Har,
@@ -21,8 +24,37 @@ import type {
 } from '../types/har.js';
 
 // Load package version dynamically for HAR creator info
-const require = createRequire(import.meta.url);
-const { version: PACKAGE_VERSION } = require('../../package.json');
+// Handle both development (src/) and production (dist/) paths
+function loadPackageVersion(): string {
+  const require = createRequire(import.meta.url);
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = dirname(__filename);
+
+  // Try multiple paths to find package.json
+  const possiblePaths = [
+    join(__dirname, '../../package.json'),           // From src/utils/
+    join(__dirname, '../../../../package.json'),     // From packages/api/dist/src/utils/
+    join(process.cwd(), 'package.json'),             // From working directory
+  ];
+
+  for (const path of possiblePaths) {
+    if (existsSync(path)) {
+      try {
+        const pkg = require(path);
+        if (pkg.version) {
+          return pkg.version;
+        }
+      } catch {
+        // Continue to next path
+      }
+    }
+  }
+
+  // Fallback version if package.json not found
+  return '0.5.0';
+}
+
+const PACKAGE_VERSION = loadPackageVersion();
 
 /**
  * Parse query string from URL
