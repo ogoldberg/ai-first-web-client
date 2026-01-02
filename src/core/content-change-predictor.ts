@@ -42,6 +42,11 @@ import type {
   TemporalPattern,
   ChangeFrequencyStats,
   ChangePrediction,
+  // INT-018: Enhanced prediction types
+  CalendarTrigger,
+  SeasonalPattern,
+  UrgencyLevel,
+  PredictionAccuracyRecord,
 } from '../types/content-change.js';
 import { DEFAULT_CHANGE_PREDICTION_CONFIG } from '../types/content-change.js';
 
@@ -316,7 +321,7 @@ export class ContentChangePredictor {
    */
   exportPatterns(): Record<string, ContentChangePattern> {
     const data: Record<string, ContentChangePattern> = {};
-    for (const [key, pattern] of this.patterns.entries()) {
+    for (const [key, pattern] of Array.from(this.patterns.entries())) {
       data[key] = pattern;
     }
     return data;
@@ -937,6 +942,11 @@ export class ContentChangePredictor {
       pattern.nextPrediction = this.generatePrediction(pattern);
     }
 
+    // INT-018: Detect calendar triggers and seasonal patterns
+    pattern.calendarTriggers = this.detectCalendarTriggers(pattern.changeTimestamps);
+    pattern.seasonalPattern = this.detectSeasonalPatterns(pattern.changeTimestamps);
+    pattern.urgencyLevel = this.calculateUrgency(pattern.domain, pattern.urlPattern);
+
     log.info('Pattern analyzed', {
       domain: pattern.domain,
       urlPattern: pattern.urlPattern,
@@ -946,6 +956,8 @@ export class ContentChangePredictor {
       nextPrediction: pattern.nextPrediction?.predictedAt
         ? new Date(pattern.nextPrediction.predictedAt).toISOString()
         : undefined,
+      calendarTriggers: pattern.calendarTriggers?.length || 0,
+      urgencyLevel: pattern.urgencyLevel,
     });
   }
 
@@ -1029,5 +1041,348 @@ export class ContentChangePredictor {
     }
 
     return { summary, recommendations };
+  }
+
+  // ============================================================================
+  // INT-018: Enhanced Prediction Methods
+  // ============================================================================
+
+  /**
+   * Detect calendar-based triggers (annual dates with consistent changes)
+   * Examples: Government fee updates on Jan 1, fiscal year changes on Apr 1
+   */
+  private detectCalendarTriggers(timestamps: number[]): CalendarTrigger[] {
+    if (timestamps.length < this.config.minCalendarTriggerObservations) {
+      return [];
+    }
+
+    // Group changes by month-day combination
+    const monthDayCounts = new Map<string, { month: number; day: number; years: number[] }>();
+
+    for (const ts of timestamps) {
+      const date = new Date(ts);
+      const month = date.getUTCMonth() + 1; // 1-12
+      const day = date.getUTCDate();
+      const year = date.getUTCFullYear();
+      const key = `${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+
+      if (!monthDayCounts.has(key)) {
+        monthDayCounts.set(key, { month, day, years: [] });
+      }
+      const entry = monthDayCounts.get(key)!;
+      if (!entry.years.includes(year)) {
+        entry.years.push(year);
+      }
+    }
+
+    // Find dates that have changes in multiple years
+    const triggers: CalendarTrigger[] = [];
+
+    for (const entry of Array.from(monthDayCounts.values())) {
+      if (entry.years.length >= this.config.minCalendarTriggerObservations) {
+        const yearsArray = entry.years.slice().sort((a, b) => b - a);
+        const confidence = Math.min(0.95, 0.5 + (entry.years.length * 0.15));
+
+        triggers.push({
+          month: entry.month,
+          dayOfMonth: entry.day,
+          historicalCount: entry.years.length,
+          confidence,
+          lastObservedYear: yearsArray[0],
+        });
+      }
+    }
+
+    // Sort by confidence descending
+    return triggers.sort((a, b) => b.confidence - a.confidence);
+  }
+
+  /**
+   * Detect seasonal patterns (month/day probability distributions)
+   */
+  private detectSeasonalPatterns(timestamps: number[]): SeasonalPattern | undefined {
+    if (timestamps.length < this.config.minObservationsForPattern) {
+      return undefined;
+    }
+
+    // Count changes per month (0-11)
+    const monthlyCounts = new Array(12).fill(0);
+    // Count changes per day of month (0-30 for days 1-31)
+    const dayOfMonthCounts = new Array(31).fill(0);
+
+    for (const ts of timestamps) {
+      const date = new Date(ts);
+      monthlyCounts[date.getUTCMonth()]++;
+      dayOfMonthCounts[date.getUTCDate() - 1]++;
+    }
+
+    const totalChanges = timestamps.length;
+
+    // Calculate probabilities
+    const monthlyProbability = monthlyCounts.map(c => c / totalChanges);
+    const dayOfMonthProbability = dayOfMonthCounts.map(c => c / totalChanges);
+
+    // Calculate average probability for threshold detection
+    const avgMonthlyProb = 1 / 12;
+    const avgDayProb = 1 / 31;
+    const threshold = this.config.seasonalHighChangeThreshold;
+
+    // Find high-change months and days
+    const highChangeMonths: number[] = [];
+    for (let i = 0; i < 12; i++) {
+      if (monthlyProbability[i] >= avgMonthlyProb * threshold) {
+        highChangeMonths.push(i + 1); // Convert to 1-12
+      }
+    }
+
+    const highChangeDays: number[] = [];
+    for (let i = 0; i < 31; i++) {
+      if (dayOfMonthProbability[i] >= avgDayProb * threshold) {
+        highChangeDays.push(i + 1); // Convert to 1-31
+      }
+    }
+
+    return {
+      monthlyProbability,
+      dayOfMonthProbability,
+      totalObservations: totalChanges,
+      highChangeMonths,
+      highChangeDays,
+    };
+  }
+
+  /**
+   * Record prediction accuracy for learning
+   * Call this after checking content to compare predicted vs actual change
+   */
+  recordPredictionAccuracy(
+    domain: string,
+    urlPattern: string,
+    actualChanged: boolean,
+    actualChangeAt?: number
+  ): void {
+    const key = getPatternKey(domain, urlPattern);
+    const pattern = this.patterns.get(key);
+
+    if (!pattern || !pattern.nextPrediction) {
+      return;
+    }
+
+    const prediction = pattern.nextPrediction;
+    const now = actualChangeAt || Date.now();
+
+    // Initialize accuracy history if needed
+    if (!pattern.accuracyHistory) {
+      pattern.accuracyHistory = [];
+    }
+
+    // Calculate if prediction was accurate
+    const windowStart = prediction.predictedAt - prediction.uncertaintyWindowMs;
+    const windowEnd = prediction.predictedAt + prediction.uncertaintyWindowMs;
+    const wasAccurate = actualChanged && now >= windowStart && now <= windowEnd;
+
+    // Calculate error
+    const errorMs = actualChanged ? (now - prediction.predictedAt) : null;
+
+    const record: PredictionAccuracyRecord = {
+      predictedAt: prediction.predictedAt,
+      predictedChangeAt: prediction.predictedAt,
+      actualChangeAt: actualChanged ? now : null,
+      wasAccurate,
+      errorMs,
+      patternType: pattern.detectedPattern,
+      confidenceAtPrediction: prediction.confidence,
+    };
+
+    pattern.accuracyHistory.push(record);
+
+    // Update success counters
+    pattern.predictionAttemptCount++;
+    if (wasAccurate) {
+      pattern.predictionSuccessCount++;
+    }
+
+    // Trim accuracy history if needed
+    if (pattern.accuracyHistory.length > this.config.maxAccuracyRecords) {
+      pattern.accuracyHistory = pattern.accuracyHistory.slice(-this.config.maxAccuracyRecords);
+    }
+
+    log.debug('Recorded prediction accuracy', {
+      domain,
+      urlPattern,
+      wasAccurate,
+      errorMs,
+      successRate: pattern.predictionAttemptCount > 0
+        ? (pattern.predictionSuccessCount / pattern.predictionAttemptCount).toFixed(2)
+        : 'N/A',
+    });
+  }
+
+  /**
+   * Calculate urgency level for refresh prioritization
+   * 0 = Low (static content, check weekly)
+   * 1 = Normal (regular patterns, follow schedule)
+   * 2 = High (approaching predicted change, check soon)
+   * 3 = Critical (calendar trigger imminent, check immediately)
+   */
+  calculateUrgency(domain: string, urlPattern: string, now: number = Date.now()): UrgencyLevel {
+    const key = getPatternKey(domain, urlPattern);
+    const pattern = this.patterns.get(key);
+
+    if (!pattern) {
+      return 1; // Normal urgency for unknown patterns
+    }
+
+    // Static content = low urgency
+    if (pattern.detectedPattern === 'static') {
+      return 0;
+    }
+
+    // Check for imminent calendar triggers
+    if (pattern.calendarTriggers && pattern.calendarTriggers.length > 0) {
+      const leadTimeMs = this.config.calendarTriggerLeadDays * 24 * 60 * 60 * 1000;
+      const currentDate = new Date(now);
+      const currentYear = currentDate.getUTCFullYear();
+
+      for (const trigger of pattern.calendarTriggers) {
+        // Check this year's trigger date
+        const triggerDate = new Date(Date.UTC(currentYear, trigger.month - 1, trigger.dayOfMonth));
+
+        // If trigger date has passed this year, check next year
+        if (triggerDate.getTime() < now) {
+          triggerDate.setUTCFullYear(currentYear + 1);
+        }
+
+        const timeUntilTrigger = triggerDate.getTime() - now;
+
+        // Critical if within lead time
+        if (timeUntilTrigger <= leadTimeMs && trigger.confidence >= 0.7) {
+          log.debug('Calendar trigger approaching', {
+            domain,
+            month: trigger.month,
+            day: trigger.dayOfMonth,
+            daysUntil: Math.ceil(timeUntilTrigger / (24 * 60 * 60 * 1000)),
+          });
+          return 3; // Critical
+        }
+      }
+    }
+
+    // Check for approaching prediction window
+    if (pattern.nextPrediction && pattern.patternConfidence >= this.config.confidenceThresholdForPrediction) {
+      const prediction = pattern.nextPrediction;
+      const windowStart = prediction.predictedAt - prediction.uncertaintyWindowMs;
+      const earlyCheckMs = this.config.earlyCheckWindowHours * 60 * 60 * 1000;
+
+      // Within prediction window = high urgency
+      if (now >= windowStart && now <= prediction.predictedAt + prediction.uncertaintyWindowMs) {
+        return 2;
+      }
+
+      // Approaching prediction window = high urgency
+      if (now >= windowStart - earlyCheckMs && now < windowStart) {
+        return 2;
+      }
+    }
+
+    // Irregular patterns get elevated urgency
+    if (pattern.detectedPattern === 'irregular') {
+      return 1; // Normal but could miss changes
+    }
+
+    // Default: normal urgency
+    return 1;
+  }
+
+  /**
+   * Get urgency for a pattern (convenience method that also updates the pattern)
+   */
+  updateUrgency(domain: string, urlPattern: string, now: number = Date.now()): UrgencyLevel {
+    const urgency = this.calculateUrgency(domain, urlPattern, now);
+    const key = getPatternKey(domain, urlPattern);
+    const pattern = this.patterns.get(key);
+
+    if (pattern) {
+      pattern.urgencyLevel = urgency;
+    }
+
+    return urgency;
+  }
+
+  /**
+   * Get all patterns with their urgency levels, sorted by urgency (highest first)
+   */
+  getPatternsWithUrgency(now: number = Date.now()): Array<ContentChangePattern & { currentUrgency: UrgencyLevel }> {
+    const results: Array<ContentChangePattern & { currentUrgency: UrgencyLevel }> = [];
+
+    for (const pattern of Array.from(this.patterns.values())) {
+      const urgency = this.calculateUrgency(pattern.domain, pattern.urlPattern, now);
+      pattern.urgencyLevel = urgency;
+      results.push({
+        ...pattern,
+        currentUrgency: urgency,
+      });
+    }
+
+    // Sort by urgency descending, then by next prediction time ascending
+    return results.sort((a, b) => {
+      if (b.currentUrgency !== a.currentUrgency) {
+        return b.currentUrgency - a.currentUrgency;
+      }
+      // Same urgency: sort by next predicted change
+      const aNext = a.nextPrediction?.predictedAt || Infinity;
+      const bNext = b.nextPrediction?.predictedAt || Infinity;
+      return aNext - bNext;
+    });
+  }
+
+  /**
+   * Get prediction accuracy statistics for a pattern
+   */
+  getAccuracyStats(domain: string, urlPattern: string): {
+    totalPredictions: number;
+    successfulPredictions: number;
+    successRate: number;
+    avgErrorMs: number | null;
+    recentAccuracy: number | null;
+  } | null {
+    const key = getPatternKey(domain, urlPattern);
+    const pattern = this.patterns.get(key);
+
+    if (!pattern) {
+      return null;
+    }
+
+    const successRate = pattern.predictionAttemptCount > 0
+      ? pattern.predictionSuccessCount / pattern.predictionAttemptCount
+      : 0;
+
+    // Calculate average error from accuracy history
+    let avgErrorMs: number | null = null;
+    if (pattern.accuracyHistory && pattern.accuracyHistory.length > 0) {
+      const errors = pattern.accuracyHistory
+        .filter(r => r.errorMs !== null)
+        .map(r => Math.abs(r.errorMs!));
+
+      if (errors.length > 0) {
+        avgErrorMs = errors.reduce((a, b) => a + b, 0) / errors.length;
+      }
+    }
+
+    // Calculate recent accuracy (last 10 predictions)
+    let recentAccuracy: number | null = null;
+    if (pattern.accuracyHistory && pattern.accuracyHistory.length > 0) {
+      const recent = pattern.accuracyHistory.slice(-10);
+      const recentSuccesses = recent.filter(r => r.wasAccurate).length;
+      recentAccuracy = recentSuccesses / recent.length;
+    }
+
+    return {
+      totalPredictions: pattern.predictionAttemptCount,
+      successfulPredictions: pattern.predictionSuccessCount,
+      successRate,
+      avgErrorMs,
+      recentAccuracy,
+    };
   }
 }

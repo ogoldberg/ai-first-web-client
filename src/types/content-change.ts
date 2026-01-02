@@ -1,8 +1,14 @@
 /**
- * Content Change Prediction Types (GAP-011)
+ * Content Change Prediction Types (GAP-011 + INT-018)
  *
  * Types for learning content update patterns and predicting when content will change.
  * Enables optimal polling intervals to minimize unnecessary fetches.
+ *
+ * INT-018 enhancements:
+ * - Calendar triggers (annual updates on specific dates like Jan 1)
+ * - Seasonal patterns (month/day probability with historical counts)
+ * - Prediction accuracy tracking (record predicted vs actual)
+ * - Urgency levels (0-3 for prioritizing refresh queue)
  *
  * @example
  * ```typescript
@@ -90,6 +96,75 @@ export interface ChangePrediction {
   reason: string;
 }
 
+// ============================================================================
+// INT-018: Enhanced Prediction Types
+// ============================================================================
+
+/**
+ * Urgency level for prioritizing refresh queue (INT-018)
+ * 0 = Low (static content, check weekly)
+ * 1 = Normal (regular patterns, follow schedule)
+ * 2 = High (approaching predicted change, check soon)
+ * 3 = Critical (calendar trigger imminent, check immediately)
+ */
+export type UrgencyLevel = 0 | 1 | 2 | 3;
+
+/**
+ * Calendar-based trigger for predictable annual updates (INT-018)
+ * Examples: Government fee updates on Jan 1, fiscal year changes on Apr 1
+ */
+export interface CalendarTrigger {
+  /** Month (1-12) */
+  month: number;
+  /** Day of month (1-31) */
+  dayOfMonth: number;
+  /** Description of what typically changes */
+  description?: string;
+  /** Historical count of changes on this date */
+  historicalCount: number;
+  /** Confidence based on historical observations (0-1) */
+  confidence: number;
+  /** Last year this trigger was observed */
+  lastObservedYear?: number;
+}
+
+/**
+ * Seasonal pattern for month/day probability (INT-018)
+ * Tracks which months and days of month see more changes
+ */
+export interface SeasonalPattern {
+  /** Monthly change probability (index 0-11 for Jan-Dec) */
+  monthlyProbability: number[];
+  /** Day-of-month change probability (index 0-30 for days 1-31) */
+  dayOfMonthProbability: number[];
+  /** Total observations used to calculate probabilities */
+  totalObservations: number;
+  /** Months with statistically significant higher change rates */
+  highChangeMonths: number[];
+  /** Days with statistically significant higher change rates */
+  highChangeDays: number[];
+}
+
+/**
+ * Record of prediction accuracy for learning (INT-018)
+ */
+export interface PredictionAccuracyRecord {
+  /** When the prediction was made */
+  predictedAt: number;
+  /** When we predicted the change would occur */
+  predictedChangeAt: number;
+  /** When the change actually occurred (null if no change detected) */
+  actualChangeAt: number | null;
+  /** Whether prediction was accurate within the uncertainty window */
+  wasAccurate: boolean;
+  /** Error in milliseconds (actual - predicted), null if no change */
+  errorMs: number | null;
+  /** The pattern type at time of prediction */
+  patternType: ChangePatternType;
+  /** Confidence at time of prediction */
+  confidenceAtPrediction: number;
+}
+
 /**
  * Full content change pattern with learning data
  */
@@ -136,6 +211,16 @@ export interface ContentChangePattern {
   predictionSuccessCount: number;
   /** How many times prediction was made */
   predictionAttemptCount: number;
+
+  // INT-018: Enhanced prediction fields
+  /** Calendar-based triggers (annual dates that typically see changes) */
+  calendarTriggers?: CalendarTrigger[];
+  /** Seasonal patterns (month/day probability distributions) */
+  seasonalPattern?: SeasonalPattern;
+  /** Current urgency level for refresh prioritization (0-3) */
+  urgencyLevel?: UrgencyLevel;
+  /** Recent prediction accuracy records for learning */
+  accuracyHistory?: PredictionAccuracyRecord[];
 }
 
 /**
@@ -162,6 +247,16 @@ export interface ContentChangePredictionConfig {
   staticContentDaysThreshold: number;
   /** Tolerance for time-of-day matching in hours (default: 2) */
   timeOfDayToleranceHours: number;
+
+  // INT-018: Enhanced prediction config
+  /** Maximum accuracy records to keep per pattern (default: 50) */
+  maxAccuracyRecords: number;
+  /** Days before calendar trigger to start urgent polling (default: 7) */
+  calendarTriggerLeadDays: number;
+  /** Minimum observations to detect calendar trigger (default: 2) */
+  minCalendarTriggerObservations: number;
+  /** Threshold for "high change" month/day detection (default: 1.5x average) */
+  seasonalHighChangeThreshold: number;
 }
 
 /**
@@ -178,6 +273,11 @@ export const DEFAULT_CHANGE_PREDICTION_CONFIG: ContentChangePredictionConfig = {
   minPollIntervalMs: 5 * 60 * 1000, // 5 minutes
   staticContentDaysThreshold: 30,
   timeOfDayToleranceHours: 2,
+  // INT-018 defaults
+  maxAccuracyRecords: 50,
+  calendarTriggerLeadDays: 7,
+  minCalendarTriggerObservations: 2,
+  seasonalHighChangeThreshold: 1.5,
 };
 
 /**

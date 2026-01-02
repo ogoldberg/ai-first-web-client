@@ -931,7 +931,7 @@ These features are designed for MoveAhead but extensible to other government/reg
 | INT-015 | Cross-source verification | M | Complete | Compare same topic across multiple sources. Detect contradictions. Confidence scoring based on agreement. Extensible to any fact-checking use case. |
 | INT-016 | Auto portal discovery | L | Complete | AutoPortalDiscovery class with 45+ country database, multiple discovery strategies (known DB, skill pack, heuristics, DNS probing), category-based grouping, caching. 36 tests. PR #218 |
 | INT-017 | Form/PDF field extraction | L | Complete | Extract AcroForm fields from PDFs (text, checkbox, radio, dropdown, optionList). Parse document requirements. Detect form numbers (Modelo, Cerfa, Form I-94). API endpoint POST /v1/pdf/extract-forms. 22 tests. |
-| INT-018 | Enhanced content change prediction | M | Not Started | Port MoveAhead PR #412 features: calendar-based triggers (detect Jan 1 annual updates), seasonal patterns (month/day probability), prediction accuracy tracking, urgency levels (0-3), API endpoint GET /v1/predictions. Extends existing ContentChangePredictor (GAP-011) and DynamicRefreshScheduler (INT-008). |
+| INT-018 | Enhanced content change prediction | M | Complete | Calendar-based triggers (detect Jan 1 annual updates), seasonal patterns (month/day probability), prediction accuracy tracking, urgency levels (0-3 with poll interval optimization), API endpoint GET /v1/predictions with urgency filtering. 51 tests. |
 
 **Potential Users Beyond MoveAhead:**
 - Immigration/visa services and consultants

@@ -4,7 +4,7 @@
  * Tests for learning content update patterns and predicting changes.
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { ContentChangePredictor } from '../../src/core/content-change-predictor.js';
 import type {
   ContentChangePattern,
@@ -623,6 +623,275 @@ describe('ContentChangePredictor (GAP-011)', () => {
       const analysis = engine.analyzeContentChangePattern('new.example.com', '/api/data');
       expect(analysis.hasEnoughData).toBe(false);
       expect(analysis.pattern).toBeDefined();
+    });
+  });
+
+  // ============================================
+  // INT-018: CALENDAR TRIGGERS
+  // ============================================
+
+  describe('Calendar Triggers (INT-018)', () => {
+    it('should detect calendar trigger when changes occur on same date across years', () => {
+      // Simulate changes on January 1 for multiple years
+      // Need at least minCalendarTriggerObservations (default 2) unique years on same date
+      vi.setSystemTime(new Date('2022-01-01T10:00:00Z'));
+      predictor.recordObservation('gov.example.com', '/fees', 'hash2022', true);
+
+      vi.setSystemTime(new Date('2023-01-01T10:00:00Z'));
+      predictor.recordObservation('gov.example.com', '/fees', 'hash2023', true);
+
+      vi.setSystemTime(new Date('2024-01-01T10:00:00Z'));
+      predictor.recordObservation('gov.example.com', '/fees', 'hash2024', true);
+
+      // Add more observations to get to minChangesForPattern (5)
+      vi.setSystemTime(new Date('2024-06-15T10:00:00Z'));
+      predictor.recordObservation('gov.example.com', '/fees', 'hash2024b', true);
+
+      vi.setSystemTime(new Date('2024-12-15T10:00:00Z'));
+      predictor.recordObservation('gov.example.com', '/fees', 'hash2024c', true);
+
+      const pattern = predictor.getPattern('gov.example.com', '/fees')!;
+
+      expect(pattern.calendarTriggers).toBeDefined();
+      expect(pattern.calendarTriggers!.length).toBeGreaterThan(0);
+
+      // Check for January 1 trigger (3 unique years on same date)
+      const janTrigger = pattern.calendarTriggers!.find(
+        t => t.month === 1 && t.dayOfMonth === 1
+      );
+      expect(janTrigger).toBeDefined();
+      expect(janTrigger!.historicalCount).toBe(3);
+    });
+
+    it('should not detect calendar trigger with insufficient data', () => {
+      // Only one year of data on a specific date - not enough for trigger
+      vi.setSystemTime(new Date('2025-01-01T10:00:00Z'));
+      predictor.recordObservation('gov2.example.com', '/fees', 'hash1', true);
+
+      // Add more observations on different dates to trigger analysis
+      vi.setSystemTime(new Date('2025-02-15T10:00:00Z'));
+      predictor.recordObservation('gov2.example.com', '/fees', 'hash2', true);
+      vi.setSystemTime(new Date('2025-03-15T10:00:00Z'));
+      predictor.recordObservation('gov2.example.com', '/fees', 'hash3', true);
+      vi.setSystemTime(new Date('2025-04-15T10:00:00Z'));
+      predictor.recordObservation('gov2.example.com', '/fees', 'hash4', true);
+      vi.setSystemTime(new Date('2025-05-15T10:00:00Z'));
+      predictor.recordObservation('gov2.example.com', '/fees', 'hash5', true);
+
+      const pattern = predictor.getPattern('gov2.example.com', '/fees')!;
+      // Should have no calendar triggers since each date only has 1 year of data
+      expect(pattern.calendarTriggers?.length ?? 0).toBe(0);
+    });
+  });
+
+  // ============================================
+  // INT-018: SEASONAL PATTERNS
+  // ============================================
+
+  describe('Seasonal Patterns (INT-018)', () => {
+    it('should detect high-change months', () => {
+      // Create changes concentrated in January and July using proper time control
+      // 5 changes in January
+      for (let i = 0; i < 5; i++) {
+        vi.setSystemTime(new Date(`2024-01-${10 + i}T10:00:00Z`));
+        predictor.recordObservation('seasonal.example.com', '/data', `jan${i}`, true);
+      }
+      // 5 changes in July
+      for (let i = 0; i < 5; i++) {
+        vi.setSystemTime(new Date(`2024-07-${10 + i}T10:00:00Z`));
+        predictor.recordObservation('seasonal.example.com', '/data', `jul${i}`, true);
+      }
+
+      const pattern = predictor.getPattern('seasonal.example.com', '/data')!;
+      expect(pattern.seasonalPattern).toBeDefined();
+      expect(pattern.seasonalPattern!.highChangeMonths).toContain(1); // January
+      expect(pattern.seasonalPattern!.highChangeMonths).toContain(7); // July
+    });
+
+    it('should calculate monthly probability distribution', () => {
+      // Create one change per month for 12 months - uniform distribution
+      for (let i = 0; i < 12; i++) {
+        const month = String(i + 1).padStart(2, '0');
+        vi.setSystemTime(new Date(`2024-${month}-15T10:00:00Z`));
+        predictor.recordObservation('uniform.example.com', '/data', `hash${i}`, true);
+      }
+
+      const pattern = predictor.getPattern('uniform.example.com', '/data')!;
+      expect(pattern.seasonalPattern).toBeDefined();
+      expect(pattern.seasonalPattern!.monthlyProbability.length).toBe(12);
+
+      // Each month should have roughly equal probability (1/12 = 0.0833...)
+      const avgProb = 1 / 12;
+      for (const prob of pattern.seasonalPattern!.monthlyProbability) {
+        expect(prob).toBeCloseTo(avgProb, 1);
+      }
+
+      // With uniform distribution, no months should be flagged as high-change
+      // (none exceed 1.5x the average)
+      expect(pattern.seasonalPattern!.highChangeMonths.length).toBe(0);
+    });
+  });
+
+  // ============================================
+  // INT-018: PREDICTION ACCURACY TRACKING
+  // ============================================
+
+  describe('Prediction Accuracy Tracking (INT-018)', () => {
+    it('should record prediction accuracy when content changes', () => {
+      // Create a pattern with a prediction
+      for (let i = 0; i < 5; i++) {
+        vi.advanceTimersByTime(60 * 60 * 1000); // 1 hour
+        predictor.recordObservation('accuracy.example.com', '/api', `hash${i}`, true);
+      }
+
+      const pattern = predictor.getPattern('accuracy.example.com', '/api')!;
+      expect(pattern.nextPrediction).toBeDefined();
+
+      // Record accuracy after observing actual change
+      predictor.recordPredictionAccuracy('accuracy.example.com', '/api', true);
+
+      const updatedPattern = predictor.getPattern('accuracy.example.com', '/api')!;
+      expect(updatedPattern.predictionAttemptCount).toBe(1);
+      expect(updatedPattern.accuracyHistory).toBeDefined();
+      expect(updatedPattern.accuracyHistory!.length).toBe(1);
+    });
+
+    it('should calculate accuracy statistics', () => {
+      // Create pattern with predictions
+      for (let i = 0; i < 5; i++) {
+        vi.advanceTimersByTime(60 * 60 * 1000);
+        predictor.recordObservation('stats.example.com', '/api', `hash${i}`, true);
+      }
+
+      // Record several accuracy observations
+      for (let i = 0; i < 3; i++) {
+        predictor.recordPredictionAccuracy('stats.example.com', '/api', true);
+      }
+
+      const stats = predictor.getAccuracyStats('stats.example.com', '/api');
+      expect(stats).toBeDefined();
+      expect(stats!.totalPredictions).toBe(3);
+    });
+
+    it('should return null for unknown pattern accuracy stats', () => {
+      const stats = predictor.getAccuracyStats('unknown.example.com', '/api');
+      expect(stats).toBeNull();
+    });
+  });
+
+  // ============================================
+  // INT-018: URGENCY LEVELS
+  // ============================================
+
+  describe('Urgency Levels (INT-018)', () => {
+    it('should return low urgency for static content', () => {
+      // Create changes that happened over 30 days ago (staticContentDaysThreshold)
+      // Static detection checks if last change was > 30 days ago at analysis time
+
+      // First change was 45 days before "today" (June 15)
+      vi.setSystemTime(new Date('2025-05-01T10:00:00Z'));
+      predictor.recordObservation('static.example.com', '/page', 'hash1', true);
+
+      // A few more changes shortly after (within a few days)
+      vi.setSystemTime(new Date('2025-05-02T10:00:00Z'));
+      predictor.recordObservation('static.example.com', '/page', 'hash2', true);
+
+      vi.setSystemTime(new Date('2025-05-03T10:00:00Z'));
+      predictor.recordObservation('static.example.com', '/page', 'hash3', true);
+
+      vi.setSystemTime(new Date('2025-05-04T10:00:00Z'));
+      predictor.recordObservation('static.example.com', '/page', 'hash4', true);
+
+      vi.setSystemTime(new Date('2025-05-05T10:00:00Z'));
+      predictor.recordObservation('static.example.com', '/page', 'hash5', true);
+
+      // Now advance to "today" - 41 days later, well past the static threshold
+      vi.setSystemTime(new Date('2025-06-15T12:00:00Z'));
+
+      // Trigger re-analysis at the new time (analyzePattern re-runs detectPatternType)
+      const analysis = predictor.analyzePattern('static.example.com', '/page');
+
+      // Pattern should be detected as static since last change was > 30 days ago
+      expect(analysis.pattern.detectedPattern).toBe('static');
+
+      const urgency = predictor.calculateUrgency('static.example.com', '/page');
+      expect(urgency).toBe(0); // Low
+    });
+
+    it('should return normal urgency for unknown patterns', () => {
+      const urgency = predictor.calculateUrgency('unknown.example.com', '/page');
+      expect(urgency).toBe(1); // Normal
+    });
+
+    it('should return high urgency near prediction window', () => {
+      // Create hourly pattern
+      for (let i = 0; i < 5; i++) {
+        vi.advanceTimersByTime(60 * 60 * 1000);
+        predictor.recordObservation('hourly.example.com', '/feed', `hash${i}`, true);
+      }
+
+      const pattern = predictor.getPattern('hourly.example.com', '/feed')!;
+      expect(pattern.nextPrediction).toBeDefined();
+
+      // Advance time to just before prediction window
+      const prediction = pattern.nextPrediction!;
+      const windowStart = prediction.predictedAt - prediction.uncertaintyWindowMs;
+      vi.setSystemTime(new Date(windowStart - 30 * 60 * 1000)); // 30 min before window
+
+      const urgency = predictor.calculateUrgency('hourly.example.com', '/feed');
+      expect(urgency).toBe(2); // High
+    });
+
+    it('should return critical urgency for imminent calendar trigger', () => {
+      // Create enough observations for pattern detection
+      for (let i = 0; i < 5; i++) {
+        vi.advanceTimersByTime(24 * 60 * 60 * 1000); // 1 day apart
+        predictor.recordObservation('calendar.example.com', '/fees', `hash${i}`, true);
+      }
+
+      const pattern = predictor.getPattern('calendar.example.com', '/fees')!;
+
+      // Set current time for the trigger calculation
+      vi.setSystemTime(new Date('2025-06-15T12:00:00Z'));
+
+      // Manually set a calendar trigger that's approaching (June 18 = 3 days from now)
+      // Must set AFTER all recordObservation calls since those overwrite calendarTriggers
+      pattern.calendarTriggers = [
+        {
+          month: 6,  // June
+          dayOfMonth: 18, // 3 days from June 15
+          historicalCount: 3,
+          confidence: 0.8,
+        },
+      ];
+      // Ensure pattern is not static (would return 0 instead)
+      pattern.detectedPattern = 'monthly';
+
+      const urgency = predictor.calculateUrgency('calendar.example.com', '/fees');
+      expect(urgency).toBe(3); // Critical
+    });
+
+    it('should update urgency on pattern', () => {
+      predictor.recordObservation('update.example.com', '/api', 'hash1', true);
+
+      const urgency = predictor.updateUrgency('update.example.com', '/api');
+      const pattern = predictor.getPattern('update.example.com', '/api')!;
+
+      expect(pattern.urgencyLevel).toBe(urgency);
+    });
+
+    it('should get patterns sorted by urgency', () => {
+      // Create multiple patterns with different urgencies
+      predictor.recordObservation('static.example.com', '/page', 'hash1', true);
+      predictor.recordObservation('hourly.example.com', '/feed', 'hash1', true);
+
+      const patterns = predictor.getPatternsWithUrgency();
+      expect(patterns.length).toBe(2);
+
+      // Should be sorted by urgency descending
+      for (let i = 0; i < patterns.length - 1; i++) {
+        expect(patterns[i].currentUrgency).toBeGreaterThanOrEqual(patterns[i + 1].currentUrgency);
+      }
     });
   });
 });
