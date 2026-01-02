@@ -16,7 +16,7 @@ import {
   classifyProblem,
   createProblemResponse,
   suggestRetryConfig,
-} from '../packages/core/dist/index.js';
+} from '../dist/core/research-suggestion.js';
 
 const COLORS = {
   green: '\x1b[32m',

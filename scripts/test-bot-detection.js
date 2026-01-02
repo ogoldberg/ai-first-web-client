@@ -11,7 +11,7 @@
 import {
   getStealthFetchHeaders,
   generateFingerprint,
-} from '../packages/core/dist/index.js';
+} from '../dist/core/stealth-browser.js';
 
 const COLORS = {
   green: '\x1b[32m',

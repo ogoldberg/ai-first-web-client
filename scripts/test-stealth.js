@@ -17,7 +17,7 @@ import {
   isStealthAvailable,
   getStealthError,
   getStealthConfig,
-} from '../packages/core/dist/index.js';
+} from '../dist/core/stealth-browser.js';
 
 console.log('=== Stealth Browser Feature Tests ===\n');
 

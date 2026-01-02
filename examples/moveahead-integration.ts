@@ -26,7 +26,8 @@
  *   UNBROWSER_API_KEY=ub_live_xxx npx tsx examples/moveahead-integration.ts
  */
 
-import { createUnbrowser, UnbrowserClient, BrowseOptions, BrowseResult } from '../packages/core/src/http-client.js';
+import { createUnbrowser, UnbrowserClient } from 'unbrowser-core';
+import type { BrowseOptions, BrowseResult } from 'unbrowser-core';
 
 // ============================================
 // CONFIGURATION
