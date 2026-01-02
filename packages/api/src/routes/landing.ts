@@ -1286,7 +1286,8 @@ landing.get('/', (c) => {
       "Collective learning",
       "Built-in content verification",
       "Session persistence",
-      "Stealth mode"
+      "Stealth mode",
+      "Content change predictions"
     ]
   }
   </script>
@@ -1481,6 +1482,20 @@ landing.get('/', (c) => {
             proxy rotation. Pass bot detection on sites that block traditional scrapers.
           </p>
         </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11v4m0 0l-2-2m2 2l2-2"/>
+            </svg>
+          </div>
+          <h3>Content Change Predictions</h3>
+          <p>
+            Predict when content will change based on calendar triggers and seasonal patterns.
+            Get urgency-ranked alerts for government portals, annual updates, and time-sensitive content.
+          </p>
+        </div>
       </div>
     </div>
   </section>
@@ -1566,6 +1581,18 @@ landing.get('/', (c) => {
             <p>Record, replay, and schedule complex workflows. Handle multi-step processes with session persistence. Ideal for repetitive tasks.</p>
           </div>
         </div>
+
+        <div class="use-case">
+          <div class="use-case-icon">
+            <svg width="24" height="24" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+            </svg>
+          </div>
+          <div>
+            <h3>Government Portal Monitoring</h3>
+            <p>Predict when government sites update with calendar-aware triggers. Get urgency alerts for annual deadlines, seasonal changes, and critical updates.</p>
+          </div>
+        </div>
       </div>
     </div>
   </section>
@@ -1623,6 +1650,11 @@ landing.get('/', (c) => {
               <td>Learning over time</td>
               <td>None</td>
               <td>Collective intelligence</td>
+            </tr>
+            <tr>
+              <td>Content change prediction</td>
+              <td>Manual polling</td>
+              <td>Calendar-aware urgency alerts</td>
             </tr>
           </tbody>
         </table>

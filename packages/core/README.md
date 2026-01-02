@@ -207,6 +207,64 @@ const results = await client.replayWorkflow(workflow.workflowId, {
 });
 ```
 
+## Content Change Predictions
+
+Predict when content will change to optimize polling and catch updates:
+
+```typescript
+// Get all predictions sorted by urgency
+const predictions = await client.getPredictions();
+console.log(`Tracking ${predictions.data.summary?.totalPatterns} patterns`);
+console.log(`${predictions.data.summary?.byUrgency.critical} critical urgency`);
+
+// Filter by minimum urgency (2=high, 3=critical)
+const urgent = await client.getPredictions({ minUrgency: 2 });
+for (const pattern of urgent.data.patterns) {
+  console.log(`${pattern.domain}: ${pattern.nextPrediction?.reason}`);
+}
+
+// Get predictions for a specific domain
+const govPatterns = await client.getPredictionsByDomain('extranjeros.inclusion.gob.es');
+for (const pattern of govPatterns.data.patterns) {
+  console.log(`${pattern.urlPattern}: urgency ${pattern.urgencyLevel}`);
+
+  // Check for calendar triggers (e.g., Jan 1 annual updates)
+  if (pattern.calendarTriggers?.length) {
+    console.log(`Calendar triggers: ${pattern.calendarTriggers.map(t => `${t.month}/${t.dayOfMonth}`).join(', ')}`);
+  }
+}
+
+// Get critical patterns (calendar trigger within 7 days)
+const critical = await client.getUrgentPredictions(3);
+for (const pattern of critical.data.patterns) {
+  console.log(`URGENT: ${pattern.domain} - ${pattern.nextPrediction?.reason}`);
+}
+
+// Record observations to train the model
+const newHash = hashContent(pageContent);
+const changed = newHash !== previousHash;
+const result = await client.recordObservation(
+  'extranjeros.inclusion.gob.es',
+  '/es/informacion/nie',
+  newHash,
+  changed
+);
+console.log(`Next check in: ${result.data.pattern.recommendedPollIntervalMs / 3600000}h`);
+
+// Check prediction accuracy
+const stats = await client.getPredictionAccuracy('gov.es');
+console.log(`Success rate: ${(stats.data.accuracy.successRate * 100).toFixed(1)}%`);
+```
+
+### Urgency Levels
+
+| Level | Name | Description |
+|-------|------|-------------|
+| 0 | Low | Static content, rarely changes |
+| 1 | Normal | Regular patterns detected |
+| 2 | High | Change predicted within recommended poll interval |
+| 3 | Critical | Calendar trigger within 7 days |
+
 ## Session Management
 
 Browse with authentication:

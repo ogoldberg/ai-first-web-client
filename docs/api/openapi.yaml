@@ -61,6 +61,8 @@ tags:
     description: Web browsing and content extraction
   - name: Discovery
     description: API endpoint discovery via fuzzing and analysis
+  - name: Predictions
+    description: Content change predictions with calendar triggers and urgency levels
   - name: Intelligence
     description: Domain intelligence and learned patterns
   - name: Usage
@@ -387,6 +389,192 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
+
+  /v1/predictions:
+    get:
+      tags:
+        - Predictions
+      summary: List all content change predictions
+      description: |
+        Get all content change patterns with urgency levels, sorted by urgency.
+
+        Features:
+        - Calendar triggers (detect annual patterns like Jan 1 updates)
+        - Seasonal patterns (month/day probability distributions)
+        - Prediction accuracy tracking
+        - Urgency levels (0-3) with optimized polling intervals
+      operationId: getPredictions
+      parameters:
+        - name: minUrgency
+          in: query
+          description: Filter by minimum urgency level (0=low, 1=normal, 2=high, 3=critical)
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 3
+        - name: domain
+          in: query
+          description: Filter by domain (partial match)
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of content change patterns
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PredictionsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /v1/predictions/{domain}:
+    get:
+      tags:
+        - Predictions
+      summary: Get predictions for a domain
+      description: Get all content change patterns for a specific domain.
+      operationId: getPredictionsByDomain
+      parameters:
+        - name: domain
+          in: path
+          required: true
+          description: Domain name
+          schema:
+            type: string
+            example: extranjeros.inclusion.gob.es
+      responses:
+        '200':
+          description: Domain predictions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DomainPredictionsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: No patterns found for domain
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1/predictions/{domain}/accuracy:
+    get:
+      tags:
+        - Predictions
+      summary: Get prediction accuracy statistics
+      description: Get accuracy metrics for predictions on a domain.
+      operationId: getPredictionAccuracy
+      parameters:
+        - name: domain
+          in: path
+          required: true
+          description: Domain name
+          schema:
+            type: string
+        - name: urlPattern
+          in: query
+          description: Optional URL pattern filter
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Prediction accuracy statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PredictionAccuracyResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: No accuracy data for domain
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /v1/predictions/{domain}/observe:
+    post:
+      tags:
+        - Predictions
+      summary: Record content observation
+      description: |
+        Record a content observation to train the prediction model.
+        Call this after checking content to improve future predictions.
+      operationId: recordObservation
+      parameters:
+        - name: domain
+          in: path
+          required: true
+          description: Domain name
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - urlPattern
+                - changed
+              properties:
+                urlPattern:
+                  type: string
+                  description: URL pattern being observed
+                  example: /es/informacion/nie
+                contentHash:
+                  type: string
+                  description: Hash of current content (for change detection)
+                changed:
+                  type: boolean
+                  description: Whether content changed since last observation
+      responses:
+        '200':
+          description: Observation recorded, pattern updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ObservationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /v1/predictions/urgency/{level}:
+    get:
+      tags:
+        - Predictions
+      summary: Get patterns by urgency level
+      description: |
+        Get all patterns at or above a specific urgency level.
+
+        Urgency levels:
+        - 0: Low (static content, rarely changes)
+        - 1: Normal (regular patterns detected)
+        - 2: High (change predicted soon)
+        - 3: Critical (calendar trigger within 7 days)
+      operationId: getUrgentPredictions
+      parameters:
+        - name: level
+          in: path
+          required: true
+          description: Minimum urgency level (0-3)
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 3
+      responses:
+        '200':
+          description: Patterns at or above urgency level
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PredictionsResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
 
   /v1/usage:
     get:
@@ -1289,6 +1477,254 @@ components:
                 remaining:
                   type: integer
                   example: 4568
+
+    # Content Change Prediction Schemas (INT-018)
+    CalendarTrigger:
+      type: object
+      properties:
+        month:
+          type: integer
+          minimum: 1
+          maximum: 12
+          description: Month (1-12)
+        dayOfMonth:
+          type: integer
+          minimum: 1
+          maximum: 31
+          description: Day of month
+        description:
+          type: string
+          description: Human-readable description
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Confidence in this trigger
+        historicalCount:
+          type: integer
+          description: Number of historical occurrences
+
+    SeasonalPattern:
+      type: object
+      properties:
+        highChangeMonths:
+          type: array
+          items:
+            type: integer
+          description: Months with higher-than-average change frequency
+        highChangeDays:
+          type: array
+          items:
+            type: integer
+          description: Days of month with higher change frequency
+        totalObservations:
+          type: integer
+          description: Total observations for analysis
+
+    PredictionForecast:
+      type: object
+      properties:
+        predictedAt:
+          type: integer
+          description: Predicted timestamp (ms since epoch)
+        predictedAtISO:
+          type: string
+          format: date-time
+          description: ISO string of predicted time
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Confidence in prediction
+        uncertaintyWindowMs:
+          type: integer
+          description: Uncertainty window in ms
+        reason:
+          type: string
+          description: Human-readable reason for prediction
+
+    ContentChangePattern:
+      type: object
+      required:
+        - id
+        - domain
+        - urlPattern
+        - detectedPattern
+        - urgencyLevel
+        - recommendedPollIntervalMs
+      properties:
+        id:
+          type: string
+          description: Pattern ID
+        domain:
+          type: string
+          description: Domain of the content
+          example: extranjeros.inclusion.gob.es
+        urlPattern:
+          type: string
+          description: URL pattern
+          example: /es/informacion/nie
+        detectedPattern:
+          type: string
+          enum: [hourly, daily, weekly, monthly, static, irregular]
+          description: Detected pattern type
+        patternConfidence:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Confidence in pattern detection
+        urgencyLevel:
+          type: integer
+          minimum: 0
+          maximum: 3
+          description: Urgency level (0=low, 1=normal, 2=high, 3=critical)
+        nextPrediction:
+          $ref: '#/components/schemas/PredictionForecast'
+        calendarTriggers:
+          type: array
+          items:
+            $ref: '#/components/schemas/CalendarTrigger'
+        seasonalPattern:
+          $ref: '#/components/schemas/SeasonalPattern'
+        recommendedPollIntervalMs:
+          type: integer
+          description: Recommended polling interval in ms
+        changeCount:
+          type: integer
+          description: Number of changes observed
+        lastAnalyzedAt:
+          type: integer
+          description: When pattern was last analyzed (ms since epoch)
+
+    PredictionsResponse:
+      type: object
+      required:
+        - success
+        - data
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          required:
+            - patterns
+          properties:
+            patterns:
+              type: array
+              items:
+                $ref: '#/components/schemas/ContentChangePattern'
+            summary:
+              type: object
+              properties:
+                totalPatterns:
+                  type: integer
+                byUrgency:
+                  type: object
+                  properties:
+                    critical:
+                      type: integer
+                    high:
+                      type: integer
+                    normal:
+                      type: integer
+                    low:
+                      type: integer
+                withCalendarTriggers:
+                  type: integer
+            metadata:
+              type: object
+              properties:
+                timestamp:
+                  type: integer
+                requestDuration:
+                  type: integer
+
+    DomainPredictionsResponse:
+      type: object
+      required:
+        - success
+        - data
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          required:
+            - domain
+            - patterns
+          properties:
+            domain:
+              type: string
+            patterns:
+              type: array
+              items:
+                $ref: '#/components/schemas/ContentChangePattern'
+            metadata:
+              type: object
+              properties:
+                timestamp:
+                  type: integer
+                requestDuration:
+                  type: integer
+
+    PredictionAccuracyResponse:
+      type: object
+      required:
+        - success
+        - data
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            domain:
+              type: string
+            urlPattern:
+              type: string
+            accuracy:
+              type: object
+              properties:
+                totalPredictions:
+                  type: integer
+                successfulPredictions:
+                  type: integer
+                successRate:
+                  type: number
+                recentAccuracy:
+                  type: number
+                averageErrorMs:
+                  type: number
+                averageErrorHours:
+                  type: number
+            metadata:
+              type: object
+              properties:
+                timestamp:
+                  type: integer
+                requestDuration:
+                  type: integer
+
+    ObservationResponse:
+      type: object
+      required:
+        - success
+        - data
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            pattern:
+              $ref: '#/components/schemas/ContentChangePattern'
+            metadata:
+              type: object
+              properties:
+                timestamp:
+                  type: integer
+                requestDuration:
+                  type: integer
 
     HealthResponse:
       type: object
