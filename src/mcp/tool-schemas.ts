@@ -644,6 +644,66 @@ Security:
 };
 
 // ==========================================================================
+// DYNAMIC HANDLER STATS (yt-dlp inspired pattern learning)
+// ==========================================================================
+
+/**
+ * Dynamic handler stats tool schema for viewing learned patterns and quirks
+ */
+export const dynamicHandlerStatsSchema: Tool = {
+  name: 'dynamic_handler_stats',
+  description: `View and manage learned site patterns and quirks (yt-dlp inspired).
+
+The dynamic handler system automatically learns:
+- Site templates (Shopify, WooCommerce, Next.js, etc.)
+- Site quirks (required headers, stealth mode, rate limits)
+- Anti-bot protection patterns (Cloudflare, etc.)
+- Successful extraction strategies per domain
+
+Actions:
+- stats: Get overall statistics (handlers, quirks, observations)
+- domains: List domains with learned patterns
+- quirks: Get quirks for a specific domain
+- templates: List available pattern templates
+- recommendation: Get extraction recommendation for a URL
+- export: Export all learned data as JSON`,
+  inputSchema: {
+    type: 'object',
+    properties: {
+      action: {
+        type: 'string',
+        enum: ['stats', 'domains', 'quirks', 'templates', 'recommendation', 'export'],
+        description: 'The action to perform',
+      },
+      // For quirks action
+      domain: {
+        type: 'string',
+        description: 'Domain to get quirks for (quirks action)',
+      },
+      // For recommendation action
+      url: {
+        type: 'string',
+        description: 'URL to get recommendation for (recommendation action)',
+      },
+      html: {
+        type: 'string',
+        description: 'Optional HTML to analyze for template detection',
+      },
+      // For domains action
+      limit: {
+        type: 'number',
+        description: 'Maximum domains to return (default: 50)',
+      },
+      hasQuirks: {
+        type: 'boolean',
+        description: 'Filter to domains with quirks only',
+      },
+    },
+    required: ['action'],
+  },
+};
+
+// ==========================================================================
 // TOOL LIST BUILDER
 // ==========================================================================
 
@@ -661,6 +721,8 @@ export function getAllToolSchemas(): Tool[] {
     // Feedback & integration tools
     aiFeedbackSchema,
     webhookManagementSchema,
+    // Learning & analytics tools
+    dynamicHandlerStatsSchema,
     // Debug tools (require DEBUG_MODE=1)
     captureScreenshotSchema,
     exportHarSchema,

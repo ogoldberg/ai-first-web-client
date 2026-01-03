@@ -12,6 +12,7 @@ import { logger } from '../../utils/logger.js';
 import { DynamicHandlerRegistry, dynamicHandlerRegistry } from './registry.js';
 import { detectTemplate, getTemplateConfig, PATTERN_TEMPLATES } from './pattern-templates.js';
 import { createPersistentRegistry, AutoSaveRegistry } from './persistence.js';
+import { rateLimiter } from '../../utils/rate-limiter.js';
 import type {
   ExtractionObservation,
   HandlerTemplate,
@@ -184,6 +185,15 @@ export class DynamicHandlerIntegration {
     // Mark dirty for auto-save
     this.autoSave?.markDirty();
 
+    // If this was a rate limit error, sync the learned rate limit to the rate limiter
+    if (context.statusCode === 429) {
+      const domain = this.extractDomain(url);
+      const quirks = this.registry.getQuirks(domain);
+      if (quirks?.rateLimit) {
+        this.syncRateLimitToDomain(domain, quirks.rateLimit);
+      }
+    }
+
     log.debug('Recorded extraction failure', {
       url,
       error: error.substring(0, 100),
@@ -211,6 +221,9 @@ export class DynamicHandlerIntegration {
   updateQuirks(domain: string, quirks: Partial<SiteQuirks>): void {
     this.registry.updateQuirks(domain, quirks);
     this.autoSave?.markDirty();
+
+    // Sync rate limit to the rate limiter
+    this.syncRateLimitToDomain(domain, quirks.rateLimit);
   }
 
   /**
@@ -246,6 +259,55 @@ export class DynamicHandlerIntegration {
     return this.registry;
   }
 
+  /**
+   * Sync all learned rate limits to the rate limiter
+   * Call this after loading persisted data to apply learned limits
+   */
+  syncAllRateLimits(): void {
+    const stats = this.registry.getStats();
+    let synced = 0;
+
+    for (const { domain } of stats.topDomains) {
+      const quirks = this.registry.getQuirks(domain);
+      if (quirks?.rateLimit) {
+        this.syncRateLimitToDomain(domain, quirks.rateLimit);
+        synced++;
+      }
+    }
+
+    if (synced > 0) {
+      log.debug('Synced rate limits from quirks', { domainsWithLimits: synced });
+    }
+  }
+
+  /**
+   * Sync a single domain's rate limit to the rate limiter
+   */
+  private syncRateLimitToDomain(
+    domain: string,
+    rateLimit?: { requestsPerSecond?: number; minDelayMs?: number }
+  ): void {
+    if (!rateLimit) return;
+
+    // Convert requestsPerSecond to requestsPerMinute
+    const requestsPerMinute = rateLimit.requestsPerSecond
+      ? Math.floor(rateLimit.requestsPerSecond * 60)
+      : 30; // default
+
+    const minDelayMs = rateLimit.minDelayMs || Math.floor(1000 / (rateLimit.requestsPerSecond || 1));
+
+    rateLimiter.setDomainConfig(domain, {
+      requestsPerMinute,
+      minDelayMs,
+    });
+
+    log.debug('Applied learned rate limit', {
+      domain,
+      requestsPerMinute,
+      minDelayMs,
+    });
+  }
+
   private extractDomain(url: string): string {
     try {
       return new URL(url).hostname;
@@ -272,6 +334,9 @@ export function initializeDynamicHandlers(options?: {
     path: options?.persistencePath,
     saveDelayMs: options?.saveDelayMs,
   });
+
+  // Sync any learned rate limits to the rate limiter
+  dynamicHandlerIntegration.syncAllRateLimits();
 
   log.info('Dynamic handler system initialized', {
     stats: dynamicHandlerIntegration.getStats(),

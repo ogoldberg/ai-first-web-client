@@ -30,6 +30,7 @@ export {
   executeApiCallSchema,
   sessionManagementSchema,
   apiAuthSchema,
+  dynamicHandlerStatsSchema,
 } from './tool-schemas.js';
 
 // Tool handlers
@@ -56,4 +57,8 @@ export {
   handleWebhookManagement,
   type WebhookAction,
   type WebhookManagementArgs,
+  // Dynamic handlers (yt-dlp inspired)
+  handleDynamicHandlerStats,
+  type DynamicHandlerStatsAction,
+  type DynamicHandlerStatsArgs,
 } from './handlers/index.js';

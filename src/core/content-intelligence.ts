@@ -93,6 +93,11 @@ import {
   detectPageLanguage,
   extractContentFromMappingLanguageAware,
 } from './content-extraction-utils.js';
+import {
+  DynamicHandlerIntegration,
+  dynamicHandlerIntegration,
+  applyQuirksToFetchOptions,
+} from './dynamic-handlers/index.js';
 
 // Create a require function for ESM compatibility
 const require = createRequire(import.meta.url);
@@ -280,6 +285,7 @@ export class ContentIntelligence {
   private extractionListeners: Set<ApiExtractionListener> = new Set();
   private patternRegistry: ApiPatternRegistry;
   private patternRegistryInitialized = false;
+  private dynamicHandlers: DynamicHandlerIntegration;
 
   constructor(options: Partial<ContentIntelligenceOptions> = {}) {
     this.options = { ...DEFAULT_OPTIONS, ...options };
@@ -289,6 +295,7 @@ export class ContentIntelligence {
       codeBlockStyle: 'fenced',
     });
     this.patternRegistry = new ApiPatternRegistry();
+    this.dynamicHandlers = dynamicHandlerIntegration;
 
     // Add options callback if provided
     if (options.onExtractionSuccess) {
@@ -316,6 +323,13 @@ export class ContentIntelligence {
    */
   getPatternRegistry(): ApiPatternRegistry {
     return this.patternRegistry;
+  }
+
+  /**
+   * Get the dynamic handler integration (for testing/external access)
+   */
+  getDynamicHandlers(): DynamicHandlerIntegration {
+    return this.dynamicHandlers;
   }
 
   /**
@@ -453,6 +467,11 @@ export class ContentIntelligence {
           // Emit extraction success event for API strategies (for pattern learning)
           this.handleApiExtractionSuccess(result, strategy.name, strategyStartTime, url, opts);
 
+          // Record success in dynamic handler system (for site pattern learning)
+          this.dynamicHandlers.recordSuccess(url, strategy.name, result, {
+            duration: Date.now() - strategyStartTime,
+          });
+
           return result;
         }
 
@@ -462,11 +481,29 @@ export class ContentIntelligence {
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         warnings.push(`${strategy.name}: ${msg}`);
+
+        // Record failures with HTTP status codes for quirk learning
+        const statusMatch = msg.match(/HTTP (\d{3})/);
+        if (statusMatch) {
+          const statusCode = parseInt(statusMatch[1], 10);
+          // Only record blocking/rate-limit failures (403, 429, 503)
+          if ([403, 429, 503].includes(statusCode)) {
+            this.dynamicHandlers.recordFailure(url, msg, {
+              statusCode,
+              strategy: strategy.name,
+            });
+          }
+        }
         // Continue to next strategy
       }
     }
 
-    // All strategies failed
+    // All strategies failed - record failure for quirk learning
+    const lastWarning = warnings[warnings.length - 1] || 'All strategies failed';
+    this.dynamicHandlers.recordFailure(url, lastWarning, {
+      strategy: strategiesAttempted[strategiesAttempted.length - 1],
+    });
+
     return {
       content: {
         title: '',
@@ -2296,24 +2333,31 @@ export class ContentIntelligence {
   ): Promise<Response> {
     const cookieString = await this.cookieJar.getCookieString(url);
 
+    // Get learned quirks for this domain
+    const domain = new URL(url).hostname;
+    const quirks = this.dynamicHandlers.getQuirks(domain);
+
+    // Apply quirks to options (adds required headers, enables stealth if needed)
+    const enhancedOpts = applyQuirksToFetchOptions(quirks, opts);
+
     const headers: Record<string, string> = {
-      'User-Agent': opts.userAgent || DEFAULT_OPTIONS.userAgent!,
+      'User-Agent': enhancedOpts.userAgent || DEFAULT_OPTIONS.userAgent!,
       'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
       'Accept-Language': 'en-US,en;q=0.5',
-      ...opts.headers,
+      ...enhancedOpts.headers,
     };
 
     if (cookieString) {
       headers['Cookie'] = cookieString;
     }
 
-    // Determine if stealth mode should be used
-    const useStealth = opts.stealth?.enabled !== false &&
-                       (opts.stealth?.enabled === true || likelyNeedsStealth(url));
+    // Determine if stealth mode should be used (from explicit option, learned quirks, or heuristics)
+    const useStealth = enhancedOpts.stealth?.enabled !== false &&
+                       (enhancedOpts.stealth?.enabled === true || likelyNeedsStealth(url));
 
     if (useStealth) {
-      logger.intelligence.debug('Using stealth fetch for high-protection site', { url });
-      return this.stealthFetchAsResponse(url, opts, headers);
+      logger.intelligence.debug('Using stealth fetch for high-protection site', { url, learnedQuirk: !!quirks?.stealth });
+      return this.stealthFetchAsResponse(url, enhancedOpts, headers);
     }
 
     // Standard fetch
