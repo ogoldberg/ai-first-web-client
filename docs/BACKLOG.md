@@ -419,7 +419,7 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 | CONN-011 | Add E2E browser tests | M | Not Started | Use Playwright to automate test page |
 | CONN-012 | Add pattern learning tests | M | Not Started | Verify patterns sync correctly from cloud |
 | CONN-013 | Add cross-origin testing | M | Not Started | Test sites with X-Frame-Options blocking |
-| CONN-014 | Add error handling tests | S | Not Started | Network failures, timeouts, blocked popups |
+| CONN-014 | Add error handling tests | S | Complete | 39 tests: config validation, URL validation, error codes, etc. 2026-01-03 |
 | CONN-015 | Add government portal patterns | L | Not Started | UK, Germany, US visa/immigration sites |
 | CONN-016 | Add Reddit patterns | M | Not Started | old.reddit.com post/comment extraction |
 | CONN-017 | Create React component wrapper | M | Not Started | useUnbrowserConnect() hook for easier integration |
