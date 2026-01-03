@@ -160,6 +160,7 @@ health.get('/', async (c) => {
   const response = {
     status,
     version: process.env.npm_package_version || '0.1.0',
+    build: '2026-01-02-reddit-html-fix',
     uptime: Math.floor(process.uptime()),
     checks,
     memory: memoryMb,
