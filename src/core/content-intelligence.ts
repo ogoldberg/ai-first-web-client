@@ -177,6 +177,8 @@ export type ExtractionStrategy =
   | 'api:devto'
   | 'api:medium'
   | 'api:youtube'
+  | 'api:shopify'
+  | 'api:amazon'
   | 'api:learned'
   | 'api:openapi'
   | 'api:graphql'
