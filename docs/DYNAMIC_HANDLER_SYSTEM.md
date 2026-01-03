@@ -147,14 +147,18 @@ shutdownDynamicHandlers();
 
 Use the `dynamic_handler_stats` MCP tool to inspect learned patterns:
 
+**Get overall stats:**
+
 ```json
-// Get overall stats
 {
   "name": "dynamic_handler_stats",
   "arguments": { "action": "stats" }
 }
+```
 
-// Get quirks for a domain
+**Get quirks for a domain:**
+
+```json
 {
   "name": "dynamic_handler_stats",
   "arguments": {
@@ -162,8 +166,11 @@ Use the `dynamic_handler_stats` MCP tool to inspect learned patterns:
     "domain": "protected-site.com"
   }
 }
+```
 
-// Get extraction recommendation
+**Get extraction recommendation:**
+
+```json
 {
   "name": "dynamic_handler_stats",
   "arguments": {
@@ -171,8 +178,11 @@ Use the `dynamic_handler_stats` MCP tool to inspect learned patterns:
     "url": "https://example-store.com/products/test"
   }
 }
+```
 
-// Export learned data
+**Export learned data:**
+
+```json
 {
   "name": "dynamic_handler_stats",
   "arguments": { "action": "export" }
@@ -190,9 +200,9 @@ Learned handlers are automatically persisted to disk:
 ### Custom Persistence
 
 ```typescript
-import { createPersistentRegistry } from 'llm-browser/sdk';
+import { createPersistentRegistry, dynamicHandlerRegistry } from 'llm-browser/sdk';
 
-const { registry, autoSave } = createPersistentRegistry(undefined, {
+const { registry, autoSave } = createPersistentRegistry(dynamicHandlerRegistry, {
   path: './my-handlers.json',
   saveDelayMs: 10000,  // 10 second debounce
   autoLoad: true,

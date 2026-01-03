@@ -442,6 +442,10 @@ export interface LearnedSiteHandler {
     successRate: number;
     avgDuration: number;
     lastUsed: number;
+    /** Number of successful extractions */
+    successCount: number;
+    /** Number of failed extractions */
+    failureCount: number;
   };
 
   /** Version for rollback */

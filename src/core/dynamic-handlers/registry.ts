@@ -80,6 +80,16 @@ export class DynamicHandlerRegistry {
       observationCount: domainObs.length,
     });
 
+    // Increment success count on existing handler
+    const handler = this.learnedSites.get(domain);
+    if (handler) {
+      handler.performance.successCount++;
+      handler.performance.successRate = this.calculateConfidence(
+        handler.performance.successCount,
+        handler.performance.failureCount
+      );
+    }
+
     // Trigger learning
     this.learnFromObservations(domain);
   }
@@ -97,6 +107,16 @@ export class DynamicHandlerRegistry {
     }
   ): void {
     const domain = this.extractDomain(url);
+
+    // Increment failure count on existing handler
+    const handler = this.learnedSites.get(domain);
+    if (handler) {
+      handler.performance.failureCount++;
+      handler.performance.successRate = this.calculateConfidence(
+        handler.performance.successCount,
+        handler.performance.failureCount
+      );
+    }
 
     // Learn quirks from failures
     this.learnQuirksFromFailure(domain, error, context);
@@ -160,6 +180,8 @@ export class DynamicHandlerRegistry {
         successRate: 1.0, // Starting optimistically
         avgDuration: analysis.avgDuration,
         lastUsed: Date.now(),
+        successCount: observations.length, // Initial observations are all successes
+        failureCount: 0,
       },
       version: 1,
     };
@@ -551,6 +573,11 @@ export class DynamicHandlerRegistry {
     }
 
     for (const site of data.learnedSites) {
+      // Backward compatibility: add successCount/failureCount if missing
+      if (site.performance.successCount === undefined) {
+        site.performance.successCount = Math.round(site.performance.successRate * 10);
+        site.performance.failureCount = Math.round((1 - site.performance.successRate) * 10);
+      }
       this.learnedSites.set(site.domain, site);
     }
 
@@ -670,8 +697,8 @@ export class DynamicHandlerRegistry {
       config: learned.effectiveConfig,
       confidence: {
         score: learned.performance.successRate,
-        successCount: 0, // Would need to track
-        failureCount: 0,
+        successCount: learned.performance.successCount,
+        failureCount: learned.performance.failureCount,
         lastSuccess: learned.performance.lastUsed,
       },
       version: learned.version,

@@ -681,8 +681,9 @@ The system automatically selects the optimal tier based on:
 
 ### Authenticated API Access
 
+**Step 1: Configure authentication**
+
 ```json
-// Step 1: Configure authentication
 {
   "name": "api_auth",
   "arguments": {
@@ -694,8 +695,11 @@ The system automatically selects the optimal tier based on:
     }
   }
 }
+```
 
-// Step 2: Make authenticated API calls
+**Step 2: Make authenticated API calls**
+
+```json
 {
   "name": "execute_api_call",
   "arguments": {
