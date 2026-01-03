@@ -589,7 +589,7 @@ See [COMPETITIVE_ANALYSIS.md](COMPETITIVE_ANALYSIS.md) for context on why these 
 
 | ID | Task | Effort | Status | Notes |
 |----|------|--------|--------|-------|
-| MKT-001 | Typography overhaul - sans-serif only | M | Not Started | Replace all serif/decorative fonts with clean sans-serif stack (Inter, system-ui) |
+| MKT-001 | Typography overhaul - sans-serif only | M | Complete | Added Inter font consistently to dashboard-ui and pricing-calculator. PR #2 |
 | MKT-002 | Update hero section with new features | M | Not Started | Highlight Connect SDK, learning capabilities, multi-interface architecture |
 | MKT-003 | Freshen visual design | M | Not Started | Modern spacing, cleaner components, improved color usage |
 | MKT-004 | Add Connect SDK marketing content | S | Complete | Landing page at /connect with hero, features, code example (CONN-023) |
