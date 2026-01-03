@@ -425,6 +425,12 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 | CONN-017 | Create React component wrapper | M | Not Started | useUnbrowserConnect() hook for easier integration |
 | CONN-018 | Publish SDK to npm | S | Not Started | @unbrowser/connect package |
 | CONN-019 | Move Ahead production integration | L | Not Started | Full integration with Move Ahead app |
+| CONN-020 | Add Connect to API documentation | M | Not Started | OpenAPI spec, /docs endpoint, getting started guide |
+| CONN-021 | Add Connect to llm.txt | S | Not Started | Document Connect endpoints for LLM context |
+| CONN-022 | Update main README | S | Not Started | Add Connect SDK section to repository README |
+| CONN-023 | Create Connect marketing page | M | Not Started | unbrowser.ai/connect landing page |
+| CONN-024 | Add Connect to pricing page | S | Not Started | Connect SDK pricing tier on unbrowser.ai/pricing |
+| CONN-025 | Create Connect integration guide | L | Not Started | Step-by-step guide for SaaS developers |
 
 **Benefits:**
 - Bypasses bot detection (user's real browser)
