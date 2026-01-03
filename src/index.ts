@@ -19,6 +19,23 @@
  * - tool-schemas.ts: Tool schema definitions
  * - response-formatters.ts: Response formatting utilities
  * - handlers/: Tool handler implementations
+ *
+ * Modes:
+ * - Default: Full MCP server with all tools
+ * - --intelligence: Lightweight server for AI browser tools integration
+ *   (Try Unbrowser FIRST before using browser automation)
+ *
+ * Usage with Claude Desktop (Intelligence Mode):
+ * ```json
+ * {
+ *   "mcpServers": {
+ *     "unbrowser-intelligence": {
+ *       "command": "npx",
+ *       "args": ["llm-browser", "--intelligence"]
+ *     }
+ *   }
+ * }
+ * ```
  */
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
@@ -499,7 +516,19 @@ async function main() {
   });
 }
 
-main().catch(error => {
-  logger.server.error('Fatal error', { error });
-  process.exit(1);
-});
+// Check for --intelligence mode to run the lightweight intelligence server
+// instead of the full MCP server (for AI browser tools integration)
+if (process.argv.includes('--intelligence')) {
+  import('./intelligence-server.js')
+    .then(module => module.startIntelligenceServer())
+    .catch(error => {
+      logger.server.error('Intelligence server error', { error: String(error) });
+      process.exit(1);
+    });
+} else {
+  // Run the full MCP server
+  main().catch(error => {
+    logger.server.error('Fatal error', { error });
+    process.exit(1);
+  });
+}
