@@ -428,8 +428,8 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 | CONN-020 | Add Connect to API documentation | M | Complete | OpenAPI spec updated with Connect endpoints and schemas. 2026-01-03 |
 | CONN-021 | Add Connect to llm.txt | S | Complete | Document Connect endpoints in llm-docs.ts. 2026-01-03 |
 | CONN-022 | Update main README | S | Complete | Add Connect SDK section to repository README. 2026-01-03 |
-| CONN-023 | Create Connect marketing page | M | Not Started | unbrowser.ai/connect landing page |
-| CONN-024 | Add Connect to pricing page | S | Not Started | Connect SDK pricing tier on unbrowser.ai/pricing |
+| CONN-023 | Create Connect marketing page | M | Complete | unbrowser.ai/connect landing page with hero, problem/solution, features, code example. 2026-01-03 |
+| CONN-024 | Add Connect to pricing page | S | Complete | Connect SDK row in comparison table + dedicated section. 2026-01-03 |
 | CONN-025 | Create Connect integration guide | L | Not Started | Step-by-step guide for SaaS developers |
 
 **Benefits:**
