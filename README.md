@@ -102,6 +102,44 @@ const result2 = await browser.browse('https://example.com/page2');
 await browser.cleanup();
 ```
 
+## Unbrowser Connect (B2B SaaS SDK)
+
+For SaaS applications that need to fetch content through their users' browsers, **Unbrowser Connect** provides a client-side SDK that bypasses bot detection by executing requests in the user's actual browser session.
+
+```bash
+npm install @unbrowser/connect
+```
+
+```typescript
+import { createConnect } from '@unbrowser/connect';
+
+const connect = createConnect({
+  appId: 'your-app-id',
+  apiKey: 'ub_live_xxx'
+});
+
+// Background fetch (hidden iframe, public content)
+const result = await connect.fetch({
+  url: 'https://example.com',
+  mode: 'background',
+  extract: { markdown: true }
+});
+
+// Popup fetch (OAuth-style, auth-required content)
+const authResult = await connect.fetch({
+  url: 'https://reddit.com/r/topic',
+  mode: 'popup',
+  requiresAuth: true
+});
+```
+
+**Key features:**
+- Runs in user's browser (bypasses server-side bot detection)
+- Patterns sync from Unbrowser cloud for intelligent extraction
+- Background mode (iframe) for public content
+- Popup mode for authenticated content
+- Data goes to your app, intelligence stays in Unbrowser cloud
+
 ## How It Works
 
 ### Tiered Rendering

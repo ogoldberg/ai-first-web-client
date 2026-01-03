@@ -59,6 +59,10 @@ servers:
 tags:
   - name: Browse
     description: Web browsing and content extraction
+  - name: Connect
+    description: |
+      Unbrowser Connect SDK - Enable B2B SaaS applications to fetch content
+      through their users' browsers, bypassing bot detection.
   - name: Discovery
     description: API endpoint discovery via fuzzing and analysis
   - name: Predictions
@@ -661,6 +665,151 @@ paths:
           $ref: '#/components/responses/RateLimited'
         '500':
           $ref: '#/components/responses/InternalError'
+
+  /v1/connect/patterns:
+    post:
+      tags:
+        - Connect
+      summary: Sync extraction patterns
+      description: |
+        Sync site-specific extraction patterns to Connect SDK clients.
+
+        The Connect SDK caches patterns locally in IndexedDB. This endpoint
+        returns patterns that have changed since the last sync (delta updates).
+
+        **How it works**:
+        1. SDK sends its last sync token
+        2. Server returns patterns that changed since that token
+        3. SDK updates local cache
+        4. Patterns enable efficient in-browser content extraction
+      operationId: syncPatterns
+      parameters:
+        - name: X-App-Id
+          in: header
+          required: true
+          schema:
+            type: string
+          description: Your Unbrowser Connect application ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatternSyncRequest'
+            example:
+              syncToken: "abc123"
+      responses:
+        '200':
+          description: Patterns synced successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PatternSyncResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /v1/connect/patterns/{domain}:
+    get:
+      tags:
+        - Connect
+      summary: Get pattern for domain
+      description: Get the extraction pattern for a specific domain.
+      operationId: getPattern
+      parameters:
+        - name: domain
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Domain to get pattern for
+          example: reddit.com
+      responses:
+        '200':
+          description: Pattern found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pattern:
+                    $ref: '#/components/schemas/SitePattern'
+        '404':
+          description: No pattern for domain
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /v1/connect/learn:
+    post:
+      tags:
+        - Connect
+      summary: Submit learned patterns
+      description: |
+        Submit extraction patterns learned from SDK usage.
+
+        When the Connect SDK encounters a site without patterns or extraction
+        fails, it can submit the page structure for server-side learning.
+        This improves patterns for all Connect users.
+      operationId: learnPattern
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LearnPatternRequest'
+            example:
+              domain: example.com
+              url: https://example.com/article/123
+              successfulSelectors:
+                title: "h1.article-title"
+                content: ".article-body"
+      responses:
+        '200':
+          description: Pattern submitted for learning
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  message:
+                    type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /v1/connect/health:
+    get:
+      tags:
+        - Connect
+      summary: Connect service health
+      description: Check Connect service health and pattern count.
+      operationId: getConnectHealth
+      security: []
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [healthy, degraded, unhealthy]
+                  patterns:
+                    type: integer
+                    description: Number of patterns available
+                  syncToken:
+                    type: string
+                    description: Current sync token
 
 components:
   securitySchemes:
@@ -1767,6 +1916,96 @@ components:
               type: string
               description: Human-readable error message
               example: The provided URL is not valid
+
+    # Connect SDK Schemas
+    PatternSyncRequest:
+      type: object
+      properties:
+        syncToken:
+          type: string
+          nullable: true
+          description: Token from last sync (null for initial sync)
+
+    PatternSyncResponse:
+      type: object
+      required:
+        - patterns
+        - syncToken
+      properties:
+        patterns:
+          type: array
+          items:
+            $ref: '#/components/schemas/SitePattern'
+          description: Patterns that changed since last sync
+        syncToken:
+          type: string
+          description: Token to use for next sync
+
+    SitePattern:
+      type: object
+      required:
+        - domain
+        - version
+        - lastUpdated
+        - selectors
+      properties:
+        domain:
+          type: string
+          description: Domain this pattern applies to
+          example: reddit.com
+        version:
+          type: string
+          description: Pattern version
+          example: "1.0.0"
+        lastUpdated:
+          type: string
+          format: date-time
+          description: When pattern was last updated
+        selectors:
+          type: object
+          additionalProperties:
+            type: string
+          description: CSS selectors for content extraction
+          example:
+            title: ".thing .title a"
+            content: ".expando .md"
+            author: ".thing .author"
+        contentStructure:
+          type: object
+          properties:
+            type:
+              type: string
+              enum: [article, list, forum, product, unknown]
+            pagination:
+              type: object
+              properties:
+                nextSelector:
+                  type: string
+                pageParamName:
+                  type: string
+
+    LearnPatternRequest:
+      type: object
+      required:
+        - domain
+        - url
+      properties:
+        domain:
+          type: string
+          description: Domain of the page
+          example: example.com
+        url:
+          type: string
+          format: uri
+          description: Full URL of the page
+        html:
+          type: string
+          description: Page HTML sample for learning
+        successfulSelectors:
+          type: object
+          additionalProperties:
+            type: string
+          description: Selectors that worked for extraction
 
   responses:
     BadRequest:

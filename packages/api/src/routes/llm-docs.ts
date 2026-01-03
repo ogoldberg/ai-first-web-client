@@ -97,6 +97,58 @@ Response: \`{"today": {"requests": n, "units": n}, "month": {...}}\`
 Health check endpoint.
 Response: \`{"status": "ok", "timestamp": "..."}\`
 
+## Unbrowser Connect (B2B SaaS SDK)
+
+Unbrowser Connect enables SaaS applications to fetch content through their users' browsers,
+bypassing bot detection. The SDK runs in the user's browser and uses Unbrowser's cloud
+for pattern intelligence.
+
+### Connect SDK Installation
+\`\`\`bash
+npm install @unbrowser/connect
+\`\`\`
+
+### Connect SDK Usage
+\`\`\`typescript
+import { createConnect } from '@unbrowser/connect';
+
+const connect = createConnect({
+  appId: 'your-app-id',
+  apiKey: 'ub_live_xxx'
+});
+
+// Background fetch (hidden iframe, public content)
+const result = await connect.fetch({
+  url: 'https://example.com',
+  mode: 'background',
+  extract: { markdown: true }
+});
+
+// Popup fetch (OAuth-style, auth-required content)
+const authResult = await connect.fetch({
+  url: 'https://reddit.com/r/topic',
+  mode: 'popup',
+  requiresAuth: true
+});
+\`\`\`
+
+### Connect API Endpoints
+
+POST /v1/connect/patterns - Sync extraction patterns to SDK
+Request: \`{"syncToken": "string | null"}\`
+Header: X-App-Id (required)
+Response: \`{"patterns": [...], "syncToken": "string"}\`
+
+POST /v1/connect/learn - Submit learned patterns
+Request: \`{"domain": "string", "url": "string", "successfulSelectors": {...}}\`
+Response: \`{"success": true, "message": "string"}\`
+
+GET /v1/connect/patterns/{domain} - Get pattern for domain
+Response: \`{"pattern": {...}}\`
+
+GET /v1/connect/health - Connect service health
+Response: \`{"status": "healthy", "patterns": number}\`
+
 ## Authentication
 \`\`\`bash
 curl -X POST https://api.unbrowser.ai/v1/browse \\
