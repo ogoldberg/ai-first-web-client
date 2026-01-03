@@ -107,6 +107,50 @@ curl -X POST https://api.unbrowser.ai/v1/browse \
 - No local setup/dependencies
 - Centralized learning (shared pattern pool across tenants)
 
+#### 3. AI Browser Tools Integration (NEW)
+
+A lightweight MCP server designed to work alongside AI browser tools like Claude-in-Chrome, OpenAI Atlas, Perplexity Comet, browser-use, and other LLM-driven browsers.
+
+- **Use Case**: AI tools that control their own browser should try Unbrowser FIRST
+- **Why**: If Unbrowser can get the data via cache, API discovery, or stealth fetch, the AI saves time and the user doesn't see browser windows opening
+- **Tools**: `unbrowser_get`, `unbrowser_check`
+- **Status**: Production Ready
+
+```json
+// Claude Desktop / Claude Code MCP config
+{
+  "mcpServers": {
+    "unbrowser-intelligence": {
+      "command": "npx",
+      "args": ["llm-browser", "--intelligence"]
+    }
+  }
+}
+```
+
+**How it works:**
+1. AI calls `unbrowser_check(url)` to see if Unbrowser can handle it
+2. If `canFetchDirectly: true`, call `unbrowser_get(url)` to get content
+3. If successful, use the returned markdown/structured data (no browser needed!)
+4. If unavailable, use the `browserHints` (selectors, stealth mode, rate limits) for effective automation
+
+**Example response from `unbrowser_get`:**
+```json
+{
+  "success": true,
+  "source": "api",           // Used HackerNews Firebase API
+  "content": {
+    "title": "HackerNews Top Stories",
+    "markdown": "# HackerNews Top Stories\n\n## [Story Title](...",
+    "structured": { "stories": [...] }
+  },
+  "meta": {
+    "fetchDuration": 413,    // Only 413ms vs 2-5s for browser
+    "hasLearnedPatterns": true
+  }
+}
+```
+
 ### Current Focus: Cloud API Launch
 
 We're building a cloud-hosted API at `api.unbrowser.ai` where all intelligence runs server-side. The cloud deployment uses the Local MCP Server architecture internally but exposes it via REST API for multi-tenant access.
