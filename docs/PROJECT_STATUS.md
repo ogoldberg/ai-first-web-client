@@ -1,10 +1,50 @@
 # Unbrowser - Project Status
 
-**Last Updated:** 2026-01-01
+**Last Updated:** 2026-01-03
 **Version:** 0.5.0
 **Current Phase:** Production Readiness (Phase 2)
-**Total Code:** ~20,000 lines TypeScript
+**Total Code:** ~21,000 lines TypeScript
 **Tests:** 3469+ passing + 44 live tests
+
+---
+
+## Recent: AI Browser Tools Integration (2026-01-03)
+
+Added first-class support for AI browser tools like Claude-in-Chrome, OpenAI Atlas, Perplexity Comet, and browser-use.
+
+**The Idea:** AI tools that control their own browser should try Unbrowser FIRST before opening a browser window. If Unbrowser can get the data via cache, API discovery, or stealth fetch, the AI saves significant time.
+
+**Completed:**
+- INT-020 - Intelligence MCP Server (`--intelligence` flag for lightweight server)
+- INT-020 - `unbrowser_get` tool - Fetch content without browser automation
+- INT-020 - `unbrowser_check` tool - Check what Unbrowser knows about a URL
+- INT-020 - HTTP API endpoints (`/v1/intelligence/check`, `/v1/intelligence/get`)
+- INT-020 - Documentation in CLAUDE.md as third deployment architecture
+- MKT-007 - Marketing site update with AI Browser Tools section
+
+**Usage:**
+```json
+// Claude Desktop MCP config
+{
+  "mcpServers": {
+    "unbrowser-intelligence": {
+      "command": "npx",
+      "args": ["llm-browser", "--intelligence"]
+    }
+  }
+}
+```
+
+**HTTP API:**
+```bash
+# Check if Unbrowser can handle a URL
+curl "https://api.unbrowser.ai/v1/intelligence/check?url=https://example.com"
+
+# Get content without browser automation
+curl -X POST "https://api.unbrowser.ai/v1/intelligence/get" \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://news.ycombinator.com"}'
+```
 
 ---
 
