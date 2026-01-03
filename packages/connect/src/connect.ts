@@ -29,7 +29,7 @@ export class UnbrowserConnect {
   private messageBus: MessageBus;
 
   constructor(config: ConnectConfig) {
-    if (!config.appId || !config.apiKey) {
+    if (!config.appId?.trim() || !config.apiKey?.trim()) {
       throw new Error('appId and apiKey are required');
     }
 
