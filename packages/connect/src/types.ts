@@ -24,6 +24,9 @@ export interface ConnectConfig {
   /** Custom styling for popup/modal UI */
   theme?: ConnectTheme;
 
+  /** Global UI options for built-in components */
+  ui?: GlobalUIOptions;
+
   /** Callback when SDK is ready */
   onReady?: () => void;
 
@@ -49,6 +52,74 @@ export interface ConnectTheme {
 
   /** Font family */
   fontFamily?: string;
+}
+
+/**
+ * Global UI options for the Connect SDK
+ */
+export interface GlobalUIOptions {
+  /** Show progress overlay during fetches (default: false) */
+  showProgress?: boolean;
+
+  /** Show error toasts on failures (default: false) */
+  showErrors?: boolean;
+
+  /** How long to show error toasts in ms (default: 5000) */
+  errorDuration?: number;
+
+  /** Container element to mount UI components (default: document.body) */
+  container?: HTMLElement;
+}
+
+/**
+ * Per-fetch UI options
+ */
+export interface FetchUIOptions {
+  /** Show progress overlay for this fetch (overrides global) */
+  showProgress?: boolean;
+
+  /** Auth prompt modal configuration */
+  authPrompt?: AuthPromptConfig;
+
+  /** Container element for this fetch's UI */
+  container?: HTMLElement;
+}
+
+/**
+ * Configuration for the auth prompt modal
+ */
+export interface AuthPromptConfig {
+  /** Modal title */
+  title?: string;
+
+  /** Explanation message */
+  message?: string;
+
+  /** Continue button text (default: "Continue") */
+  buttonText?: string;
+
+  /** Cancel button text (default: "Cancel") */
+  cancelText?: string;
+
+  /** Show cancel button (default: true) */
+  showCancel?: boolean;
+}
+
+/**
+ * Configuration for progress overlay
+ */
+export interface ProgressOverlayConfig {
+  /** Show spinner animation (default: true) */
+  showSpinner?: boolean;
+
+  /** Show percentage (default: true) */
+  showPercent?: boolean;
+
+  /** Show stage text (default: true) */
+  showStage?: boolean;
+
+  /** Custom loading text */
+  loadingText?: string;
 }
 
 /**
@@ -86,6 +157,9 @@ export interface FetchOptions {
 
   /** Callback for progress updates */
   onProgress?: (progress: FetchProgress) => void;
+
+  /** UI options for this fetch (overrides global settings) */
+  ui?: FetchUIOptions;
 }
 
 /**

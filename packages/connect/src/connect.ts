@@ -19,6 +19,7 @@ import { BackgroundFetcher } from './fetchers/background-fetcher.js';
 import { PopupFetcher } from './fetchers/popup-fetcher.js';
 import { PatternCache } from './patterns/pattern-cache.js';
 import { MessageBus } from './communication/message-bus.js';
+import { UIManager } from './ui/ui-manager.js';
 
 export class UnbrowserConnect {
   private config: Required<Pick<ConnectConfig, 'appId' | 'apiKey' | 'apiUrl' | 'debug'>> & ConnectConfig;
@@ -27,6 +28,7 @@ export class UnbrowserConnect {
   private popupFetcher: PopupFetcher;
   private patternCache: PatternCache;
   private messageBus: MessageBus;
+  private uiManager: UIManager;
 
   constructor(config: ConnectConfig) {
     if (!config.appId?.trim() || !config.apiKey?.trim()) {
@@ -61,6 +63,8 @@ export class UnbrowserConnect {
       theme: this.config.theme,
       debug: this.config.debug,
     });
+
+    this.uiManager = new UIManager(this.config.ui, this.config.theme);
   }
 
   /**
@@ -97,50 +101,88 @@ export class UnbrowserConnect {
       await this.init();
     }
 
-    const { url, mode = 'background', requiresAuth = false } = options;
+    const { url, mode = 'background', requiresAuth = false, ui: fetchUI } = options;
 
     // Validate URL
     try {
       new URL(url);
     } catch {
-      return this.createError('INVALID_URL', `Invalid URL: ${url}`);
+      const error = this.createError('INVALID_URL', `Invalid URL: ${url}`);
+      this.uiManager.showError(error.error);
+      return error;
     }
 
     const startTime = Date.now();
 
+    // Show progress overlay if enabled
+    this.uiManager.showProgress(fetchUI);
+
+    // Create progress handler that updates both callback and UI
+    const handleProgress = (progress: FetchProgress) => {
+      options.onProgress?.(progress);
+      this.uiManager.updateProgress(progress);
+    };
+
     // Report initial progress
-    this.reportProgress(options.onProgress, 'initializing', 0, 'Starting fetch...');
+    handleProgress({ stage: 'initializing', percent: 0, message: 'Starting fetch...' });
 
     try {
       let result: FetchResult | FetchError;
 
+      // Show auth modal if configured for popup mode
+      if ((mode === 'popup' || requiresAuth) && fetchUI?.authPrompt) {
+        const authResult = await this.uiManager.showAuthPrompt(fetchUI.authPrompt, fetchUI);
+        if (!authResult.confirmed) {
+          this.uiManager.hideProgress();
+          return this.createError('USER_CANCELLED', 'User cancelled authentication');
+        }
+      }
+
       if (mode === 'background' && !requiresAuth) {
         // Try background (iframe) first
-        result = await this.backgroundFetcher.fetch(options);
+        result = await this.backgroundFetcher.fetch({
+          ...options,
+          onProgress: handleProgress,
+        });
 
         // If iframe is blocked, escalate to popup
         if (!result.success && result.error.code === 'IFRAME_BLOCKED') {
           this.log('Iframe blocked, escalating to popup mode');
-          result = await this.popupFetcher.fetch({ ...options, mode: 'popup' });
+          result = await this.popupFetcher.fetch({
+            ...options,
+            mode: 'popup',
+            onProgress: handleProgress,
+          });
         }
       } else {
         // Use popup for auth-required or explicit popup mode
-        result = await this.popupFetcher.fetch(options);
+        result = await this.popupFetcher.fetch({
+          ...options,
+          onProgress: handleProgress,
+        });
       }
 
       // Add timing metadata if successful
       if (result.success) {
         result.meta.duration = Date.now() - startTime;
+      } else {
+        // Show error toast for failures
+        this.uiManager.showError(result.error);
       }
 
-      this.reportProgress(options.onProgress, 'complete', 100, 'Fetch complete');
+      handleProgress({ stage: 'complete', percent: 100, message: 'Fetch complete' });
+      this.uiManager.hideProgress();
 
       return result;
     } catch (error) {
+      this.uiManager.hideProgress();
+
       const connectError = this.createError(
         'NETWORK_ERROR',
         error instanceof Error ? error.message : 'Unknown error'
       );
+
+      this.uiManager.showError(connectError.error);
 
       if (this.config.onError) {
         this.config.onError(connectError.error);
@@ -227,6 +269,7 @@ export class UnbrowserConnect {
     this.messageBus.destroy();
     this.backgroundFetcher.destroy();
     this.popupFetcher.destroy();
+    this.uiManager.destroy();
     this.initialized = false;
   }
 
@@ -235,17 +278,6 @@ export class UnbrowserConnect {
       success: false,
       error: { code, message },
     };
-  }
-
-  private reportProgress(
-    callback: FetchOptions['onProgress'],
-    stage: FetchProgress['stage'],
-    percent: number,
-    message: string
-  ): void {
-    if (callback) {
-      callback({ stage, percent, message });
-    }
   }
 
   private log(...args: unknown[]): void {

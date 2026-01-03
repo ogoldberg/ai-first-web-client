@@ -67,6 +67,16 @@
     <input type="text" id="apiKey" value="ub_test_demo123" placeholder="Your API key">
     <label>App ID:</label>
     <input type="text" id="appId" value="test-app" placeholder="Your app ID">
+    <div style="margin: 10px 0;">
+      <label>
+        <input type="checkbox" id="showProgress"> Show built-in progress overlay
+      </label>
+    </div>
+    <div style="margin: 10px 0;">
+      <label>
+        <input type="checkbox" id="showErrors"> Show built-in error toasts
+      </label>
+    </div>
     <button onclick="initConnect()">Initialize Connect</button>
     <div id="initStatus"></div>
   </div>
@@ -109,6 +119,8 @@ https://httpbin.org/html</textarea>
     window.initConnect = async function() {
       const apiKey = document.getElementById('apiKey').value;
       const appId = document.getElementById('appId').value;
+      const showProgress = document.getElementById('showProgress').checked;
+      const showErrors = document.getElementById('showErrors').checked;
       const status = document.getElementById('initStatus');
 
       try {
@@ -116,6 +128,17 @@ https://httpbin.org/html</textarea>
           appId,
           apiKey,
           debug: true,
+          ui: {
+            showProgress,
+            showErrors,
+            errorDuration: 5000,
+          },
+          theme: {
+            primaryColor: '#4a90d9',
+            backgroundColor: '#ffffff',
+            textColor: '#333333',
+            borderRadius: '8px',
+          },
           onReady: () => {
             status.textContent = 'Connected!';
             status.className = 'success';
