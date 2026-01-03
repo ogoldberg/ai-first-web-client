@@ -2341,7 +2341,7 @@ export class ContentIntelligence {
     const enhancedOpts = applyQuirksToFetchOptions(quirks, opts);
 
     const headers: Record<string, string> = {
-      'User-Agent': enhancedOpts.userAgent || DEFAULT_OPTIONS.userAgent!,
+      'User-Agent': opts.userAgent || DEFAULT_OPTIONS.userAgent!,
       'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
       'Accept-Language': 'en-US,en;q=0.5',
       ...enhancedOpts.headers,

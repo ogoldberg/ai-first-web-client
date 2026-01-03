@@ -125,7 +125,9 @@ export async function isCycleTLSAvailable(): Promise<boolean> {
   }
 
   try {
-    const initCycleTLS = (await import('cycletls')).default;
+    const cycleTLSModule = await import('cycletls');
+    // Dynamic import with type assertion - cycletls exports a function as default
+    const initCycleTLS = cycleTLSModule.default as unknown as (initOptions?: { port?: number; debug?: boolean; timeout?: number; executablePath?: string }) => Promise<typeof cycleTLSInstance>;
     cycleTLSInstance = await initCycleTLS();
     cycleTLSAvailable = true;
     log.info('CycleTLS initialized successfully');

@@ -12,6 +12,7 @@ import {
   type ExtractionContext,
 } from '../../core/dynamic-handlers/integration.js';
 import { PATTERN_TEMPLATES, detectTemplate } from '../../core/dynamic-handlers/pattern-templates.js';
+import type { HandlerTemplate } from '../../core/dynamic-handlers/types.js';
 
 export type DynamicHandlerStatsAction =
   | 'stats'
@@ -172,7 +173,7 @@ export function handleDynamicHandlerStats(args: DynamicHandlerStatsArgs): McpRes
       const recommendation = dynamicHandlerIntegration.getRecommendation(context);
 
       // Also run template detection if HTML provided
-      let templateDetection = null;
+      let templateDetection: { template: HandlerTemplate; confidence: number; signals: string[] } | null = null;
       if (html) {
         templateDetection = detectTemplate(html, url);
       }
