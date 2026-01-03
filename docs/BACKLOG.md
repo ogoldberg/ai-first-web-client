@@ -417,7 +417,7 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 | CONN-009 | Add unit tests | S | Complete | 5 tests passing in packages/connect |
 | CONN-010 | Create interactive test page | S | Complete | test-page/index.html for manual testing |
 | CONN-011 | Add E2E browser tests | M | Complete | 17 Playwright tests: init, fetch, batch, errors, UI. 2026-01-03 |
-| CONN-012 | Add pattern learning tests | M | Not Started | Verify patterns sync correctly from cloud |
+| CONN-012 | Add pattern learning tests | M | Complete | 36 tests: pattern sync, domain matching, IndexedDB, selectors. 2026-01-03 |
 | CONN-013 | Add cross-origin testing | M | Not Started | Test sites with X-Frame-Options blocking |
 | CONN-014 | Add error handling tests | S | Complete | 39 tests: config validation, URL validation, error codes, etc. 2026-01-03 |
 | CONN-015 | Add government portal patterns | L | Not Started | UK, Germany, US visa/immigration sites |
