@@ -151,7 +151,10 @@ app.get('/', async (c) => {
       browse: '/v1/browse',
       batch: '/v1/batch',
       fetch: '/v1/fetch',
-      intelligence: '/v1/domains/:domain/intelligence',
+      intelligence: '/v1/intelligence',
+      intelligenceCheck: '/v1/intelligence/check',
+      intelligenceGet: '/v1/intelligence/get',
+      domainIntelligence: '/v1/domains/:domain/intelligence',
       usage: '/v1/usage',
       skillPacks: '/v1/skill-packs',
       workflows: '/v1/workflows',
@@ -246,6 +249,7 @@ async function initializeApiRoutes(): Promise<void> {
       betaModule,
       predictionsModule,
       connectModule,
+      intelligenceModule,
     ] = await Promise.all([
       import('./routes/docs.js'),
       import('./routes/browse.js'),
@@ -262,6 +266,7 @@ async function initializeApiRoutes(): Promise<void> {
       import('./routes/beta.js'),
       import('./routes/predictions.js'),
       import('./routes/connect.js'),
+      import('./routes/intelligence.js'),
     ]);
 
     // Extract exports (some use named, some use default)
@@ -280,6 +285,7 @@ async function initializeApiRoutes(): Promise<void> {
     const beta = betaModule.beta;
     const predictions = predictionsModule.default;
     const connect = connectModule.connect;
+    const intelligence = intelligenceModule.intelligence;
 
     // API documentation
     app.route('/docs', docs); // API-011: Interactive API documentation
@@ -311,6 +317,9 @@ async function initializeApiRoutes(): Promise<void> {
 
     // Unbrowser Connect SDK (CONN-001: B2B SaaS browser-side fetching)
     app.route('/v1/connect', connect); // Pattern sync, learning, health
+
+    // AI Browser Tools Integration (INT-020: AI browser tools integration)
+    app.route('/v1/intelligence', intelligence); // Check/get content for AI browsers
 
     // LLM documentation (also available in marketing mode via redirect)
     app.route('', llmDocs); // LLM documentation at /llm.txt, /llm.md
