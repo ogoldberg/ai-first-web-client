@@ -1,0 +1,44 @@
+{
+  "name": "@unbrowser/connect",
+  "version": "0.1.0",
+  "description": "Unbrowser Connect - Fetch through your users' browsers",
+  "type": "module",
+  "main": "dist/connect.js",
+  "module": "dist/connect.esm.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup src/index.ts --format cjs,esm --dts --minify",
+    "build:cdn": "tsup src/index.ts --format iife --global-name UnbrowserConnect --minify --out-dir dist/cdn",
+    "dev": "tsup src/index.ts --format esm --watch",
+    "test": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": [
+    "unbrowser",
+    "scraping",
+    "web-extraction",
+    "saas",
+    "browser-fetch"
+  ],
+  "author": "Unbrowser",
+  "license": "MIT",
+  "devDependencies": {
+    "tsup": "^8.0.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.0.0"
+  },
+  "peerDependencies": {},
+  "engines": {
+    "node": ">=18"
+  }
+}

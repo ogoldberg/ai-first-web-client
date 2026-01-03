@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Unbrowser Connect Test Page</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .card {
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    h1 { color: #333; }
+    h2 { color: #666; margin-top: 0; }
+    button {
+      background: #4a90d9;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-right: 10px;
+      margin-bottom: 10px;
+    }
+    button:hover { background: #357abd; }
+    button:disabled { background: #ccc; cursor: not-allowed; }
+    pre {
+      background: #1e1e1e;
+      color: #d4d4d4;
+      padding: 15px;
+      border-radius: 4px;
+      overflow-x: auto;
+      white-space: pre-wrap;
+    }
+    .progress {
+      padding: 10px;
+      background: #e8f4fd;
+      border-radius: 4px;
+      margin-bottom: 10px;
+    }
+    .error { background: #fde8e8; color: #c53030; }
+    .success { background: #e8fde8; color: #2f855a; }
+    input[type="text"] {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      margin-bottom: 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Unbrowser Connect Test Page</h1>
+
+  <div class="card">
+    <h2>Configuration</h2>
+    <label>API Key:</label>
+    <input type="text" id="apiKey" value="ub_test_demo123" placeholder="Your API key">
+    <label>App ID:</label>
+    <input type="text" id="appId" value="test-app" placeholder="Your app ID">
+    <button onclick="initConnect()">Initialize Connect</button>
+    <div id="initStatus"></div>
+  </div>
+
+  <div class="card">
+    <h2>Background Fetch (iframe)</h2>
+    <p>Fetches content in a hidden iframe. Works for public content that allows embedding.</p>
+    <input type="text" id="bgUrl" value="https://example.com" placeholder="URL to fetch">
+    <button onclick="fetchBackground()" id="bgBtn" disabled>Fetch Background</button>
+    <div id="bgProgress" class="progress" style="display:none;"></div>
+    <pre id="bgResult">Results will appear here...</pre>
+  </div>
+
+  <div class="card">
+    <h2>Popup Fetch (OAuth-style)</h2>
+    <p>Opens a popup window. User can authenticate if needed.</p>
+    <input type="text" id="popupUrl" value="https://old.reddit.com/r/artificial" placeholder="URL to fetch">
+    <button onclick="fetchPopup()" id="popupBtn" disabled>Fetch with Popup</button>
+    <div id="popupProgress" class="progress" style="display:none;"></div>
+    <pre id="popupResult">Results will appear here...</pre>
+  </div>
+
+  <div class="card">
+    <h2>Batch Fetch</h2>
+    <p>Fetch multiple URLs with concurrency control.</p>
+    <textarea id="batchUrls" rows="4" style="width:100%;padding:10px;">https://example.com
+https://httpbin.org/html</textarea>
+    <button onclick="fetchBatch()" id="batchBtn" disabled>Batch Fetch</button>
+    <div id="batchProgress" class="progress" style="display:none;"></div>
+    <pre id="batchResult">Results will appear here...</pre>
+  </div>
+
+  <!-- Load the SDK -->
+  <script type="module">
+    import { createConnect } from '../dist/index.js';
+
+    let connect = null;
+
+    // Expose functions to window for button onclick handlers
+    window.initConnect = async function() {
+      const apiKey = document.getElementById('apiKey').value;
+      const appId = document.getElementById('appId').value;
+      const status = document.getElementById('initStatus');
+
+      try {
+        connect = createConnect({
+          appId,
+          apiKey,
+          debug: true,
+          onReady: () => {
+            status.textContent = 'Connected!';
+            status.className = 'success';
+          },
+          onError: (err) => {
+            status.textContent = 'Error: ' + err.message;
+            status.className = 'error';
+          }
+        });
+
+        await connect.init();
+
+        // Enable buttons
+        document.getElementById('bgBtn').disabled = false;
+        document.getElementById('popupBtn').disabled = false;
+        document.getElementById('batchBtn').disabled = false;
+
+      } catch (err) {
+        status.textContent = 'Init failed: ' + err.message;
+        status.className = 'error';
+      }
+    };
+
+    window.fetchBackground = async function() {
+      const url = document.getElementById('bgUrl').value;
+      const progressEl = document.getElementById('bgProgress');
+      const resultEl = document.getElementById('bgResult');
+
+      progressEl.style.display = 'block';
+
+      try {
+        const result = await connect.fetch({
+          url,
+          mode: 'background',
+          extract: { text: true, markdown: true },
+          onProgress: (p) => {
+            progressEl.textContent = p.stage + ': ' + p.percent + '% - ' + p.message;
+          }
+        });
+
+        resultEl.textContent = JSON.stringify(result, null, 2);
+      } catch (err) {
+        resultEl.textContent = 'Error: ' + err.message;
+      }
+
+      progressEl.style.display = 'none';
+    };
+
+    window.fetchPopup = async function() {
+      const url = document.getElementById('popupUrl').value;
+      const progressEl = document.getElementById('popupProgress');
+      const resultEl = document.getElementById('popupResult');
+
+      progressEl.style.display = 'block';
+
+      try {
+        const result = await connect.fetch({
+          url,
+          mode: 'popup',
+          extract: { text: true, markdown: true },
+          onProgress: (p) => {
+            progressEl.textContent = p.stage + ': ' + p.percent + '% - ' + p.message;
+          }
+        });
+
+        resultEl.textContent = JSON.stringify(result, null, 2);
+      } catch (err) {
+        resultEl.textContent = 'Error: ' + err.message;
+      }
+
+      progressEl.style.display = 'none';
+    };
+
+    window.fetchBatch = async function() {
+      const urls = document.getElementById('batchUrls').value.split('\n').filter(u => u.trim());
+      const progressEl = document.getElementById('batchProgress');
+      const resultEl = document.getElementById('batchResult');
+
+      progressEl.style.display = 'block';
+
+      try {
+        const result = await connect.batchFetch({
+          urls,
+          options: { extract: { text: true } },
+          concurrency: 2,
+          onProgress: (completed, total) => {
+            progressEl.textContent = 'Completed ' + completed + '/' + total;
+          }
+        });
+
+        resultEl.textContent = JSON.stringify(result, null, 2);
+      } catch (err) {
+        resultEl.textContent = 'Error: ' + err.message;
+      }
+
+      progressEl.style.display = 'none';
+    };
+  </script>
+</body>
+</html>

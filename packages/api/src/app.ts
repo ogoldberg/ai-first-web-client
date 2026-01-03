@@ -245,6 +245,7 @@ async function initializeApiRoutes(): Promise<void> {
       pdfModule,
       betaModule,
       predictionsModule,
+      connectModule,
     ] = await Promise.all([
       import('./routes/docs.js'),
       import('./routes/browse.js'),
@@ -260,6 +261,7 @@ async function initializeApiRoutes(): Promise<void> {
       import('./routes/pdf.js'),
       import('./routes/beta.js'),
       import('./routes/predictions.js'),
+      import('./routes/connect.js'),
     ]);
 
     // Extract exports (some use named, some use default)
@@ -277,6 +279,7 @@ async function initializeApiRoutes(): Promise<void> {
     const pdf = pdfModule.pdf;
     const beta = betaModule.beta;
     const predictions = predictionsModule.default;
+    const connect = connectModule.connect;
 
     // API documentation
     app.route('/docs', docs); // API-011: Interactive API documentation
@@ -305,6 +308,9 @@ async function initializeApiRoutes(): Promise<void> {
 
     // Content change predictions (INT-018)
     app.route('/v1/predictions', predictions); // Content change predictions API
+
+    // Unbrowser Connect SDK (CONN-001: B2B SaaS browser-side fetching)
+    app.route('/v1/connect', connect); // Pattern sync, learning, health
 
     // LLM documentation (also available in marketing mode via redirect)
     app.route('', llmDocs); // LLM documentation at /llm.txt, /llm.md

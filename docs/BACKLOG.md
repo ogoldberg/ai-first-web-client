@@ -388,6 +388,53 @@ See [VECTOR_EMBEDDING_STORAGE_PLAN.md](VECTOR_EMBEDDING_STORAGE_PLAN.md) for the
 
 ---
 
+## P1.5: Unbrowser Connect (New Initiative)
+
+**Goal:** Enable B2B SaaS applications to fetch web content through their users' browsers, bypassing bot detection.
+
+**Context:** Cloud-based scraping fails for sites like Reddit due to aggressive bot detection. Unbrowser Connect embeds a JavaScript SDK in SaaS frontends that uses hidden iframes or popups to fetch content from the user's real browser (residential IP, real fingerprint). Intelligence/patterns remain in Unbrowser cloud; only extracted data flows to the SaaS customer.
+
+**Reference Customer:** Move Ahead (AI relocation assistant) - needs visa requirements from government portals + community experiences from Reddit.
+
+**Architecture:** See [UNBROWSER_CONNECT_ARCHITECTURE.md](UNBROWSER_CONNECT_ARCHITECTURE.md) for full design.
+
+**Success Criteria:**
+- SDK published to npm as @unbrowser/connect
+- Background (iframe) and popup fetch modes working
+- Pattern sync from cloud to SDK clients
+- Move Ahead integration demo functional
+
+| ID | Task | Effort | Status | Notes |
+|----|------|--------|--------|-------|
+| CONN-001 | Create packages/connect structure | S | Complete | Package.json, tsconfig, types. 2026-01-03 |
+| CONN-002 | Build BackgroundFetcher (iframe) | M | Complete | Hidden iframe for public content |
+| CONN-003 | Build PopupFetcher (OAuth-style) | M | Complete | Popup window for auth-required content |
+| CONN-004 | Build ContentExtractor | M | Complete | In-browser extraction: HTML, text, markdown, selectors |
+| CONN-005 | Build PatternCache | S | Complete | IndexedDB-cached patterns with cloud sync |
+| CONN-006 | Build MessageBus | S | Complete | postMessage communication layer |
+| CONN-007 | Create Connect API endpoints | M | Complete | /v1/connect/patterns, /learn, /health |
+| CONN-008 | Create Move Ahead example | S | Complete | examples/move-ahead-integration.ts |
+| CONN-009 | Add unit tests | S | Complete | 5 tests passing in packages/connect |
+| CONN-010 | Create interactive test page | S | Complete | test-page/index.html for manual testing |
+| CONN-011 | Add E2E browser tests | M | Not Started | Use Playwright to automate test page |
+| CONN-012 | Add pattern learning tests | M | Not Started | Verify patterns sync correctly from cloud |
+| CONN-013 | Add cross-origin testing | M | Not Started | Test sites with X-Frame-Options blocking |
+| CONN-014 | Add error handling tests | S | Not Started | Network failures, timeouts, blocked popups |
+| CONN-015 | Add government portal patterns | L | Not Started | UK, Germany, US visa/immigration sites |
+| CONN-016 | Add Reddit patterns | M | Not Started | old.reddit.com post/comment extraction |
+| CONN-017 | Create React component wrapper | M | Not Started | useUnbrowserConnect() hook for easier integration |
+| CONN-018 | Publish SDK to npm | S | Not Started | @unbrowser/connect package |
+| CONN-019 | Move Ahead production integration | L | Not Started | Full integration with Move Ahead app |
+
+**Benefits:**
+- Bypasses bot detection (user's real browser)
+- No extension installation required
+- Invisible for public content (iframe)
+- OAuth-style flow for authenticated content
+- Intelligence stays in Unbrowser cloud
+
+---
+
 ## P2: Progressive Optimization Gaps (New Initiative)
 
 **Goal:** Fully utilize "Browser Minimizer" philosophy by connecting existing learning infrastructure to progressive optimization.
