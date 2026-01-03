@@ -257,7 +257,7 @@ function extractMicrodata($: cheerio.CheerioAPI): MicrodataItem[] {
   const items: MicrodataItem[] = [];
 
   // Find all itemscope elements
-  $('[itemscope]').each((_: number, el: cheerio.Element) => {
+  $('[itemscope]').each((_, el) => {
     const $el = $(el);
 
     // Skip nested itemscopes (they'll be processed as properties of their parent)
@@ -279,7 +279,7 @@ function extractMicrodata($: cheerio.CheerioAPI): MicrodataItem[] {
  */
 function extractMicrodataItem(
   $: cheerio.CheerioAPI,
-  $el: cheerio.Cheerio<cheerio.Element>
+  $el: ReturnType<cheerio.CheerioAPI>
 ): MicrodataItem | null {
   const itemtype = $el.attr('itemtype');
   if (!itemtype) return null;
