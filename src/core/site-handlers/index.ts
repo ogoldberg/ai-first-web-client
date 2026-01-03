@@ -30,6 +30,11 @@ import { pypiHandler } from './pypi-handler.js';
 import { devtoHandler } from './devto-handler.js';
 import { mediumHandler } from './medium-handler.js';
 import { youtubeHandler } from './youtube-handler.js';
+import { shopifyHandler } from './shopify-handler.js';
+import { amazonHandler } from './amazon-handler.js';
+import { ebayHandler } from './ebay-handler.js';
+import { woocommerceHandler } from './woocommerce-handler.js';
+import { walmartHandler } from './walmart-handler.js';
 
 // Export individual handlers for direct use
 export { redditHandler } from './reddit-handler.js';
@@ -42,6 +47,11 @@ export { pypiHandler } from './pypi-handler.js';
 export { devtoHandler } from './devto-handler.js';
 export { mediumHandler } from './medium-handler.js';
 export { youtubeHandler } from './youtube-handler.js';
+export { shopifyHandler } from './shopify-handler.js';
+export { amazonHandler } from './amazon-handler.js';
+export { ebayHandler } from './ebay-handler.js';
+export { woocommerceHandler } from './woocommerce-handler.js';
+export { walmartHandler } from './walmart-handler.js';
 
 // Handler classes for custom instantiation
 export { RedditHandler } from './reddit-handler.js';
@@ -54,6 +64,11 @@ export { PyPIHandler } from './pypi-handler.js';
 export { DevToHandler } from './devto-handler.js';
 export { MediumHandler } from './medium-handler.js';
 export { YouTubeHandler } from './youtube-handler.js';
+export { ShopifyHandler } from './shopify-handler.js';
+export { AmazonHandler } from './amazon-handler.js';
+export { EbayHandler } from './ebay-handler.js';
+export { WooCommerceHandler } from './woocommerce-handler.js';
+export { WalmartHandler } from './walmart-handler.js';
 
 /**
  * All registered site handlers
@@ -70,6 +85,11 @@ export const siteHandlers = [
   devtoHandler,
   mediumHandler,
   youtubeHandler,
+  shopifyHandler,
+  amazonHandler,
+  ebayHandler,
+  woocommerceHandler,
+  walmartHandler,
 ] as const;
 
 /**

@@ -4,11 +4,12 @@ This document provides comprehensive documentation for all MCP tools available i
 
 ## Tool Visibility
 
-Tools are organized into three categories based on visibility:
+Tools are organized into categories based on visibility:
 
 | Category | Environment Variable | Default |
 |----------|---------------------|---------|
 | **Core Tools** | Always visible | 5 tools |
+| **Learning & Analytics** | Always visible | 1 tool |
 | **Debug Tools** | `LLM_BROWSER_DEBUG_MODE=1` | Hidden |
 | **Admin Tools** | `LLM_BROWSER_ADMIN_MODE=1` | Hidden |
 
@@ -680,8 +681,9 @@ The system automatically selects the optimal tier based on:
 
 ### Authenticated API Access
 
+**Step 1: Configure authentication**
+
 ```json
-// Step 1: Configure authentication
 {
   "name": "api_auth",
   "arguments": {
@@ -693,8 +695,11 @@ The system automatically selects the optimal tier based on:
     }
   }
 }
+```
 
-// Step 2: Make authenticated API calls
+**Step 2: Make authenticated API calls**
+
+```json
 {
   "name": "execute_api_call",
   "arguments": {
@@ -731,6 +736,142 @@ The system automatically selects the optimal tier based on:
     "url": "https://example.com",
     "fullPage": true,
     "waitForSelector": ".main-content"
+  }
+}
+```
+
+---
+
+## Learning & Analytics Tools
+
+These tools provide visibility into the system's learned patterns and behaviors.
+
+### dynamic_handler_stats
+
+View and manage learned site patterns and quirks (yt-dlp inspired pattern learning).
+
+The dynamic handler system automatically learns:
+- Site templates (Shopify, WooCommerce, Next.js, etc.)
+- Site quirks (required headers, stealth mode, rate limits)
+- Anti-bot protection patterns (Cloudflare, etc.)
+- Successful extraction strategies per domain
+
+#### Parameters
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `action` | string | Yes | One of: `stats`, `domains`, `quirks`, `templates`, `recommendation`, `export` |
+| `domain` | string | No | Domain to get quirks for (quirks action) |
+| `url` | string | No | URL to get recommendation for (recommendation action) |
+| `html` | string | No | Optional HTML to analyze for template detection |
+| `limit` | number | No | Maximum domains to return (default: 50) |
+| `hasQuirks` | boolean | No | Filter to domains with quirks only |
+
+#### Actions
+
+**`stats`** - Get overall statistics
+- Returns: Total handlers, quirks, observations, and top domains
+
+**`domains`** - List domains with learned patterns
+- Optional: `limit`, `hasQuirks` filter
+- Returns: Domain list with observation counts and quirk summaries
+
+**`quirks`** - Get quirks for a specific domain
+- Requires: `domain`
+- Returns: Stealth requirements, rate limits, anti-bot info, required headers
+
+**`templates`** - List available pattern templates
+- Returns: All template definitions (Shopify, WooCommerce, Next.js, etc.)
+
+**`recommendation`** - Get extraction recommendation for a URL
+- Requires: `url`
+- Optional: `html` for template detection
+- Returns: Recommended template, confidence, stealth/rate limit requirements
+
+**`export`** - Export all learned data as JSON
+- Returns: Serialized registry for backup/transfer
+
+#### Response Examples
+
+**Stats action:**
+```json
+{
+  "action": "stats",
+  "summary": {
+    "totalHandlers": 15,
+    "totalQuirks": 8,
+    "totalObservations": 245,
+    "templateCount": 9
+  },
+  "topDomains": [
+    { "domain": "shop.example.com", "observations": 42 },
+    { "domain": "api.service.com", "observations": 31 }
+  ],
+  "message": "Learned from 245 extractions across 15 domains"
+}
+```
+
+**Quirks action:**
+```json
+{
+  "action": "quirks",
+  "domain": "protected-site.com",
+  "hasLearned": true,
+  "quirks": {
+    "stealth": {
+      "required": true,
+      "reason": "Cloudflare detected"
+    },
+    "rateLimit": {
+      "requestsPerSecond": 1
+    },
+    "antiBot": {
+      "type": "cloudflare",
+      "severity": "high"
+    },
+    "confidence": 0.9,
+    "learnedAt": "2025-01-03T12:00:00.000Z"
+  }
+}
+```
+
+**Recommendation action:**
+```json
+{
+  "action": "recommendation",
+  "url": "https://mystore.com/products/item",
+  "domain": "mystore.com",
+  "recommendation": {
+    "template": "shopify-like",
+    "confidence": 0.85,
+    "needsStealth": false,
+    "rateLimit": null,
+    "apiCount": 2,
+    "ruleCount": 4,
+    "hasQuirks": false
+  },
+  "templateDetection": {
+    "template": "shopify-like",
+    "confidence": 0.9,
+    "signalsMatched": 3,
+    "signals": [
+      { "type": "html-marker", "pattern": "cdn.shopify.com" },
+      { "type": "html-marker", "pattern": "Shopify.theme" }
+    ]
+  },
+  "advice": "No special requirements detected"
+}
+```
+
+#### Example
+
+```json
+{
+  "name": "dynamic_handler_stats",
+  "arguments": {
+    "action": "recommendation",
+    "url": "https://example-store.com/products/test",
+    "html": "<html>...</html>"
   }
 }
 ```

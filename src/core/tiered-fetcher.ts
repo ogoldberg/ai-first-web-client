@@ -43,6 +43,7 @@ import {
   getContentMarkerPatterns,
   getIncompleteMarkerPatterns,
 } from '../utils/heuristics-config.js';
+import { likelyNeedsStealth } from './stealth-fetch.js';
 
 export type RenderTier = 'intelligence' | 'lightweight' | 'playwright';
 
@@ -508,12 +509,17 @@ export class TieredFetcher {
       });
     }
 
+    // Enable stealth mode for high-protection sites
+    const useStealth = likelyNeedsStealth(url);
+
     const result = await this.contentIntelligence.extract(url, {
       timeout: options.tierTimeout,
       minContentLength: options.minContentLength,
       headers: options.headers,
       // Don't use browser in this tier - that's what the playwright tier is for
       allowBrowser: false,
+      // Use stealth fetch for sites with bot protection
+      stealth: useStealth ? { enabled: true } : undefined,
     });
 
     // If extraction failed completely, throw to trigger fallback

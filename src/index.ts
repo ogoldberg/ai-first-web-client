@@ -43,12 +43,14 @@ import {
   handleExecuteApiCall,
   handleAiFeedback,
   handleWebhookManagement,
+  handleDynamicHandlerStats,
   type SmartBrowseArgs,
   type BatchBrowseArgs,
   type DebugTracesAction,
   type SessionAction,
   type FeedbackAction,
   type WebhookAction,
+  type DynamicHandlerStatsAction,
 } from './mcp/index.js';
 
 // Auth helpers (not yet extracted to handlers)
@@ -417,11 +419,24 @@ server.setRequestHandler(CallToolRequestSchema, async request => {
         return result;
       }
 
+      case 'dynamic_handler_stats': {
+        const result = handleDynamicHandlerStats({
+          action: args.action as DynamicHandlerStatsAction,
+          domain: args.domain as string | undefined,
+          url: args.url as string | undefined,
+          html: args.html as string | undefined,
+          limit: args.limit as number | undefined,
+          hasQuirks: args.hasQuirks as boolean | undefined,
+        });
+        await recordToolInvocation(true);
+        return result;
+      }
+
       default: {
         // Get list of available tools for helpful error message
         const availableTools = [
           'smart_browse', 'batch_browse', 'execute_api_call', 'session_management', 'api_auth',
-          'ai_feedback', 'webhook_management',
+          'ai_feedback', 'webhook_management', 'dynamic_handler_stats',
           ...(DEBUG_MODE ? ['capture_screenshot', 'export_har', 'debug_traces'] : []),
         ];
         throw new Error(unknownToolError(name, availableTools));

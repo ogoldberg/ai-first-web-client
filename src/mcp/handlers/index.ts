@@ -32,3 +32,10 @@ export { handleAiFeedback, type FeedbackAction, type AiFeedbackArgs } from './fe
 
 // Webhook handlers
 export { handleWebhookManagement, type WebhookAction, type WebhookManagementArgs } from './webhook-handlers.js';
+
+// Dynamic handlers (yt-dlp inspired pattern learning)
+export {
+  handleDynamicHandlerStats,
+  type DynamicHandlerStatsAction,
+  type DynamicHandlerStatsArgs,
+} from './dynamic-handlers-handler.js';

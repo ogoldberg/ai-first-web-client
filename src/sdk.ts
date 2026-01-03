@@ -2539,3 +2539,101 @@ export async function createResearchBrowser(config: ResearchConfig = {}): Promis
   await client.initialize();
   return client;
 }
+
+// =============================================================================
+// DYNAMIC HANDLER SYSTEM
+// =============================================================================
+
+/**
+ * Dynamic Handler System for automatic site pattern learning.
+ *
+ * The dynamic handler system learns from every browse operation:
+ * 1. Repeatable patterns (Shopify-like, WooCommerce, Next.js SSR, etc.)
+ * 2. Site-specific quirks (headers, rate limits, anti-bot detection)
+ *
+ * @example
+ * ```typescript
+ * import {
+ *   initializeDynamicHandlers,
+ *   dynamicHandlerIntegration,
+ *   shutdownDynamicHandlers,
+ * } from 'llm-browser/sdk';
+ *
+ * // Initialize at app startup (loads persisted handlers)
+ * initializeDynamicHandlers();
+ *
+ * // Get recommendations for a URL
+ * const recommendation = dynamicHandlerIntegration.getRecommendation({
+ *   url: 'https://example-store.com/products/test',
+ *   domain: 'example-store.com',
+ * });
+ * console.log(`Template: ${recommendation.template}`);
+ * console.log(`Needs stealth: ${recommendation.needsStealth}`);
+ *
+ * // Get learned stats
+ * const stats = dynamicHandlerIntegration.getStats();
+ * console.log(`Learned handlers: ${stats.totalHandlers}`);
+ * console.log(`Quirks learned: ${stats.totalQuirks}`);
+ *
+ * // Shutdown gracefully (saves handlers)
+ * shutdownDynamicHandlers();
+ * ```
+ */
+export {
+  // Main integration
+  DynamicHandlerIntegration,
+  dynamicHandlerIntegration,
+  initializeDynamicHandlers,
+  shutdownDynamicHandlers,
+  applyQuirksToFetchOptions,
+  templateToStrategy,
+
+  // Registry
+  DynamicHandlerRegistry,
+  dynamicHandlerRegistry,
+
+  // Pattern detection
+  detectTemplate,
+  getTemplateConfig,
+  PATTERN_TEMPLATES,
+  mergeTemplateWithQuirks,
+
+  // Persistence
+  saveRegistry,
+  loadRegistry,
+  AutoSaveRegistry,
+  createPersistentRegistry,
+} from './core/dynamic-handlers/index.js';
+
+// Re-export types
+export type {
+  // Handler types
+  DynamicHandler,
+  LearnedSiteHandler,
+  HandlerTemplate,
+  HandlerMatch,
+  LearningConfig,
+
+  // Extraction types
+  ExtractionRule,
+  ExtractionMethod,
+  ApiPattern as DynamicApiPattern,
+  UrlPattern,
+
+  // Pattern types
+  PatternTemplate,
+  PatternSignal,
+
+  // Observation types
+  ExtractionObservation,
+
+  // Quirks types
+  SiteQuirks,
+
+  // Integration types
+  ExtractionContext,
+  ExtractionRecommendation,
+
+  // Persistence
+  SerializedHandlerRegistry,
+} from './core/dynamic-handlers/index.js';

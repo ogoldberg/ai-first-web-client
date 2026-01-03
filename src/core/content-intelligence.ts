@@ -64,11 +64,21 @@ import {
   extractVuePressData,
 } from './framework-extractors/index.js';
 import {
+  stealthFetchWithRetry,
+  likelyNeedsStealth,
+  type StealthFetchResponse,
+  type BrowserProfile,
+} from './stealth-fetch.js';
+import {
   extractApisFromJavaScript,
   predictAPIEndpoints,
   looksLikeApiUrl,
   resolveApiUrl,
 } from './js-api-extractor.js';
+import {
+  extractStructuredData,
+  type StructuredDataResult,
+} from './structured-data-extractor.js';
 import {
   getValueAtPath,
   hasFieldAtPath,
@@ -83,6 +93,11 @@ import {
   detectPageLanguage,
   extractContentFromMappingLanguageAware,
 } from './content-extraction-utils.js';
+import {
+  DynamicHandlerIntegration,
+  dynamicHandlerIntegration,
+  applyQuirksToFetchOptions,
+} from './dynamic-handlers/index.js';
 
 // Create a require function for ESM compatibility
 const require = createRequire(import.meta.url);
@@ -177,6 +192,11 @@ export type ExtractionStrategy =
   | 'api:devto'
   | 'api:medium'
   | 'api:youtube'
+  | 'api:shopify'
+  | 'api:amazon'
+  | 'api:ebay'
+  | 'api:woocommerce'
+  | 'api:walmart'
   | 'api:learned'
   | 'api:openapi'
   | 'api:graphql'
@@ -208,6 +228,15 @@ export interface ContentIntelligenceOptions {
     slowMotion?: number;
     screenshots?: boolean;
     consoleLogs?: boolean;
+  };
+  // Stealth mode options (for high-protection sites)
+  stealth?: {
+    // Enable stealth fetch (auto-detected if not specified)
+    enabled?: boolean;
+    // Browser profile to use
+    profile?: BrowserProfile;
+    // Proxy URL for stealth requests
+    proxy?: string;
   };
 }
 
@@ -256,6 +285,7 @@ export class ContentIntelligence {
   private extractionListeners: Set<ApiExtractionListener> = new Set();
   private patternRegistry: ApiPatternRegistry;
   private patternRegistryInitialized = false;
+  private dynamicHandlers: DynamicHandlerIntegration;
 
   constructor(options: Partial<ContentIntelligenceOptions> = {}) {
     this.options = { ...DEFAULT_OPTIONS, ...options };
@@ -265,6 +295,7 @@ export class ContentIntelligence {
       codeBlockStyle: 'fenced',
     });
     this.patternRegistry = new ApiPatternRegistry();
+    this.dynamicHandlers = dynamicHandlerIntegration;
 
     // Add options callback if provided
     if (options.onExtractionSuccess) {
@@ -292,6 +323,13 @@ export class ContentIntelligence {
    */
   getPatternRegistry(): ApiPatternRegistry {
     return this.patternRegistry;
+  }
+
+  /**
+   * Get the dynamic handler integration (for testing/external access)
+   */
+  getDynamicHandlers(): DynamicHandlerIntegration {
+    return this.dynamicHandlers;
   }
 
   /**
@@ -429,6 +467,11 @@ export class ContentIntelligence {
           // Emit extraction success event for API strategies (for pattern learning)
           this.handleApiExtractionSuccess(result, strategy.name, strategyStartTime, url, opts);
 
+          // Record success in dynamic handler system (for site pattern learning)
+          this.dynamicHandlers.recordSuccess(url, strategy.name, result, {
+            duration: Date.now() - strategyStartTime,
+          });
+
           return result;
         }
 
@@ -438,11 +481,29 @@ export class ContentIntelligence {
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
         warnings.push(`${strategy.name}: ${msg}`);
+
+        // Record failures with HTTP status codes for quirk learning
+        const statusMatch = msg.match(/HTTP (\d{3})/);
+        if (statusMatch) {
+          const statusCode = parseInt(statusMatch[1], 10);
+          // Only record blocking/rate-limit failures (403, 429, 503)
+          if ([403, 429, 503].includes(statusCode)) {
+            this.dynamicHandlers.recordFailure(url, msg, {
+              statusCode,
+              strategy: strategy.name,
+            });
+          }
+        }
         // Continue to next strategy
       }
     }
 
-    // All strategies failed
+    // All strategies failed - record failure for quirk learning
+    const lastWarning = warnings[warnings.length - 1] || 'All strategies failed';
+    this.dynamicHandlers.recordFailure(url, lastWarning, {
+      strategy: strategiesAttempted[strategiesAttempted.length - 1],
+    });
+
     return {
       content: {
         title: '',
@@ -495,6 +556,11 @@ export class ContentIntelligence {
       'api:devto': () => this.tryDevToAPI(url, opts),
       'api:medium': () => this.tryMediumAPI(url, opts),
       'api:youtube': () => this.tryYouTubeAPI(url, opts),
+      'api:shopify': () => this.tryStructuredData(url, opts), // Handled by siteHandlers
+      'api:amazon': () => this.tryStructuredData(url, opts),  // Handled by siteHandlers
+      'api:ebay': () => this.tryStructuredData(url, opts),    // Handled by siteHandlers
+      'api:woocommerce': () => this.tryStructuredData(url, opts), // Handled by siteHandlers
+      'api:walmart': () => this.tryStructuredData(url, opts), // Handled by siteHandlers
       'api:learned': () => this.tryLearnedPatterns(url, opts),
       'api:openapi': () => this.tryOpenAPIDiscovery(url, opts),
       'api:graphql': () => this.tryGraphQLDiscovery(url, opts),
@@ -583,6 +649,7 @@ export class ContentIntelligence {
 
   // ============================================
   // STRATEGY: Structured Data
+  // Uses comprehensive extractStructuredData from structured-data-extractor.ts
   // ============================================
 
   private async tryStructuredData(
@@ -591,74 +658,184 @@ export class ContentIntelligence {
   ): Promise<ContentResult | null> {
     const html = await this.fetchHTML(url, opts);
 
-    // Try JSON-LD (Google's preferred format)
-    const jsonLd = this.extractJsonLd(html);
-    if (jsonLd && jsonLd.text.length > 50) {
-      return this.buildResult(url, url, 'structured:jsonld', jsonLd, 'high');
-    }
+    // Use comprehensive structured data extraction
+    const structuredData = extractStructuredData(html, url);
 
-    // Try OpenGraph + basic meta
-    const meta = this.extractMetadata(html);
-    if (meta && meta.text.length > 50) {
-      return this.buildResult(url, url, 'structured:opengraph', meta, 'medium');
-    }
+    // Try to build content from various structured data sources
+    // Priority: JSON-LD > Microdata > OpenGraph
 
-    return null;
-  }
-
-  private extractJsonLd(html: string): { title: string; text: string; structured?: unknown } | null {
-    const matches = html.match(/<script type="application\/ld\+json"[^>]*>([\s\S]*?)<\/script>/gi);
-    if (!matches?.length) return null;
-
-    const allData: unknown[] = [];
-    let combinedText = '';
-    let title = '';
-
-    for (const match of matches) {
-      const jsonMatch = match.match(/<script[^>]*>([\s\S]*?)<\/script>/i);
-      if (!jsonMatch) continue;
-
-      try {
-        const data = JSON.parse(jsonMatch[1]);
-        allData.push(data);
-
-        // Extract text from common properties
-        if (data.name && !title) title = data.name;
-        if (data.headline && !title) title = data.headline;
-        if (data.description) combinedText += data.description + '\n';
-        if (data.articleBody) combinedText += data.articleBody + '\n';
-        if (data.text) combinedText += data.text + '\n';
-
-        // Recursively extract from nested objects
-        combinedText += this.extractTextFromObject(data);
-      } catch {
-        // Invalid JSON, skip
+    // 1. Try JSON-LD (Google's preferred format)
+    if (structuredData.jsonLd.length > 0) {
+      const content = this.buildContentFromJsonLd(structuredData);
+      if (content && content.text.length > 50) {
+        return this.buildResult(url, url, 'structured:jsonld', {
+          ...content,
+          structured: structuredData.jsonLd,
+        }, 'high');
       }
     }
 
-    if (combinedText.length > 50) {
-      return { title, text: combinedText.trim(), structured: allData };
+    // 2. Try normalized product data (from any source)
+    if (structuredData.product) {
+      const content = this.buildContentFromProduct(structuredData.product);
+      if (content && content.text.length > 50) {
+        return this.buildResult(url, url, 'structured:jsonld', {
+          ...content,
+          structured: structuredData.product,
+        }, 'high');
+      }
+    }
+
+    // 3. Try normalized article data
+    if (structuredData.article) {
+      const content = this.buildContentFromArticle(structuredData.article);
+      if (content && content.text.length > 50) {
+        return this.buildResult(url, url, 'structured:jsonld', {
+          ...content,
+          structured: structuredData.article,
+        }, 'high');
+      }
+    }
+
+    // 4. Try Microdata
+    if (structuredData.microdata.length > 0) {
+      const content = this.buildContentFromMicrodata(structuredData);
+      if (content && content.text.length > 50) {
+        return this.buildResult(url, url, 'structured:jsonld', {
+          ...content,
+          structured: structuredData.microdata,
+        }, 'medium');
+      }
+    }
+
+    // 5. Try OpenGraph + Twitter Card
+    const ogContent = this.buildContentFromOpenGraph(structuredData);
+    if (ogContent && ogContent.text.length > 50) {
+      return this.buildResult(url, url, 'structured:opengraph', ogContent, 'medium');
     }
 
     return null;
   }
 
-  private extractMetadata(html: string): { title: string; text: string } | null {
-    const $ = cheerio.load(html);
+  /**
+   * Build content from JSON-LD structured data
+   */
+  private buildContentFromJsonLd(data: StructuredDataResult): { title: string; text: string } | null {
+    let title = '';
+    let combinedText = '';
 
-    const title = $('meta[property="og:title"]').attr('content') ||
-                  $('meta[name="twitter:title"]').attr('content') ||
-                  $('title').text() || '';
+    for (const item of data.jsonLd) {
+      // Extract title
+      if (!title) {
+        title = (item.name as string) ||
+                (item.headline as string) ||
+                (item.title as string) || '';
+      }
 
-    const description = $('meta[property="og:description"]').attr('content') ||
-                       $('meta[name="description"]').attr('content') ||
-                       $('meta[name="twitter:description"]').attr('content') || '';
+      // Extract text content
+      if (item.description) combinedText += item.description + '\n';
+      if (item.articleBody) combinedText += item.articleBody + '\n';
+      if (item.text) combinedText += item.text + '\n';
 
-    if (description.length > 50) {
-      return { title: title.trim(), text: description.trim() };
+      // Handle nested objects
+      combinedText += this.extractTextFromObject(item);
     }
 
-    return null;
+    if (!combinedText) return null;
+    return { title, text: combinedText.trim() };
+  }
+
+  /**
+   * Build content from normalized product data
+   */
+  private buildContentFromProduct(product: StructuredDataResult['product']): { title: string; text: string; markdown: string } | null {
+    if (!product) return null;
+
+    const lines: string[] = [];
+    if (product.name) lines.push(`# ${product.name}`, '');
+    if (product.brand) lines.push(`**Brand:** ${product.brand}`);
+    if (product.price !== undefined && product.priceCurrency) {
+      lines.push(`**Price:** ${product.priceCurrency} ${product.price}`);
+    }
+    if (product.availability) lines.push(`**Availability:** ${product.availability}`);
+    if (product.rating) {
+      lines.push(`**Rating:** ${product.rating.value}/${product.rating.best || 5} (${product.rating.count} reviews)`);
+    }
+    if (product.description) lines.push('', product.description);
+
+    if (lines.length === 0) return null;
+
+    const markdown = lines.join('\n');
+    return {
+      title: product.name || '',
+      text: markdown.replace(/[#*]/g, '').trim(),
+      markdown,
+    };
+  }
+
+  /**
+   * Build content from normalized article data
+   */
+  private buildContentFromArticle(article: StructuredDataResult['article']): { title: string; text: string; markdown: string } | null {
+    if (!article) return null;
+
+    const lines: string[] = [];
+    if (article.headline) lines.push(`# ${article.headline}`, '');
+    if (article.author) {
+      const authors = Array.isArray(article.author) ? article.author.join(', ') : article.author;
+      lines.push(`**By:** ${authors}`);
+    }
+    if (article.datePublished) lines.push(`**Published:** ${article.datePublished}`);
+    if (article.publisher) lines.push(`**Publisher:** ${article.publisher}`);
+    if (article.description) lines.push('', article.description);
+    if (article.articleBody) lines.push('', article.articleBody);
+
+    if (lines.length === 0) return null;
+
+    const markdown = lines.join('\n');
+    return {
+      title: article.headline || '',
+      text: markdown.replace(/[#*]/g, '').trim(),
+      markdown,
+    };
+  }
+
+  /**
+   * Build content from Microdata
+   */
+  private buildContentFromMicrodata(data: StructuredDataResult): { title: string; text: string } | null {
+    let title = '';
+    let combinedText = '';
+
+    for (const item of data.microdata) {
+      const props = item.properties;
+      if (!title && props.name) title = String(props.name);
+      if (props.description) combinedText += String(props.description) + '\n';
+
+      // Extract other text content
+      for (const [key, value] of Object.entries(props)) {
+        if (typeof value === 'string' && !['name', 'url', 'image'].includes(key)) {
+          combinedText += value + '\n';
+        }
+      }
+    }
+
+    if (!combinedText) return null;
+    return { title, text: combinedText.trim() };
+  }
+
+  /**
+   * Build content from OpenGraph/Twitter metadata
+   */
+  private buildContentFromOpenGraph(data: StructuredDataResult): { title: string; text: string } | null {
+    const og = data.openGraph;
+    const twitter = data.twitterCard;
+
+    const title = og.title || twitter.title || '';
+    const description = og.description || twitter.description || '';
+
+    if (!description) return null;
+    return { title, text: description };
   }
 
   // ============================================
@@ -2156,17 +2333,34 @@ export class ContentIntelligence {
   ): Promise<Response> {
     const cookieString = await this.cookieJar.getCookieString(url);
 
+    // Get learned quirks for this domain
+    const domain = new URL(url).hostname;
+    const quirks = this.dynamicHandlers.getQuirks(domain);
+
+    // Apply quirks to options (adds required headers, enables stealth if needed)
+    const enhancedOpts = applyQuirksToFetchOptions(quirks, opts);
+
     const headers: Record<string, string> = {
       'User-Agent': opts.userAgent || DEFAULT_OPTIONS.userAgent!,
       'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
       'Accept-Language': 'en-US,en;q=0.5',
-      ...opts.headers,
+      ...enhancedOpts.headers,
     };
 
     if (cookieString) {
       headers['Cookie'] = cookieString;
     }
 
+    // Determine if stealth mode should be used (from explicit option, learned quirks, or heuristics)
+    const useStealth = enhancedOpts.stealth?.enabled !== false &&
+                       (enhancedOpts.stealth?.enabled === true || likelyNeedsStealth(url));
+
+    if (useStealth) {
+      logger.intelligence.debug('Using stealth fetch for high-protection site', { url, learnedQuirk: !!quirks?.stealth });
+      return this.stealthFetchAsResponse(url, enhancedOpts, headers);
+    }
+
+    // Standard fetch
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), opts.timeout || TIMEOUTS.NETWORK_FETCH);
 
@@ -2190,6 +2384,64 @@ export class ContentIntelligence {
       return response;
     } finally {
       clearTimeout(timeoutId);
+    }
+  }
+
+  /**
+   * Use stealthFetch and wrap result as Response-like object
+   */
+  private async stealthFetchAsResponse(
+    url: string,
+    opts: ContentIntelligenceOptions,
+    headers: Record<string, string>
+  ): Promise<Response> {
+    try {
+      const stealthResponse = await stealthFetchWithRetry(url, {
+        profile: opts.stealth?.profile || 'chrome_120',
+        proxy: opts.stealth?.proxy,
+        headers,
+        timeout: opts.timeout || TIMEOUTS.NETWORK_FETCH,
+      });
+
+      // Store cookies from stealth response
+      const setCookie = stealthResponse.headers['set-cookie'];
+      if (setCookie) {
+        try {
+          await this.cookieJar.setCookie(setCookie, url);
+        } catch {
+          // Ignore invalid cookies
+        }
+      }
+
+      // Wrap StealthFetchResponse as a Response-like object
+      const responseHeaders = new Headers();
+      for (const [key, value] of Object.entries(stealthResponse.headers)) {
+        if (value) responseHeaders.set(key, value);
+      }
+
+      return new Response(stealthResponse.body, {
+        status: stealthResponse.status,
+        statusText: stealthResponse.statusText,
+        headers: responseHeaders,
+      });
+    } catch (error) {
+      logger.intelligence.warn('Stealth fetch failed, falling back to standard fetch', {
+        url,
+        error: String(error),
+      });
+      // Fall back to standard fetch
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), opts.timeout || TIMEOUTS.NETWORK_FETCH);
+
+      try {
+        return await fetch(url, {
+          headers,
+          signal: controller.signal,
+          redirect: 'follow',
+        });
+      } finally {
+        clearTimeout(timeoutId);
+      }
     }
   }
 
