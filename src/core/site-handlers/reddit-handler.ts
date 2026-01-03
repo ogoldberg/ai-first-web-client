@@ -88,7 +88,12 @@ export class RedditHandler extends BaseSiteHandler {
     const parsed = new URL(url);
     // Replace www.reddit.com with old.reddit.com
     const hostname = parsed.hostname.replace(/^(www\.)?reddit\.com$/, 'old.reddit.com');
-    return `https://${hostname}${parsed.pathname}${parsed.search}`;
+    // Ensure trailing slash to avoid 301 redirects
+    let pathname = parsed.pathname;
+    if (!pathname.endsWith('/') && !pathname.includes('.')) {
+      pathname += '/';
+    }
+    return `https://${hostname}${pathname}${parsed.search}`;
   }
 
   /**
