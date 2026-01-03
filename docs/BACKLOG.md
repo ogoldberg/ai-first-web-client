@@ -579,6 +579,31 @@ See [COMPETITIVE_ANALYSIS.md](COMPETITIVE_ANALYSIS.md) for context on why these 
 
 ---
 
+## P1.5: Marketing Site Redesign (New Initiative)
+
+**Goal:** Refresh the marketing site with improved typography, updated product features, and cleaner visual design.
+
+**Context:** Current marketing site has font issues and needs to reflect new product features (Connect SDK, etc.). Design should use sans-serif fonts only and present a more polished, professional appearance.
+
+**Repository:** `ogoldberg/unbrowser-marketing`
+
+| ID | Task | Effort | Status | Notes |
+|----|------|--------|--------|-------|
+| MKT-001 | Typography overhaul - sans-serif only | M | Not Started | Replace all serif/decorative fonts with clean sans-serif stack (Inter, system-ui) |
+| MKT-002 | Update hero section with new features | M | Not Started | Highlight Connect SDK, learning capabilities, multi-interface architecture |
+| MKT-003 | Freshen visual design | M | Not Started | Modern spacing, cleaner components, improved color usage |
+| MKT-004 | Add Connect SDK marketing content | S | Complete | Landing page at /connect with hero, features, code example (CONN-023) |
+| MKT-005 | Update pricing page for new features | S | Complete | Connect SDK row added (CONN-024) |
+| MKT-006 | Add new product feature sections | M | Not Started | Document WebSocket support, workflow recording, verification engine, etc. |
+
+**Success Criteria:**
+- All fonts are sans-serif (Inter preferred, system-ui fallback)
+- New product features prominently displayed
+- Cleaner, more modern visual appearance
+- Consistent with API documentation styling
+
+---
+
 ## P2: Medium Priority (Plan For)
 
 ### Debugging & Observability
