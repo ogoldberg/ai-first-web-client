@@ -4,7 +4,7 @@
  * Starts the Hono server using Node.js HTTP adapter.
  * Dynamically loads API routes only when not in marketing mode.
  *
- * @version 0.5.1 - Node 22 compatibility update
+ * @version 0.5.2 - Reddit handler HTML parsing update
  */
 
 import { serve } from '@hono/node-server';
